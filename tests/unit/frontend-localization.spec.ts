@@ -13,7 +13,7 @@ describe('shared request-bound localization', () => {
         expect(() => rich('common.save', {})).toThrow('no authored nodes');
         expect(() => rich('activity.progressComplete', {assigned: '{done}', required: 2})).toThrow('Invalid translation parameter');
     });
-    it('discovers the same pilot languages for browser and server and resolves regional fallback', () => {
+    it('discovers the same frontend languages for browser and server and resolves regional fallback', () => {
         expect(localeManifest.map(locale => locale.locale)).toEqual(expect.arrayContaining(['de', 'en']));
         expect(catalogVersion).toMatch(/^[a-f\d]{64}$/);
         expect(resolveLocale('DE-de')).toBe('de');

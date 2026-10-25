@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {shallowRef} from 'vue';
-import {useActionState, usePilot} from '../../app/context';
+import {useActionState, useFrontend} from '../../app/context';
 import type {components} from '../../../types/api/v1';
 import type {FinanceSubmissionAccessReview} from '../../../types/FrontendFinanceReviewTypes';
 import {useCommand} from '../../composables/command';
@@ -13,7 +13,7 @@ import CommandFeedback from '../../components/CommandFeedback.vue';
 // never submits its sibling settings, invoice or membership drafts.
 const props = defineProps<{eventId: string; pool: components['schemas']['FinancePool']; active: boolean; refresh: () => Promise<void>}>();
 const emit = defineEmits<{edit: [kind: 'settings' | 'expense' | 'assignments' | 'adjustments' | 'takeovers']}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useFinanceApi(context);
 const command = useCommand(props.refresh, false, {dirty: () => false, unknownMessage: 'draft.leaveUnknown', recoveryEligible: () => props.active});
@@ -22,7 +22,7 @@ const action = useActionState({eligible: () => props.active, blocked: () => comm
 const confirmation = useActionState({eligible: ownsReview, blocked: () => command.action.disabled.value,
     pending: () => command.pending.value});
 
-/** Open the native review without writing. Capture only this operation's intent;
+/** Open the review without writing. Capture only this operation's intent;
  * the existing command still owns its delivery, feedback and reconciliation. */
 function changeSubmissionState(): void {
     if (!action.isAvailable() || props.pool.status === 'CLOSED') return;
@@ -71,7 +71,7 @@ async function refresh(): Promise<void> {
 
 <template>
     <div class="mb-3" data-finance-pool-actions>
-        <div class="pilot-action-row">
+        <div class="frontend-action-row">
             <ActionButton variant="primary" class="btn-sm" :state="action" @click="emit('edit', 'expense')">
                 <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>{{ messages.t('finance.addInvoiceAmount') }}
             </ActionButton>

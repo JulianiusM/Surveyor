@@ -2,9 +2,9 @@
 import {computed, ref} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {EntityMetadataSnapshot, EntityMetadataValues} from '../../../types/FrontendEntityMetadataTypes';
-import type {PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import type {FrontendRead, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import {useEventApi} from './api';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {eventKeys} from '../../app/queryKeys';
 import {normalizeNullableMetadataText} from '../../composables/metadataDraft';
 import {useMetadataEditorHandle} from '../../composables/metadataEditor';
@@ -15,7 +15,7 @@ import EntityMetadataEditor from '../../components/EntityMetadataEditor.vue';
 // editor owns admitted reads, sparse drafts, confirmation and explicit recovery.
 const props = withDefaults(defineProps<{eventId: string; eventTitle?: string; disabled?: boolean; busy?: boolean; active?: boolean}>(), {active: true});
 const emit = defineEmits<{close: []; saved: []; accessLost: []}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useEventApi(context);
 const editor = ref<InstanceType<typeof EntityMetadataEditor> | null>(null);
@@ -28,7 +28,7 @@ const families = [
     {key: 'registration', label: 'event.propertyRegistration', fields: ['maxParticipants', 'allowRegDateUpdatesAfterDeadline', 'allowRegCancelationAfterDeadline']},
     {key: 'dietary', label: 'event.propertyDietary', fields: ['requireDietaryInfo', 'allowDietComment', 'allowRegDietUpdateAfterDeadline']},
 ] as const;
-/** Omit empty property families while retaining the native order and first-open rule. */
+/** Omit empty property families while retaining the order and first-open rule. */
 function admittedFamilies(fields: readonly string[]) {
     // A family appears only for its own current field grants; peer field grants
     // never expose values or controls from another property responsibility.
@@ -43,17 +43,17 @@ function fieldLabel(field: string): string {
         allowRegCancelationAfterDeadline: 'event.cancelUpdates', allowRegDietUpdateAfterDeadline: 'event.dietUpdates'} as const;
     return messages.value.t(key[field as keyof typeof key] ?? 'packing.properties');
 }
-/** Native zone changes apply to the displayed local deadline. Unrelated changes omit
+/** Zone changes apply to the displayed local deadline. Unrelated changes omit
  * both fields and preserve the stored instant; no client-side timezone coercion occurs. */
 function preparePatch(patch: EntityMetadataValues, values: EntityMetadataValues): EntityMetadataValues {
     return 'deadlineTz' in patch && 'bindingDeadline' in values ? {...patch, bindingDeadline: values.bindingDeadline} : patch;
 }
 
 /** Generated Event declarations and validators keep wire policy in the feature. */
-function read(id: string, scope: PilotRequestScope, signal?: AbortSignal, previous?: PilotRead<EntityMetadataSnapshot>) {
-    return api.metadata(id, scope, signal, previous as PilotRead<components['schemas']['EventMetadata']> | undefined);
+function read(id: string, scope: FrontendRequestScope, signal?: AbortSignal, previous?: FrontendRead<EntityMetadataSnapshot>) {
+    return api.metadata(id, scope, signal, previous as FrontendRead<components['schemas']['EventMetadata']> | undefined);
 }
-function save(id: string, patch: EntityMetadataValues, token: string, scope: PilotRequestScope) {
+function save(id: string, patch: EntityMetadataValues, token: string, scope: FrontendRequestScope) {
     return api.saveMetadata(id, patch as components['schemas']['EventMetadataPatch'], token, scope);
 }
 // Settings calls the shared editor's public workflow, preserving one draft owner.

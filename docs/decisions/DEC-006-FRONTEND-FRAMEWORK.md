@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; frontend developers
 owner: frontend maintainers
 status: current
-last-verified: 2026-10-22
+last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Existing framework/interface decisions and original deferred-target wording retained; factual P6/P9 implementation status distinguished from unimplemented principal-language and output-localization targets; no new decision or cutover acceptance
-source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendPilotRenderer.ts; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md
+verification-scope: Original framework/interface decisions and deferred targets retained; authorized P11 cutover scope and lasting amendments preserved; source ownership reconciled without final acceptance or deployment claim
+source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendRenderer.ts; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; src/routes/api/v1/
 next-review: frontend-technology-or-rendering-boundary-change
 -->
 
@@ -323,8 +323,68 @@ small-screen behavior.
 [Vue accessibility](https://vuejs.org/guide/best-practices/accessibility.html)
 
 Compare affected scenes against approved behavior with equal data/actors/viewport and disclose intended changes.
-Named shared operations and controller-owned method policy are implemented. Existing shared-action declarations
-also feed native factories and v1 policy/capability consumers, rather than retaining separate copied grants.
+Named shared operations and controller-owned method policy are implemented. Shared-action declarations originally
+served native factories alongside v1 consumers; the retained controller and v1 policy/capability owners continue to
+use those declarations after native factory retirement.
 Current verification selection belongs to [Testing](../TESTING_GUIDE.md).
 No bundle-size or framework benchmark is claimed by this decision record.
 Documentation reports remain advisory.
+
+## Preserved migration decisions and cutover (2026-10-25)
+
+The maintainer directly requests full P11 implementation, regression testing and comparison with the last recorded
+native screenshots. This authorizes default-route adoption, native browser retirement and publication of independently
+reviewed prepared guide bytes under the existing P11 contract. It does not authorize deployment or the excluded
+general backend remedies. Earlier phase-only limits describe their original checkpoints; this instruction supplies
+the later cutover authority without changing those earlier approvals.
+
+The completed temporary design and review records are retired after their lasting contracts enter the existing
+Architecture, Development, Testing, operator guides and this decision record. Detailed historical evidence remains
+in Git and ignored run artifacts. The following amendments preserve decisions that outlive their temporary owners;
+they describe authorization and intended boundaries, not fresh test results.
+
+| Date and decision | Preserved contract |
+|---|---|
+| October 8, refresh and progressive delivery | Healthy eligible shared reads use a 30-second cadence with bounded recovery, visibility/cooldown/disposal guards and independent Overview regions. The October 13 startup amendment supersedes initial interactive controls with shared skeletons; mounted readable data and drafts survive background reads. |
+| October 8, duplicate return | Login returns to the exact requested duplicate destination through the shared creation-flow owner. This changes no creation or duplication grant. |
+| October 12, shared backend and per-method permission | Existing controllers own named business operations and centrally declared method policy; adapters decode/project only. Public methods retain existing public grants without exposing private projections or relaxing operations that require a principal. The bounded Packing root-before-item lock remedy and automatic-archival root-lock repair remain the recorded exceptions to the general backend-repair exclusion. |
+| October 13, existing Event association | Selecting the existing Event association returns `changed: false` after current source and target permission checks, ignoring comparison-header evidence and writing nothing. Changed associations require the current relationship and reviewed comparison under the existing locks. |
+| October 13, Packed storage failure | Packing may keep temporary mounted checklist state when local storage fails, with visible warning and explicit retry. It neither persists to the server nor promises restoration after the owner is retired. |
+| October 13–15, identity and request-session ownership | Express's request Session remains the single writable request owner. The narrowly approved identity completion transaction prepares required output before commit and retains its exact callers. Ordinary admission reads current generation without introducing a mirrored request session, save interceptor or extra anonymous persistence. Existing account-required redirects may use the established one-time anonymous Session/flash behavior. |
+| October 13, Help fallback | The initial individual-figure fallback was superseded by complete-article selection: a complete localized article with its own assets, or its complete reviewed English counterpart with visible disclosure. Invalid existing source fails normally. The canonical Help tree and DEC-004 trust boundary remain. |
+| October 14, separate backend work | Migration reuses existing operation order and inherited partial outcomes. Current-owner token issuance/consumption, transfer completion, profile deactivation, account deletion and provider failure remedies remain separately authorized backlog work. A frontend consumer or passing test cannot approve them. |
+| October 15–20, native isolation | During migration, native presentation was fixed and Vue presentation separately mutable, shared among matching Vue consumers. Backend/domain/catalog owners and common images stayed shared. That temporary native preservation obligation ends with authorized P11 retirement; simultaneous native/Vue production use was expressly excluded on October 16. |
+| October 18, Survey presentation | Initial native parity kept saved voting descriptions hidden and duplicate descriptions empty, with first-occurrence selections. The separately approved R1/R2 exceptions display escaped saved instructions with line breaks and prefill the saved description/canonical recurrence values when duplicating; ballots and header images remain excluded. Survey retains its distinct permission model without the general permission matrix. |
+| October 19, recommendation observation | Automatically started recommendation jobs may be observed through pure saved-state/status reads. Explicit workspace entry, Reload and generation/application completion retain their recorded maintenance triggers. Observation cannot enqueue additional work or replay generation. |
+| October 20, civil days and saved-slot count | Activity counts every admitted saved slot independently of the current filter. Event/Activity date-only labels and Activity weeks share the civil-date owner, superseding native timezone-dependent presentation; stored days, business calculations, timestamps, assignments and print outputs retain their meaning. |
+| October 20, Activity swaps | New local swap legs keep their explicit pair identity. Saved rows may use a mutually unique reciprocal counterpart; ambiguity requires the organizer's choice before review changes. Pair metadata stays local and does not replace the server's reviewed-batch contract. |
+| October 20, Finance public methods | Pool management, assignment/adjustment/organizer coverage and ordinary invoice acceptance/decline/organizer close honor their established public method grants. Organizer expenses, retroactive changes, participant operations and private finance reads retain their existing identity requirements. |
+| October 23, composing Enter | Shared inline editors and Activity role entry ignore shortcuts during active composition. Ordinary Enter, mouse actions and blur keep their existing behavior. This deliberately supersedes inherited keyboard parity for those controls. |
+| October 23, deletion delivery | Original departure consent expires when the first confirmed-delivery attempt settles. Retry consults current drafts again; retained delivery prevents another permanent deletion until its destination is resolved. Required reads/navigation may retry, DELETE never does. |
+| October 23, Overview invalidation | Actual Query invalidation pauses lifecycle/deletion writes while cached cards stay readable. Navigation/filter/paging/expansion/Refresh keep their admission. Background failures and locale invalidation can prolong this pause; no separate freshness store is introduced. |
+| October 23, Home and shared controls | Public Home remains distinct from personal Overview. Creation permission disclosures start closed while retaining mounted values; Survey remains excluded. Sticky notices reserve their natural height, shared Refresh/headings retain actual read admission, reorder previews retain one existing command, and generated diagnostics identify fields without duplicating validation. Explicit removal of saved former-participant overrides preserves ordinary omission protection. |
+| October 24, feedback and contextual wording | Confirmed operations publish one common receipt; failed following reads/navigation retain recovery without write replay. Independent failures retain their actual identity. Responsive menus/actions and contextual translations use shared owners. Bounded error-cause metadata preserves existing controller reasons without changing status, operation order or business rules. |
+| October 25, deactivation warning | English/German wording distinguishes deactivating the selected profile from deleting an account with no profiles remaining. Confirmation, permanence warning and existing uncertain completion stay intact; IMP-006 is not repaired by this wording correction. |
+
+Production documents use the canonical paths, with Home at `/`, Overview at `/users/dashboard`, explicit feature
+routes and retained compatibility entries. Provider/token arrivals, protected files, print and exports remain document
+boundaries. Native interactive views, browser modules, browser styles and flat Help comparison content are retired;
+standalone Pug print templates, print CSS, shared images, domain/controllers/DBAL, catalogs and required third-party
+packages retain their actual consumers. The established API validator generator still uses esbuild independently
+of the retired native browser pipeline.
+
+Publication copies the reviewed prepared bytes verbatim. The release still contains coherent server, Vite client/SSR,
+print and shared assets; it introduces no additional deployment protocol. Documentation checks remain advisory.
+
+### Maintainer correction to cutover ownership and wording (2026-10-25)
+
+The maintainer rejects the unapproved English rewording and mixed-domain route implementation, and explicitly
+requires removal of production references to the pilot or other frontends. Restore the established English labels
+and domain route composition: Express mounts domain routers explicitly, and Vue route records belong to matching
+domain modules. Preserve ordering, shared controller/DBAL operations and genuine provider, token and output boundaries.
+
+The same correction supersedes the compatibility-entry wording above. Remove unused rollout prefixes, Home aliases,
+registration aliases and the unversioned proof alias rather than retaining a second route surface. Current versioned
+proof downloads and actual document entry points keep their existing authorization. Production identifiers, selectors
+and comments describe their present responsibilities. The earlier cutover request did not authorize the rejected
+English or ownership changes; implementation and passing tests did not establish that approval.

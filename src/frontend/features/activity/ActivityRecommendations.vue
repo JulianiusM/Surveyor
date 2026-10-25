@@ -4,8 +4,8 @@ import {useQuery, type QueryFunctionContext} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
 import type {ActivityRecommendationDraftRow, ActivityRecommendationPairChoice, ActivityRecommendationReviewAction,
     ActivityRecommendationRow} from '../../../types/FrontendActivityRecommendationTypes';
-import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
-import {useActionState, usePilot} from '../../app/context';
+import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import {useActionState, useFrontend} from '../../app/context';
 import {activityKeys} from '../../app/queryKeys';
 import {refetchFreshQuery, useQueryAdmission} from '../../app/queryCache';
 import {ApiFailure, isReadDenial, ObsoleteRequestError} from '../../app/transport';
@@ -31,11 +31,11 @@ type Job = components['schemas']['ActivityRecommendationJob'];
 // Server snapshots live in Query; the local review owns independent values and
 // its saved baseline. Maintenance is a single-attempt entry command, never a
 // query function or background refetch. Explicit generation completion retains
-// its native entry trigger; automatic job completion reads only a pure snapshot.
+// its entry trigger; automatic job completion reads only a pure snapshot.
 const props = defineProps<{planId: string; view: components['schemas']['ActivityView'];
     assignmentMode?: components['schemas']['ActivityView']['assignmentMode']; disabled?: boolean}>();
 const emit = defineEmits<{changed: []; denied: []}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useActivityApi(context);
 const key = computed(() => activityKeys.recommendations(context.session.value?.context, props.planId));
@@ -78,7 +78,7 @@ const command = useCommand(refreshSnapshot, true, {dirty: () => dirty.value,
 const reviewBlocked = computed(() => !!props.disabled || revoked.value || command.action.disabled.value || previewing.value || confirmation.value);
 const blocked = computed(() => reviewBlocked.value || pairChoice.value !== null);
 const pairOptions = computed(currentPairOptions);
-// The admitted requirement form supplies its live mode, matching native's local
+// The admitted requirement form supplies its live mode, using the local
 // Auto control. The server still decides generation from persisted settings.
 const assignmentMode = computed(() => props.assignmentMode ?? props.view.assignmentMode);
 const retryRead = useReadRetry(() => snapshot.error.value);
@@ -124,7 +124,7 @@ function receive(value: Workspace, replace = false): void {
     // former partner must never attach itself to a different reverse operation.
     revalidateRecommendationGroups(rows.value, value.recommendations);
     // Approved R1: entry may return an already queued deadline job. Observe its
-    // identity without another dispatch or changing native maintenance triggers.
+    // identity without another dispatch or changing maintenance triggers.
     if (value.autoGenerationJob) observeJob(value.autoGenerationJob);
     if (dirty.value && !replace) {
         // Compare saved intent with the draft's original baseline. An unchanged
@@ -146,10 +146,10 @@ function receive(value: Workspace, replace = false): void {
 }
 
 /** Confirmed maintenance supplies a snapshot, not a saved-edit notification.
- * All native-equivalent entry triggers publish through this same owner. */
+ * All feature-specific entry triggers publish through this same owner. */
 function publishWorkspace(value: Workspace, replace = false): void {
     if (!active || revoked.value) return;
-    // Native's successful workspace load is quiet. Retain command uncertainty
+    // A successful workspace load is quiet. Retain command uncertainty
     // and errors, while removing only this confirmed load's generic success.
     command.feedback.dismissNotice();
     receive(value, replace);
@@ -198,7 +198,7 @@ function retireAdvancedAccess(): void {
 
 /** Commands and warning previews enforce the same private-projection retirement
  * as query reads. Rejections still propagate to the existing command owner. */
-async function advancedCommand<T>(operation: Promise<T>, scope: PilotRequestScope): Promise<T> {
+async function advancedCommand<T>(operation: Promise<T>, scope: FrontendRequestScope): Promise<T> {
     try {
         return await operation;
     } catch (failure) {
@@ -210,7 +210,7 @@ async function advancedCommand<T>(operation: Promise<T>, scope: PilotRequestScop
     }
 }
 
-/** Native opens the recommendation workspace once on page entry, even with the
+/** The page opens the recommendation workspace once on page entry, even with the
  * Schedule tab active. Capture that trigger once; uncertain delivery never retries. */
 async function enterWorkspace(): Promise<void> {
     if (!active || entered || !context.mayRead() || !command.action.isAvailable()) return;
@@ -223,11 +223,11 @@ async function enterWorkspace(): Promise<void> {
 }
 watch(() => context.hydrated.value && context.mayRead(), ready => { if (ready) void enterWorkspace(); }, {immediate: true});
 
-/** Only an explicit Reload discards a local draft and repeats native maintenance.
+/** Only an explicit Reload discards a local draft and repeats maintenance.
  * A canceled confirmation keeps every row and its current warning state. */
 async function reload(): Promise<void> {
     if (blocked.value || dirty.value && !window.confirm(messages.value.t('draft.discard'))) return;
-    // Native-equivalent maintenance starts only after accepted discard. Its
+    // Feature-specific maintenance starts only after accepted discard. Its
     // initiating Reload stays distinct from automatic entry/job maintenance.
     pendingControl.value = 'reload';
     try {
@@ -250,9 +250,9 @@ function observeJob(value: Job, restart = false): void {
     context.queryClient.setQueryData(activityKeys.recommendationJob(context.session.value?.context, props.planId, value.id), value);
 }
 function isRunning(value: Job): boolean { return value.status === 'QUEUED' || value.status === 'RUNNING'; }
-/** Observe a live job at the native cadence within its finite observation window. */
+/** Observe a live job at the cadence within its finite observation window. */
 function jobInterval(query: {state: {data?: Job; error: Error | null}}): number | false {
-    // Match native's bounded ten-minute observation while honoring admission,
+    // Use bounded ten-minute observation while honoring admission,
     // background visibility and any server read cooldown in shared transport.
     if (!jobId.value || !active || !context.mayRead() || !context.visible.value || query.state.error || jobTimedOut.value) return false;
     if (Date.now() - jobStartedAt.value >= 600_000) { jobTimedOut.value = true; return false; }
@@ -268,7 +268,7 @@ async function readJob({signal}: QueryFunctionContext): Promise<Job> {
     if (!active || signal.aborted || !context.isCurrent(scope) || id !== jobId.value) throw new ObsoleteRequestError();
     return value;
 }
-/** Complete each known job once. Explicit generation retains native maintenance;
+/** Complete each known job once. Explicit generation retains maintenance;
  * approved deadline-job observation adopts saved results through a pure read. */
 async function finishObservedJob(): Promise<void> {
     const value = job.data.value;
@@ -501,7 +501,7 @@ function stage(values: ActivityRecommendationRow[]): void {
 /** Stage the existing assignment's removal for later whole-batch review. */
 function unassign(slotId: string, profileId: string): void {
     if (blocked.value || !workspace.value) return;
-    // Preserve the native single-intent-per-placement guard and admitted identity.
+    // Preserve the single-intent-per-placement guard and admitted identity.
     if (rows.value.some(row => row.value.item.id === slotId && row.value.profile?.id === profileId)) {
         command.setError('activity.recommendations.duplicate');
         return;
@@ -567,8 +567,8 @@ async function applyFrozen(): Promise<void> {
     warnings.value = value.warnings;
     baseline.value = JSON.stringify(recommendationReview(rows.value));
     emit('changed');
-    // Native reloads its document after a confirmed apply, performing one page
-    // entry maintenance. Keep that invocation while staying in this document.
+    // A confirmed apply performs one workspace-entry maintenance call.
+    // Keep that explicit lifecycle step separate from pure background reads.
     const refreshed = await command.run(scope => advancedCommand(api.recommendationWorkspace(props.planId, scope), scope),
         false, true, {success: null});
     if (refreshed) publishWorkspace(refreshed);
@@ -600,7 +600,7 @@ function statusLabel(status: typeof statuses[number]): string {
             <span class="d-flex align-items-center gap-2">
                 <i class="bi bi-magic me-1" aria-hidden="true"></i><span>{{ messages.t('activity.recommendations.title') }}</span>
             </span>
-            <div class="pilot-action-row">
+            <div class="frontend-action-row">
                 <ActionButton
                     type="button"
                     class="btn-sm" variant="outline-secondary"
@@ -628,7 +628,7 @@ function statusLabel(status: typeof statuses[number]): string {
         <div class="card-body">
             <p class="text-secondary small">{{ messages.t('activity.recommendations.description') }}</p>
             <StatusNotice kind="warning" class="small">{{ messages.t('activity.recommendations.linkedWarning') }}</StatusNotice>
-            <div class="pilot-section-heading mb-2">
+            <div class="frontend-section-heading mb-2">
                 <p class="text-secondary small mb-0">{{ messages.t('activity.recommendations.reviewHint') }}</p>
                 <small id="recommendationSummaryStats" class="text-secondary">
                     <span v-if="!rows.length" class="text-secondary">{{ messages.t('activity.recommendations.empty') }}</span>

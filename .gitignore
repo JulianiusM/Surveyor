@@ -272,11 +272,8 @@ $RECYCLE.BIN/
 
 settings.csv
 
-src/public/js/**/*.gen.js
-src/public/js/**/*.gen.js.map
-
-src/public/style/**/*.css
-src/public/style/**/*.css.map
+src/public/style/print.css
+src/public/style/print.css.map
 
 # Optional Sass IDE output; Vite consumes the authored Sass and pilot.css directly.
 src/frontend/styles/accordion.css

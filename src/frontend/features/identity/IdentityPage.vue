@@ -2,9 +2,9 @@
 import {computed, onMounted, reactive, ref, shallowRef, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
 import type {WatchCallback} from 'vue';
-import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {FrontendIdentityOperation} from '../../../types/IdentityTypes';
-import {useActionState, usePilot} from '../../app/context';
+import {useActionState, useFrontend} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {problemMessage, useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {usePageTitle} from '../../composables/pageTitle';
@@ -19,7 +19,7 @@ import type {components} from '../../../types/api/v1';
 import {frontendDocumentUrl, frontendIdentityMessageFeedback, frontendIdentityPageEntry, frontendIdentityProblemKey, isRegistrationPasswordValid, passwordCriteria, safeFrontendReturn} from '../../../modules/lib/frontendIdentity';
 import {isPlainMessageKey} from '../../../modules/localization/translator';
 
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const route = useRoute();
 const router = useRouter();
@@ -28,7 +28,7 @@ const mode = computed(
     () => route.meta.identityMode as FrontendIdentityOperation,
 );
 const next = computed(() => safeFrontendReturn(route.query.next));
-const nativeInitial = context.initialDocumentFor(route.fullPath);
+const initialBootstrap = context.initialDocumentFor(route.fullPath);
 // Passwords belong only to this mounted form; neither bootstrap nor persistent recovery stores them.
 const fields = reactive({
     username: '',
@@ -37,7 +37,7 @@ const fields = reactive({
     displayname: '',
     email: '',
 });
-const finished = ref(!!nativeInitial?.identityFeedback && frontendIdentityMessageFeedback.includes(nativeInitial.identityFeedback));
+const finished = ref(!!initialBootstrap?.identityFeedback && frontendIdentityMessageFeedback.includes(initialBootstrap.identityFeedback));
 // Signup completion stays on this visit's existing message surface. SMTP failure
 // changes its advisory text, never its confirmed account-creation outcome.
 const registrationEmailFailed = ref(false);
@@ -75,7 +75,7 @@ const recoveringAccess = ref(false);
 const submittingIdentity = computed(() => command.pending.value && !recoveringAccess.value);
 const submittingRecovery = computed(() => command.pending.value && recoveringAccess.value);
 const formLocation = computed(() => {
-    // A new return destination is a new native form visit, even when Vue reuses its
+    // A new return destination is a new form visit, even when Vue reuses its
     // component. Locale presentation and fragment movement retain the current draft.
     const {locale: _locale, ...query} = route.query;
     return router.resolve({path: route.path, query}).fullPath;
@@ -103,9 +103,9 @@ function clearFields(): void {
     Object.assign(fields, {username: '', password: '', passwordRepeat: '', displayname: '', email: ''});
 }
 
-/** Native rejected forms never redisplay credentials. Release only secrets after an actual
+/** Rejected forms never redisplay credentials. Release only secrets after an actual
  * server rejection; local validation and unknown delivery retain the user's mounted input. */
-function acceptIdentityRejection(failure: unknown, scope: PilotRequestScope): void {
+function acceptIdentityRejection(failure: unknown, scope: FrontendRequestScope): void {
     if (!(failure instanceof ApiFailure) || !failure.confirmedRejection || !context.isCurrent(scope)) return;
     fields.password = '';
     fields.passwordRepeat = '';
@@ -129,7 +129,7 @@ const identityDenial = computed(() => {
     const initial = initialDocument.value?.identityProblem;
     if (initial) return problemMessage(messages.value, initial, identityProblemKey);
     // Configuration may change after the page shell was read. Its validated command
-    // rejection still owns the same complete native Error instead of an inline form.
+    // rejection still owns the same complete Error document instead of an inline form.
     if (identityConfigurationProblem.value) {
         return problemMessage(messages.value, identityConfigurationProblem.value, identityProblemKey);
     }
@@ -138,7 +138,7 @@ const identityDenial = computed(() => {
         isPlainMessageKey(configuredEntry.value.messageKey) ? configuredEntry.value.messageKey : 'common.error');
     return null;
 });
-/** OIDC entry is a document navigation, preserving the native configured-provider owner. */
+/** OIDC entry is a document navigation, preserving the configured-provider owner. */
 function enterConfiguredProvider(redirect: boolean): void {
     const entry = configuredEntry.value;
     if (redirect && context.browser && entry.kind === 'redirect') window.location.assign(entry.url);
@@ -224,13 +224,13 @@ async function refreshIdentityState(): Promise<void> {
     await command.recover();
 }
 
-/** API codes remain stable while each native form selects its established wording.
+/** API codes remain stable while each form selects its established wording.
  * Both bootstrap denials and enhanced commands use the same validated projection. */
 function identityProblemKey(problem: components['schemas']['Problem']) {
     return frontendIdentityProblemKey(mode.value, problem.code);
 }
-// Page and submit presentation share one definition per existing native identity form.
-// Keeping label/icon choices together makes later form migrations explicit and reviewable.
+// Page and submit presentation share one definition per existing identity form.
+// Keeping label/icon choices together keeps each form definition explicit and reviewable.
 const signInPresentation = {title: 'app.login', icon: 'bi-box-arrow-in-right',
     submit: 'app.login', submitIcon: 'bi-box-arrow-in-right'} as const;
 const presentations = {
@@ -258,7 +258,7 @@ const resultTitle = computed(() => {
     return undefined;
 });
 const title = computed(() => resultTitle.value ?? messages.value.t(presentation.value.title));
-// Native recovery documents have their own titles; their visible form headings
+// Recovery documents have their own titles; their visible form headings
 // remain conversational. Confirmed/denied outcomes still share one result title.
 const documentTitle = computed(() => resultTitle.value ?? messages.value.t(
     'documentTitle' in presentation.value ? presentation.value.documentTitle : presentation.value.title));
@@ -279,7 +279,7 @@ const titleIcon = computed(() => presentation.value.icon);
 const submitLabel = computed(() => messages.value.t(presentation.value.submit));
 const submitIcon = computed(() => presentation.value.submitIcon);
 
-/** Dispatch the current form through one command owner after local, native-equivalent validation. */
+/** Dispatch the current form through one command owner after local, feature-specific validation. */
 async function submit(): Promise<void> {
     // A confirmed command awaiting destination delivery can only retry navigation.
     // The shared receipt survives the private view's identity-driven remount.
@@ -290,7 +290,7 @@ async function submit(): Promise<void> {
         // Identify the failed requirement using the existing password policy;
         // keep the field warning and the user's unsent credentials available.
         // Reset has no such browser handler: its controller owns rejection and
-        // native redisplay, including clearing both submitted password fields.
+        // redisplay, including clearing both submitted password fields.
         showPasswordCriteria.value = !isRegistrationPasswordValid(fields.password);
         command.setError(showPasswordCriteria.value ? 'auth.passwordRequirements' : 'auth.passwordMismatch', 'transient');
         return;
@@ -318,7 +318,7 @@ async function submit(): Promise<void> {
         if (mode.value === 'activate') {
             // Activation consumes a token. Delivery failure can retry the confirmed
             // login destination only; it must never run activation a second time.
-            const destination = router.resolve({path: '/frontend-pilot/users/login', query: {next: next.value}}).fullPath;
+            const destination = router.resolve({path: '/users/login', query: {next: next.value}}).fullPath;
             await confirmedNavigation.navigate(destination, context.capture(), route.fullPath,
                 {kind: 'success', messageKey: 'auth.activated'});
         }
@@ -326,7 +326,7 @@ async function submit(): Promise<void> {
 }
 
 /** Sign-in commands keep the entered credentials within the captured request scope. */
-async function signIn(scope: PilotRequestScope): Promise<components['schemas']['IdentityResult']> {
+async function signIn(scope: FrontendRequestScope): Promise<components['schemas']['IdentityResult']> {
     try {
         if (mode.value === 'guest-login') {
             return await context.api.guestLogin({guestId: String(route.params.guestId), token: String(route.params.token)}, scope);
@@ -339,12 +339,12 @@ async function signIn(scope: PilotRequestScope): Promise<components['schemas']['
 }
 
 /** Dispatch registration, reset-mail, activation or password reset in the captured
- * actor scope. Await rejection here to preserve native secret-clearing behavior;
+ * actor scope. Await rejection here to preserve secret-clearing behavior;
  * invalid reset tokens retire admission, while unconfirmed delivery remains unknown. */
-async function submitIdentityForm(scope: PilotRequestScope) {
+async function submitIdentityForm(scope: FrontendRequestScope) {
     try {
         // Await inside this boundary so every confirmed server rejection releases secrets.
-        // Returning an unawaited promise would bypass the native redisplay handling below.
+        // Returning an unawaited promise would bypass the redisplay handling below.
         if (mode.value === 'register') {
             return await context.api.register({
                 username: fields.username,
@@ -373,7 +373,7 @@ async function submitIdentityForm(scope: PilotRequestScope) {
     }
 }
 
-/** Native recovery completes on the full message surface. Unknown delivery preserves the
+/** Recovery completes on the full message surface. Unknown delivery preserves the
  * mounted form and its values; only confirmation releases those values and departure guards. */
 async function recover(): Promise<void> {
     if (blocked.value) return;
@@ -385,13 +385,13 @@ async function recover(): Promise<void> {
         // recovery never resends a mail request with uncertain delivery.
         if (await command.run(requestRecovery, false)) {
             clearFields();
-            await completePageEntry(context, router, '/frontend-pilot/guest/recovery',
+            await completePageEntry(context, router, '/guest/recovery',
                 'auth.recoverySent', 'success', scope, origin, confirmedNavigation);
         }
     } finally { recoveringAccess.value = false; }
 }
 
-function requestRecovery(scope: PilotRequestScope): Promise<components['schemas']['MutationResult']> {
+function requestRecovery(scope: FrontendRequestScope): Promise<components['schemas']['MutationResult']> {
     return context.api.recoverGuest({email: fields.email, next: next.value}, scope);
 }
 onMounted(() => {
@@ -401,7 +401,7 @@ onMounted(() => {
  * restore a completed command; only authorized initial feedback or the scoped receipt can. */
 function admitRecovery(): void {
     if (context.browser && context.ready.value && mode.value === 'recovery' && !pageCompleted.value && !identityDenial.value) {
-        void router.replace('/frontend-pilot/users/login');
+        void router.replace('/users/login');
     }
 }
 watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.value, context.ready.value],
@@ -421,7 +421,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
     <LoadingSkeleton v-else-if="mode === 'recovery'" v-bind="route.meta.loadingSkeleton" page />
     <template v-else>
         <!-- Identity validation and activation feedback occupy the same shared region
-             above the form card as native account pages. Keep it outside the form. -->
+             above the form card as account pages. Keep it outside the form. -->
         <CommandFeedback :feedback="command.feedback" part="error" error-kind="danger"
             :disabled="command.pending.value || command.recovering.value" />
         <section class="card bg-dark text-white mb-3">
@@ -546,7 +546,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                             >
                         </div>
                         <div v-if="['forgot', 'reset'].includes(mode)" class="col-12 text-center mt-3">
-                            <RouterLink class="text-decoration-none" :to="{path: '/frontend-pilot/users/login', query: {next}}"><i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('auth.backLogin') }}</RouterLink>
+                            <RouterLink class="text-decoration-none" :to="{path: '/users/login', query: {next}}"><i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('auth.backLogin') }}</RouterLink>
                         </div>
                     </template>
                     <p v-else class="text-center">{{ messages.t('auth.loginDisabled') }}</p>
@@ -556,7 +556,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                     >
                         <a
                             class="btn btn-primary"
-                            :href="'/frontend-pilot/users/oidc/login?next=' + encodeURIComponent(next)"
+                            :href="'/users/oidc/login?next=' + encodeURIComponent(next)"
                             ><i class="bi bi-person-vcard me-1" aria-hidden="true"></i>{{
                                 messages.t('auth.oidcLogin', {provider: context.session.value.shell.oidcName})
                             }}</a
@@ -568,7 +568,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                     >
                         <RouterLink
                             class="text-decoration-none"
-                            :to="{path: '/frontend-pilot/users/forgot-password', query: {next}}"
+                            :to="{path: '/users/forgot-password', query: {next}}"
                             ><i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i
                             >{{ messages.t('auth.forgotPassword') }}</RouterLink
                         >
@@ -603,7 +603,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                     </form>
                 </template>
                 <p v-if="finished" class="text-center mt-3">
-                    <RouterLink :to="{path: '/frontend-pilot/users/login', query: {next}}">{{
+                    <RouterLink :to="{path: '/users/login', query: {next}}">{{
                         messages.t('auth.backLogin')
                     }}</RouterLink>
                 </p>

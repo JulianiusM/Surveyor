@@ -2,7 +2,7 @@
 import {computed, ref, shallowRef, watch} from 'vue';
 import type {ActivityRequirementConfiguration, ActivityRequirementDraft} from '../../../types/FrontendActivityRequirementTypes';
 import {calculateBaselineRequirementForPlan, hasValidRequirementValues} from '../../../modules/activity/requirements';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {activityKeys} from '../../app/queryKeys';
 import {retireQueryFamily} from '../../app/queryCache';
 import {useListCommands, useListDetail} from '../../composables/listDetail';
@@ -20,7 +20,7 @@ import StatusNotice from '../../components/StatusNotice.vue';
 // clean controls, but never replace a dirty draft or its calculation context.
 const props = defineProps<{planId: string; disabled?: boolean}>();
 const emit = defineEmits<{changed: []; denied: []; mode: [mode: ActivityRequirementDraft['assignmentMode'] | null]}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useActivityApi(context);
 const planId = computed(() => props.planId);
@@ -44,7 +44,7 @@ const targets = computed(() => [...(configuration.value?.overrideTargets ?? [])]
 function targetLabel(target: ActivityRequirementConfiguration['overrideTargets'][number]): string {
     return activityParticipantName(target.label, messages.value.t, target.nameIsFallback, target.profileId);
 }
-// Native live coverage also gates Auto-generate from the unsaved mode. Publish
+// Live coverage also gates Auto-generate from the unsaved mode. Publish
 // that presentation input only; this form remains the sole requirement draft.
 watch(() => draft.value?.assignmentMode ?? null, mode => emit('mode', mode), {immediate: true});
 
@@ -192,7 +192,7 @@ async function save(): Promise<void> {
         <div class="card-header d-flex justify-content-between align-items-center">
             <span class="d-flex align-items-center gap-2">
                 <i class="bi bi-gear-wide-connected" aria-hidden="true"></i><span>{{ messages.t('activity.requirements.settings') }}</span></span>
-            <div class="pilot-action-row">
+            <div class="frontend-action-row">
                 <ActionButton type="button" class="btn-sm" variant="outline-secondary" data-requirements-refresh
                     :pending="readAction.pending.value" :show-spinner="false"
                     :disabled="readAction.disabled.value || command.pending.value || command.recovering.value" @click="reload">
@@ -266,7 +266,7 @@ async function save(): Promise<void> {
                             :pending="command.pending.value" />
                     </div>
                     <hr />
-                    <h6 class="pilot-section-heading">
+                    <h6 class="frontend-section-heading">
                         <span>{{ messages.t('activity.requirements.stays') }}</span>
                         <small class="text-secondary">{{ messages.t('activity.requirements.staysHint') }}</small>
                     </h6>
@@ -283,7 +283,7 @@ async function save(): Promise<void> {
                         </div>
                     </div>
                     <!-- These switches persist independently of coverage demand.
-                    They retain the native assignment/attendance policy meanings. -->
+                    They retain the assignment/attendance policy meanings. -->
                     <div class="form-check form-switch my-3">
                         <input id="allowOverfill" v-model="draft.allowOverfillAfterFull" type="checkbox" role="switch"
                             class="form-check-input" :disabled="blocked" />
@@ -313,7 +313,7 @@ async function save(): Promise<void> {
                         </div>
                     </div>
                     <hr />
-                    <h6 class="pilot-section-heading">
+                    <h6 class="frontend-section-heading">
                         <span>{{ messages.t('activity.requirements.roles') }}</span>
                         <small class="text-secondary">{{ messages.t('activity.requirements.rolesHint') }}</small>
                     </h6>
@@ -325,7 +325,7 @@ async function save(): Promise<void> {
                             :pending="command.pending.value" />
                     </div>
                     <hr />
-                    <h6 class="pilot-section-heading mb-2">
+                    <h6 class="frontend-section-heading mb-2">
                         <span>{{ messages.t('activity.requirements.overrides') }}</span>
                         <ActionButton type="button" class="btn-sm" variant="outline-info" data-add-override
                             :disabled="blocked || !targets.length"
@@ -363,7 +363,7 @@ async function save(): Promise<void> {
                             </div>
                         </div>
                     </div>
-                    <div class="pilot-action-row justify-content-end border-top border-secondary-subtle mt-3 pt-3">
+                    <div class="frontend-action-row justify-content-end border-top border-secondary-subtle mt-3 pt-3">
                         <small class="text-secondary me-auto">{{ messages.t('activity.requirements.saveHint') }}</small>
                         <ActionButton type="button" variant="success" data-requirements-save
                             :pending="command.pending.value" :show-spinner="false" :disabled="blocked || !dirty" @click="save">
@@ -375,7 +375,7 @@ async function save(): Promise<void> {
     </div>
     <template v-if="draft && analysis">
         <hr />
-        <h6 class="pilot-section-heading mt-3">
+        <h6 class="frontend-section-heading mt-3">
             <span><span class="badge bg-light text-dark me-2">{{ messages.t('activity.requirements.stepTwo') }}</span>{{ messages.t('activity.requirements.checkCoverage') }}</span>
             <small class="text-secondary">{{ messages.t('activity.requirements.progressHint') }}</small>
         </h6>

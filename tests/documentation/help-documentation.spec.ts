@@ -88,6 +88,7 @@ describe('in-app help source and trust boundary', () => {
             'Plan and decide',
             'Organize and share',
             'Advanced',
+            'More help',
         ]);
         expect(help.docsList.map(doc => doc.path)).toEqual([
             'readme',
@@ -100,6 +101,7 @@ describe('in-app help source and trust boundary', () => {
             'packing_lists',
             'drivers_lists',
             'permissions',
+            'localization',
         ]);
         expect(new Set(help.docsList.map(doc => doc.path)).size).toBe(help.docsList.length);
     });
@@ -119,7 +121,7 @@ describe('in-app help source and trust boundary', () => {
             '',
             '![Navigation map](assets/navigation-at-a-glance.png)',
         ].join('\n'));
-        expect(rendered.content).toContain('src="/help/assets/navigation-at-a-glance.png"');
+        expect(rendered.content).toContain('src="/help/assets/navigation-at-a-glance.png?locale=en"');
         expect(() => validateTrustedHelpMarkdown('# Bad\n\n![Missing](assets/missing.png)')).toThrow(/packaged file/iu);
     });
 
@@ -163,10 +165,10 @@ describe('critical rendered help contracts', () => {
         expectAll(permissions, [/cumulative/iu, /One profile can match several groups/iu, /Surveys.*do not use/iu]);
 
         const visibleSources = readRepositoryFiles(
-            'src/views/users',
-            'src/views/layout.pug',
-            'src/views/modules/module_unified_entity_cards.pug',
-            'src/public/js/core/password-validation.ts',
+            'src/frontend/features/identity',
+            'src/frontend/features/overview',
+            'src/frontend/components/AppHeader.vue',
+            'src/locales/en.json',
         );
         expectAll(visibleSources, ['Register', 'Your overview', 'Your participation', 'Administrable entities', 'New']);
     });
@@ -187,10 +189,11 @@ describe('critical rendered help contracts', () => {
             /owner-only/iu,
         ]);
 
-        const surveyUi = readRepositoryFiles('src/views/surveyor');
+        const surveyUi = readRepositoryFiles('src/frontend/features/surveys', 'src/locales/en.json');
         expectAll(surveyUi, [
             'Add new combination',
             'Weekday',
+            'Week of month',
             'Day in month',
             'Add',
             'Submit',
@@ -212,8 +215,8 @@ describe('critical rendered help contracts', () => {
             'Packed?',
             // Preserve the locality/privacy contract without pinning a superseded
             // sentence. Application tests independently verify localStorage behavior.
-            /check mark is stored only in the current browser for that list item/iu,
-            /not tied to the active profile/iu,
+            /check mark.*Only that browser for that list item/iu,
+            /not associated with a Surveyor account or profile/iu,
             /Participants.*distinct/iu,
             /Items.*all rows in the list, including Everyone items/iu,
             /open.*ordinary item/iu,
@@ -221,7 +224,7 @@ describe('critical rendered help contracts', () => {
             /Everyone.*excluded/iu,
         ]);
 
-        const packingUi = readRepositoryFiles('src/views/packing', 'src/public/js');
+        const packingUi = readRepositoryFiles('src/frontend/features/packing', 'src/locales/en.json');
         expectAll(packingUi, [
             'Everyone',
             'All',
@@ -247,7 +250,7 @@ describe('critical rendered help contracts', () => {
             // The task-first guide names the two visible totals, then distinguishes
             // aggregate coverage from timetable feasibility in its explanation.
             /compares Required shifts with total Slot capacity/iu,
-            /Coverage is an aggregate planning check, not proof that a timetable is feasible/iu,
+            /Coverage compares the number of required shifts with available places; it does not guarantee that everyone can be assigned/iu,
             'Auto-generate',
             'Pending',
             'Approved',
@@ -259,7 +262,7 @@ describe('critical rendered help contracts', () => {
             'Save changes',
             /Automatic generation creates only ordinary slot assignments\. It does not fill named roles/iu,
             /An assignment carrying a named role is never moved automatically/iu,
-            /roleless/iu,
+            /existing assignment without a named role/iu,
             /A workable arrangement can exist even when no suggestion is found/iu,
             /last resort/iu,
             /overfill/iu,
@@ -272,7 +275,7 @@ describe('critical rendered help contracts', () => {
             '4 The exact saved Stay duration requirements value',
         ]);
 
-        const activityUi = readRepositoryFiles('src/views/activity', 'src/public/js/modules/activity');
+        const activityUi = readRepositoryFiles('src/frontend/features/activity', 'src/locales/en.json');
         expectAll(activityUi, [
             'Free',
             'Required',

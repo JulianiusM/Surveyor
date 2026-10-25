@@ -63,7 +63,7 @@ function atomicGuestOptions(req: Request): GuestRegistrationTransactionOptions<P
     function prepareResult(staged: Request['session'], personalLink: string) {
         return prepareGuestIdentityReplies(req, staged, personalLink);
     }
-    return {frontend: true, next: '/frontend-pilot', context: req.apiActor!.context, prepareResult};
+    return {frontend: true, next: '/', context: req.apiActor!.context, prepareResult};
 }
 
 /** Check both real related tables after a rollback, rather than mocking creation repositories. */
@@ -77,7 +77,7 @@ function atomicAccountOptions(req: Request): AccountRegistrationTransactionOptio
     function prepareResult() {
         return prepareAccountRegistrationReplies(req);
     }
-    return {frontend: true, next: '/frontend-pilot', context: req.apiActor!.context, prepareResult};
+    return {frontend: true, next: '/', context: req.apiActor!.context, prepareResult};
 }
 
 /** Keep valid credentials private to the production registration call and its real ORM fixture. */
@@ -154,7 +154,7 @@ async function ordinaryLogoutFixture(kind: Exclude<OrdinaryIdentityKind, 'profil
     await run();
     const stored = await readStoredSession(req.sessionStore, req.sessionID);
     req.sessionStore.createSession(req, stored!);
-    req.session.frontendAuthReturn = '/frontend-pilot/packing/return-after-login';
+    req.session.frontendAuthReturn = '/packing/return-after-login';
     await persistSession(req.session);
     req.apiActor = {context: req.session.frontendContext!, auth: req.session.auth, profile: req.session.profile};
 
@@ -193,7 +193,7 @@ async function invalidAdmissionRequest(): Promise<Request> {
     return req;
 }
 
-describe('read-only pilot session admission', () => {
+describe('read-only frontend session admission', () => {
     it('projects a cookie-free anonymous visit without creating or mutating its server session', async () => {
         const req = identityRequest();
         const original = req.session;
@@ -657,7 +657,7 @@ describe('atomic versioned account registration', () => {
     });
 });
 
-describe('atomic pilot activation completion', () => {
+describe('atomic frontend activation completion', () => {
     it('consumes its token with a prevalidated receipt and staged document feedback without a later session save', async () => {
         const {id} = await registerLocalAccount('atomic-activation');
         const token = await userService.generateActivationToken(id);
@@ -667,7 +667,7 @@ describe('atomic pilot activation completion', () => {
         function prepareDocumentCompletion(staged: Request['session']) {
             // The document adapter writes this same connect-flash shape only on
             // isolated staging; private activation tokens never enter feedback.
-            Object.defineProperty(staged, 'flash', {value: {'frontend-pilot': ['auth.activated']}, enumerable: true});
+            Object.defineProperty(staged, 'flash', {value: {'frontend': ['auth.activated']}, enumerable: true});
             return prepareValidatedJson(req, 'activateIdentity', 200, {changed: true});
         }
         options.prepareResult = prepareDocumentCompletion;
@@ -730,7 +730,7 @@ describe('atomic pilot activation completion', () => {
     });
 });
 
-describe('atomic ordinary pilot identity completion', () => {
+describe('atomic ordinary frontend identity completion', () => {
     it('creates its first account session only after credentials and prepared identity completion succeed', async () => {
         const account = await registerLocalAccount('first-account-login');
         await userService.activateUser(account.id);
@@ -835,7 +835,7 @@ describe('atomic ordinary pilot identity completion', () => {
     });
 });
 
-describe('atomic ordinary pilot logout completion', () => {
+describe('atomic ordinary frontend logout completion', () => {
     it.each(['account', 'guest'] as const)('commits anonymous %s logout and its prepared receipt without a later actor resave', async kind => {
         const {req, options} = await ordinaryLogoutFixture(kind);
         const original = req.session;
@@ -932,8 +932,8 @@ describe('atomic ordinary pilot logout completion', () => {
     });
 });
 
-describe('atomic pilot password-reset consumption', () => {
-    it('allows only one of two independent pilot sessions to consume a reset token and write its password', async () => {
+describe('atomic frontend password-reset consumption', () => {
+    it('allows only one of two independent frontend sessions to consume a reset token and write its password', async () => {
         const account = await registerLocalAccount('concurrent-reset');
         const token = await userService.generatePasswordResetToken(account.username);
         const first = await atomicGuestRequest();
@@ -1025,7 +1025,7 @@ describe('atomic pilot password-reset consumption', () => {
         expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe('later-reset-actor');
     });
 
-    it('preserves native and pilot mismatch-before-invalid-token diagnostics', async () => {
+    it('preserves native and frontend mismatch-before-invalid-token diagnostics', async () => {
         const req = await atomicGuestRequest();
         const body = {password: 'first-value', confirmPassword: 'other-value'};
         await expect(userController.resetPassword('invalid-token', body)).rejects.toMatchObject({cause: 'PASSWORD_MISMATCH'});
@@ -1035,7 +1035,7 @@ describe('atomic pilot password-reset consumption', () => {
     });
 });
 
-describe('atomic pilot password-reset mail preparation', () => {
+describe('atomic frontend password-reset mail preparation', () => {
     it('rolls back a known account token when cached SMTP setup fails before commit', async () => {
         const account = await registerLocalAccount('reset-setup-failed');
         const oldToken = await userService.generatePasswordResetToken(account.username);
@@ -1124,7 +1124,7 @@ describe('authentication user stories', () => {
         function prepareFailingSave(staged: Request['session']): PreparedApiJsonResponse {
             const result = prepareIdentityReply(req, staged, 'loginIdentity');
             Object.defineProperty(staged, 'flash', {value: {
-                'frontend-pilot-notice': [JSON.stringify({kind: 'success', messageKey: 'auth.loginDone'})],
+                'frontend-notice': [JSON.stringify({kind: 'success', messageKey: 'auth.loginDone'})],
             }, enumerable: true});
             Object.defineProperty(staged, 'serializationCycle', {value: staged, enumerable: true});
             return result;
@@ -1165,17 +1165,17 @@ describe('authentication user stories', () => {
         const guestMail = vi.spyOn(email, 'sendLinkEmail').mockResolvedValue(undefined);
         const recovery = vi.spyOn(email, 'sendGuestRecoveryEmail').mockResolvedValue(undefined);
         try {
-            const next = '/frontend-pilot/packing/example?locale=de#items';
+            const next = '/packing/example?locale=de#items';
             await userController.registerUser({username: 'frontend-link-account', displayname: 'Frontend Name',
                 email: 'frontend-links@example.test', password: 'initial-secret', password_repeat: 'initial-secret'},
                 undefined, {frontend: true, next});
             const activateUrl = new URL(activation.mock.calls[0][1]);
-            expect(activateUrl.pathname).toMatch(/^\/frontend-pilot\/users\/activate\/[^/]+$/);
+            expect(activateUrl.pathname).toMatch(/^\/users\/activate\/[^/]+$/);
             expect(activateUrl.searchParams.get('next')).toBe(next);
             await userController.sendPasswordForgotMail('frontend-link-account', {frontend: true, next: '//outside.invalid'});
             const resetUrl = new URL(reset.mock.calls[0][1]);
-            expect(resetUrl.pathname).toMatch(/^\/frontend-pilot\/users\/reset-password\/[^/]+$/);
-            expect(resetUrl.searchParams.get('next')).toBe('/frontend-pilot/users/dashboard');
+            expect(resetUrl.pathname).toMatch(/^\/users\/reset-password\/[^/]+$/);
+            expect(resetUrl.searchParams.get('next')).toBe('/users/dashboard');
 
             const session = {} as Request['session'];
             const link = await userController.registerGuest('Frontend Guest', '  FRONTEND-GUEST@example.test  ', session,

@@ -4,14 +4,14 @@ documentation-metadata
 audience: maintainers; security reviewers; advanced documentation contributors
 owner: permission-system maintainers
 status: current
-last-verified: 2026-10-03
+last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: Native cumulative grants, generated permission references, feature exceptions, field/action policy and archival/private visibility authority.
-source-anchors: src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/controller/entityAdminController.ts; src/middleware/adminApiFactory.ts; src/modules/database/services/UserService.ts; src/modules/lib/permissions.ts; src/modules/permissionEngine.ts; src/types/PermissionTypes.d.ts; src/middleware/permissionMiddleware.ts; src/middleware/guestFlowFactory.ts; src/modules/database/services/EntityAdminService.ts; src/modules/database/entities/permissions/EntityPermissions.ts; src/modules/database/entities/permissions/EntityAdminAssignment.ts; src/views/modules/module_perm_matrix.pug; src/views/modules/module_admin_matrix.pug; src/views/modules/module_admin_options.pug; src/public/js/modules/perm-matrix.ts; src/public/js/modules/admin-matrix.ts; src/routes/event.ts; src/routes/api/event.ts; src/routes/api/activity.ts; src/routes/api/packing.ts; src/routes/api/drivers.ts
+verification-scope: P11 source-owner and Help-link reconciliation; existing domain behavior and decisions retained; no new execution claim
+source-anchors: src/types/EntityPropertyTypes.d.ts; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/frontend-core.spec.ts; src/controller/entityAdminController.ts; src/modules/database/services/UserService.ts; src/modules/lib/permissions.ts; src/modules/permissionEngine.ts; src/types/PermissionTypes.d.ts; src/middleware/permissionMiddleware.ts; src/modules/database/services/EntityAdminService.ts; src/modules/database/entities/permissions/EntityPermissions.ts; src/modules/database/entities/permissions/EntityAdminAssignment.ts; src/frontend/components/EntityAccessEditor.vue; src/routes/api/v1/
 next-review: D12,D14
 -->
 
-This is the canonical maintainer reference for Surveyor’s general permission engine. The end-user, novice-first explanation is [Permissions and Sharing](user-guide/PERMISSIONS.md).
+This is the canonical maintainer reference for Surveyor’s general permission engine. The end-user, novice-first explanation is [Permissions and Sharing](user-guide/en/PERMISSIONS.md).
 
 ## Scope
 
@@ -56,7 +56,8 @@ A full-account event participant with an individual assignment can therefore rec
 
 ## Session establishment and page admission
 
-Permission evaluation is not the only access layer. `createGuestFlow` installs a safe-zone middleware for most feature pages:
+Permission evaluation is not the only access layer. Existing feature controller entry operations and
+`getEntityViewAdmission` supply the shared admission rules used by canonical document and versioned consumers:
 
 1. For an event-linked resource, a registered participant enters without an additional page-level bit check.
 2. A nonparticipant with an active profile enters only when the effective entity mask contains `ACCESS_VIEW`.
@@ -197,12 +198,13 @@ Reordering is an entity-level `ITEM_EDIT` check; adding a child is an entity-lev
 
 ## Middleware and rendering contracts
 
-- `requirePermission` and `requirePermissionApi` evaluate entity subjects and reject when the required mask is absent.
-- `requireItemPermission` and `requireItemPermissionApi` evaluate item plus parent and can accept explicit parent alternatives.
+- Protected document outputs retain `requirePermission`; versioned adapters capture the admitted actor and invoke the existing controller operation.
+- Controllers evaluate entity/item subjects through the shared permission engine. Explicit parent alternatives remain feature-specific operation policy.
 - A required mask can combine bits. `hasPerm(mask, required)` succeeds only when all bits in the combined required mask are present.
-- `attachPermBundle` supplies entity and item `PermView` instances to Pug.
-- `attachPermMeta` supplies generated labels, current/default audience masks, and presets.
-- `attachAdminData` supplies profile-specific rows.
+- Versioned projections derive permitted actions from the shared permission owner; component visibility never authorizes a write.
+
+- `entityAdminController.permissionDefinitions` supplies the maintained permission/preset definitions to creation and settings consumers.
+- Authorized controller projections supply current/default masks and profile-specific administrator rows to the versioned adapters.
 - Group and administrator mutation APIs are guarded by `MANAGE_PERMISSIONS`.
 
 Client-side checks improve feedback and visibility but are not the security boundary. Every mutation must retain the matching server-side middleware or controller authorization.
@@ -274,7 +276,8 @@ When changing a permission bit, predicate, default, preset, route guard, or UI c
 
 1. Update `PERM` or `DEFAULT_PERM` as the single generated source where appropriate.
 2. Review every server-side `requirePermission*`, `requireItemPermission*`, and direct `can` call.
-3. Review Pug and browser-side checks for matching visibility and feedback.
+3. Review component controls and versioned projections for matching visibility and feedback.
+
 4. Review creation defaults and stored audience migration implications.
 5. Regenerate and compare both tables in this reference and the complete label table in the user guide.
 6. Add scenario tests for overlapping audiences, owner behavior, item fallback, and linked-resource admission.
@@ -287,7 +290,8 @@ The D03 documentation package validates:
 
 - Exact permission keys, values, labels, preset membership, and initial defaults against `src/modules/lib/permissions.ts`.
 - Cumulative source combinations against `computeMaskFor`.
-- Linked and unlinked page-admission descriptions against `guestFlowFactory.ts`.
-- Parent fallback examples against the API route middleware.
-- Matrix labels and replace-selection behavior against Pug and browser modules.
+- Linked and unlinked page admission against the feature controller entry operations and their canonical document/API consumers.
+- Parent fallback examples against the shared permission engine and the relevant feature controller operation.
+- Matrix labels and replace-selection behavior against shared Vue permission controls.
+
 - Survey exclusion against the feature-specific decision records and survey creation/view paths.

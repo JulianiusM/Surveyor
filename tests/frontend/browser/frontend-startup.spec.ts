@@ -4,20 +4,18 @@ import {expect, test, type Dialog, type Locator, type Page, type Route} from '@p
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {compile, Logger} from 'sass';
 import type {Response} from 'express';
-import {createBrowserReadGate as readGate, waitForPilotHydration} from '../../keywords/frontendDynamicKeywords';
+import {createBrowserReadGate as readGate, waitForFrontendHydration} from '../../keywords/frontendDynamicKeywords';
 import type {components} from '../../../src/types/api/v1';
-import type {FrontendPilotBootstrap, FrontendPreparedDocument} from '../../../src/types/FrontendPilotTypes';
+import type {FrontendBootstrap, FrontendPreparedDocument} from '../../../src/types/FrontendTypes';
 import {createFrontendEventView} from '../../factories/frontendEventFactory';
 
 type Session = components['schemas']['SessionView'];
 const deliveries = new WeakMap<Page, {documents: number; commands: number; nativeStyles: number}>();
-let referenceStyles: string | undefined;
 
 test.afterEach(async ({page}) => {
     expect(deliveries.get(page)?.commands ?? 0, 'Isolated startup must not dispatch commands').toBe(0);
-    expect(deliveries.get(page)?.nativeStyles ?? 0, 'Pilot documents must not depend on native stylesheets').toBe(0);
+    expect(deliveries.get(page)?.nativeStyles ?? 0, 'Frontend documents must not depend on native stylesheets').toBe(0);
     deliveries.delete(page);
 });
 
@@ -35,16 +33,16 @@ function startupSession(locale: Session['locale'] = 'en'): Session {
 /** Deliver real built SSR and fingerprinted client assets through one intercepted
  * origin. This selected browser boundary needs no Express server or schema reset.
  * API fixtures retain production decoding while refusing every command. */
-async function startupDocument(page: Page, path: string, bootstrap: FrontendPilotBootstrap,
+async function startupDocument(page: Page, path: string, bootstrap: FrontendBootstrap,
                                documentHeaders?: Record<string, string>) {
-    const renderer = await import(pathToFileURL(resolve('dist/modules/frontendPilotRenderer.js')).href) as {
-        prepareFrontendPilot(response: Response, url: string, bootstrap: FrontendPilotBootstrap): Promise<FrontendPreparedDocument>;
+    const renderer = await import(pathToFileURL(resolve('dist/modules/frontendRenderer.js')).href) as {
+        prepareFrontend(response: Response, url: string, bootstrap: FrontendBootstrap): Promise<FrontendPreparedDocument>;
     };
     // Only the response/header boundary is substituted. The real renderer owns
     // the complete shell, independent notice/monitor, SSR tree and bootstrap.
     const response: Response = Object.create(null);
     response.set = setFixtureHeader;
-    const prepared = await renderer.prepareFrontendPilot(response, path, bootstrap);
+    const prepared = await renderer.prepareFrontend(response, path, bootstrap);
     // Local installed Bootstrap makes layout independent of CDN availability.
     // Its version differs from the release CDN, so omit only fixture SRI metadata;
     // production HTML, module loading and application behavior remain intact.
@@ -79,13 +77,13 @@ async function startupDocument(page: Page, path: string, bootstrap: FrontendPilo
             await route.abort('failed');
             return;
         }
-        if (request.isNavigationRequest() && pathname.startsWith('/frontend-pilot')) {
+        if (request.isNavigationRequest() && pathname.startsWith('/')) {
             observed.documents++;
             // Native href/GET recovery may visit another Help query. Deliver its
             // real shell too; this remains synthetic public data, not a server route
             // admission or search-result/persistence assertion.
             const document = request.url() === url ? html
-                : (await renderer.prepareFrontendPilot(response, pathname + requestedUrl.search, bootstrap)).html
+                : (await renderer.prepareFrontend(response, pathname + requestedUrl.search, bootstrap)).html
                     .replace(/\s+integrity="[^"]*"/gu, '');
             await route.fulfill({status: 200, contentType: 'text/html', headers: documentHeaders, body: document});
             return;
@@ -142,7 +140,7 @@ async function startupEventDocument(page: Page, locale: Session['locale'], admin
     const event = createFrontendEventView({id, title,
         capabilities: {...baseline.capabilities, admin, settings, register: !admin}});
     const eventEntry: components['schemas']['EventResourceEntry'] = {entry: {kind: 'render'}, guest: null};
-    const delivery = await startupDocument(page, `/frontend-pilot/event/${id}${admin ? '/admin' : ''}?locale=${locale}`,
+    const delivery = await startupDocument(page, `/event/${id}${admin ? '/admin' : ''}?locale=${locale}`,
         {session, pageEntry: {kind: 'render'}, eventEntry});
     await page.route(`**/api/v1/events/${id}**`, async route => {
         const pathname = new URL(route.request().url()).pathname;
@@ -155,19 +153,7 @@ async function startupEventDocument(page: Page, locale: Session['locale'], admin
         await route.fulfill({status: 200, contentType: 'application/json',
             headers: {'X-Surveyor-Context': session.context!}, body: JSON.stringify(data)});
     });
-    return {delivery, event};
-}
-
-/** Compile the unchanged native authored styles in memory for a temporary visual
- * comparator. Production delivery uses only Vite assets; no native file is changed
- * or served by this reference, and generated CSS is never an authored fixture. */
-function nativeStyleReference(includePilotOverrides = true): string {
-    if (referenceStyles === undefined) {
-        const base = compile(resolve('src/public/style/style.sass'), {logger: Logger.silent}).css;
-        const help = compile(resolve('src/public/style/help.sass'), {logger: Logger.silent}).css;
-        referenceStyles = base + '\n' + help;
-    }
-    return includePilotOverrides ? referenceStyles + '\n' + readFileSync('src/frontend/styles/pilot.css', 'utf8') : referenceStyles;
+    return {delivery, event, session};
 }
 
 /** Hold the first real module request so static Help can be edited before failure.
@@ -214,11 +200,11 @@ async function expandStartupNavigation(page: Page): Promise<void> {
 
 /** Startup fallback belongs below the same actual header in every failure mode. */
 async function expectStartupNoticeBelowHeader(page: Page): Promise<void> {
-    const notice = page.locator('#surveyor-pilot-javascript-required');
+    const notice = page.locator('#surveyor-frontend-javascript-required');
     await expect(notice).toBeVisible();
     await expect(notice).toHaveCount(1);
-    expect(await notice.evaluate(element => element.previousElementSibling?.matches('.pilot-app-header'))).toBe(true);
-    const navigation = (await page.locator('.pilot-app-header').boundingBox())!;
+    expect(await notice.evaluate(element => element.previousElementSibling?.matches('.frontend-app-header'))).toBe(true);
+    const navigation = (await page.locator('.frontend-app-header').boundingBox())!;
     const warning = (await notice.boundingBox())!;
     expect(Math.abs(warning.y - navigation.y - navigation.height)).toBeLessThan(1);
     expect(warning.x).toBeGreaterThanOrEqual(0);
@@ -244,9 +230,9 @@ for (const locale of ['en', 'de'] as const) {
             const profile = {id: '11111111-1111-4111-8111-111111111111', name: 'Menu fixture'};
             const session: Session = {...startupSession(locale), kind: 'account', activeProfile: profile, profiles: [profile],
                 context: 'menu-browser-context-1234567890', csrfToken: 'menu-browser-csrf-1234567890'};
-            const delivery = await startupDocument(page, '/frontend-pilot', {session, landing: {quickCreate: 'packing'}});
+            const delivery = await startupDocument(page, '/', {session, landing: {quickCreate: 'packing'}});
             await page.goto(delivery.url);
-            await waitForPilotHydration(page);
+            await waitForFrontendHydration(page);
             await expandStartupNavigation(page);
             const disclosure = page.locator('header .navbar-nav.ms-auto details');
             await disclosure.locator('summary').click();
@@ -291,7 +277,7 @@ for (const locale of ['en', 'de'] as const) {
             const profile = {id: '11111111-1111-4111-8111-111111111111', name: 'Accordion fixture'};
             const session: Session = {...startupSession(locale), kind: 'account', activeProfile: profile, profiles: [profile],
                 context: 'accordion-browser-context-1234567890', csrfToken: 'accordion-browser-csrf-1234567890'};
-            const delivery = await startupDocument(page, '/frontend-pilot/users/dashboard', {session, pageEntry: {kind: 'render'}});
+            const delivery = await startupDocument(page, '/users/dashboard', {session, pageEntry: {kind: 'render'}});
             const counts = {owner: 0, participant: 0};
             const started = readGate();
             const released = readGate();
@@ -310,8 +296,8 @@ for (const locale of ['en', 'de'] as const) {
             });
             try {
                 await page.goto(delivery.url);
-                await waitForPilotHydration(page);
-                const heading = page.locator('.pilot-accordion-heading').last();
+                await waitForFrontendHydration(page);
+                const heading = page.locator('.frontend-accordion-heading').last();
                 const label = locale === 'en' ? 'Refresh' : 'Aktualisieren';
                 const refresh = heading.getByRole('button', {name: label, exact: true});
                 await expect(refresh).toBeEnabled();
@@ -360,12 +346,12 @@ for (const width of [1280, 1024, 390, 320]) {
             name: 'Maximilian Langnamiger Teilnehmer mit einem ausführlichen Profilnamen'};
         const session: Session = {...startupSession('de'), kind: 'account', activeProfile: profile, profiles: [profile],
             context: 'german-navigation-context-1234567890', csrfToken: 'german-navigation-csrf-1234567890'};
-        const delivery = await startupDocument(page, '/frontend-pilot', {session,
+        const delivery = await startupDocument(page, '/', {session,
             landing: {quickCreate: 'packing'}, pageNotice: {kind: 'info', messageKey: 'auth.accountRequired'}});
         await page.goto(delivery.url);
-        await waitForPilotHydration(page);
+        await waitForFrontendHydration(page);
         await expandStartupNavigation(page);
-        await expect(page.locator('main [data-pilot-notices] .pilot-notification')).toBeVisible();
+        await expect(page.locator('main [data-frontend-notices] .frontend-notification')).toBeVisible();
 
         // Exercise every actual header disclosure with translated labels. Hit
         // testing catches a usable-looking menu hidden underneath sticky feedback.
@@ -422,7 +408,7 @@ for (const width of [1280, 390]) {
         await page.setViewportSize({width, height: 900});
         const help: components['schemas']['HelpPageData'] = {locale: 'de', title: 'Lange Rückmeldung',
             content: '<h2>Weiterhin lesbarer Inhalt</h2>', currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};
-        const delivery = await startupDocument(page, '/frontend-pilot/help', {session: startupSession('de'), help});
+        const delivery = await startupDocument(page, '/help', {session: startupSession('de'), help});
         const diagnostic = 'Die angeforderten Informationen konnten wegen einer vorübergehenden Unterbrechung nicht geladen werden. '.repeat(6);
         await page.route('**/api/v1/help*', async function failHelpRead(route) {
             // A future server's safe plain-text detail crosses the real decoding
@@ -434,12 +420,12 @@ for (const width of [1280, 390]) {
             })});
         });
         await page.goto(delivery.url);
-        await waitForPilotHydration(page);
+        await waitForFrontendHydration(page);
         await page.locator('main').getByRole('button', {name: 'Aktualisieren', exact: true}).click();
         const notice = page.locator('main .status-notice.alert-danger');
         await expect(notice.locator('[data-read-issue]')).toHaveText(diagnostic.trim());
-        const body = (await notice.locator('.pilot-notice-body').boundingBox())!;
-        const action = notice.locator('.pilot-notice-actions .btn');
+        const body = (await notice.locator('.frontend-notice-body').boundingBox())!;
+        const action = notice.locator('.frontend-notice-actions .btn');
         const button = (await action.boundingBox())!;
         const bounds = (await notice.boundingBox())!;
         expect(button.x).toBeGreaterThanOrEqual(bounds.x);
@@ -466,11 +452,11 @@ for (const kind of ['anonymous', 'account', 'guest'] as const) {
             const session: Session = kind === 'anonymous' ? startupSession()
                 : {...startupSession(), kind, activeProfile: profile, profiles: [profile],
                     context: 'landing-route-context-1234567890', csrfToken: 'landing-route-csrf-1234567890'};
-            const delivery = await startupDocument(page, '/frontend-pilot', {session, landing: {quickCreate: 'packing'}});
+            const delivery = await startupDocument(page, '/', {session, landing: {quickCreate: 'packing'}});
             const overviewReads: string[] = [];
             await page.route('**/api/v1/overview?*', deliverOverview);
             await page.goto(delivery.url);
-            await waitForPilotHydration(page);
+            await waitForFrontendHydration(page);
             const landing = page.locator('main > section');
             await expect(landing.getByRole('heading', {level: 1, name: 'Surveyor', exact: true})).toBeVisible();
             await expect(landing.locator('h2')).toHaveCount(7);
@@ -480,12 +466,12 @@ for (const kind of ['anonymous', 'account', 'guest'] as const) {
             const brand = page.locator('header a.navbar-brand');
             // The mobile navbar deliberately starts closed; inspect its fixed
             // destination now, then expose and activate that same link below.
-            const home = page.locator('header a.nav-link[href="/frontend-pilot"]');
-            await expect(brand).toHaveAttribute('href', '/frontend-pilot');
-            await expect(home).toHaveAttribute('href', '/frontend-pilot');
-            if (kind !== 'anonymous') await expect(landing.locator('a.btn-primary')).toHaveAttribute('href', '/frontend-pilot/users/dashboard');
+            const home = page.locator('header a.nav-link[href="/"]');
+            await expect(brand).toHaveAttribute('href', '/');
+            await expect(home).toHaveAttribute('href', '/');
+            if (kind !== 'anonymous') await expect(landing.locator('a.btn-primary')).toHaveAttribute('href', '/users/dashboard');
             if (width < 576) {
-                const bar = landing.locator('.pilot-action-row').first();
+                const bar = landing.locator('.frontend-action-row').first();
                 const actions = await bar.locator(':scope > .btn').all();
                 const row = (await bar.boundingBox())!;
                 const first = (await actions[0]!.boundingBox())!;
@@ -499,11 +485,11 @@ for (const kind of ['anonymous', 'account', 'guest'] as const) {
             await expandStartupNavigation(page);
             await page.locator('header').getByRole('button', {name: 'Overview', exact: true}).click();
             const overview = page.locator('header').getByRole('link', {name: 'Your overview', exact: true});
-            await expect(overview).toHaveAttribute('href', '/frontend-pilot/users/dashboard');
+            await expect(overview).toHaveAttribute('href', '/users/dashboard');
             await overview.click();
             if (kind === 'anonymous') {
-                await expect(page).toHaveURL(/\/frontend-pilot\/users\/login\?next=/u);
-                expect(new URL(page.url()).searchParams.get('next')).toBe('/frontend-pilot/users/dashboard');
+                await expect(page).toHaveURL(/\/users\/login\?next=/u);
+                expect(new URL(page.url()).searchParams.get('next')).toBe('/users/dashboard');
                 await expect(page.locator('main #username')).toBeVisible();
                 if (width < 576) {
                     const form = page.locator('main form').filter({has: page.locator('#username')});
@@ -514,25 +500,25 @@ for (const kind of ['anonymous', 'account', 'guest'] as const) {
                 expect(overviewReads).toEqual([]);
                 await page.screenshot({path: info.outputPath('anonymous-dashboard-login.png'), fullPage: true, animations: 'disabled'});
             } else {
-                await expect(page).toHaveURL(/\/frontend-pilot\/users\/dashboard$/u);
+                await expect(page).toHaveURL(/\/users\/dashboard$/u);
                 await expect(page.locator('main h1')).toHaveText('Welcome, Landing fixture!');
                 await expect(page.locator('[data-collection="owner"][data-region="main"]')).toBeVisible();
                 await expect.poll(() => overviewReads.length).toBeGreaterThan(0);
             }
             await expandStartupNavigation(page);
             await home.click();
-            await expect(page).toHaveURL(/\/frontend-pilot$/u);
+            await expect(page).toHaveURL(/\/$/u);
             await expect(page.locator('main h1')).toHaveText('Surveyor');
             await expect(page.locator('main h2')).toHaveCount(7);
             await expandStartupNavigation(page);
             await page.locator('header').getByRole('button', {name: 'Overview', exact: true}).click();
             await page.locator('header').getByRole('link', {name: 'Your overview', exact: true}).click();
             await expect(page).toHaveURL(kind === 'anonymous'
-                ? /\/frontend-pilot\/users\/login\?next=/u
-                : /\/frontend-pilot\/users\/dashboard$/u);
-            if (kind === 'anonymous') expect(new URL(page.url()).searchParams.get('next')).toBe('/frontend-pilot/users/dashboard');
+                ? /\/users\/login\?next=/u
+                : /\/users\/dashboard$/u);
+            if (kind === 'anonymous') expect(new URL(page.url()).searchParams.get('next')).toBe('/users/dashboard');
             await brand.click();
-            await expect(page).toHaveURL(/\/frontend-pilot$/u);
+            await expect(page).toHaveURL(/\/$/u);
             await expect(page.locator('main h1')).toHaveText('Surveyor');
             expect(await page.evaluate(() => performance.timeOrigin)).toBe(origin);
             expect(delivery.observed.documents).toBe(1);
@@ -584,25 +570,25 @@ test.describe('page-shaped initial loading', function pageShapedInitialLoading()
         for (const sample of pages) {
             test(`${sample.name} skeleton follows its page layout at ${width}px`, async function inspectInitialPageShape({page}, info) {
                 await page.setViewportSize({width, height: 900});
-                const delivery = await startupDocument(page, '/frontend-pilot' + sample.path, {session: startupSession()});
+                const delivery = await startupDocument(page, sample.path, {session: startupSession()});
                 const entry = await failStartupModule(page, /\/app\/assets\/entry-client-[^/]+\.js(?:\?|$)/u);
                 try {
                     await page.goto(delivery.url, {waitUntil: 'commit'});
                     await entry.started;
-                    const loading = page.locator('[data-pilot-initial-loading]');
+                    const loading = page.locator('[data-frontend-initial-loading]');
                     await expect(loading).toHaveAttribute('data-loading-skeleton', sample.variant);
                     await expect(loading).toBeVisible();
                     await expect(loading.locator('[role="status"]')).toHaveCount(1);
-                    await expect(loading.locator('.pilot-skeleton-animated')).toHaveCount(1);
-                    await expect(loading.locator('.pilot-skeleton-page-header')).toHaveCount(1);
+                    await expect(loading.locator('.frontend-skeleton-animated')).toHaveCount(1);
+                    await expect(loading.locator('.frontend-skeleton-page-header')).toHaveCount(1);
                     await expect(page.locator('main input, main select, main textarea, main form')).toHaveCount(0);
 
                     // Column geometry must follow the actual module. Packing and
                     // Drivers retain every column on phones rather than hiding data.
                     if (sample.columns) {
-                        const table = loading.locator('.pilot-skeleton-table-grid').first();
+                        const table = loading.locator('.frontend-skeleton-table-grid').first();
                         await expect(table).toHaveAttribute('data-skeleton-columns', String(sample.columns));
-                        const cells = table.locator('.pilot-skeleton-table-heading > .pilot-skeleton-bar');
+                        const cells = table.locator('.frontend-skeleton-table-heading > .frontend-skeleton-bar');
                         await expect(cells).toHaveCount(sample.columns);
                         for (const cell of await cells.all()) {
                             expect(await cell.evaluate(element => getComputedStyle(element).display)).not.toBe('none');
@@ -623,15 +609,15 @@ test.describe('page-shaped initial loading', function pageShapedInitialLoading()
                     expect(geometry.width).toBeGreaterThan(width * .9);
                     expect(geometry.height).toBeGreaterThan(150);
                     expect(geometry.document).toBeLessThanOrEqual(geometry.viewport + 1);
-                    const heading = await loading.locator('.pilot-skeleton-page-header > .pilot-skeleton-heading').boundingBox();
+                    const heading = await loading.locator('.frontend-skeleton-page-header > .frontend-skeleton-heading').boundingBox();
                     expect(Math.abs(heading!.x + heading!.width / 2 - width / 2)).toBeLessThan(1);
                     if (['list-detail', 'activity', 'survey', 'event', 'event-admin'].includes(sample.variant)) {
-                        const header = await loading.locator('.pilot-skeleton-page-header').boundingBox();
+                        const header = await loading.locator('.frontend-skeleton-page-header').boundingBox();
                         expect(header!.height - heading!.height).toBeGreaterThanOrEqual(32);
                     }
                     if (sample.variant === 'overview' && width === 1280) {
-                        const animation = loading.locator('.pilot-skeleton-animated');
-                        expect(await animation.evaluate(element => getComputedStyle(element).animationName)).toBe('pilot-skeleton-pulse');
+                        const animation = loading.locator('.frontend-skeleton-animated');
+                        expect(await animation.evaluate(element => getComputedStyle(element).animationName)).toBe('frontend-skeleton-pulse');
                         await page.emulateMedia({reducedMotion: 'reduce'});
                         expect(await animation.evaluate(element => getComputedStyle(element).animationName)).toBe('none');
                         await page.emulateMedia({reducedMotion: 'no-preference'});
@@ -651,15 +637,15 @@ for (const width of [1280, 390]) {
     test(`sticky notifications reserve and release page space at ${width}px`, async ({page}, testInfo) => {
         await page.setViewportSize({width, height: 900});
         const content = Array.from({length: 40}, () => '<p>Readable saved page content.</p>').join('');
-        const delivery = await startupDocument(page, '/frontend-pilot/help?doc=fixture', {
+        const delivery = await startupDocument(page, '/help?doc=fixture', {
             session: startupSession(), pageNotice: {kind: 'info', messageKey: 'auth.accountRequired'},
             help: {locale: 'en', title: 'Notification layout fixture', currentDoc: 'fixture.md',
                 content, docsList: [], docsGroups: [], toc: []},
         });
         await page.goto(delivery.url);
-        await waitForPilotHydration(page);
-        const host = page.locator('main > .pilot-notice-region');
-        const notice = host.locator('.pilot-notification');
+        await waitForFrontendHydration(page);
+        const host = page.locator('main > .frontend-notice-region');
+        const notice = host.locator('.frontend-notification');
         const body = page.locator('main > section');
         await expect(notice).toBeVisible();
         const occupied = (await host.boundingBox())!;
@@ -690,7 +676,7 @@ for (const width of [1280, 1024, 390]) {
             const profile = {id: '11111111-1111-4111-8111-111111111111', name: 'Header fixture'};
             const session: Session = {...startupSession(), kind: 'account', activeProfile: profile, profiles: [profile],
                 context: 'heading-browser-context-1234567890', csrfToken: 'heading-browser-csrf-1234567890'};
-            const delivery = await startupDocument(page, '/frontend-pilot/packing/' + id, {session, pageEntry: {kind: 'render'}});
+            const delivery = await startupDocument(page, '/packing/' + id, {session, pageEntry: {kind: 'render'}});
             const list: components['schemas']['PackingListView'] = {
                 entityType: 'packing', id, title: 'E2E Core Packing List', description: null,
                 headerUrl: null, headerVersion: null, orderToken: '"fixture-order"',
@@ -715,11 +701,11 @@ for (const width of [1280, 1024, 390]) {
             let initialHeaderHeight: number | undefined;
             if (entry) {
                 await entry.started;
-                initialHeaderHeight = (await page.locator('[data-pilot-initial-loading] .pilot-skeleton-page-header').boundingBox())!.height;
+                initialHeaderHeight = (await page.locator('[data-frontend-initial-loading] .frontend-skeleton-page-header').boundingBox())!.height;
                 await page.screenshot({path: testInfo.outputPath('entity-initial-skeleton.png'), animations: 'disabled'});
                 entry.restore();
             }
-            await waitForPilotHydration(page);
+            await waitForFrontendHydration(page);
             const title = page.locator('main .card-header h1');
             await expect(title).toHaveText(list.title);
             const header = page.locator('main > section > .card-header');
@@ -762,7 +748,7 @@ for (const width of [1280, 1024, 390]) {
                 refreshed.release();
                 await expect(refresh).toBeEnabled();
                 await expect(refresh).toBeFocused();
-                expect(await original!.evaluate(node => node === document.querySelector('main .pilot-page-heading-actions button[aria-label="Refresh"]'))).toBe(true);
+                expect(await original!.evaluate(node => node === document.querySelector('main .frontend-page-heading-actions button[aria-label="Refresh"]'))).toBe(true);
             } finally { refreshed.release(); await original!.dispose(); }
         });
     }
@@ -775,7 +761,7 @@ for (const locale of ['en', 'de'] as const) {
                 await page.setViewportSize({width, height: 900});
                 const {delivery, event} = await startupEventDocument(page, locale, admin, 'Shared regional meeting', false);
                 await page.goto(delivery.url);
-                await waitForPilotHydration(page);
+                await waitForFrontendHydration(page);
                 const header = page.locator('main > section > .card-header');
                 const title = header.locator('h1');
                 await expect(title).toContainText(event.title);
@@ -812,7 +798,7 @@ for (const locale of ['en', 'de'] as const) {
                 : 'Gemeinsames regionales Planungstreffen mit mehreren Gruppen und einem vollständigen Programm';
             const {delivery, event} = await startupEventDocument(page, locale, true, text);
             await page.goto(delivery.url);
-            await waitForPilotHydration(page);
+            await waitForFrontendHydration(page);
             const header = page.locator('main > section > .card-header');
             const title = header.locator('h1');
             await expect(title).toContainText(event.title);
@@ -862,8 +848,8 @@ for (const locale of ['en', 'de'] as const) {
             await page.setViewportSize({width, height: 900});
             const {delivery} = await startupEventDocument(page, locale, false);
             await page.goto(delivery.url);
-            await waitForPilotHydration(page);
-            const grids = page.locator('main .pilot-choice-grid');
+            await waitForFrontendHydration(page);
+            const grids = page.locator('main .frontend-choice-grid');
             await expect(grids).toHaveCount(3);
             await expect(grids.first().locator('input[type="checkbox"]')).toHaveCount(4);
             if (width === 390) {
@@ -910,27 +896,27 @@ for (const locale of ['en', 'de'] as const) {
 }
 
 test('lazy navigation shows header progress without inserting a line above the current page', async ({page}) => {
-    const delivery = await startupDocument(page, '/frontend-pilot/help?doc=fixture', {
+    const delivery = await startupDocument(page, '/help?doc=fixture', {
         session: startupSession(), help: {locale: 'en', title: 'Retained source page', currentDoc: 'fixture.md',
             content: '<p>Readable source content.</p>', docsList: [], docsGroups: [], toc: []},
     });
     await page.goto(delivery.url);
-    await waitForPilotHydration(page);
+    await waitForFrontendHydration(page);
     const entry = await failStartupModule(page, /\/app\/assets\/PackingCreatePage-[^/]+\.js(?:\?|$)/u);
     try {
         const source = page.locator('main > section');
         const before = (await source.boundingBox())!;
         await page.getByRole('button', {name: 'New', exact: true}).click();
-        await page.locator('header a[href="/frontend-pilot/packing/create"]').click();
+        await page.locator('header a[href="/packing/create"]').click();
         await entry.started;
-        await expect(page.locator('header .pilot-navigation-indicator .spinner-border')).toBeVisible();
-        await expect(page.locator('main .pilot-navigation-loading')).toHaveAttribute('role', 'status');
+        await expect(page.locator('header .frontend-navigation-indicator .spinner-border')).toBeVisible();
+        await expect(page.locator('main .frontend-navigation-loading')).toHaveAttribute('role', 'status');
         await expect(page.locator('main [data-loading-skeleton]')).toHaveCount(0);
         await expect(source.locator('h1')).toHaveText('Retained source page');
         expect((await source.boundingBox())!.y).toBe(before.y);
         entry.restore();
-        await expect(page).toHaveURL(/\/frontend-pilot\/packing\/create$/u);
-        await expect(page.locator('header .pilot-navigation-indicator .spinner-border')).toHaveCount(0);
+        await expect(page).toHaveURL(/\/packing\/create$/u);
+        await expect(page.locator('header .frontend-navigation-indicator .spinner-border')).toHaveCount(0);
         expect(delivery.observed.documents).toBe(1);
     } finally { entry.restore(); }
 });
@@ -942,7 +928,7 @@ for (const locale of ['en', 'de'] as const) {
             const profile = {id: '11111111-1111-4111-8111-111111111111', name: 'Profile fixture', isDefault: true};
             const session: Session = {...startupSession(locale), kind: 'account', activeProfile: profile, profiles: [profile],
                 context: 'profile-heading-context-1234567890', csrfToken: 'profile-heading-csrf-1234567890'};
-            const delivery = await startupDocument(page, '/frontend-pilot/users/profile/manage', {session, pageEntry: {kind: 'render'}});
+            const delivery = await startupDocument(page, '/users/profile/manage', {session, pageEntry: {kind: 'render'}});
             const profiles: components['schemas']['ProfileManagement'] = {profiles: [profile], activeProfileId: profile.id};
             await page.route('**/api/v1/profiles', async route => {
                 await route.fulfill({status: 200, contentType: 'application/json', headers: {
@@ -952,11 +938,11 @@ for (const locale of ['en', 'de'] as const) {
             try {
                 await page.goto(delivery.url, {waitUntil: 'commit'});
                 await entry.started;
-                const initial = (await page.locator('[data-pilot-initial-loading] .pilot-skeleton-page-header').boundingBox())!;
+                const initial = (await page.locator('[data-frontend-initial-loading] .frontend-skeleton-page-header').boundingBox())!;
                 await page.screenshot({path: testInfo.outputPath('profile-initial-skeleton.png'), animations: 'disabled'});
                 entry.restore();
-                await waitForPilotHydration(page);
-                const header = page.locator('main > section > .pilot-page-heading');
+                await waitForFrontendHydration(page);
+                const header = page.locator('main > section > .frontend-page-heading');
                 const label = locale === 'en' ? 'Refresh' : 'Aktualisieren';
                 const refresh = header.getByRole('button', {name: label, exact: true});
                 await expect(refresh).toBeVisible();
@@ -990,11 +976,11 @@ for (const locale of ['en', 'de'] as const) {
                 const definitions = {defaults: {participant: 1, guest: 0, authenticated: 0, public: 0}, presets: [],
                     permissions: [{key: 'ACCESS_VIEW', bit: 1}, {key: 'ITEM_ADD', bit: 2}, {key: 'EDIT_TITLE', bit: 4},
                         {key: 'MANAGE_PERMISSIONS', bit: 8}, {key: 'DATA_EXPORT', bit: 16}]};
-                const delivery = await startupDocument(page, `/frontend-pilot/${family}/create?locale=${locale}`, {session,
+                const delivery = await startupDocument(page, `/${family}/create?locale=${locale}`, {session,
                     pageEntry: {kind: 'render'}, packingCreateContext: definitions, driversCreateContext: definitions,
                     activityCreateContext: definitions, eventCreateContext: definitions});
                 await page.goto(delivery.url);
-                await waitForPilotHydration(page);
+                await waitForFrontendHydration(page);
                 const settings = page.locator('[data-creation-permissions]');
                 const toggle = settings.locator('button[aria-controls]');
                 const panel = settings.locator('[role="region"]');
@@ -1041,7 +1027,7 @@ test('reduced motion suppresses the actual pending picker spinner inside its por
         id: '22222222-2222-4222-8222-222222222222', title: 'Selectable fixture event', description: null,
         startDate: '2026-10-23', endDate: '2026-10-24', archived: false, deadlinePassed: false,
     };
-    const delivery = await startupDocument(page, '/frontend-pilot/packing/create', {session,
+    const delivery = await startupDocument(page, '/packing/create', {session,
         pageEntry: {kind: 'render'}, packingCreateContext: {
             defaults: {participant: 0, guest: 0, authenticated: 0, public: 0}, permissions: [], presets: [],
         }});
@@ -1065,7 +1051,7 @@ test('reduced motion suppresses the actual pending picker spinner inside its por
 
     try {
         await page.goto(delivery.url);
-        await waitForPilotHydration(page);
+        await waitForFrontendHydration(page);
         await page.locator('#create-event-button').click();
         const dialog = page.getByRole('dialog');
         const next = dialog.getByRole('button', {name: 'Next page', exact: true});
@@ -1077,7 +1063,7 @@ test('reduced motion suppresses the actual pending picker spinner inside its por
         await expect(next).toHaveAttribute('aria-busy', 'true');
         const spinner = next.locator('.spinner-border');
         await expect(spinner).toBeVisible();
-        expect(await spinner.evaluate(element => element.closest('.pilot-app') === null)).toBe(true);
+        expect(await spinner.evaluate(element => element.closest('.frontend-app') === null)).toBe(true);
         expect(await spinner.evaluate(element => getComputedStyle(element).animationName)).toBe('none');
         held.release();
         await completed.promise;
@@ -1092,7 +1078,7 @@ test('reduced motion suppresses the actual pending picker spinner inside its por
 test('initial startup retains editable static Help search and recovers only after one accepted discard confirmation', async ({page}) => {
     const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Synthetic Help',
         content: '<h2 id="task">Synthetic task</h2>', currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};
-    const delivery = await startupDocument(page, '/frontend-pilot/help', {session: startupSession(), help});
+    const delivery = await startupDocument(page, '/help', {session: startupSession(), help});
     const module = await failStartupModule(page, /\/app\/assets\/HelpPage-[^/]+\.js(?:\?|$)/u);
     const dialogs: string[] = [];
     let accept = false;
@@ -1111,19 +1097,19 @@ test('initial startup retains editable static Help search and recovers only afte
         const original = await search.elementHandle();
         await search.fill('Retained startup search');
         module.fail();
-        const recovery = page.locator('#surveyor-pilot-startup-recovery');
+        const recovery = page.locator('#surveyor-frontend-startup-recovery');
         await expect(recovery).toBeVisible();
         await settleStartup(page);
         expect(delivery.observed.documents).toBe(1);
         expect(delivery.observed.commands).toBe(0);
         await expect(search).toHaveValue('Retained startup search');
-        expect(await original!.evaluate(node => node === document.getElementById('pilot-help-search'))).toBe(true);
-        await expect(page.locator('#surveyor-pilot')).not.toHaveAttribute('data-pilot-hydrated', 'true');
+        expect(await original!.evaluate(node => node === document.getElementById('frontend-help-search'))).toBe(true);
+        await expect(page.locator('#surveyor-frontend')).not.toHaveAttribute('data-frontend-hydrated', 'true');
 
         await recovery.getByRole('button', {name: 'Refresh page', exact: true}).click();
         expect(dialogs).toEqual(['confirm']);
         await expect(search).toHaveValue('Retained startup search');
-        expect(await original!.evaluate(node => node === document.getElementById('pilot-help-search'))).toBe(true);
+        expect(await original!.evaluate(node => node === document.getElementById('frontend-help-search'))).toBe(true);
         expect(delivery.observed.documents).toBe(1);
 
         // Restoring a chunk does not retry a form. Only a separate accepted
@@ -1131,7 +1117,7 @@ test('initial startup retains editable static Help search and recovers only afte
         module.restore();
         accept = true;
         await recovery.getByRole('button', {name: 'Refresh page', exact: true}).click();
-        await waitForPilotHydration(page);
+        await waitForFrontendHydration(page);
         expect(dialogs).toEqual(['confirm', 'confirm']);
         expect(delivery.observed.documents).toBe(2);
         expect(delivery.observed.commands).toBe(0);
@@ -1140,29 +1126,29 @@ test('initial startup retains editable static Help search and recovers only afte
         // Successful guarded reload hides that same presentation; it does not
         // remove/recreate the notice or introduce another recovery control.
         await expect(recovery).toBeHidden();
-        await expect(page.locator('#surveyor-pilot')).toHaveAttribute('data-pilot-hydrated', 'true');
-        await expect(page.locator('#surveyor-pilot-javascript-required')).toHaveCount(1);
-        await expect(page.locator('[data-pilot-startup-reload]')).toHaveCount(1);
+        await expect(page.locator('#surveyor-frontend')).toHaveAttribute('data-frontend-hydrated', 'true');
+        await expect(page.locator('#surveyor-frontend-javascript-required')).toHaveCount(1);
+        await expect(page.locator('[data-frontend-startup-reload]')).toHaveCount(1);
         await original!.dispose();
     } finally { module.restore(); page.off('dialog', answerRecovery); }
 });
 
 test('initial startup reloads a pristine dynamic route once and permits deliberate recovery from its stored marker', async ({page}) => {
-    const delivery = await startupDocument(page, '/frontend-pilot/users/dashboard', {session: startupSession()});
+    const delivery = await startupDocument(page, '/users/dashboard', {session: startupSession()});
     const module = await failStartupModule(page, /\/app\/assets\/OverviewPage-[^/]+\.js(?:\?|$)/u);
     try {
         await page.goto(delivery.url, {waitUntil: 'commit'});
         await module.started;
-        await expect(page.locator('[data-pilot-initial-loading]')).toBeVisible();
+        await expect(page.locator('[data-frontend-initial-loading]')).toBeVisible();
         await expect(page.locator('main form, main input')).toHaveCount(0);
         module.fail();
-        const recovery = page.locator('#surveyor-pilot-startup-recovery');
+        const recovery = page.locator('#surveyor-frontend-startup-recovery');
         await expect.poll(() => delivery.observed.documents).toBe(2);
         await expect(recovery).toBeVisible();
         await settleStartup(page);
         expect(delivery.observed.documents).toBe(2);
         expect(delivery.observed.commands).toBe(0);
-        await expect(page.locator('#surveyor-pilot')).not.toHaveAttribute('data-pilot-hydrated', 'true');
+        await expect(page.locator('#surveyor-frontend')).not.toHaveAttribute('data-frontend-hydrated', 'true');
 
         // The second failed document has the automatic attempt marker. A user
         // action can still recover it after delivery returns, without any prompt.
@@ -1174,7 +1160,7 @@ test('initial startup reloads a pristine dynamic route once and permits delibera
         }
         module.restore();
         await recovery.getByRole('button', {name: 'Refresh page', exact: true}).click();
-        await waitForPilotHydration(page);
+        await waitForFrontendHydration(page);
         expect(dialogs).toEqual([]);
         expect(delivery.observed.documents).toBe(3);
         expect(delivery.observed.commands).toBe(0);
@@ -1183,7 +1169,7 @@ test('initial startup reloads a pristine dynamic route once and permits delibera
 });
 
 test('initial startup never automatically reopens token issuance and permits deliberate recovery', async ({page}) => {
-    const delivery = await startupDocument(page, '/frontend-pilot/users/profile/migrate/request', {
+    const delivery = await startupDocument(page, '/users/profile/migrate/request', {
         session: startupSession(), profileWorkflow: {kind: 'token', token: 'synthetic-private-transfer-token'},
     });
     const module = await failStartupModule(page, /\/app\/assets\/ProfileWorkflowPage-[^/]+\.js(?:\?|$)/u);
@@ -1191,19 +1177,19 @@ test('initial startup never automatically reopens token issuance and permits del
         await page.goto(delivery.url, {waitUntil: 'commit'});
         await module.started;
         module.fail();
-        const recovery = page.locator('#surveyor-pilot-startup-recovery');
+        const recovery = page.locator('#surveyor-frontend-startup-recovery');
         await expect(recovery).toBeVisible();
         await settleStartup(page);
         expect(delivery.observed.documents).toBe(1);
         expect(delivery.observed.commands).toBe(0);
-        await expect(page.locator('#surveyor-pilot')).not.toHaveAttribute('data-pilot-hydrated', 'true');
+        await expect(page.locator('#surveyor-frontend')).not.toHaveAttribute('data-frontend-hydrated', 'true');
 
         // This real URL issues a replacement token on document GET. The fixture
         // counts navigation only; it does not claim backend token persistence.
         // Deliberate recovery still follows that native document boundary once.
         module.restore();
         await recovery.getByRole('button', {name: 'Refresh page', exact: true}).click();
-        await waitForPilotHydration(page);
+        await waitForFrontendHydration(page);
         expect(delivery.observed.documents).toBe(2);
         expect(delivery.observed.commands).toBe(0);
     } finally { module.restore(); }
@@ -1212,12 +1198,12 @@ test('initial startup never automatically reopens token issuance and permits del
 test('a hydrated Packing denial retains its static document through a detected release', async ({page}) => {
     const session = startupSession();
     const delivery = await startupDocument(page,
-        '/frontend-pilot/packing/22222222-2222-4222-8222-222222222222', {session, packingError: 'packing.notFound'});
+        '/packing/22222222-2222-4222-8222-222222222222', {session, packingError: 'packing.notFound'});
     await page.goto(delivery.url);
-    await waitForPilotHydration(page);
+    await waitForFrontendHydration(page);
     const denial = page.locator('main').getByText('packing not found', {exact: true});
     await expect(denial).toBeVisible();
-    await expect(page.locator('[data-pilot-initial-loading]')).toHaveCount(0);
+    await expect(page.locator('[data-frontend-initial-loading]')).toHaveCount(0);
 
     // Change only the ordinary session read's deployment projection. The actual
     // browser context observes that release after a mounted denial has retired
@@ -1228,7 +1214,7 @@ test('a hydrated Packing denial retains its static document through a detected r
                 deployment: {...session.deployment, buildId: 'mounted-denial-replacement'}})});
     });
     await page.evaluate(function resumeSession(): void { window.dispatchEvent(new Event('focus')); });
-    const recovery = page.locator('#surveyor-pilot').getByRole('button', {name: 'Refresh page', exact: true});
+    const recovery = page.locator('#surveyor-frontend').getByRole('button', {name: 'Refresh page', exact: true});
     await expect(recovery).toBeVisible();
     await settleStartup(page);
     expect(delivery.observed.documents).toBe(1);
@@ -1237,7 +1223,7 @@ test('a hydrated Packing denial retains its static document through a detected r
     // Static classification leaves deliberate document recovery available.
     // This remains isolated client evidence and makes no persistence claim.
     await recovery.click();
-    await waitForPilotHydration(page);
+    await waitForFrontendHydration(page);
     await expect(denial).toBeVisible();
     expect(delivery.observed.documents).toBe(2);
 });
@@ -1247,20 +1233,20 @@ test('initial startup offers deliberate recovery without looping when attempt st
         Object.defineProperty(window, 'sessionStorage', {configurable: true,
             get: function unavailableAttemptStorage(): never { throw new Error('Fixture storage access denied'); }});
     });
-    const delivery = await startupDocument(page, '/frontend-pilot/users/login', {session: startupSession()});
+    const delivery = await startupDocument(page, '/users/login', {session: startupSession()});
     const module = await failStartupModule(page, /\/app\/assets\/IdentityPage-[^/]+\.js(?:\?|$)/u);
     try {
         await page.goto(delivery.url, {waitUntil: 'commit'});
         await module.started;
         module.fail();
-        const recovery = page.locator('#surveyor-pilot-startup-recovery');
+        const recovery = page.locator('#surveyor-frontend-startup-recovery');
         await expect(recovery).toBeVisible();
         await settleStartup(page);
         expect(delivery.observed.documents).toBe(1);
         expect(delivery.observed.commands).toBe(0);
         module.restore();
         await recovery.getByRole('button', {name: 'Refresh page', exact: true}).click();
-        await waitForPilotHydration(page);
+        await waitForFrontendHydration(page);
         expect(delivery.observed.documents).toBe(2);
         expect(delivery.observed.commands).toBe(0);
     } finally { module.restore(); }
@@ -1270,7 +1256,7 @@ test('initial startup exposes localized recovery before context creation when th
     const session = startupSession('de');
     const help: components['schemas']['HelpPageData'] = {locale: 'de', title: 'Synthetische Hilfe',
         content: '<h2 id="task">Synthetische Aufgabe</h2>', currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};
-    const delivery = await startupDocument(page, '/frontend-pilot/help', {session, help});
+    const delivery = await startupDocument(page, '/help', {session, help});
     const module = await failStartupModule(page, /\/app\/assets\/validateHelpPageData-[^/]+\.js(?:\?|$)/u);
     const dialogs: string[] = [];
     page.on('dialog', acceptValidatorRecovery);
@@ -1284,7 +1270,7 @@ test('initial startup exposes localized recovery before context creation when th
         const search = page.getByRole('searchbox');
         await search.fill('Behaltene Suchanfrage');
         module.fail();
-        const recovery = page.locator('#surveyor-pilot-startup-recovery');
+        const recovery = page.locator('#surveyor-frontend-startup-recovery');
         await expect(recovery).toContainText('Diese Seite konnte nicht vollständig geladen werden.');
         await expectStartupNoticeBelowHeader(page);
         await expect(recovery.getByRole('button', {name: 'Seite neu laden', exact: true})).toBeVisible();
@@ -1294,7 +1280,7 @@ test('initial startup exposes localized recovery before context creation when th
         expect(delivery.observed.commands).toBe(0);
         module.restore();
         await recovery.getByRole('button').click();
-        await waitForPilotHydration(page);
+        await waitForFrontendHydration(page);
         expect(dialogs).toEqual(['confirm']);
         expect(delivery.observed.documents).toBe(2);
         expect(delivery.observed.commands).toBe(0);
@@ -1305,45 +1291,45 @@ test('initial startup exposes localized recovery before context creation when th
 test('initial startup never exposes inactive creation controls when its bootstrap validator fails', async ({page}) => {
     const packingCreateContext: components['schemas']['PackingCreateContext'] = {
         defaults: {participant: 0, guest: 0, authenticated: 0, public: 0}, permissions: [], presets: []};
-    const delivery = await startupDocument(page, '/frontend-pilot/packing/create', {
+    const delivery = await startupDocument(page, '/packing/create', {
         session: startupSession(), pageEntry: {kind: 'render'}, packingCreateContext});
     const module = await failStartupModule(page, /\/app\/assets\/validatePackingCreateContext-[^/]+\.js(?:\?|$)/u);
     try {
         await page.goto(delivery.url, {waitUntil: 'commit'});
         await module.started;
-        await expect(page.locator('[data-pilot-initial-loading]')).toBeVisible();
+        await expect(page.locator('[data-frontend-initial-loading]')).toBeVisible();
         await expect(page.locator('main form, main input')).toHaveCount(0);
         module.fail();
-        const recovery = page.locator('#surveyor-pilot-startup-recovery');
+        const recovery = page.locator('#surveyor-frontend-startup-recovery');
         await expect(recovery).toBeVisible();
-        await expect(page.locator('#surveyor-pilot-javascript-required')).toContainText('Interactive features on this site require JavaScript.');
-        await expect(page.locator('[data-pilot-initial-loading]')).toBeHidden();
+        await expect(page.locator('#surveyor-frontend-javascript-required')).toContainText('Interactive features on this site require JavaScript.');
+        await expect(page.locator('[data-frontend-initial-loading]')).toBeHidden();
         await settleStartup(page);
         expect(delivery.observed.documents).toBe(1);
         expect(delivery.observed.commands).toBe(0);
         await expect(page.locator('main form, main input')).toHaveCount(0);
-        await expect(page.locator('#surveyor-pilot')).not.toHaveAttribute('data-pilot-hydrated', 'true');
+        await expect(page.locator('#surveyor-frontend')).not.toHaveAttribute('data-frontend-hydrated', 'true');
     } finally { module.restore(); }
 });
 
 test('initial startup shows an independent notice when the module entry cannot load and offers safe Help navigation', async ({page}) => {
-    const delivery = await startupDocument(page, '/frontend-pilot/users/login', {session: startupSession()});
+    const delivery = await startupDocument(page, '/users/login', {session: startupSession()});
     const module = await failStartupModule(page, /\/app\/assets\/entry-client-[^/]+\.js(?:\?|$)/u);
     try {
         await page.goto(delivery.url, {waitUntil: 'commit'});
         await module.started;
-        await expect(page.locator('[data-pilot-initial-loading]')).toBeVisible();
+        await expect(page.locator('[data-frontend-initial-loading]')).toBeVisible();
         module.fail();
-        const notice = page.locator('#surveyor-pilot-javascript-required');
+        const notice = page.locator('#surveyor-frontend-javascript-required');
         await expect(notice).toBeVisible();
         await expectStartupNoticeBelowHeader(page);
         await expect(notice).toContainText('Interactive features on this site require JavaScript.');
-        await expect(notice.getByRole('link', {name: 'Help', exact: true})).toHaveAttribute('href', '/frontend-pilot/help?locale=en');
+        await expect(notice.getByRole('link', {name: 'Help', exact: true})).toHaveAttribute('href', '/help?locale=en');
         await expect(notice.getByRole('button')).toHaveCount(0);
-        await expect(page.locator('[data-pilot-initial-loading]')).toBeHidden();
+        await expect(page.locator('[data-frontend-initial-loading]')).toBeHidden();
         await expect(page.locator('main form, main input')).toHaveCount(0);
-        await expect(page.locator('#pilot-locale')).toBeDisabled();
-        await expect(page.locator('#pilot-navbar-main')).toBeVisible();
+        await expect(page.locator('#frontend-locale')).toBeDisabled();
+        await expect(page.locator('#frontend-navbar-main')).toBeVisible();
         await settleStartup(page);
         expect(delivery.observed.documents).toBe(1);
     } finally { module.restore(); }
@@ -1351,25 +1337,25 @@ test('initial startup shows an independent notice when the module entry cannot l
 
 test('initial startup ends loading with a notice when entry initialization never starts', async ({page}) => {
     await page.clock.install();
-    const delivery = await startupDocument(page, '/frontend-pilot/users/login', {session: startupSession()});
+    const delivery = await startupDocument(page, '/users/login', {session: startupSession()});
     const module = await failStartupModule(page, /\/app\/assets\/entry-client-[^/]+\.js(?:\?|$)/u);
     try {
         await page.goto(delivery.url, {waitUntil: 'commit'});
         await module.started;
-        await expect(page.locator('[data-pilot-initial-loading]')).toBeVisible();
+        await expect(page.locator('[data-frontend-initial-loading]')).toBeVisible();
         await page.clock.runFor(15_001);
-        await expect(page.locator('#surveyor-pilot-javascript-required')).toBeVisible();
+        await expect(page.locator('#surveyor-frontend-javascript-required')).toBeVisible();
         await expectStartupNoticeBelowHeader(page);
-        await expect(page.locator('[data-pilot-initial-loading]')).toBeHidden();
+        await expect(page.locator('[data-frontend-initial-loading]')).toBeHidden();
         expect(delivery.observed.documents).toBe(1);
         expect(delivery.observed.commands).toBe(0);
         // A late successful entry retires the same notice without a reload or
         // replacing its SSR node after the independent deadline already fired.
-        const originalNotice = await page.locator('#surveyor-pilot-javascript-required').elementHandle();
+        const originalNotice = await page.locator('#surveyor-frontend-javascript-required').elementHandle();
         module.restore();
-        await waitForPilotHydration(page);
-        await expect(page.locator('#surveyor-pilot-javascript-required')).toBeHidden();
-        expect(await originalNotice!.evaluate(element => element === document.getElementById('surveyor-pilot-javascript-required'))).toBe(true);
+        await waitForFrontendHydration(page);
+        await expect(page.locator('#surveyor-frontend-javascript-required')).toBeHidden();
+        expect(await originalNotice!.evaluate(element => element === document.getElementById('surveyor-frontend-javascript-required'))).toBe(true);
         await originalNotice!.dispose();
     } finally { module.restore(); }
 });
@@ -1379,7 +1365,7 @@ test('a blocked inline monitor keeps safe fallback below navigation until the re
         content: '<h2>Readable task</h2>', currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};
     // Only the response's script policy blocks the inline monitor. The actual
     // external entry and all later production modules retain their normal origin.
-    const delivery = await startupDocument(page, '/frontend-pilot/help', {session: startupSession(), help},
+    const delivery = await startupDocument(page, '/help', {session: startupSession(), help},
         {'Content-Security-Policy': "script-src 'self'"});
     const module = await failStartupModule(page, /\/app\/assets\/entry-client-[^/]+\.js(?:\?|$)/u);
     const hydrationErrors: string[] = [];
@@ -1388,17 +1374,17 @@ test('a blocked inline monitor keeps safe fallback below navigation until the re
         await page.goto(delivery.url, {waitUntil: 'commit'});
         await module.started;
         await expectStartupNoticeBelowHeader(page);
-        await expect(page.locator('#surveyor-pilot')).not.toHaveAttribute('data-pilot-startup-observed');
-        await expect(page.locator('[data-pilot-startup-reload]')).toBeHidden();
-        await expect(page.locator('.pilot-refresh-button')).toBeHidden();
+        await expect(page.locator('#surveyor-frontend')).not.toHaveAttribute('data-frontend-startup-observed');
+        await expect(page.locator('[data-frontend-startup-reload]')).toBeHidden();
+        await expect(page.locator('.frontend-refresh-button')).toBeHidden();
         const search = page.getByRole('searchbox');
         await search.fill('Retained while startup waits');
         const original = await search.elementHandle();
         module.restore();
-        await waitForPilotHydration(page);
-        await expect(page.locator('#surveyor-pilot-javascript-required')).toBeHidden();
+        await waitForFrontendHydration(page);
+        await expect(page.locator('#surveyor-frontend-javascript-required')).toBeHidden();
         await expect(search).toHaveValue('Retained while startup waits');
-        expect(await original!.evaluate(element => element === document.getElementById('pilot-help-search'))).toBe(true);
+        expect(await original!.evaluate(element => element === document.getElementById('frontend-help-search'))).toBe(true);
         await original!.dispose();
         expect(hydrationErrors).toEqual([]);
         expect(delivery.observed.documents).toBe(1);
@@ -1414,17 +1400,17 @@ test('initial startup preserves real Help navigation and guarded GET search afte
             value: function unavailableIdentityChannel(): never { throw new Error('Controlled channel initialization failure'); }});
     });
     const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Synthetic Help',
-        content: '<h2 id="task">Readable task</h2><a href="/frontend-pilot/help?doc=second&amp;locale=en">Next Help topic</a>',
+        content: '<h2 id="task">Readable task</h2><a href="/help?doc=second&amp;locale=en">Next Help topic</a>',
         currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};
-    const delivery = await startupDocument(page, '/frontend-pilot/help', {session: startupSession(), help});
+    const delivery = await startupDocument(page, '/help', {session: startupSession(), help});
     await page.goto(delivery.url, {waitUntil: 'domcontentloaded'});
-    await expect(page.locator('#surveyor-pilot-startup-recovery')).toBeVisible();
-    await expect(page.locator('#surveyor-pilot')).not.toHaveAttribute('data-pilot-hydrated', 'true');
-    await expect(page.locator('#pilot-locale')).toBeDisabled();
+    await expect(page.locator('#surveyor-frontend-startup-recovery')).toBeVisible();
+    await expect(page.locator('#surveyor-frontend')).not.toHaveAttribute('data-frontend-hydrated', 'true');
+    await expect(page.locator('#frontend-locale')).toBeDisabled();
     await expect(page.locator('.help-content')).toContainText('Readable task');
     await page.getByRole('link', {name: 'Next Help topic', exact: true}).click();
-    await expect(page).toHaveURL(/\/frontend-pilot\/help\?doc=second&locale=en$/u);
-    await expect(page.locator('#surveyor-pilot-startup-recovery')).toBeVisible();
+    await expect(page).toHaveURL(/\/help\?doc=second&locale=en$/u);
+    await expect(page.locator('#surveyor-frontend-startup-recovery')).toBeVisible();
     expect(delivery.observed.documents).toBe(2);
 
     const dialogs: string[] = [];
@@ -1435,8 +1421,8 @@ test('initial startup preserves real Help navigation and guarded GET search afte
     }
     await page.getByRole('searchbox').fill('A retained native search');
     await page.getByRole('search').getByRole('button').click();
-    await expect(page).toHaveURL(/\/frontend-pilot\/help\?locale=en&q=A\+retained\+native\+search$/u);
-    await expect(page.locator('#surveyor-pilot-startup-recovery')).toBeVisible();
+    await expect(page).toHaveURL(/\/help\?locale=en&q=A\+retained\+native\+search$/u);
+    await expect(page.locator('#surveyor-frontend-startup-recovery')).toBeVisible();
     expect(delivery.observed.documents).toBe(3);
     expect(dialogs).toEqual(['beforeunload']);
     expect(delivery.observed.commands).toBe(0);
@@ -1450,7 +1436,7 @@ for (const width of [1280, 390]) {
         const profile = {id: '11111111-1111-4111-8111-111111111111', name: 'Reorder fixture'};
         const session: Session = {...startupSession(), kind: 'account', activeProfile: profile, profiles: [profile],
             context: 'reorder-browser-context-1234567890', csrfToken: 'reorder-browser-csrf-1234567890'};
-        const delivery = await startupDocument(page, '/frontend-pilot/packing/' + id, {session, pageEntry: {kind: 'render'}});
+        const delivery = await startupDocument(page, '/packing/' + id, {session, pageEntry: {kind: 'render'}});
         const firstId = '33333333-3333-4333-8333-333333333333';
         const lastId = '44444444-4444-4444-8444-444444444444';
         const list: components['schemas']['PackingListView'] = {
@@ -1472,7 +1458,7 @@ for (const width of [1280, 390]) {
                 headers: {'X-Surveyor-Context': session.context!, ETag: '"reorder-fixture"'}, body: JSON.stringify(list)});
         });
         await page.goto(delivery.url);
-        await waitForPilotHydration(page);
+        await waitForFrontendHydration(page);
         const first = page.locator('[data-item-id="' + firstId + '"]');
         const last = page.locator('[data-item-id="' + lastId + '"]');
         await first.scrollIntoViewIfNeeded();
@@ -1486,9 +1472,9 @@ for (const width of [1280, 390]) {
         await page.mouse.move(x + 12, y + 8, {steps: 5});
         await page.mouse.move(destination.x + 20, destination.y + 8, {steps: 8});
         await page.mouse.move(destination.x + 21, destination.y + 9);
-        await expect(last).toHaveClass(/pilot-reorder-before/u);
+        await expect(last).toHaveClass(/frontend-reorder-before/u);
         await page.mouse.move(destination.x + 20, destination.y + destination.height - 8, {steps: 6});
-        await expect(last).toHaveClass(/pilot-reorder-after/u);
+        await expect(last).toHaveClass(/frontend-reorder-after/u);
         expect(await last.locator('td').first().evaluate(cell => getComputedStyle(cell).boxShadow)).toContain('0px -3px');
         const preview = (await last.boundingBox())!;
         expect(preview).toEqual(before);
@@ -1498,7 +1484,7 @@ for (const width of [1280, 390]) {
         expect(delivery.observed.commands).toBe(0);
         await page.keyboard.press('Escape');
         await page.mouse.up();
-        await expect(page.locator('.pilot-reorder-before, .pilot-reorder-after, .pilot-reorder-dragging')).toHaveCount(0);
+        await expect(page.locator('.frontend-reorder-before, .frontend-reorder-after, .frontend-reorder-dragging')).toHaveCount(0);
         expect(delivery.observed.commands).toBe(0);
     });
 }
@@ -1536,13 +1522,13 @@ for (const width of [390, 1280]) {
         const codeTable = renderTrustedHelpMarkdown('| Setting | Description |\n|---|---|\n'
             + '| `AN_EXTENDED_CONFIGURATION_VALUE` | A readable description beside a complete code value. |',
             'Help table fixture').content;
-        const delivery = await startupDocument(page, '/frontend-pilot/help?doc=fixture', {
+        const delivery = await startupDocument(page, '/help?doc=fixture', {
             session: startupSession(), help: {locale: 'en', title: 'Help table comparison', currentDoc: 'fixture.md',
                 content: articleTables + codeTable, docsList: [], docsGroups: [], toc: [{id: 'tables', title: 'Tables', level: 2}]},
         });
         await page.setViewportSize({width, height: 900});
         await page.goto(delivery.url);
-        await waitForPilotHydration(page);
+        await waitForFrontendHydration(page);
         const tables = page.locator('.help-content table');
         await expect(tables).toHaveCount(patterns.length + 1);
         const copied = await tables.evaluateAll(elements => elements.map(table => ({
@@ -1568,28 +1554,6 @@ for (const width of [390, 1280]) {
         }
         await page.screenshot({path: info.outputPath('help-natural-tables.png'), fullPage: true, animations: 'disabled'});
 
-        // Keep the real Help markup/frame and substitute only the comparison
-        // stylesheet. This baseline deliberately excludes all pilot overrides.
-        await page.locator('link[rel="stylesheet"][href^="/app/"]').evaluateAll(links => {
-            for (const link of links) (link as HTMLLinkElement).disabled = true;
-        });
-        await page.evaluate(css => {
-            const style = document.createElement('style');
-            style.textContent = css;
-            document.head.append(style);
-        }, nativeStyleReference(false));
-        const native = await tables.evaluateAll(elements => elements.map(table => ({
-            columns: [...table.querySelectorAll('thead th')].map(cell => cell.getBoundingClientRect().width),
-            rows: [...table.querySelectorAll('tr')].map(row => row.getBoundingClientRect().height),
-        })));
-        for (let index = 0; index < copied.length; index++) {
-            expect(copied[index]!.columns).toHaveLength(native[index]!.columns.length);
-            for (let column = 0; column < native[index]!.columns.length; column++)
-                expect(Math.abs(copied[index]!.columns[column]! - native[index]!.columns[column]!)).toBeLessThan(1);
-            expect(copied[index]!.rows).toHaveLength(native[index]!.rows.length);
-            for (let row = 0; row < native[index]!.rows.length; row++)
-                expect(Math.abs(copied[index]!.rows[row]! - native[index]!.rows[row]!)).toBeLessThan(1);
-        }
     });
 }
 
@@ -1601,12 +1565,12 @@ test.describe('JavaScript unavailable', () => {
             test(`localized fallback follows navigation without dead Refresh controls at ${width}px in ${locale}`, async ({page}) => {
                 const help: components['schemas']['HelpPageData'] = {locale, title: 'Synthetic Help',
                     content: '<h2>Readable task</h2>', currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};
-                const delivery = await startupDocument(page, '/frontend-pilot/help', {session: startupSession(locale), help});
+                const delivery = await startupDocument(page, '/help', {session: startupSession(locale), help});
                 await page.setViewportSize({width, height: 900});
                 await page.goto(delivery.url, {waitUntil: 'domcontentloaded'});
                 await expectStartupNoticeBelowHeader(page);
-                await expect(page.locator('.pilot-refresh-button')).toBeHidden();
-                await expect(page.locator('[data-pilot-startup-reload]')).toBeHidden();
+                await expect(page.locator('.frontend-refresh-button')).toBeHidden();
+                await expect(page.locator('[data-frontend-startup-reload]')).toBeHidden();
                 await expect(page.locator('.help-content')).toContainText('Readable task');
                 await expect(page.getByRole('search')).toHaveAttribute('method', 'get');
                 await expect(page.getByRole('searchbox')).toBeEditable();
@@ -1618,39 +1582,27 @@ test.describe('JavaScript unavailable', () => {
     }
 
     for (const width of [390, 1280]) {
-        test(`copied frontend styles preserve the native cascade before JavaScript at ${width}px`, async ({page}, testInfo) => {
+        test(`built application styles are delivered before JavaScript at ${width}px`, async ({page}, testInfo) => {
             const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Stylesheet comparison',
                 content: '<h2 id="task">Styled before initialization</h2><p>A readable article with ordinary links and a table.</p>'
                     + '<table><thead><tr><th>Setting</th><th>Description</th></tr></thead><tbody><tr>'
                     + '<td><code>AN_EXTENDED_CONFIGURATION_VALUE</code></td><td>Preserved dark-theme article geometry.</td>'
                     + '</tr></tbody></table><h3>Following section</h3><p>Content after the table remains readable.</p>',
                 currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: [{id: 'task', title: 'Styled before initialization', level: 2}]};
-            const delivery = await startupDocument(page, '/frontend-pilot/help', {session: startupSession(), help});
+            const delivery = await startupDocument(page, '/help', {session: startupSession(), help});
             await page.setViewportSize({width, height: 900});
             await page.goto(delivery.url, {waitUntil: 'networkidle'});
             await expect(page.locator('.help-content h2')).toBeVisible();
-            await expect(page.locator('#surveyor-pilot')).not.toHaveAttribute('data-pilot-hydrated', 'true');
+            await expect(page.locator('#surveyor-frontend')).not.toHaveAttribute('data-frontend-hydrated', 'true');
             const applicationStyles = page.locator('link[rel="stylesheet"][href^="/app/"]');
             expect(await applicationStyles.count()).toBeGreaterThan(0);
-            const copied = await page.screenshot({path: testInfo.outputPath('copied-styles.png'),
+            await page.screenshot({path: testInfo.outputPath('copied-styles.png'),
                 fullPage: true, animations: 'disabled', caret: 'hide'});
 
-            // Keep the same real SSR, viewport and vendor fixture. Replace only
-            // its Vite CSS with the untouched native Sass compilation and the
-            // existing pilot overrides, making cascade drift visible pixel by pixel.
-            await applicationStyles.evaluateAll(function disableApplicationStyles(links) {
-                for (const link of links) (link as HTMLLinkElement).disabled = true;
-            });
-            // Driver evaluation can update a JS-disabled document synchronously.
-            // Avoid a helper that waits for a page-side stylesheet load callback.
-            await page.evaluate(function applyReferenceStyles(content) {
-                const style = document.createElement('style');
-                style.textContent = content;
-                document.head.append(style);
-            }, nativeStyleReference());
-            const reference = await page.screenshot({path: testInfo.outputPath('native-style-reference.png'),
-                fullPage: true, animations: 'disabled', caret: 'hide'});
-            expect(copied.equals(reference), 'Copied CSS must preserve the unchanged reference presentation').toBe(true);
+            // Built CSS must already style the SSR content before any client code.
+            await expect(page.locator('.help-content h2')).toHaveCSS('font-weight', '600');
+            expect(await page.locator('.help-content').evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThan(0);
+            expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
             expect(delivery.observed.nativeStyles).toBe(0);
         });
     }
@@ -1658,53 +1610,194 @@ test.describe('JavaScript unavailable', () => {
     test('initial startup keeps static Help search/navigation and disabled client controls without any executed script', async ({page}) => {
         const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Synthetic Help',
             content: '<h2 id="task">Readable without JavaScript</h2>', currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};
-        const delivery = await startupDocument(page, '/frontend-pilot/help', {session: startupSession(), help});
+        const delivery = await startupDocument(page, '/help', {session: startupSession(), help});
         await page.setViewportSize({width: 390, height: 844});
         await page.goto(delivery.url, {waitUntil: 'domcontentloaded'});
-        await expect(page.locator('#surveyor-pilot-javascript-required')).toBeVisible();
+        await expect(page.locator('#surveyor-frontend-javascript-required')).toBeVisible();
         await expectStartupNoticeBelowHeader(page);
-        await expect(page.locator('.pilot-refresh-button')).toBeHidden();
+        await expect(page.locator('.frontend-refresh-button')).toBeHidden();
         await expect(page.locator('.help-content')).toContainText('Readable without JavaScript');
         await expect(page.getByRole('search')).toHaveAttribute('method', 'get');
-        await expect(page.getByRole('search')).toHaveAttribute('action', '/frontend-pilot/help');
+        await expect(page.getByRole('search')).toHaveAttribute('action', '/help');
         await expect(page.getByRole('searchbox')).toBeEditable();
         await expect(page.getByRole('search').getByRole('button')).toBeEnabled();
-        await expect(page.locator('#pilot-navbar-main')).toBeVisible();
+        await expect(page.locator('#frontend-navbar-main')).toBeVisible();
         await expect(page.locator('.navbar-toggler')).toHaveCount(0);
-        await expect(page.locator('#pilot-locale')).toBeDisabled();
+        await expect(page.locator('#frontend-locale')).toBeDisabled();
         await page.locator('details').filter({hasText: 'New'}).locator('summary').click();
         await expect(page.getByRole('link', {name: 'Survey', exact: true})).toBeVisible();
-        await expect(page.locator('#surveyor-pilot')).not.toHaveAttribute('data-pilot-hydrated', 'true');
+        await expect(page.locator('#surveyor-frontend')).not.toHaveAttribute('data-frontend-hydrated', 'true');
         expect(delivery.observed.commands).toBe(0);
     });
 });
 
 test('client startup preserves an explicitly supplied recovery completion and retires it after committed departure', async ({page}) => {
     const session = startupSession();
-    const url = '/frontend-pilot/guest/recovery';
+    const url = '/guest/recovery';
     const delivery = await startupDocument(page, url, {session, pageCompletion: {context: session.context,
         destination: url, messageKey: 'auth.recoverySent', kind: 'success'}});
     await page.goto(delivery.url, {waitUntil: 'domcontentloaded'});
-    await waitForPilotHydration(page);
+    await waitForFrontendHydration(page);
     await expect(page.getByRole('heading', {name: 'Success', exact: true})).toBeVisible();
     await expect(page.locator('main')).toContainText('The link(s) to your guest account(s) have been sent to your email address.');
     await expect(page.locator('main form')).toHaveCount(0);
-    await expect(page).toHaveURL(/\/frontend-pilot\/guest\/recovery$/);
+    await expect(page).toHaveURL(/\/guest\/recovery$/);
 
     await page.locator('header').getByRole('link', {name: 'Home', exact: true}).click();
-    await expect(page).toHaveURL(/\/frontend-pilot$/);
+    await expect(page).toHaveURL(/\/$/);
     await page.goBack();
-    await expect(page).toHaveURL(/\/frontend-pilot\/users\/login$/);
+    await expect(page).toHaveURL(/\/users\/login$/);
     await expect(page.getByRole('heading', {name: 'Login', exact: true})).toBeVisible();
 });
 
 test('client startup preserves the native expired-session notice', async ({page}) => {
     const session = startupSession();
-    const delivery = await startupDocument(page, '/frontend-pilot/users/login', {session,
+    const delivery = await startupDocument(page, '/users/login', {session,
         pageNotice: {kind: 'error', messageKey: 'auth.sessionExpired'}});
     await page.goto(delivery.url, {waitUntil: 'domcontentloaded'});
-    await waitForPilotHydration(page);
+    await waitForFrontendHydration(page);
     await expect(page.locator('main .alert-danger')).toContainText('Session has expired');
     await expect(page.getByRole('heading', {name: 'Login', exact: true})).toBeVisible();
 });
+
+/** Extreme ledger data belongs at this isolated rendering boundary: no account,
+ * persisted financial state or server command is manufactured for a layout test.
+ * The shared built-document fixture still owns SSR, assets and denied commands. */
+async function startupFinanceDocument(page: Page, admin: boolean) {
+    const {delivery, event, session} = await startupEventDocument(page, 'en', admin, 'Finance layout fixture', false);
+    event.capabilities.manageAssignments = admin;
+    event.hasInvoicePools = true;
+    event.registration = {id: '1', arrivalDate: event.startDate, departureDate: event.endDate,
+        dietary: ['MEAT'], allergyNotes: '', dietComment: ''};
+    const payer = 'LongPayerName'.repeat(15);
+    const note = 'A saved calculation note with unbroken content: ' + 'LongReceiptNote'.repeat(20);
+    const amount = '-99999999.99';
+    const pool: components['schemas']['FinancePool'] = {
+        id: '33333333-3333-4333-8333-333333333333', name: 'Shared travel', description: null,
+        status: 'CLOSED', isDefault: false, needsRecalculation: false, hasPendingTakeovers: false,
+        coverageKnown: true, coverageGroups: [], pendingCoverageGroups: [], assignedCount: 1, assignAll: true,
+        revision: 1, canSubmit: false, summary: null, calculation: null, exampleCalculation: null,
+    };
+    const share: components['schemas']['FinanceShare'] = {id: '1', poolId: pool.id, poolName: pool.name,
+        payerName: payer, notes: [note], needsRecalculation: false, amount, status: 'settled', statusLabel: 'Refunded',
+        isPaid: true, caption: 'Refunded', settledShareNotice: null, coveredNames: [], coverageKnown: true};
+    const calculation: components['schemas']['FinanceCalculation'] = {title: 'Calculation explanation', sections: [{
+        key: 'balance', title: `Calculated balance for ${payer}`,
+        formula: {terms: [{label: 'Base share', value: '10.00'}, {operator: '−', label: 'Previous payments', value: '100000009.99'}],
+            result: {label: 'Calculated balance', value: amount}},
+    }]};
+    const breakdown: components['schemas']['FinanceBreakdown'] = {
+        components: [{key: 'shareAmount', label: 'Calculated balance', amount}], calculation, notes: [note],
+        statusLabel: 'Refunded', needsRecalculation: false, settledShareNotice: null,
+    };
+    const preview: components['schemas']['FinancePreview'] = {revision: 1, roundUpShares: false,
+        calculation: {title: 'Saved calculation basis', sections: []}, exampleCalculation: calculation,
+        columns: [{key: 'baseShareAmount', label: 'Base'}, {key: 'extraAmount', label: 'Adjustments'},
+            {key: 'invoiceCreditAmount', label: 'Invoice credit'}, {key: 'paymentCreditAmount', label: 'Previous'},
+            {key: 'shareAmount', label: 'Calculated balance'}],
+        shares: [{registrationId: '1', payerName: payer, baseShareAmount: '10.00', extraAmount: '-20.00',
+            invoiceCreditAmount: '100.00', paymentCreditAmount: '99999889.99', shareAmount: amount,
+            calculatedAmount: '-110.00', isPaid: false, notes: [note], statusLabel: 'Refund due'}],
+        totals: {invoiceAmount: '10.00', redistributedAmount: '0.00', distributableAmount: '10.00',
+            allocatedBaseAmount: '10.00', roundingDifference: '0.00', adjustmentAmount: '-20.00', grossAmount: '-10.00',
+            invoiceCreditAmount: '100.00', expectedNetAmount: '-110.00', calculatedAmount: '-110.00',
+            paymentCreditAmount: '99999889.99', outstandingAmount: '0.00', creditAmount: '99999999.99'},
+    };
+    const finance: components['schemas']['FinanceView'] = {audience: admin ? 'organizer' : 'participant',
+        registrationId: admin ? null : '1', pools: [pool], shares: [share], invoices: []};
+    const reads: string[] = [];
+    await page.route(`**/api/v1/events/${event.id}/finance**`, async function deliverFinanceLayout(route) {
+        // Every attempted command still reaches the shared fixture's refusal
+        // and counter. This fixture supplies only the three selected GETs.
+        if (route.request().method() !== 'GET') return route.fallback();
+        const pathname = new URL(route.request().url()).pathname;
+        let data: unknown;
+        if (pathname === `/api/v1/events/${event.id}/finance${admin ? '/organizer' : ''}`) data = finance;
+        else if (pathname === `/api/v1/events/${event.id}/finance/pools/${pool.id}/shares/1`) data = breakdown;
+        else if (pathname === `/api/v1/events/${event.id}/finance/pools/${pool.id}/preview`) data = preview;
+        else return route.fallback();
+        reads.push(pathname);
+        await route.fulfill({status: 200, contentType: 'application/json',
+            headers: {'X-Surveyor-Context': session.context!}, body: JSON.stringify(data)});
+    });
+    return {delivery, event, pool, payer, note, reads};
+}
+
+/** Measure real browser overflow inside each financial surface, including
+ * unbroken text that can escape a cell even when its table fits the viewport. */
+async function expectFinanceLayoutFits(surface: Locator, selectors: string[]): Promise<void> {
+    for (const selector of selectors) {
+        const overflowing = await surface.locator(selector).evaluateAll(elements => elements
+            .filter(element => element.checkVisibility() && element.scrollWidth > element.clientWidth + 1)
+            .map(element => element.className));
+        expect(overflowing, selector).toEqual([]);
+    }
+    expect(await surface.page().evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+}
+
+for (const width of [320, 768, 1024, 1440]) {
+    test(`built Finance ledgers and previews wrap extreme signed amounts and audit text at ${width}px`, async ({page}, info) => {
+        await page.setViewportSize({width, height: 900});
+        for (const admin of [false, true]) {
+            await page.unrouteAll({behavior: 'wait'});
+            const fixture = await startupFinanceDocument(page, admin);
+            await page.goto(fixture.delivery.url, {waitUntil: 'domcontentloaded'});
+            await waitForFrontendHydration(page);
+            const finance = page.locator('[data-finance-section]');
+            if (admin) await finance.locator('[data-finance-pool] .accordion-button').click();
+            else await finance.getByRole('button', {name: /Invoice pools & payments/u}).click();
+            const ledger = finance.locator('[data-finance-shares]');
+            await expect(ledger.locator('[data-finance-share]')).toHaveCount(1);
+            await expect(ledger).toContainText('-99,999,999.99');
+            await expect(ledger.locator('[data-finance-share] .badge')).toHaveText('Refunded');
+            if (!admin) await expect(ledger.locator('[data-finance-settle]')).toHaveCount(0);
+            else {
+                await expect(finance.locator('a[download]')).toHaveCount(2);
+                await expect(finance.locator('a[download]').first()).toHaveAttribute('href',
+                    `/event/${fixture.event.id}/export/invoice-pools/${fixture.pool.id}/shares`);
+                await expect(finance.locator('a[download]').nth(1)).toHaveAttribute('href',
+                    `/event/${fixture.event.id}/export/invoice-pools/${fixture.pool.id}/shares?example=false`);
+            }
+            await expectFinanceLayoutFits(finance, ['.pool-header-summary', '.share-ledger', '.share-ledger-table']);
+            expect(fixture.reads.filter(path => path.includes('/shares/'))).toHaveLength(0);
+            await ledger.getByRole('button', {name: /^View breakdown/u}).click();
+            const dialog = page.getByRole('dialog');
+            await expect(dialog).toHaveCount(1);
+            await dialog.locator('details > summary').first().click();
+            await dialog.locator('details > summary').last().click();
+            await expect(dialog).toContainText(`Calculated balance for ${fixture.payer}`);
+            await expect(dialog).toContainText(fixture.note);
+            await expect(dialog).not.toContainText('Participant A');
+            await expect(dialog).not.toContainText('Unsettled balance');
+            await expect(dialog.locator('.invoice-share-breakdown')).toContainText('-99,999,999.99');
+            expect(fixture.reads.filter(path => path.includes('/shares/'))).toHaveLength(1);
+            await expectFinanceLayoutFits(dialog, ['.modal-body', '.invoice-share-breakdown', '.invoice-calculation', '.invoice-calculation-formula']);
+            await dialog.screenshot({path: info.outputPath(`finance-${admin ? 'organizer' : 'personal'}-${width}.png`), animations: 'disabled'});
+            await dialog.getByRole('button', {name: 'Close', exact: true}).last().click();
+            await expect(dialog).toHaveCount(0);
+            if (admin) {
+                await finance.getByRole('button', {name: 'Recalculate pool', exact: true}).click();
+                const preview = page.getByRole('dialog');
+                const payer = preview.locator('[data-finance-preview-payer]');
+                await expect(payer).toHaveCount(1);
+                await payer.locator('details > summary').click();
+                await preview.locator('[data-finance-preview-example] summary').click();
+                await expect(payer).toContainText(fixture.note);
+                await expect(payer.locator('[data-calculation-display]')).toHaveCount(0);
+                await expect(preview.locator('[data-finance-preview-example] [data-calculation-display]')).toHaveCount(1);
+                await expect(preview.locator('.pool-preview-summary')).toContainText('-99,999,999.99');
+                await expect(payer.locator('[data-label="Calculated balance"]')).toContainText('-99,999,999.99');
+                await expectFinanceLayoutFits(preview, ['.modal-body', '.pool-preview-table', 'td', '.invoice-calculation-formula']);
+                if (width < 992) {
+                    const rowBounds = (await payer.boundingBox())!;
+                    const nameBounds = (await payer.locator('td').first().boundingBox())!;
+                    expect(nameBounds.width / rowBounds.width).toBeGreaterThan(0.85);
+                }
+                await preview.screenshot({path: info.outputPath(`finance-preview-${width}.png`), animations: 'disabled'});
+                await preview.getByRole('button', {name: 'Cancel', exact: true}).click();
+            }
+            expect(fixture.delivery.observed.commands).toBe(0);
+        }
+    });
+}
 

@@ -21,8 +21,7 @@ import type {Event} from "../modules/database/entities/event/Event";
 import type {PackingList} from "../modules/database/entities/packing/PackingList";
 import type {Survey} from "../modules/database/entities/surveys/Survey";
 import {Guest} from "../modules/database/entities/user/Guest";
-import type * as userService from "../modules/database/services/UserService";
-import type {EntityItemType, EntityType} from "./UtilTypes";
+import type {EntityType} from "./UtilTypes";
 import type {ArchivePresentation, ArchiveSnapshotEntry, PersonalVisibility} from "./ArchiveTypes";
 
 export type OidcClaims = {
@@ -33,30 +32,6 @@ export type OidcClaims = {
     name?: string;
     // add whatever custom claims you mapped in authentik (e.g., groups)
     groups?: string[];
-};
-
-export type GuestFlowConfig = {
-    entityType: EntityType,
-    entityItemType?: EntityItemType,
-    addToEvent: boolean,
-    db: Partial<GuestFlowDb>,
-    templates: { create: string, view: string },
-    buildRedirect: (id: any) => string,
-    preprocessCreate: (body: any) => any,
-    createEntity: (ownerId: string, data: any) => Promise<any>,
-    afterCreateItems: (id: any, data: any) => Promise<void>,
-    fetchForView: (entity: any, Request) => Promise<any | null>,
-    fetchForDuplicate: (entity: any, session: Request['session']) => Promise<any | null>,
-    deleteEntity: (entity: any, session: Request['session']) => Promise<any>,
-};
-
-export type GuestFlowDb = {
-    getById: (id: any) => Promise<any | null>,
-    getItems: (id: any) => Promise<any[]>,
-    registerGuest: typeof userService.createGuest,
-    getGuestInternal: typeof userService.getGuestInternal,
-    getGuestByToken: typeof userService.getGuestByToken,
-    getGuestLinkToken: typeof userService.getGuestLinkToken,
 };
 
 export type UserInfo = {
@@ -102,7 +77,7 @@ export type Entity = EntityBase & {
     visibility?: PersonalVisibility;
     /**
      * Final overview placement computed from authoritative archival and the private preference.
-     * Pug consumes this result rather than reproducing visibility rules. An omitted value
+     * Overview projections consume this result rather than reproducing visibility rules. An omitted value
      * leaves ordinary card collections unpartitioned instead of inferring user preferences.
      */
     overviewHidden?: boolean;
@@ -161,8 +136,8 @@ export interface OverviewReadResult {
 }
 
 /**
- * One region's explicit Pug/fragment data. The same projection drives ordinary GET links and
- * enhanced navigation; searchFields preserves other regions when submitting the fallback form.
+ * Shared controller projection for one bounded Overview region. The versioned adapter
+ * selects its permitted cards, counts and paging availability from this existing result.
  */
 export interface OverviewRegionView extends OverviewQuery {
     id: string;
@@ -200,5 +175,5 @@ export interface OverviewPageView {
 
 export type GuestLinkData = Guest & { link: string }
 
-/** Shared native page admission; attached roots are checked before standalone guest entry. */
+/** Shared document admission; attached roots are checked before standalone guest entry. */
 export type EntityViewAdmission = 'render' | 'guest' | 'event-registration-required';

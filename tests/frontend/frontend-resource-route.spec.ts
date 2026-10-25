@@ -5,8 +5,8 @@ import {defineComponent} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
-import {pilotRoutes} from '../../src/frontend/app/createApp';
-import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
+import {frontendRoutes} from '../../src/frontend/routes';
+import {createFrontendContext, frontendContextKey} from '../../src/frontend/app/context';
 import GuestEntryPage from '../../src/frontend/features/identity/GuestEntryPage.vue';
 import EventPage from '../../src/frontend/features/event/EventPage.vue';
 import ActivityPage from '../../src/frontend/features/activity/ActivityPage.vue';
@@ -27,15 +27,15 @@ async function visit(path: string, handler: (request: Request) => unknown, local
     const request = vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(handler(input as Request)), {
         headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context},
     }));
-    const context = createPilotContext({session}, true, request);
+    const context = createFrontendContext({session}, true, request);
     context.hydrated.value = true;
     context.visible.value = true;
-    const router = createRouter({history: createMemoryHistory(), routes: pilotRoutes});
+    const router = createRouter({history: createMemoryHistory(), routes: frontendRoutes});
     await router.push(path);
     await router.isReady();
     const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[pilotContextKey as symbol]: context},
+        provide: {[frontendContextKey as symbol]: context},
     }});
     cleanups.push(async () => {
         root.unmount();
@@ -51,7 +51,7 @@ describe('matched resource route intent', () => {
         {locale: 'en', reason: 'You must be registered for the event to access this resource'},
         {locale: 'de', reason: 'Du musst für die Veranstaltung angemeldet sein, um auf diese Ressource zuzugreifen'},
     ] as const)('explains linked Activity admission denial in $locale without reading protected content', async wording => {
-        const {root, request} = await visit(`/frontend-pilot/activity/${frontendEventId}`, function denyLinkedPlan(input) {
+        const {root, request} = await visit(`/activity/${frontendEventId}`, function denyLinkedPlan(input) {
             const url = new URL(input.url);
             if (input.method !== 'GET' || !url.pathname.endsWith(`/activity-plans/${frontendEventId}/entry`)) {
                 throw new Error('Denied Activity visits must not read protected content or send commands');
@@ -69,7 +69,7 @@ describe('matched resource route intent', () => {
     });
 
     it.each(['trailing slash', 'case'] as const)('presents only the current exact-destination completion on a %s message visit', async spelling => {
-        const canonical = '/frontend-pilot/message';
+        const canonical = '/message';
         const path = spelling === 'case' ? canonical.toUpperCase() : canonical + '/';
         const {root, request, context, session} = await visit(path, () => { throw new Error('Message visits do not read data'); });
         context.pageCompletion.value = {context: session.context, destination: path,
@@ -89,7 +89,7 @@ describe('matched resource route intent', () => {
 
     for (const family of ['packing', 'drivers', 'activity', 'survey', 'event']) {
         it.each(['trailing slash', 'case'] as const)(`retains ${family} guest admission and controls with %s`, async spelling => {
-            const canonical = `/frontend-pilot/${family}/${frontendEventId}/guest`;
+            const canonical = `/${family}/${frontendEventId}/guest`;
             const path = spelling === 'case' ? canonical.toUpperCase() : canonical + '/';
             const admitted: URL[] = [];
             const {root, request, router, context} = await visit(path, function admitGuest(request) {
@@ -120,7 +120,7 @@ describe('matched resource route intent', () => {
         {locale: 'de', title: 'Für Veranstaltungen empfohlen', warning: 'Veranstaltungsanmeldung und verknüpfte Packlisten oder Aktivitätspläne',
             email: 'Ohne E-Mail-Adresse kannst du deinen Gastlink und deine Veranstaltungsanmeldung nicht wiederherstellen.'},
     ] as const)('explains Event guest access and recovery in $locale through the actual feature route', async wording => {
-        const {root, request} = await visit(`/frontend-pilot/event/${frontendEventId}/guest`, function admitEventGuest() {
+        const {root, request} = await visit(`/event/${frontendEventId}/guest`, function admitEventGuest() {
             return {entry: {kind: 'render'}, guest: {id: frontendEventId, title: 'Public Event'}};
         }, wording.locale);
         await vi.waitFor(() => expect(root.findComponent(GuestEntryPage).exists()).toBe(true));
@@ -134,7 +134,7 @@ describe('matched resource route intent', () => {
     });
 
     it.each(['direct', 'existing-email'] as const)('confirms Event guest creation after %s choice without submitting a canceled draft', async journey => {
-        const {root, request, context} = await visit(`/frontend-pilot/event/${frontendEventId}/guest`, function readGuestChoice(input) {
+        const {root, request, context} = await visit(`/event/${frontendEventId}/guest`, function readGuestChoice(input) {
             const path = new URL(input.url).pathname;
             if (path.endsWith('/guest-email-exists')) return {exists: true};
             if (input.method === 'POST') throw new TypeError('Guest identity delivery unavailable');
@@ -183,7 +183,7 @@ describe('matched resource route intent', () => {
     });
 
     it.each(['trailing slash', 'case'] as const)('retains Event administration admission, heading and reads with %s', async spelling => {
-        const canonical = `/frontend-pilot/event/${frontendEventId}/admin`;
+        const canonical = `/event/${frontendEventId}/admin`;
         const path = spelling === 'case' ? canonical.toUpperCase() : canonical + '/';
         const reads: URL[] = [];
         const view = createFrontendEventView();

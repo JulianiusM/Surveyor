@@ -3,7 +3,7 @@ import {computed} from 'vue';
 import type {components} from '../../../types/api/v1';
 import {permissionLabel} from '../../../modules/localization/permissionLabels';
 import type {MessageKey} from '../../../types/LocalizationTypes';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import ActionButton from '../ActionButton.vue';
 
 const props = defineProps<{
@@ -16,7 +16,7 @@ const props = defineProps<{
     hydrationDraft?: boolean;
 }>();
 const emit = defineEmits<{'update:modelValue': [mask: number]}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const categories = ['ACCESS', 'EDIT', 'ITEM', 'MANAGE', 'DATA', 'OTHER'];
 const groups = computed(permissionGroups);
 

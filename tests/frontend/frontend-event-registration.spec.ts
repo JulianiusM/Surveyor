@@ -32,24 +32,24 @@ describe('Event participant registration', () => {
         const arrival = mounted.wrapper.get<HTMLInputElement>('[name="arrivalDate"]');
         await mounted.wrapper.get('form').trigger('submit');
         expect(mounted.request).not.toHaveBeenCalled();
-        const feedback = mounted.wrapper.get('.pilot-notification.alert-danger');
+        const feedback = mounted.wrapper.get('.frontend-notification.alert-danger');
         expect(feedback.text()).toContain(mounted.context.messages.value.t('event.registration.mealRequired'));
-        expect(feedback.element.closest('.pilot-notice-region')).not.toBeNull();
+        expect(feedback.element.closest('.frontend-notice-region')).not.toBeNull();
 
         mounted.context.locale.value = 'de';
         await flushPromises();
-        expect(mounted.wrapper.get('.pilot-notification.alert-danger').element).toBe(feedback.element);
+        expect(mounted.wrapper.get('.frontend-notification.alert-danger').element).toBe(feedback.element);
         expect(feedback.text()).toContain(mounted.context.messages.value.t('event.registration.mealRequired'));
         expect(mounted.wrapper.get('[name="arrivalDate"]').element).toBe(arrival.element);
         expect(arrival.element.value).toBe('2027-06-01');
         await mounted.wrapper.get('#diet-meat').setValue(true);
-        expect(mounted.wrapper.find('.pilot-notification.alert-danger').exists()).toBe(false);
+        expect(mounted.wrapper.find('.frontend-notification.alert-danger').exists()).toBe(false);
         expect(mounted.request).not.toHaveBeenCalled();
 
         await mounted.wrapper.get('#diet-meat').setValue(false);
         await mounted.wrapper.get('form').trigger('submit');
-        await mounted.wrapper.get('.pilot-notification .btn-close').trigger('click');
-        expect(mounted.wrapper.find('.pilot-notification').exists()).toBe(false);
+        await mounted.wrapper.get('.frontend-notification .btn-close').trigger('click');
+        expect(mounted.wrapper.find('.frontend-notification').exists()).toBe(false);
         expect(arrival.element.value).toBe('2027-06-01');
         expect(mounted.request).not.toHaveBeenCalled();
     });
@@ -120,7 +120,7 @@ describe('Event participant registration', () => {
         const mounted = await mountFrontendEvent(EventRegistration, async request => {
             writes.push({method: request.method, body: await request.json()});
             return json({changed: true});
-        }, {event, refresh}, `/frontend-pilot/event/${frontendEventId}?regToken=private%2Btoken`);
+        }, {event, refresh}, `/event/${frontendEventId}?regToken=private%2Btoken`);
         cleanups.push(mounted.dispose);
         expect(mounted.request).not.toHaveBeenCalled();
         refresh.mockImplementation(async () => {

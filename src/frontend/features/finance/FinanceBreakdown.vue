@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {eventKeys} from '../../app/queryKeys';
 import {evictQueryFamilies} from '../../app/queryCache';
 import {isReadDenial} from '../../app/transport';
@@ -18,7 +18,7 @@ import StatusNotice from '../../components/StatusNotice.vue';
 // from its own protected saved-data read when the shared dialog is opened.
 const props = defineProps<{eventId: string; share: components['schemas']['FinanceShare']; admin: boolean}>();
 const emit = defineEmits<{close: []}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages, locale} = context;
 const api = useFinanceApi(context);
 const key = computed(() => [...eventKeys.financeBreakdown(context.session.value?.context, props.eventId, props.share.poolId, props.share.id, props.admin), locale.value]);
@@ -92,9 +92,9 @@ async function refresh(): Promise<void> {
                 </ul>
             </details>
         </template>
-        <!-- Native read-only breakdowns finish within the scrolling content.
+        <!-- Read-only breakdowns finish within the scrolling content.
              Keep this same close action available while loading or recovering. -->
-        <div class="pilot-action-row justify-content-end mt-3">
+        <div class="frontend-action-row justify-content-end mt-3">
             <ActionButton variant="secondary" @click="emit('close')">{{ messages.t('common.close') }}</ActionButton>
         </div>
     </AppDialog>

@@ -2,12 +2,12 @@ import {resolveLocale} from '../localization/translator';
 import type {operations} from '../../types/api/v1';
 
 /**
- * Translate Help's explicit native path aliases into the authored pilot query contract.
- * Native /search always owns search, including its empty prompt; an article path ignores
- * competing q/doc parameters. Only the pilot root uses the established q-first query
+ * Resolve explicit Help article/search paths and the root's query selection.
+ * The /search path always owns search, including its empty prompt; an article path ignores
+ * competing q/doc parameters. Only the frontend root uses the established q-first query
  * selection. SSR and browser reads must choose the same page before invoking its owner.
  */
-export function resolvePilotHelpQuery(pathDoc: unknown, query: Readonly<Record<string, unknown>>):
+export function resolveFrontendHelpQuery(pathDoc: unknown, query: Readonly<Record<string, unknown>>):
     NonNullable<operations['getHelpPage']['parameters']['query']> {
     if (typeof pathDoc === 'string' && pathDoc.length > 0) {
         if (pathDoc.toLowerCase() === 'search') return {q: normalizedHelpSearch(query.q)};
@@ -17,13 +17,13 @@ export function resolvePilotHelpQuery(pathDoc: unknown, query: Readonly<Record<s
     return typeof query.doc === 'string' ? {doc: query.doc} : {};
 }
 
-/** Retain the existing browser transport bound and native whitespace normalization.
+/** Retain the existing browser transport bound and whitespace normalization.
  * The owning help controller independently admits and searches the fixed source. */
 function normalizedHelpSearch(value: unknown): string {
     return typeof value === 'string' ? value.trim().replace(/\s+/gu, ' ').slice(0, 100) : '';
 }
 
-/** Query state precedes fragments so native links retain the selected language.
+/** Query state precedes fragments so links retain the selected language.
  * This browser-safe owner is shared with the fixed-source help renderer. */
 export function localizedHelpUrl(href: string, locale: string): string {
     const url = new URL(href, 'https://help.invalid');
@@ -31,14 +31,10 @@ export function localizedHelpUrl(href: string, locale: string): string {
     return `${url.pathname}${url.search}${url.hash}`;
 }
 
-/** Map native and migrated page aliases to the same maintained task guide.
+/** Map each canonical page family to its maintained task guide.
  * The policy remains independent of HTML rendering, persistence and SPA transport. */
 export function resolveContextualHelpUrl(requestPath: string, locale?: string): string {
-    let pathname = requestPath.split(/[?#]/u, 1)[0].toLowerCase();
-    // Home remains the public landing page; the personal dashboard retains its
-    // native path beneath the pilot prefix, so contextual Help cannot confuse them.
-    if (/^\/frontend-pilot\/?$/u.test(pathname)) pathname = '/';
-    else pathname = pathname.replace(/^\/frontend-pilot(?=\/)/u, '');
+    const pathname = requestPath.split(/[?#]/u, 1)[0].toLowerCase();
 
     const rules: Array<[RegExp, string]> = [
         [/^\/users\/dashboard(?:\/|$)/u, '/help/dashboard'],
@@ -55,24 +51,22 @@ export function resolveContextualHelpUrl(requestPath: string, locale?: string): 
     return locale ? localizedHelpUrl(destination, locale) : destination;
 }
 
-/** Adapt fixed-source help links without losing their native query/fragment meaning.
+/** Adapt fixed-source help links without losing their query/fragment meaning.
  * External links and separate assets retain document navigation. The adapter
  * introduces no feature state or additional navigation controls. */
-export function pilotHelpUrl(href: string, locale: string): string {
+export function frontendHelpUrl(href: string, locale: string): string {
     if (!href.startsWith('/help')) return href;
     const source = new URL(href, 'https://help.invalid');
     const match = /^\/help(?:\/([a-z0-9_-]+))?\/?$/iu.exec(source.pathname);
     if (!match || match[1]?.toLowerCase() === 'assets') return href;
 
-    // Preserve native suffixes as data rather than reinterpreting their q/doc values.
-    // Ordinary articles retain existing query URLs; only reserved/conflicting routes
-    // need a path alias to keep the same native page selection. The shipped README is
-    // the native home article, so its path alias keeps ignored home parameters inert.
+    // The canonical root owns q/doc selection. Article aliases
+    // still ignore competing selectors, so retain their explicit pathname.
     const params = new URLSearchParams(source.searchParams);
-    let pathname = '/frontend-pilot/help';
+    let pathname = '/help';
     const pathDoc = match[1];
     if (pathDoc?.toLowerCase() === 'search') pathname += '/search';
-    else if (params.has('q') || params.has('doc')) pathname += `/${pathDoc ?? 'readme'}`;
+    else if (pathDoc && (params.has('q') || params.has('doc'))) pathname += `/${pathDoc}`;
     else if (pathDoc) params.set('doc', pathDoc);
     params.set('locale', resolveLocale(locale));
     return `${pathname}?${params.toString()}${source.hash}`;

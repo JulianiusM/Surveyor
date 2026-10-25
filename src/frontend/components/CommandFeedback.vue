@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type {CommandFeedbackProps} from '../../types/FrontendFeedbackTypes';
-import {usePilot} from '../app/context';
+import {useFrontend} from '../app/context';
 import StatusNotice from './StatusNotice.vue';
 import ActionButton from './ActionButton.vue';
 
@@ -10,7 +10,7 @@ withDefaults(defineProps<CommandFeedbackProps>(), {
     part: 'all', unknownMessage: 'state.unknownOutcome', disabled: false,
 });
 const emit = defineEmits<{action: [source: MouseEvent]; reviewCreation: [source: MouseEvent]}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 </script>
 
 <template>

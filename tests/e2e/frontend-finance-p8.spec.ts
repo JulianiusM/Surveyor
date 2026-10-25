@@ -1,10 +1,10 @@
+import {submitFinanceInvoiceFixture, financeFixtureRequest, createFinancePoolFixture, registerFinanceParticipantFixture} from '../keywords/frontendFinanceE2EKeywords';
 import {expect, test, type APIRequestContext, type Dialog, type Locator, type Page, type Request, type TestInfo} from '@playwright/test';
 import {writeFile} from 'node:fs/promises';
 import type {components} from '../../src/types/api/v1';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
-import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
-import {dismissFrontendSuccessNotifications, expectUsableFrontendLayout, readNamedControlContracts as formContract,
-    readSecondaryInstructionColors, readVisiblePresentation, openModalForE2E, closeModalForE2E} from '../keywords/e2eCoreKeywords';
+import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
+import {dismissFrontendSuccessNotifications, expectUsableFrontendLayout, readSecondaryInstructionColors, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
 import {createTranslator} from '../../src/modules/localization/translator';
 
 test.use({actionTimeout: 10_000});
@@ -12,28 +12,24 @@ test.use({actionTimeout: 10_000});
 /** Establish actual guest membership through the integrated application rather
  * than manufacturing finance read models or replacing the session boundary. */
 async function registerParticipant(request: APIRequestContext, eventId: string, name: string): Promise<void> {
-    expect((await request.post(`/event/${eventId}/guest`, {form: {username: name}, maxRedirects: 0})).status()).toBe(302);
-    expect((await request.post(`/api/event/${eventId}/register`, {data: {
-        arrivalDate: '2030-06-01', departureDate: '2030-06-04', dietary: ['MEAT'],
-    }})).status()).toBe(200);
+    await registerFinanceParticipantFixture(request, eventId, name);
 }
 
 /** Read persisted authority independently of the page that issued the command.
  * A fresh read never retries creation or assumes uncertain delivery rolled back. */
 async function readFinance(request: APIRequestContext, eventId: string, organizer = true): Promise<components['schemas']['FinanceView']> {
-    const response = await request.get(`/api/v1/events/${eventId}/finance${organizer ? '/organizer' : ''}`, {
+    const response = await financeFixtureRequest(request, 'GET', `/api/v1/events/${eventId}/finance${organizer ? '/organizer' : ''}`, {
         headers: await frontendEventHeaders(request),
     });
     expect(response.status()).toBe(200);
     return response.json();
 }
 
-/** Open the real organizer page and selected pool disclosure in either renderer.
- * Native remains the unchanged comparator; Vue hydration is awaited explicitly. */
-async function openPool(page: Page, eventId: string, poolId: string, pilot: boolean, locale = 'en'): Promise<Locator> {
-    await page.goto(`${pilot ? '/frontend-pilot' : ''}/event/${eventId}/admin?locale=${locale}`, {waitUntil: 'domcontentloaded'});
-    if (pilot) await waitForPilotHydration(page);
-    const pool = page.locator(pilot ? `[data-finance-pool="${poolId}"]` : `.invoice-pool[data-pool="${poolId}"]`);
+/** Open the hydrated organizer page and its selected saved pool disclosure. */
+async function openPool(page: Page, eventId: string, poolId: string, locale = 'en'): Promise<Locator> {
+    await page.goto(`/event/${eventId}/admin?locale=${locale}`, {waitUntil: 'domcontentloaded'});
+    await waitForFrontendHydration(page);
+    const pool = page.locator(`[data-finance-pool="${poolId}"]`);
     const toggle = pool.locator('.accordion-button').first();
     await expect(toggle).toBeVisible();
     if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
@@ -77,16 +73,15 @@ interface ReviewScene {
     status: ReviewInvoice['status'];
 }
 
-/** Establish saved CLOSED-pool evidence through the existing native fixture
- * operation. P8 reviews its later source changes; no Vue calculation or
- * settlement control is introduced or exercised by this preparation. */
+/** Establish a saved closed pool and settlement through admitted fixture
+ * commands before exercising later invoice changes in the browser. */
 async function closeReviewPoolFixture(request: APIRequestContext, eventId: string, poolId: string): Promise<void> {
     // Capture the real preview revision before requesting the fixture calculation.
-    const endpoint = `/api/event/${eventId}/invoice-pools/${poolId}`;
-    const preview = await request.get(`${endpoint}/preview`);
+    const endpoint = `/api/v1/events/${eventId}/finance/pools/${poolId}`;
+    const preview = await financeFixtureRequest(request, 'GET', `${endpoint}/preview`);
     expect(preview.status()).toBe(200);
-    const revision = (await preview.json()).data.revision;
-    expect((await request.post(`${endpoint}/close`, {data: {expectedRevision: revision, sendEmails: false}})).status()).toBe(200);
+    const revision = (await preview.json()).revision;
+    expect((await financeFixtureRequest(request, 'POST', `${endpoint}/close`, {data: {expectedRevision: revision, sendEmails: false}})).status()).toBe(200);
 
     // A separate payer gives the retained snapshot a nonzero balance. Record
     // one real settlement so later source changes must preserve both its
@@ -95,7 +90,7 @@ async function closeReviewPoolFixture(request: APIRequestContext, eventId: strin
     expect(saved.pools.find(pool => pool.id === poolId)).toMatchObject({status: 'CLOSED', needsRecalculation: false});
     const payable = saved.shares.find(share => share.poolId === poolId && Number(share.amount) > 0);
     expect(payable, 'Fixture must contain a positive saved payer balance').toBeDefined();
-    expect((await request.post(`${endpoint}/shares/${payable!.id}/pay`, {data: {isPaid: true}})).status()).toBe(200);
+    expect((await financeFixtureRequest(request, 'POST', `${endpoint}/shares/${payable!.id}/settlement`, {data: {isPaid: true}})).status()).toBe(200);
     const settled = await readFinance(request, eventId);
     expect(settled.shares.find(share => share.id === payable!.id)).toMatchObject({amount: payable!.amount, isPaid: true, status: 'settled'});
 }
@@ -111,9 +106,8 @@ function savedReviewShares(view: components['schemas']['FinanceView']) {
     });
 }
 
-/** Preserve each original and its raw browser measurements for independent review.
- * Native inline fields and Vue's combined review have different wrappers; neither
- * a screenshot nor these measurements claims exact native-pixel equality. */
+/** Preserve each original and its raw browser measurements for independent
+ * review against the separately recorded final native screenshots. */
 async function captureReviewSurface(surface: Locator, info: TestInfo, name: string): Promise<void> {
     // Wait for the actual painted controls and fonts before retaining evidence.
     await expect(surface).toBeVisible();
@@ -150,22 +144,22 @@ async function reviewFieldContracts(surface: Locator, selectors: string[]) {
 }
 
 /** Select only this action's explicit field family in its real presentation. */
-function reviewFieldSelectors(scene: ReviewScene, nativeInline = false): string[] {
-    if (scene.action === 'approve' || scene.action === 'revise') return nativeInline
+function reviewFieldSelectors(scene: ReviewScene, inline = false): string[] {
+    if (scene.action === 'approve' || scene.action === 'revise') return inline
         ? ['.invoice-corrected-amount', '.invoice-corrected-description']
         : ['[name="correctedAmount"]', '[name="correctedDescription"]'];
-    if (scene.action === 'decline' || scene.action === 'reject') return nativeInline
+    if (scene.action === 'decline' || scene.action === 'reject') return inline
         ? ['.invoice-rejection-reason'] : ['[name="rejectionReason"]'];
     return [];
 }
 
 /** Fill only the fields belonging to this review action and return their public
- * contracts. NEW native review has two optional inline correction fields; its
+ * contracts. NEW invoice review has two optional inline correction fields; its
  * unrelated rejection draft must never become part of an acceptance comparison. */
-async function fillReviewFields(surface: Locator, scene: ReviewScene, nativeInline = false) {
+async function fillReviewFields(surface: Locator, scene: ReviewScene, inline = false) {
     // Scope writes to the selected action, keeping its opposite decision's
     // fields out of both the captured draft and the field comparison.
-    const selectors = reviewFieldSelectors(scene, nativeInline);
+    const selectors = reviewFieldSelectors(scene, inline);
     if (scene.action === 'approve' || scene.action === 'revise') {
         await surface.locator(selectors[0]!).fill(scene.amount!);
         await surface.locator(selectors[1]!).fill(scene.description!);
@@ -177,8 +171,7 @@ async function fillReviewFields(surface: Locator, scene: ReviewScene, nativeInli
 }
 
 /** Assert every value in the final frozen correction/rejection review. The
- * original invoice remains separate evidence in Vue's combined dialog; native
- * presents it in its saved row before the separately opened lifecycle dialog. */
+ * original invoice remains separate evidence in the combined review dialog. */
 async function expectFrozenReview(dialog: Locator, invoice: ReviewInvoice, scene: ReviewScene): Promise<void> {
     // Frozen proposed values remain distinct from the saved original subject.
     await expect(dialog).toContainText(`Invoice #${invoice.id}`);
@@ -197,67 +190,14 @@ async function expectFrozenReview(dialog: Locator, invoice: ReviewInvoice, scene
     await expect(dialog.getByRole('button', {name: scene.action === 'revise' ? 'Confirm correction' : 'Confirm rejection', exact: true})).toBeEnabled();
 }
 
-/** Inspect and cancel the unchanged native operation without sending its write.
- * Immediate decisions keep their actual inline-edit then confirmation sequence;
- * accepted changes retain edit, final review and Back-to-edit draft restoration. */
-async function inspectNativeReview(page: Page, info: TestInfo, eventId: string, poolId: string,
-    invoice: ReviewInvoice, scene: ReviewScene) {
-    const pool = await openPool(page, eventId, poolId, false);
-    // A CLOSED pool without NEW invoices starts with its native audit trail
-    // collapsed. Follow the real disclosure before inspecting the saved row.
-    const history = pool.locator('details').filter({has: page.locator('[data-invoice-ledger]')});
-    if (await history.getAttribute('open') === null) await history.locator(':scope > summary').click();
-    await expect(history).toHaveJSProperty('open', true);
-    const row = pool.locator('[data-invoice-row]').filter({has: page.locator(`[data-id="${invoice.id}"]`)});
-    await expect(row).toContainText(invoice.description!);
-    const retroactive = scene.action === 'revise' || scene.action === 'reject';
-    const inline = scene.action === 'approve' || scene.action === 'decline';
-    const contracts = inline ? await fillReviewFields(row, scene, true) : [];
-    await captureReviewSurface(row, info, `native-p8-${scene.action}-row`);
-    const opened = page.locator(!retroactive ? '#invoiceCommandConfirmModal'
-        : scene.action === 'revise' ? '#invoiceEditModal' : '#invoiceRejectModal');
-    if (!retroactive) await expect(opened).toHaveAttribute('data-initialized', 'true');
-    await openModalForE2E(opened, row.getByRole('button', {name: scene.button, exact: true}));
-
-    if (!retroactive) {
-        const confirmation = page.locator('#invoiceCommandConfirmModal');
-        const wording = scene.action === 'approve' ? `Accept this invoice for ${scene.amount}?`
-            : scene.action === 'decline' ? `Reject this invoice for ${invoice.amount}?`
-                : `Close this accepted invoice for ${invoice.amount}?`;
-        await expect(confirmation.locator('[data-invoice-command-description]')).toHaveText(wording);
-        await expect(confirmation.locator('[data-invoice-command-confirm]')).toHaveText(scene.button);
-        await expect(confirmation.locator('[data-invoice-command-confirm]')).toBeEnabled();
-        await captureReviewSurface(confirmation, info, `native-p8-${scene.action}-confirmation`);
-        await closeModalForE2E(confirmation);
-        return contracts;
-    }
-
-    // A lifecycle edit captures the existing revision without changing it.
-    const editing = page.locator(scene.action === 'revise' ? '#invoiceEditModal' : '#invoiceRejectModal');
-    if (scene.action === 'revise') {
-        expect(Number(await editing.locator('[name="correctedAmount"]').inputValue())).toBe(Number(invoice.correctedAmount ?? invoice.amount));
-        await expect(editing.locator('[name="correctedDescription"]')).toHaveValue(invoice.correctedDescription ?? invoice.description!);
-    }
-    const editedContracts = await fillReviewFields(editing, scene);
-    await captureReviewSurface(editing, info, `native-p8-${scene.action}-edit`);
-    const confirmation = page.locator('#invoiceConfirmModal');
-    await openModalForE2E(confirmation, editing.getByRole('button', {name: 'Continue', exact: true}));
-    await expectFrozenReview(confirmation, invoice, scene);
-    await captureReviewSurface(confirmation, info, `native-p8-${scene.action}-confirmation`);
-    await openModalForE2E(editing, confirmation.getByRole('button', {name: 'Back to edit', exact: true}));
-    expect(await reviewFieldContracts(editing, reviewFieldSelectors(scene))).toEqual(editedContracts);
-    await closeModalForE2E(editing);
-    return editedContracts;
-}
-
-/** Compare Vue's actual inline or retroactive review with native fields/facts.
+/** Inspect the actual inline or retroactive review and its public field rules.
  * Cancellation is checked before the caller reopens and commits once, so
  * inspection never supplies consent to an earlier preview. */
 async function inspectVueReview(page: Page, info: TestInfo, eventId: string, poolId: string,
-    invoice: ReviewInvoice, scene: ReviewScene, nativeContracts: Awaited<ReturnType<typeof reviewFieldContracts>>) {
-    const pool = await openPool(page, eventId, poolId, true);
-    // Match the native disclosure step after the final NEW invoice is processed.
-    // The app deliberately starts a CLOSED pool's now-historical ledger folded.
+    invoice: ReviewInvoice, scene: ReviewScene) {
+    const pool = await openPool(page, eventId, poolId);
+    // A closed pool's historical ledger starts folded after its final NEW
+    // invoice is processed; follow that disclosure before inspecting the row.
     const history = pool.locator('details').filter({has: page.locator('[data-finance-history]')});
     if (await history.getAttribute('open') === null) await history.locator(':scope > summary').click();
     await expect(history).toHaveJSProperty('open', true);
@@ -274,7 +214,18 @@ async function inspectVueReview(page: Page, info: TestInfo, eventId: string, poo
         await expect(dialog.locator('[name="correctedDescription"]')).toHaveValue(invoice.correctedDescription ?? invoice.description!);
     }
     const contracts = inlineContracts ?? await fillReviewFields(dialog, scene);
-    expect(contracts).toEqual(nativeContracts);
+    expect(contracts.map(field => ({value: field.value, disabled: field.disabled, readOnly: field.readOnly})))
+        .toEqual((scene.action === 'approve' || scene.action === 'revise' ? [scene.amount, scene.description]
+            : scene.action === 'decline' || scene.action === 'reject' ? [scene.reason] : [])
+            .map(value => ({value, disabled: false, readOnly: false})));
+    if (scene.action === 'approve' || scene.action === 'revise') {
+        expect(contracts[0]).toMatchObject({type: 'number', min: '0.01',
+            max: scene.action === 'revise' ? '99999999.99' : '', step: '0.01', required: scene.action === 'revise'});
+        expect(contracts[1]).toMatchObject({required: false, maxLength: 4000});
+    }
+    if (scene.action === 'decline' || scene.action === 'reject') {
+        expect(contracts[0]).toMatchObject({maxLength: 4000, required: scene.action === 'reject'});
+    }
     await expect(dialog).toContainText(`Invoice #${invoice.id}`);
     if (inline) await expect(dialog.locator('input, textarea')).toHaveCount(0);
     await expect(row).toContainText(invoice.description!);
@@ -314,7 +265,7 @@ async function inspectVueReview(page: Page, info: TestInfo, eventId: string, poo
 }
 
 for (const width of [1280, 390]) {
-    test(`compares native and Vue invoice review, accepted changes and closure at ${width}px`, async function compareInvoiceReview({page, browser, baseURL}, info) {
+    test(`preserves invoice review, accepted changes and closure at ${width}px`, async function compareInvoiceReview({page, browser, baseURL}, info) {
         test.setTimeout(180_000);
         const participant = await browser.newContext({baseURL});
         const other = await browser.newContext({baseURL});
@@ -322,31 +273,27 @@ for (const width of [1280, 390]) {
         const commands: Request[] = [];
         page.on('pageerror', function recordBrowserError(error) { errors.push(error.message); });
         try {
-            // Real native fixture operations establish two actual guests and
-            // three saved invoices. Both renderers inspect these records before a Vue
-            // command deliberately advances their existing lifecycle below.
+            // Actual guest registrations and three persisted receipts establish
+            // the lifecycle that each confirmed browser command advances below.
             const event = await createFrontendEventFixture(page.request);
             await registerParticipant(participant.request, event.id, 'P8 review evidence participant');
             await registerParticipant(other.request, event.id, 'P8 review saved-share payer');
-            const created = await page.request.post(`/api/event/${event.id}/invoice-pools`, {data: {
+            const poolId = await createFinancePoolFixture(page.request, event.id, {
                 name: 'P8 matched invoice reviews', distribution: 'EQUAL', assignAll: true, subtractPersonalInvoices: true,
                 sendCalculationEmails: false,
-            }});
-            expect(created.status()).toBe(200);
-            const poolId = (await created.json()).data.id as string;
-            const endpoint = `/api/event/${event.id}/invoice-pools/${poolId}`;
+            });
+            const endpoint = `/api/v1/events/${event.id}/finance/pools/${poolId}`;
             const fixtures = [
                 {amount: '40', description: 'P8 review immutable original'},
                 {amount: '9', description: 'P8 review submitted rejection'},
                 {amount: '17', description: 'P8 review accepted closure'},
             ];
             for (const [index, fixture] of fixtures.entries()) {
-                expect((await participant.request.post(`${endpoint}/submit`, {multipart: {
-                    ...fixture, proof: proof(`p8-review-${index}.pdf`),
-                }})).status()).toBe(200);
+                await submitFinanceInvoiceFixture(participant.request, `${endpoint}/invoices`,
+                    {...fixture}, proof(`p8-review-${index}.pdf`));
             }
             const closing = (await readFinance(page.request, event.id)).invoices.find(invoice => invoice.description === fixtures[2]!.description)!;
-            expect((await page.request.post(`${endpoint}/invoices/${closing.id}/approve`, {data: {}})).status()).toBe(200);
+            expect((await financeFixtureRequest(page.request, 'POST', `${endpoint}/invoices/${closing.id}/approve`, {data: {}})).status()).toBe(200);
             await page.setViewportSize({width, height: 900});
             page.on('request', recordReviewCommand);
 
@@ -373,10 +320,7 @@ for (const width of [1280, 390]) {
                 if (scene.closedPool) expect(saved.shares.some(share => Number(share.amount) > 0 && share.isPaid)).toBe(true);
                 const invoice = saved.invoices.find(candidate => candidate.description === scene.originalDescription)!;
                 const commandCount = commands.length;
-                const contracts = await inspectNativeReview(page, info, event.id, poolId, invoice, scene);
-                expect(commands).toHaveLength(commandCount);
-                expect(await readFinance(page.request, event.id)).toEqual(saved);
-                const {row} = await inspectVueReview(page, info, event.id, poolId, invoice, scene, contracts);
+                const {row} = await inspectVueReview(page, info, event.id, poolId, invoice, scene);
                 expect(commands).toHaveLength(commandCount);
                 expect(await readFinance(page.request, event.id)).toEqual(saved);
 
@@ -428,7 +372,7 @@ for (const width of [1280, 390]) {
     });
 }
 
-test('preserves native organizer form information and completes pool creation, attributed entry and invoice review within the Vue document', async ({page, browser, baseURL}, info) => {
+test('preserves organizer form information and completes pool creation, attributed entry and invoice review within the Vue document', async ({page, browser, baseURL}, info) => {
     test.setTimeout(180_000);
     const participant = await browser.newContext({baseURL});
     const other = await browser.newContext({baseURL});
@@ -436,52 +380,55 @@ test('preserves native organizer form information and completes pool creation, a
         const event = await createFrontendEventFixture(page.request);
         await registerParticipant(participant.request, event.id, 'P8 paid-by participant');
         await registerParticipant(other.request, event.id, 'P8 other participant');
-        const created = await page.request.post(`/api/event/${event.id}/invoice-pools`, {data: {
+        const poolId = await createFinancePoolFixture(page.request, event.id, {
             name: 'P8 reference pool', distribution: 'EQUAL', assignAll: true, subtractPersonalInvoices: true,
             sendCalculationEmails: false, roundUpShares: false,
-        }});
-        expect(created.status()).toBe(200);
-        const poolId = (await created.json()).data.id as string;
-        const nativeEndpoint = `/api/event/${event.id}/invoice-pools/${poolId}`;
-        expect((await participant.request.post(`${nativeEndpoint}/submit`, {multipart: {
-            amount: '40', description: 'P8 immutable original receipt', proof: proof(),
-        }})).status()).toBe(200);
-        expect((await other.request.post(`${nativeEndpoint}/submit`, {multipart: {
-            amount: '9', description: 'P8 rejected receipt', proof: proof('p8-rejected.pdf'),
-        }})).status()).toBe(200);
+        });
+        const fixtureEndpoint = `/api/v1/events/${event.id}/finance/pools/${poolId}`;
+        // Organizer recording is separately admitted even with a valid session
+        // and well-formed upload. Neither attendance nor anonymity grants it.
+        const unauthorizedExpense = {data: JSON.stringify({amount: '1', description: 'Unauthorized organizer expense'})};
+        expect((await financeFixtureRequest(participant.request, 'POST', `${fixtureEndpoint}/invoices/organizer`, {
+            multipart: unauthorizedExpense,
+        })).status()).toBe(403);
+        const anonymous = await browser.newContext({baseURL});
+        try {
+            expect((await financeFixtureRequest(anonymous.request, 'POST', `${fixtureEndpoint}/invoices/organizer`, {
+                multipart: unauthorizedExpense,
+            })).status()).toBe(401);
+        } finally { await anonymous.close(); }
+        await submitFinanceInvoiceFixture(participant.request, `${fixtureEndpoint}/invoices`,
+            {amount: '40', description: 'P8 immutable original receipt'}, proof());
+        await submitFinanceInvoiceFixture(other.request, `${fixtureEndpoint}/invoices`,
+            {amount: '9', description: 'P8 rejected receipt'}, proof('p8-rejected.pdf'));
 
         // Each renderer exposes equivalent settings and optional-proof entry at
         // desktop and phone widths. These captures preserve both real surfaces.
         for (const width of [1280, 390]) {
             await page.setViewportSize({width, height: 900});
-            const native = await openPool(page, event.id, poolId, false);
-            await native.getByRole('button', {name: 'Pool settings', exact: true}).click();
-            const nativeSettings = page.locator(`#pool-${poolId}-settings`);
-            const settingsFields = ['distribution', 'description', 'roundUpShares', 'sendCalculationEmails'];
-            const settings = await formContract(nativeSettings, settingsFields);
-            await nativeSettings.screenshot({path: info.outputPath(`native-p8-settings-${width}.png`), animations: 'disabled'});
-            await nativeSettings.getByRole('button', {name: 'Close', exact: true}).last().click();
-            await native.getByRole('button', {name: 'Add invoice / amount', exact: true}).click();
-            const nativeExpense = page.locator(`#pool-${poolId}-expense`);
-            const expenseFields = ['amount', 'description', 'registrationId', 'proof'];
-            const expense = await formContract(nativeExpense, expenseFields);
-            const expenseInstructionColors = await readSecondaryInstructionColors(nativeExpense);
-            expect(expenseInstructionColors.length).toBeGreaterThan(0);
-            await nativeExpense.screenshot({path: info.outputPath(`native-p8-expense-${width}.png`), animations: 'disabled'});
-            await nativeExpense.getByRole('button', {name: 'Cancel', exact: true}).click();
-
-            const vue = await openPool(page, event.id, poolId, true);
+            const vue = await openPool(page, event.id, poolId);
             await vue.getByRole('button', {name: 'Pool settings', exact: true}).click();
             const settingsDialog = page.getByRole('dialog');
-            expect(await formContract(settingsDialog, settingsFields)).toEqual(settings);
+            await expect(settingsDialog.locator('[name="distribution"]')).toHaveValue('EQUAL');
+            await expect(settingsDialog.locator('[name="distribution"]')).toHaveJSProperty('required', true);
+            await expect(settingsDialog.locator('[name="description"]')).toHaveValue('');
+            await expect(settingsDialog.locator('[name="roundUpShares"]')).not.toBeChecked();
+            await expect(settingsDialog.locator('[name="sendCalculationEmails"]')).not.toBeChecked();
             await expectReadableSelection(settingsDialog.locator('[name="distribution"]'));
             await expectUsableFrontendLayout(settingsDialog);
             await settingsDialog.screenshot({path: info.outputPath(`vue-p8-settings-${width}.png`), animations: 'disabled'});
             await settingsDialog.getByRole('button', {name: 'Close', exact: true}).last().click();
             await vue.getByRole('button', {name: 'Add invoice / amount', exact: true}).click();
             const expenseDialog = page.getByRole('dialog');
-            expect(await formContract(expenseDialog, expenseFields)).toEqual(expense);
-            expect(new Set(await readSecondaryInstructionColors(expenseDialog))).toEqual(new Set(expenseInstructionColors));
+            const amount = expenseDialog.locator('[name="amount"]');
+            await expect(amount).toHaveAttribute('min', '0.01');
+            await expect(amount).toHaveAttribute('step', '0.01');
+            await expect(amount).toHaveJSProperty('required', true);
+            await expect(expenseDialog.locator('[name="description"]')).toHaveAttribute('maxlength', '4000');
+            await expect(expenseDialog.locator('[name="registrationId"]')).toHaveValue('');
+            await expect(expenseDialog.locator('[name="proof"]')).toHaveJSProperty('required', false);
+            await expect(expenseDialog.locator('[name="proof"]')).toHaveAttribute('accept', 'image/jpeg,image/png,image/gif,application/pdf');
+            expect(new Set(await readSecondaryInstructionColors(expenseDialog))).toEqual(new Set(['rgb(173, 181, 189)']));
             await expectUsableFrontendLayout(expenseDialog);
             await expenseDialog.screenshot({path: info.outputPath(`vue-p8-expense-${width}.png`), animations: 'disabled'});
             await expenseDialog.getByRole('button', {name: 'Cancel', exact: true}).click();
@@ -489,7 +436,7 @@ test('preserves native organizer form information and completes pool creation, a
         }
 
         await page.setViewportSize({width: 1280, height: 900});
-        const pool = await openPool(page, event.id, poolId, true);
+        const pool = await openPool(page, event.id, poolId);
         const documentMarker = await page.evaluate(() => performance.timeOrigin);
         const navigations: string[] = [];
         page.on('request', request => {
@@ -504,6 +451,38 @@ test('preserves native organizer form information and completes pool creation, a
         await creation.getByRole('button', {name: 'Add pool', exact: true}).click();
         await expect.poll(async () => (await readFinance(page.request, event.id)).pools.some(row => row.name === 'P8 created through Vue')).toBe(true);
         await expect(creation).toBeHidden();
+
+        // Organizer-only creation is a submission state, not financial closure.
+        // Its ordinary organizer form and first calculation work immediately.
+        const createdPool = (await readFinance(page.request, event.id)).pools.find(row => row.name === 'P8 created through Vue')!;
+        expect(createdPool.status).toBe('ORGANIZER_ONLY');
+        const createdCard = page.locator(`[data-finance-pool="${createdPool.id}"]`);
+        const createdToggle = createdCard.locator('.accordion-button').first();
+        if (await createdToggle.getAttribute('aria-expanded') !== 'true') await createdToggle.click();
+        await createdCard.getByRole('button', {name: 'Add invoice / amount', exact: true}).click();
+        let createdDialog = page.getByRole('dialog');
+        await createdDialog.getByLabel('Amount', {exact: true}).fill('75');
+        await createdDialog.getByLabel('Description', {exact: true}).fill('Direct organizer-only expense');
+        await createdDialog.getByRole('button', {name: 'Add expense', exact: true}).click();
+        await expect(createdDialog.getByLabel('Amount', {exact: true})).toHaveValue('');
+        await createdDialog.getByRole('button', {name: 'Cancel', exact: true}).click();
+        const organizerOnly = await readFinance(page.request, event.id);
+        expect(organizerOnly.pools.find(row => row.id === createdPool.id)?.status).toBe('ORGANIZER_ONLY');
+        expect(organizerOnly.shares.filter(row => row.poolId === createdPool.id)).toEqual([]);
+        await createdCard.getByRole('button', {name: 'Preview calculation', exact: true}).click();
+        createdDialog = page.getByRole('dialog');
+        await expect(createdDialog).toContainText('75.00');
+        await expect(createdDialog.getByRole('button', {name: 'Apply recalculation', exact: true})).toHaveCount(0);
+        await createdDialog.getByRole('checkbox').uncheck();
+        await createdDialog.getByRole('button', {name: 'Close pool & calculate', exact: true}).click();
+        await expect(createdDialog).toBeHidden();
+        await dismissFrontendSuccessNotifications(page);
+        const createdClosed = await readFinance(page.request, event.id);
+        expect(createdClosed.pools.find(row => row.id === createdPool.id)?.status).toBe('CLOSED');
+        expect(createdClosed.shares.filter(row => row.poolId === createdPool.id).map(row => row.amount)).toEqual(['37.50', '37.50']);
+        expect((await financeFixtureRequest(page.request, 'POST', `/api/v1/events/${event.id}/finance/pools/${createdPool.id}/submission-state`, {
+            data: {status: 'OPEN', expectedRevision: createdClosed.pools.find(row => row.id === createdPool.id)!.revision},
+        })).status()).toBe(409);
 
         await pool.getByRole('button', {name: 'Add invoice / amount', exact: true}).click();
         const expense = page.getByRole('dialog');
@@ -523,8 +502,8 @@ test('preserves native organizer form information and completes pool creation, a
         await expense.getByRole('button', {name: 'Cancel', exact: true}).click();
         const attributed = (await readFinance(participant.request, event.id, false)).invoices.find(row => row.description === 'P8 attributed organizer expense')!;
         expect(attributed).toMatchObject({organizerRecorded: true, participantName: 'P8 paid-by participant', amount: '13.50', canClose: true});
-        expect((await other.request.get(attributed.proofUrl!)).status()).toBe(403);
-        expect((await participant.request.get(attributed.proofUrl!)).status()).toBe(200);
+        expect((await financeFixtureRequest(other.request, 'GET', attributed.proofUrl!)).status()).toBe(403);
+        expect((await financeFixtureRequest(participant.request, 'GET', attributed.proofUrl!)).status()).toBe(200);
 
         const pending = (await readFinance(page.request, event.id)).invoices.find(row => row.description === 'P8 immutable original receipt')!;
         const row = pool.locator(`[data-finance-invoice="${pending.id}"]`);
@@ -547,7 +526,7 @@ test('preserves native organizer form information and completes pool creation, a
         await correction.getByRole('button', {name: 'Continue', exact: true}).click();
         // A second actor changes saved inputs after review. Applying the captured
         // revision must reject definitely and preserve the reviewed correction.
-        expect((await page.request.post(nativeEndpoint, {data: {distribution: 'EQUAL', description: 'Concurrent pool settings'}})).status()).toBe(200);
+        expect((await financeFixtureRequest(page.request, 'POST', `${fixtureEndpoint}/settings`, {data: {sendCalculationEmails: false, roundUpShares: false, distribution: 'EQUAL', description: 'Concurrent pool settings'}})).status()).toBe(200);
         await correction.getByRole('button', {name: 'Confirm correction', exact: true}).click();
         await expect(correction).toContainText(/changed|conflict|review/i);
         expect((await readFinance(page.request, event.id)).invoices.find(invoice => invoice.id === pending.id)?.correctedAmount).toBe('35.00');
@@ -558,7 +537,7 @@ test('preserves native organizer form information and completes pool creation, a
         expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentMarker);
         expect(navigations).toEqual([]);
 
-        const german = await openPool(page, event.id, poolId, true, 'de');
+        const german = await openPool(page, event.id, poolId, 'de');
         await page.setViewportSize({width: 390, height: 844});
         await german.getByRole('button', {name: 'Pooleinstellungen', exact: true}).click();
         await expectUsableFrontendLayout(page.getByRole('dialog'));
@@ -578,27 +557,17 @@ test('saves allocation forms separately, retains an additive draft during remova
         const event = await createFrontendEventFixture(page.request);
         await registerParticipant(participant.request, event.id, 'P8 allocation payer');
         await registerParticipant(other.request, event.id, 'P8 allocation beneficiary');
-        const response = await page.request.post(`/api/event/${event.id}/invoice-pools`, {data: {
+        const poolId = await createFinancePoolFixture(page.request, event.id, {
             name: 'P8 allocation inputs', distribution: 'EQUAL', assignAll: true, sendCalculationEmails: false,
-        }});
-        expect(response.status()).toBe(200);
-        const poolId = (await response.json()).data.id as string;
+        });
         const ownId = (await readFinance(participant.request, event.id, false)).registrationId!;
         const otherId = (await readFinance(other.request, event.id, false)).registrationId!;
         for (const width of [1280, 390]) {
             await page.setViewportSize({width, height: 900});
-            const native = await openPool(page, event.id, poolId, false);
-            await native.getByRole('button', {name: 'Participants & factors', exact: true}).click();
-            const nativeAssignments = page.locator(`#pool-${poolId}-participants`);
-            const allocationInstructionColors = await readSecondaryInstructionColors(nativeAssignments);
-            expect(allocationInstructionColors.length).toBeGreaterThan(0);
-            await expect(nativeAssignments.locator('[data-participant-factor]').first()).toHaveAttribute('step', '0.0001');
-            await nativeAssignments.screenshot({path: info.outputPath(`native-p8-allocation-${width}.png`), animations: 'disabled'});
-            await nativeAssignments.getByRole('button', {name: 'Close', exact: true}).last().click();
-            const vue = await openPool(page, event.id, poolId, true);
+            const vue = await openPool(page, event.id, poolId);
             await vue.getByRole('button', {name: 'Participants & factors', exact: true}).click();
             const allocation = page.getByRole('dialog');
-            expect(new Set(await readSecondaryInstructionColors(allocation))).toEqual(new Set(allocationInstructionColors));
+            expect(new Set(await readSecondaryInstructionColors(allocation))).toEqual(new Set(['rgb(173, 181, 189)']));
             await expect(allocation.getByLabel('Share factor', {exact: true}).first()).toHaveAttribute('step', '0.0001');
             await expectUsableFrontendLayout(allocation);
             await allocation.screenshot({path: info.outputPath(`vue-p8-allocation-${width}.png`), animations: 'disabled'});
@@ -630,7 +599,7 @@ test('saves allocation forms separately, retains an additive draft during remova
         await expect(adjustments).toContainText('Rebate');
         // The shared saved notification overlays the dialog without moving its
         // fields. Use its ordinary dismissal before editing the saved row below.
-        const savedAdjustmentNotice = adjustments.locator('[data-pilot-notices] .pilot-notification.alert-success')
+        const savedAdjustmentNotice = adjustments.locator('[data-frontend-notices] .frontend-notification.alert-success')
             .filter({hasText: 'Adjustment saved.'});
         await expect(savedAdjustmentNotice).toBeVisible();
         const dismissAdjustmentNotice = savedAdjustmentNotice.getByRole('button', {name: 'Dismiss notification', exact: true});
@@ -640,8 +609,9 @@ test('saves allocation forms separately, retains an additive draft during remova
         await adjustments.getByLabel('Participant', {exact: true}).selectOption(otherId);
         await adjustments.getByLabel('Amount (negative for a rebate)', {exact: true}).fill('2.50');
         await adjustments.getByLabel('Note', {exact: true}).fill('P8 unsaved sibling adjustment');
-        page.once('dialog', dialog => dialog.accept());
         await adjustments.locator('[data-finance-adjustment]').getByRole('button', {name: /^Remove Rebate for/u}).click();
+        await expect(adjustments.locator('[data-finance-removal-review]')).toBeVisible();
+        await adjustments.getByRole('button', {name: 'Remove adjustment', exact: true}).click();
         await expect(adjustments.locator('[data-finance-adjustment]')).toHaveCount(0);
         await expect(adjustments.getByLabel('Note', {exact: true})).toHaveValue('P8 unsaved sibling adjustment');
         await expect(adjustments.getByLabel('Amount (negative for a rebate)', {exact: true})).toHaveValue('2.50');
@@ -667,24 +637,24 @@ test('saves allocation forms separately, retains an additive draft during remova
             if (request.method() === 'POST' && request.url().endsWith(`/finance/pools/${poolId}/submission-state`)) accessRequests++;
         }
         page.on('request', trackSubmissionAccess);
-        page.once('dialog', dialog => dialog.dismiss());
         await pool.getByRole('button', {name: 'Close participant invoices', exact: true}).click();
+        await page.getByRole('dialog').getByRole('button', {name: 'Cancel', exact: true}).click();
         expect(accessRequests).toBe(0);
         expect((await readFinance(page.request, event.id)).pools.find(row => row.id === poolId)?.status).toBe('OPEN');
-        page.once('dialog', dialog => dialog.accept());
         await pool.getByRole('button', {name: 'Close participant invoices', exact: true}).click();
+        await page.getByRole('dialog').getByRole('button', {name: 'Close participant invoices', exact: true}).click();
         await expect.poll(async () => (await readFinance(page.request, event.id)).pools.find(row => row.id === poolId)?.status).toBe('ORGANIZER_ONLY');
-        expect((await participant.request.post(`/api/event/${event.id}/invoice-pools/${poolId}/takeovers`, {data: {beneficiaries: []}})).status()).toBe(409);
-        page.once('dialog', dialog => dialog.accept());
+        expect((await financeFixtureRequest(participant.request, 'POST', `/api/v1/events/${event.id}/finance/pools/${poolId}/takeovers`, {data: {beneficiaries: []}})).status()).toBe(409);
         await pool.getByRole('button', {name: 'Open participant invoices', exact: true}).click();
+        await page.getByRole('dialog').getByRole('button', {name: 'Open participant invoices', exact: true}).click();
         await expect.poll(async () => (await readFinance(page.request, event.id)).pools.find(row => row.id === poolId)?.status).toBe('OPEN');
         expect(accessRequests).toBe(2);
         page.off('request', trackSubmissionAccess);
         expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentMarker);
 
         const personalPage = await participant.newPage();
-        await personalPage.goto(`/frontend-pilot/event/${event.id}?locale=en`);
-        await waitForPilotHydration(personalPage);
+        await personalPage.goto(`/event/${event.id}?locale=en`);
+        await waitForFrontendHydration(personalPage);
         const finance = personalPage.locator('[data-finance-section]');
         const toggle = finance.locator('.accordion-button').first();
         if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
@@ -714,8 +684,8 @@ for (const width of [320, 390]) {
             await registerParticipant(participant.request, event.id, 'Zahlende Person am See');
             await registerParticipant(other.request, event.id, 'Mitreisende Person am See');
             await page.setViewportSize({width, height: 900});
-            await page.goto(`/frontend-pilot/event/${event.id}/admin?locale=de`, {waitUntil: 'domcontentloaded'});
-            await waitForPilotHydration(page);
+            await page.goto(`/event/${event.id}/admin?locale=de`, {waitUntil: 'domcontentloaded'});
+            await waitForFrontendHydration(page);
             const documentTime = await page.evaluate(() => performance.timeOrigin);
             const finance = page.locator('[data-finance-section]');
             await finance.getByRole('button', {name: messages.t('finance.createPool'), exact: true}).click();
@@ -774,12 +744,11 @@ for (const width of [320, 390]) {
             await expense.getByRole('button', {name: messages.t('common.cancel'), exact: true}).click();
             await expect(pool.locator(`[data-finance-invoice="${attributed.id}"]`)).toContainText('13,50');
 
-            // Seed only the independent source invoice through the unchanged
-            // native route; acceptance itself uses the actual German browser UI.
-            const endpoint = `/api/event/${event.id}/invoice-pools/${poolId}`;
-            expect((await participant.request.post(`${endpoint}/submit`, {multipart: {
-                amount: '22.50', description: 'Zu prüfender Teilnehmerbeleg', proof: proof(`german-${width}.pdf`),
-            }})).status()).toBe(200);
+            // Seed the independent source receipt through the admitted API;
+            // acceptance itself uses the actual German browser controls.
+            const endpoint = `/api/v1/events/${event.id}/finance/pools/${poolId}`;
+            await submitFinanceInvoiceFixture(participant.request, `${endpoint}/invoices`,
+                {amount: '22.50', description: 'Zu prüfender Teilnehmerbeleg'}, proof(`german-${width}.pdf`));
             await finance.getByRole('button', {name: messages.t('common.refresh'), exact: true}).first().click();
             const pending = (await readFinance(page.request, event.id)).invoices.find(invoice => invoice.description === 'Zu prüfender Teilnehmerbeleg')!;
             const row = pool.locator(`[data-finance-invoice="${pending.id}"]`);
@@ -845,8 +814,8 @@ for (const width of [320, 390]) {
 
             const personal = await participant.newPage();
             personal.on('pageerror', error => errors.push(error.message));
-            await personal.goto(`/frontend-pilot/event/${event.id}?locale=de`, {waitUntil: 'domcontentloaded'});
-            await waitForPilotHydration(personal);
+            await personal.goto(`/event/${event.id}?locale=de`, {waitUntil: 'domcontentloaded'});
+            await waitForFrontendHydration(personal);
             const personalTime = await personal.evaluate(() => performance.timeOrigin);
             const ownFinance = personal.locator('[data-finance-section]');
             const ownToggle = ownFinance.locator('.accordion-button').first();
@@ -888,12 +857,10 @@ for (const width of [320, 390]) {
 test('protects a committed organizer expense after response loss until deliberate history inspection without resubmission', async ({page, context}) => {
     test.setTimeout(90_000);
     const event = await createFrontendEventFixture(page.request);
-    const created = await page.request.post(`/api/event/${event.id}/invoice-pools`, {data: {
+    const poolId = await createFinancePoolFixture(page.request, event.id, {
         name: 'P8 unknown organizer result', distribution: 'EQUAL', assignAll: true, sendCalculationEmails: false,
-    }});
-    expect(created.status()).toBe(200);
-    const poolId = (await created.json()).data.id as string;
-    const pool = await openPool(page, event.id, poolId, true);
+    });
+    const pool = await openPool(page, event.id, poolId);
     await pool.getByRole('button', {name: 'Add invoice / amount', exact: true}).click();
     const expense = page.getByRole('dialog');
     await expense.locator('[name="amount"]').fill('18');

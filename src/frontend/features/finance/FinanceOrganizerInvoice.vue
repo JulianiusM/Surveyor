@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, reactive, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
-import {useActionState, usePilot} from '../../app/context';
+import {useActionState, useFrontend} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
 import {financeDecimal, protectFinanceNumberFromScroll} from './numbers';
@@ -24,7 +24,7 @@ const props = defineProps<{
     refresh: () => Promise<void>;
 }>();
 const emit = defineEmits<{close: []; history: []}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useFinanceApi(context);
 const id = useId();

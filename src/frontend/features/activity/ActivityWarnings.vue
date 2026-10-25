@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type {components} from '../../../types/api/v1';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import {activityWarningLabel} from './presentation';
@@ -9,7 +9,7 @@ import {activityWarningLabel} from './presentation';
 // as text and never look up hidden sibling plans/slots from an identifier.
 const props = defineProps<{open: boolean; title: string; warnings: components['schemas']['ActivityWarning'][]; slots: components['schemas']['ActivitySlotView'][]; pending?: boolean; blocked?: boolean; confirmDisabled?: boolean; confirmLabel?: string}>();
 const emit = defineEmits<{close: []; confirm: []}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 function description(warning: components['schemas']['ActivityWarning']): string {
     return activityWarningLabel(warning, props.slots, messages.value.t);
 }

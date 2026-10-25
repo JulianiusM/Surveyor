@@ -1,4 +1,4 @@
-import type {FrontendPilotBootstrap, PackingPageError} from '../../types/FrontendPilotTypes';
+import type {FrontendBootstrap, PackingPageError} from '../../types/FrontendTypes';
 import {validateSessionView} from '../../../.generated/api/v1/browser/validateSessionView.mjs';
 import {validateProblem} from '../../../.generated/api/v1/browser/validateProblem.mjs';
 import {validatePageEntryOutcome} from '../../../.generated/api/v1/browser/validatePageEntryOutcome.mjs';
@@ -41,22 +41,22 @@ const bootstrapValidators = {
     personalLink: validateString,
     overview: validateOverview,
     initialUrl: validateString,
-} satisfies {[Field in keyof FrontendPilotBootstrap]-?: (value: unknown) => boolean | Promise<boolean>};
+} satisfies {[Field in keyof FrontendBootstrap]-?: (value: unknown) => boolean | Promise<boolean>};
 
 /** Validate the complete wire object before it enters reactive application state. Unknown
  * fields fail closed, and feature validators load only when their initial data is present. */
-export async function decodeBootstrap(value: unknown): Promise<FrontendPilotBootstrap> {
-    if (!isRecord(value) || !Object.hasOwn(value, 'session')) throw new Error('Invalid pilot bootstrap.');
+export async function decodeBootstrap(value: unknown): Promise<FrontendBootstrap> {
+    if (!isRecord(value) || !Object.hasOwn(value, 'session')) throw new Error('Invalid frontend bootstrap.');
 
     for (const [field, payload] of Object.entries(value)) {
-        if (!Object.hasOwn(bootstrapValidators, field)) throw new Error('Invalid pilot bootstrap field.');
-        const validate = bootstrapValidators[field as keyof FrontendPilotBootstrap];
-        if (!await validate(payload)) throw new Error(`Invalid pilot bootstrap field: ${field}.`);
+        if (!Object.hasOwn(bootstrapValidators, field)) throw new Error('Invalid frontend bootstrap field.');
+        const validate = bootstrapValidators[field as keyof FrontendBootstrap];
+        if (!await validate(payload)) throw new Error(`Invalid frontend bootstrap field: ${field}.`);
     }
 
     // All declared values have crossed their runtime validator; preserving them together
-    // keeps native admission, feedback and confirmed completion intact during hydration.
-    return value as unknown as FrontendPilotBootstrap;
+    // keeps admission, feedback and confirmed completion intact during hydration.
+    return value as unknown as FrontendBootstrap;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -77,7 +77,7 @@ function validateLanding(value: unknown): boolean {
 /** Admit the exact private document projection, never a serialized profile/account row. */
 function validateProfileWorkflow(value: unknown): boolean {
     if (!isRecord(value)) return false;
-    // Each variant owns only its native presentation fields. In particular, an
+    // Each variant owns only its presentation fields. In particular, an
     // input form cannot acquire another variant's preview, token or error identity.
     if (value.kind === 'entry') return Object.keys(value).length === 1;
     if (value.kind === 'token') return typeof value.token === 'string' && Object.keys(value).length === 2;
@@ -115,7 +115,7 @@ function validateIdentityFeedback(value: unknown): boolean {
     return typeof value === 'string' && frontendIdentityFeedback.includes(value as typeof frontendIdentityFeedback[number]);
 }
 
-// Require every declared native admission label at the browser boundary. An added
+// Require every declared admission label at the browser boundary. An added
 // server outcome must update this owner too, instead of silently failing hydration.
 const packingPageErrors = {
     'packing.notFound': true,
@@ -212,7 +212,7 @@ async function validateOverview(value: unknown): Promise<boolean> {
 }
 
 /** Keep bootstrap JSON inert inside an HTML script element, including translated or help text. */
-export function serializeBootstrap(bootstrap: FrontendPilotBootstrap): string {
+export function serializeBootstrap(bootstrap: FrontendBootstrap): string {
     return JSON.stringify(bootstrap).replace(/</gu, '\\u003c').replace(/>/gu, '\\u003e')
         .replace(/&/gu, '\\u0026').replace(/\u2028/gu, '\\u2028').replace(/\u2029/gu, '\\u2029');
 }

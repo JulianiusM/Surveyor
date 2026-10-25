@@ -1,11 +1,12 @@
 schema_version: 1
 maintenance:
-  reviewed_on: 2026-10-13
-  authority: Explicit maintainer authorization to consolidate completed documentation history; live guidance continues to
-    describe native behavior.
+  reviewed_on: 2026-10-25
+  authority: Explicit P11 implementation request authorizes cutover and retirement; existing open backend remedies retain
+    their separately authorized scope.
   policy: docs/policies/DOCUMENTATION_POLICY.md
   history: Superseded audit metrics, completed package sequences and detailed run transcripts remain in Git history; no
-    parallel archive is maintained.
+    parallel archive is maintained. Retired native source paths and temporary review records below identify historical
+    discovery evidence in Git, not live implementation owners.
   evidence_rule: Closed dispositions summarize recorded evidence; this editorial consolidation does not rerun application
     or operator checks.
 documentation_delivery_policy:
@@ -448,7 +449,11 @@ implementation_defects:
       - rendered-view tests prove that unauthorized profiles receive neither the tab nor participant data
       - authorized participant review and schedule-name rendering remain aligned
   - id: IMP-019
-    status: open
+    status: closed
+    closed_on: 2026-10-25
+    resolution: P11 canonical Vue cutover retires the defective native voting template. Built desktop/mobile Survey cases verify escaped single-line and multiline saved descriptions; current rendering uses the approved R1 behavior.
+    closure_evidence: P11 canonical route/native consumer retirement, independently reviewed source and recorded visual
+      comparison; actual focused built test results retained in artifacts/p11-e2e-retry-10.11.log and the final P11 run artifacts.
     severity: high
     owner: application maintainers
     out_of_scope_for_documentation_migration: true
@@ -465,7 +470,7 @@ implementation_defects:
     migration_disposition:
       decision: Maintainer approved Vue-only description rendering as R1 on 2026-10-18; minor backend adapter changes
         are permitted if needed, without altering native frontend or shared business behavior.
-      frontend_status: Vue rendering is implemented; the native defect remains until cutover.
+      frontend_status: Canonical Vue rendering verified at P11 cutover; defective native consumer retired.
       closure_boundary: Keep this record open until native-to-Vue cutover has happened and the corrected frontend
         rendering has been verified. Vue implementation alone does not resolve the retained native defect.
     closes_when:
@@ -473,7 +478,11 @@ implementation_defects:
       - rendered-view or E2E coverage checks both single-line and multiline descriptions
       - D09 is re-verified only if the visible description contract changes
   - id: IMP-020
-    status: open
+    status: closed
+    closed_on: 2026-10-25
+    resolution: P11 canonical Vue cutover retires the defective native duplication form. Retained Survey creation/duplication coverage verifies saved description and recurrence values under the approved R2 behavior; responses and header images remain excluded.
+    closure_evidence: P11 canonical route/native consumer retirement, independently reviewed source and recorded visual
+      comparison; actual focused built test results retained in artifacts/p11-e2e-retry-10.11.log and the final P11 run artifacts.
     severity: medium
     owner: application maintainers
     out_of_scope_for_documentation_migration: true
@@ -490,7 +499,7 @@ implementation_defects:
     migration_disposition:
       decision: Maintainer approved Vue-only duplicate prefill as R2 on 2026-10-18 under the same frontend-only/minor
         adapter scope as R1; native frontend and shared persistence remain unchanged.
-      frontend_status: Vue prefill is implemented; the native defect remains until cutover.
+      frontend_status: Canonical Vue prefill verified at P11 cutover; defective native consumer retired.
       closure_boundary: Keep this record open until native-to-Vue cutover has happened and complete prefill has been
         verified. Vue implementation alone does not resolve the retained native defect.
     closes_when:
@@ -695,7 +704,17 @@ implementation_defects:
       - frontend and integration tests cover attendance, overlap, capacity, named-role, stale-source, and
         reciprocal-swap blocking
   - id: IMP-030
-    status: open
+    status: closed
+    closed_on: 2026-10-25
+    resolution: P11 canonical cutover retires the native observer defect. The existing Vue receive/observeJob owner
+      follows the returned job identity, displays progress and terminal states, and adopts automatic completion
+      through a pure saved-state read without another generation or maintenance command.
+    closure_evidence:
+      - artifacts/p11-feature-e2e-10.11.log records the real initially queued deadline job case passing at test43
+        (tests/e2e/frontend-pilot-activity-advanced.spec.ts), with one entry and no second generation trigger.
+      - src/frontend/features/activity/ActivityRecommendations.vue owns bounded polling, failure/stale/timeout
+        presentation, identity fences and pure automatic completion; retained mounted recommendation tests cover
+        automatic completion with and without dirty edits, failure/stale outcomes and observer disposal.
     severity: medium
     owner: application maintainers
     out_of_scope_for_documentation_migration: true
@@ -715,8 +734,8 @@ implementation_defects:
       - On 2026-10-19 the maintainer explicitly approved directly reissued P6 R1 as a frontend correction with at most
         a few minor backend changes. Vue observes the returned domain job and reads saved proposals through the
         existing pure projection; no backend change or additional generation trigger is required.
-      - The native frontend remains unchanged. Per the same direct decision this record must remain open until
-        native-to-Vue cutover has actually occurred; implementation or verification alone cannot resolve IMP-030.
+      - The same direct decision required actual native-to-Vue cutover before closure; P11 now retires the native
+        consumer after the current implementation and built observation case were verified.
     closes_when:
       - the active schedule detects autoGenerationJob, shows its status, polls it, and reloads terminal results
       - stale, failed, and timed-out jobs produce actionable visible messages
@@ -893,7 +912,7 @@ implementation_defects:
         actor/resource/DOM callbacks. Removed rows, denied resources and changed context retire local fallback.
       - The focused production-consumer selection passed two files and 114 tests, including local Retry, EN/DE notice,
         healthy rereads, retirement, detached controls and retained authorized 503 behavior. Exact commands and broader
-        current verification are owned by docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+        verification at closure were recorded in the pre-cutover docs/frontend-migration/PILOT_PARITY_REVIEW.md in Git history.
   - id: IMP-044
     status: closed
     closed_on: 2026-10-13
@@ -915,7 +934,7 @@ implementation_defects:
       - The existing command owner rejects new run calls after unmount before acquiring authority or a status lease;
         its admitted-operation body remains unchanged. Native and backend sources are unchanged.
       - Three focused production-consumer files passed all 136 tests, including both new regressions and both valid
-        deferred-work controls. Exact commands and final verification are owned by the paired pilot review.
+        deferred-work controls. Exact commands and verification at closure remain in the paired pilot review in Git history.
   - id: IMP-045
     status: closed
     closed_on: 2026-10-13
@@ -953,7 +972,7 @@ implementation_defects:
         semantic review protect unknown-outcome leases; new manual-marker cases do not independently certify that
         boundary. Source review verifies early guard installation and normal mount-restoration handoff, with no
         secret/file persistence or command replay.
-      - Exact current commands, results and no-database/arbitrary-mount limitations are owned by the paired pilot review.
+      - Commands, results and no-database/arbitrary-mount limitations at closure remain in the paired pilot review in Git history.
   - id: IMP-046
     status: closed
     closed_on: 2026-10-13
@@ -978,8 +997,8 @@ implementation_defects:
         production command/API owners; healthy and failed follow-up reads clear the same input, while rejected and
         unknown uploads plus background reads retain its File. Deliberate same-filename reselection permits another upload.
       - The four mounted header cases and independent source review accept feature-owned release and preservation
-        of native/backend behavior. Latest executed selection, commands and practical browser/persistence limits are
-        owned by docs/frontend-migration/PILOT_PARITY_REVIEW.md; a superseded aggregate quick count is not current proof.
+        of native/backend behavior. The selection, commands and practical browser/persistence limits at closure remain
+        in docs/frontend-migration/PILOT_PARITY_REVIEW.md in Git history; a superseded aggregate quick count is not current proof.
   - id: IMP-047
     status: closed
     closed_on: 2026-10-13
@@ -1113,7 +1132,7 @@ implementation_defects:
         return 404 without changing the admitted actor or creating User/Profile/Guest rows. Current built API signup
         retains complete account/profile/token persistence after controlled local SMTP failure without token exposure
         or actor change. Independent semantic review accepts production adoption and protected native/shared behavior;
-        exact current execution belongs to the paired pilot review. General native token defects remain IMP-051/057.
+        execution at closure remains in the paired pilot review in Git history. General native token defects remain IMP-051/057.
   - id: IMP-051
     status: open
     severity: high
@@ -1184,7 +1203,7 @@ implementation_defects:
         or optional flash within the existing locked completion transaction; captured delivery follows its commit.
       - Real ORM cases pass cached setup rollback, generic known/unknown and failed/unexpected delivery, private
         result preparation and later-actor preservation. The built API/document workflows and independent nonauthor
-        semantic review accept production adoption; current exact scopes are owned by the paired pilot review.
+        semantic review accepted production adoption; exact scopes at closure remain in the paired pilot review in Git history.
       - Closure is pilot-only. Native ordering, inactive-login resend, existing confirmation/error responses and
         no-account-discovery contract remain protected; no live SMTP or mixed-writer guarantee is inferred.
     evidence_limit: Native reset-mail ordering remains unchanged. Mixed native/pilot token-consumption decisions
@@ -1255,7 +1274,7 @@ implementation_defects:
       - Real ORM projection/generated-response rejection roll back the preference; native/pilot DTO and captured
         output assertions preserve placement/archive distinctions across later archive/context changes. Built-system
         workflows, final source/build checks and independent nonauthor semantic review accept the production path.
-        Current execution scopes are owned by the paired pilot review.
+        Execution scopes at closure remain in the paired pilot review in Git history.
     evidence_limit: Closure covers the pilot required archive projection and prepared response only. Native default
       presentation, locale-cookie behavior and other visibility/lifecycle writers remain outside this assertion.
   - id: IMP-055
@@ -1484,8 +1503,8 @@ implementation_defects:
         entry-server share its classifier without mirroring private query data.
       - Actual SSR and hydrated App/PackingEntry cases protect initial/warm denial, release/chunk recovery, retained
         deliberate guards, fresh render restoration and retirement across resource/actor changes. The final combined
-        client/genuine server-component suite and built-client browser selection passed; the current pilot review
-        owns exact commands, counts and practical limits.
+        client/genuine server-component suite and built-client browser selection passed; the pre-cutover pilot review
+        in Git history records exact commands, counts and practical limits at closure.
       - Normal build, final frontend/client/SSR and test compiler checks passed. Root and independent nonauthor review
         accept current ownership, scoped lifetime, actual shared adoption and preserved navigation/admission guards.
     evidence_limit: Mounted cases substitute HTTP; controlled built-browser delivery is client evidence. Neither is
@@ -1862,7 +1881,11 @@ implementation_defects:
     disposition: Recorded once for separate native maintenance. The sticky-placement comparison uses the existing
       single Tab/blur save path while retaining the real command receipt, single confirmation, viewport and sticky-geometry assertions.
   - id: IMP-075
-    status: open
+    status: closed
+    closed_on: 2026-10-25
+    resolution: P11 retires the native wide-table consumer. Current built Survey desktop/mobile workflows pass all-column local scrolling, sticky participant cells and keyboard selection without document travel; the approved Vue containing block remains the shared owner.
+    closure_evidence: P11 canonical route/native consumer retirement, independently reviewed source and recorded visual
+      comparison; actual focused built test results retained in artifacts/p11-e2e-retry-10.11.log and the final P11 run artifacts.
     discovered_on: 2026-10-18
     severity: medium
     owner: native frontend maintainers
@@ -1894,9 +1917,13 @@ implementation_defects:
     disposition: The original comparator allowed improvement but required only no worsening. The authorized shared
       Vue containing-block correction passes both focused built comparisons without hiding overflow or changing
       widths, columns, sticky cells, native source or backend behavior. The renewed full-system selection also passes
-      this boundary; exact execution and image scope remain in the pilot review. The unchanged native defect remains open.
+      this boundary; exact execution and image scope remain in the pilot review. P11 now retires that unchanged native consumer after the current Vue checks.
   - id: IMP-076
-    status: open
+    status: closed
+    closed_on: 2026-10-25
+    resolution: P11 retires the native grouped-data badge. Current Activity presentation uses the approved saved-slot total independently of local filters; mounted coverage and built Activity journeys retain the verified count behavior.
+    closure_evidence: P11 canonical route/native consumer retirement, independently reviewed source and recorded visual
+      comparison; actual focused built test results retained in artifacts/p11-e2e-retry-10.11.log and the final P11 run artifacts.
     discovered_on: 2026-10-18
     severity: low
     owner: native frontend maintainers
@@ -1918,10 +1945,14 @@ implementation_defects:
       independently of All/My/Open, and displays zero for an empty plan. Independent source review and the focused
       mounted regression verify distinct visible sets, fresh three-slot data with Open retained, empty reads and
       GET-only delivery. The focused selection passes one case with 24 filtered cases; both repaired desktop/mobile
-      built comparisons also pass and their original images show the total. Native retains its unchanged defect,
-      so this ID stays open.
+      built comparisons also pass and their original images show the total. P11 now retires that native consumer, satisfying the remaining cutover boundary.
   - id: IMP-077
-    status: open
+    status: closed
+    closed_on: 2026-10-25
+    resolution: P11 retires native interactive Activity calendar consumers. The approved shared civil-day owner remains active for Event/Activity labels and creation weeks, with retained timezone/DST coverage. Stored values, business calculations and print semantics remain outside this presentation remedy.
+    closure_evidence: P11 canonical route/native consumer retirement, independently reviewed source and recorded visual
+      comparison; all four built Los Angeles/Berlin English/German DST cases pass in
+      artifacts/p11-remaining-e2e-10.11.log (tests/e2e/frontend-calendar.spec.ts).
     discovered_on: 2026-10-18
     severity: medium
     owner: native frontend maintainers
@@ -1950,9 +1981,13 @@ implementation_defects:
       approved correction now uses one pure owner for matching Vue date-only labels and Activity creation/versioned
       weeks. Independent production adoption review, 111 focused cases, 21 genuine ORM cases and four built calendar
       journeys verify the bounded correction, including real DST/offset scenes and unchanged instant semantics.
-      This open native defect is not resolved by Vue checks, and no exhaustive timezone certification is claimed.
+      The final P11 retirement removes the native interactive consumers; no exhaustive timezone certification is claimed.
   - id: IMP-078
-    status: open
+    status: closed
+    closed_on: 2026-10-25
+    resolution: P11 retires the native Activity creation form. Current creation date labels target their actual controls through the shared Vue field owner, retaining the approved accessible-label correction and built creation coverage.
+    closure_evidence: P11 canonical route/native consumer retirement, independently reviewed source and recorded visual
+      comparison; actual focused built test results retained in artifacts/p11-e2e-retry-10.11.log and the final P11 run artifacts.
     discovered_on: 2026-10-18
     severity: low
     owner: native frontend maintainers
@@ -1968,8 +2003,8 @@ implementation_defects:
       applies those requirements without changing the native comparator.
     documentation_contract: Date labels should identify their corresponding date controls.
     disposition: The initial Vue implementation supplied the native label targets to the shared field owner. Its
-      corrected date fields now use the actual startDate/endDate targets. The native label defect remains open;
-      source and scoped execution evidence are recorded in the pilot review.
+      corrected date fields now use the actual startDate/endDate targets. P11 retires the native label defect;
+      original source and scoped execution evidence remain in Git and ignored run artifacts.
   - id: IMP-079
     status: open
     discovered_on: 2026-10-18
@@ -1996,7 +2031,11 @@ implementation_defects:
         committed application or distinctly reports the committed application and regeneration outcome.
       - Real persistence tests exercise the approved behavior and confirm that application cannot replay implicitly.
   - id: IMP-080
-    status: open
+    status: closed
+    closed_on: 2026-10-25
+    resolution: P11 canonical Vue cutover retires the clipping native recommendation header. Recorded final-native comparisons and current built Activity responsive coverage verify the approved locale-neutral action layout; command authority and drafts remain unchanged.
+    closure_evidence: P11 canonical route/native consumer retirement, independently reviewed source and recorded visual
+      comparison; actual focused built test results retained in artifacts/p11-e2e-retry-10.11.log and the final P11 run artifacts.
     discovered_on: 2026-10-18
     severity: medium
     owner: native frontend maintainers
@@ -2012,9 +2051,9 @@ implementation_defects:
     authorization: On 2026-10-19 the maintainer rejected the German-only R4 proposal and approved locale-neutral
       responsive usability, including English, through shared frontend owners with at most minimal backend adaptation.
     documentation_contract: Organizer actions should remain visible and usable at supported narrow viewport sizes.
-    disposition: The Vue responsive correction is now authorized; native authored sources remain unchanged.
-      The same direct decision requires IMP-080 to stay open until actual native-to-Vue cutover. Source adoption
-      or passing Vue checks cannot close this native defect earlier.
+    disposition: The Vue responsive correction was authorized while native authored sources remained unchanged.
+      The direct decision required actual native-to-Vue cutover before closure; P11 now supplies that retirement
+      after source, visual and built responsive verification.
     closes_when:
       - A separately approved presentation change keeps the title and all actions usable at narrow viewport sizes.
       - Built desktop and mobile comparisons verify the approved layout without changing command authority or drafts.
@@ -2122,7 +2161,7 @@ implementation_defects:
       default/Quick Add numeric normalization retains its established behavior. Independent source review and actual
       built workflows verify Finance spelling, Event 005 through blur and sibling/metadata changes, Activity 003 and
       Packing retained initial input. Matching desktop/mobile Packing comparisons pass after the final browser-restoration
-      attribute correction. The current pilot review records their finite execution and original-image evidence;
+      attribute correction. The pre-cutover pilot review in Git history records their finite execution and original-image evidence;
       no equivalent migrated consumer is deferred.
   - id: IMP-085
     status: open
@@ -4029,13 +4068,14 @@ run_protocol:
     delivery.
   - Record only latest relevant evidence and remaining work; prior transcripts remain in Git and ignored run artifacts.
 migration_tracking:
-  status_document: docs/frontend-migration/DOCUMENTATION_MIGRATION_STATUS.md
+  status_document: docs/README.md
   policy_document: docs/policies/DOCUMENTATION_POLICY.md
   checker: scripts/check-documentation.mjs
   checker_config: docs/policies/documentation-check.json
   current_baseline: docs-baseline-2026-09-06-ci-repair
-  next_continuation: D04V / OPSV-001 is an independent advisory rehearsal. Frontend pilot correction and current evidence
-    belong to docs/frontend-migration/PILOT_PARITY_REVIEW.md; unrelated native repairs require their own authorization.
+  next_continuation: D04V / OPSV-001 remains an independent advisory rehearsal. P11 execution evidence belongs to ignored
+    run artifacts and the task report; durable frontend decisions belong to DEC-006. Open backend remedies require
+    their own authorization.
 completed_verification:
   documentation_packages: D00–D14 completed; D04V remains deferred and advisory. Package/closed-finding IDs above retain disposition.
   d14_visuals: Recorded review of four raster illustrations at full resolution and narrow preview sizes; initial tool

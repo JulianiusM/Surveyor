@@ -1,13 +1,14 @@
+import {patchActivitySlotForE2E, createActivityRoleForE2E} from './frontendActivityE2EKeywords';
+import {commandHeadersForE2E, createProfileForE2E, selectProfileForE2E, updateEntityMetadataForE2E} from './e2eCoreKeywords';
 import {expect, type APIRequestContext, type Locator, type Page, type TestInfo} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import type {components} from '../../src/types/api/v1';
-import {createActivityForE2E, assignActivityThroughNative, captureActivityPresentation, readActivityForE2E,
-    waitForNativeActivityPane} from './frontendActivityE2EKeywords';
+import {createActivityForE2E, assignActivityForE2E, captureActivityPresentation, readActivityForE2E} from './frontendActivityE2EKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from './frontendEventE2EKeywords';
-import {waitForPilotHydration} from './frontendDynamicKeywords';
+import {waitForFrontendHydration} from './frontendDynamicKeywords';
 
-/** Create shared persisted inputs through the established HTTP owners. Both
- * renderers use these same registered profiles, saved rules and recommendation. */
+/** Create persisted inputs through the established HTTP owners: registered
+ * profiles, saved rules and a pending recommendation when requested. */
 export async function createAdvancedActivityForE2E(request: APIRequestContext,
     options: {assigned?: boolean; secondAssigned?: boolean; recommendation?: boolean;
         period?: Pick<components['schemas']['ActivityCreateInput'], 'startDate' | 'endDate'>} = {}) {
@@ -16,20 +17,18 @@ export async function createAdvancedActivityForE2E(request: APIRequestContext,
     // Calendar scenarios reuse the existing Event operation before either real
     // registration. Ordinary fixtures retain their original four-day Event and
     // two-day plan; no business or attendance rule is bypassed for the test.
-    if (options.period) expect((await request.post(`/api/event/${event.id}/update`, {data: options.period})).status()).toBe(200);
-    expect((await request.post(`/api/event/${event.id}/register`, {
-        data: {arrivalDate: attendance.startDate, departureDate: attendance.endDate, dietary: ['MEAT']},
-    })).status()).toBe(200);
+    if (options.period) await updateEntityMetadataForE2E(request, 'events', event.id, options.period);
+    expect((await request.put(`/api/v1/events/${event.id}/registration`, {headers: await commandHeadersForE2E(request), data: {arrivalDate: attendance.startDate, departureDate: attendance.endDate, dietary: ['MEAT']}})).status()).toBe(200);
     const plan = await createActivityForE2E(request, event.id, options.period);
 
-    // The native fixture's breakfast occurs on arrival morning. Advanced
+    // The base fixture's breakfast occurs on arrival morning. Advanced
     // recommendation application intentionally blocks that time, so choose two
     // eligible, nonoverlapping arrival-afternoon slots for these workflows.
     for (const [index, slot] of plan.view.slots.entries()) {
-        expect((await request.post(`/api/activity/${plan.id}/slot/${slot.id}/attr`, {data: {
+        await patchActivitySlotForE2E(request, plan.id, slot.id, {
             title: index === 0 ? 'Early duty' : 'Late duty',
             startTime: index === 0 ? '16:00' : '18:00', endTime: index === 0 ? '17:00' : '19:00',
-        }})).status()).toBe(200);
+        });
     }
     const session = await (await request.get('/api/v1/session')).json() as components['schemas']['SessionView'];
     const owner = session.activeProfile!;
@@ -37,22 +36,18 @@ export async function createAdvancedActivityForE2E(request: APIRequestContext,
     // A second real registration makes participant override and swap choices
     // meaningful. Restore the original actor before returning the shared fixture.
     const name = `P6 participant ${randomUUID().slice(0, 8)}`;
-    expect((await request.post('/users/profile/create', {form: {name}, maxRedirects: 0})).status()).toBe(302);
+    await createProfileForE2E(request, name);
     const roster = await (await request.get('/api/v1/session')).json() as components['schemas']['SessionView'];
     const other = roster.profiles.find(profile => profile.name === name)!;
     expect(other).toBeTruthy();
-    expect((await request.get(`/users/profile/change/${other.id}`, {maxRedirects: 0})).status()).toBe(302);
-    expect((await request.post(`/api/event/${event.id}/register`, {
-        data: {arrivalDate: attendance.startDate, departureDate: attendance.endDate, dietary: ['MEAT']},
-    })).status()).toBe(200);
-    if (options.secondAssigned) await assignActivityThroughNative(request, plan.id, plan.view.slots[1]!.id);
-    expect((await request.get(`/users/profile/change/${owner.id}`, {maxRedirects: 0})).status()).toBe(302);
+    await selectProfileForE2E(request, other.id);
+    expect((await request.put(`/api/v1/events/${event.id}/registration`, {headers: await commandHeadersForE2E(request), data: {arrivalDate: attendance.startDate, departureDate: attendance.endDate, dietary: ['MEAT']}})).status()).toBe(200);
+    if (options.secondAssigned) await assignActivityForE2E(request, plan.id, plan.view.slots[1]!.id);
+    await selectProfileForE2E(request, owner.id);
 
-    const roles = await request.post(`/api/activity/${plan.id}/roles`, {data: {name: 'Kitchen lead'}});
-    expect(roles.status()).toBe(200);
-    const roleId = ((await roles.json()).data as Array<{id: number}>)[0]!.id;
+    const roleId = await createActivityRoleForE2E(request, plan.id, 'Kitchen lead');
     const days = Math.round((Date.parse(plan.view.endDate) - Date.parse(plan.view.startDate)) / 86_400_000) + 1;
-    expect((await request.post(`/api/activity/${plan.id}/requirements`, {data: {
+    expect((await request.put(`/api/v1/activity-plans/${plan.id}/requirements`, {headers: await commandHeadersForE2E(request), data: {
         assignmentMode: 'REQUIRED', generalRequiredShifts: 2, roundingMode: 'CEIL', bindingDeadline: null,
         allowOverfillAfterFull: false, allowExternalAssignees: false,
         allowArrivalDayEvening: true, allowDepartureDayMorning: true,
@@ -61,13 +56,25 @@ export async function createAdvancedActivityForE2E(request: APIRequestContext,
             requiredShifts: index === 0 ? 0 : index === days - 1 ? 2 : 1})),
         overrides: options.recommendation ? [{profileId: owner.id, roleId: null, requiredShifts: 1}] : [],
     }})).status()).toBe(200);
-    if (options.assigned) await assignActivityThroughNative(request, plan.id, plan.view.slots[0]!.id);
+    if (options.assigned) await assignActivityForE2E(request, plan.id, plan.view.slots[0]!.id);
     if (options.recommendation) {
-        expect((await request.post(`/api/activity/${plan.id}/recommendations`, {data: {recommendations: [{
+        await savePendingActivityRecommendationsForE2E(request, plan.id, [{
             itemId: plan.view.slots[1]!.id, profileId: other.id, status: 'PENDING', operation: 'ASSIGN', manual: false,
-        }]}})).status()).toBe(200);
+        }]);
     }
     return {...plan, view: await readActivityForE2E(request, plan.id), event, owner, other, roleId, days, attendance};
+}
+
+/** Persist pending review rows through the ordinary batch owner, which records
+ * review state but applies only approved rows. Verify no assignment was applied. */
+export async function savePendingActivityRecommendationsForE2E(request: APIRequestContext, planId: string,
+    recommendations: components['schemas']['ActivityRecommendationInput'][]): Promise<void> {
+    expect(recommendations.every(row => row.status === 'PENDING')).toBe(true);
+    const response = await request.post(`/api/v1/activity-plans/${planId}/recommendations/apply`, {
+        headers: await commandHeadersForE2E(request), data: {recommendations},
+    });
+    expect(response.status()).toBe(200);
+    expect(await response.json()).toMatchObject({applied: 0});
 }
 
 /** Prepare two independent swaps sharing the same slot directions. Every profile
@@ -78,29 +85,27 @@ export async function createActivitySwapPairsForE2E(request: APIRequestContext) 
     const [first, second] = plan.view.slots;
     // Each slot needs two real occupants. Increasing the existing second slot
     // keeps capacity warnings separate from the review-pairing regression.
-    expect((await request.post(`/api/activity/${plan.id}/slot/${second!.id}/attr`, {
-        data: {maxAssignees: 2},
-    })).status()).toBe(200);
+    await patchActivitySlotForE2E(request, plan.id, second!.id, {maxAssignees: 2});
     const additional: Array<{id: string; name: string}> = [];
 
     try {
         for (const slot of [first!, second!]) {
             const name = `Swap participant ${randomUUID().slice(0, 8)}`;
-            expect((await request.post('/users/profile/create', {form: {name}, maxRedirects: 0})).status()).toBe(302);
+            await createProfileForE2E(request, name);
             const session = await (await request.get('/api/v1/session')).json() as components['schemas']['SessionView'];
             const profile = session.profiles.find(candidate => candidate.name === name);
             expect(profile).toBeTruthy();
-            expect((await request.get(`/users/profile/change/${profile!.id}`, {maxRedirects: 0})).status()).toBe(302);
-            expect((await request.post(`/api/event/${plan.event.id}/register`, {data: {
+            await selectProfileForE2E(request, profile!.id);
+            expect((await request.put(`/api/v1/events/${plan.event.id}/registration`, {headers: await commandHeadersForE2E(request), data: {
                 arrivalDate: plan.attendance.startDate, departureDate: plan.attendance.endDate, dietary: ['MEAT'],
             }})).status()).toBe(200);
-            await assignActivityThroughNative(request, plan.id, slot.id);
+            await assignActivityForE2E(request, plan.id, slot.id);
             additional.push({id: profile!.id, name});
         }
     } finally {
         // The page under test belongs to the original organizer, independently
         // of which fixture registration/assignment last changed the session.
-        expect((await request.get(`/users/profile/change/${plan.owner.id}`, {maxRedirects: 0})).status()).toBe(302);
+        await selectProfileForE2E(request, plan.owner.id);
     }
 
     return {...plan, view: await readActivityForE2E(request, plan.id),
@@ -125,21 +130,16 @@ export async function stageActivitySwapForE2E(page: Page,
 
 /** Open the real built route and wait for saved Rules inputs, rather than a
  * framework mount or a response that has not yet populated visible controls. */
-export async function openActivityRulesForE2E(page: Page, plan: {path: string; days: number}, pilot = true): Promise<void> {
-    await page.goto(`${pilot ? '/frontend-pilot' : ''}${plan.path}?locale=en`, {waitUntil: 'domcontentloaded'});
-    if (pilot) await waitForPilotHydration(page);
-    if (pilot) await page.getByRole('tab', {name: 'Rules & auto-assign', exact: true}).click();
-    else await page.locator('[data-bs-target="#tab-rules"]').click();
-    if (!pilot) await waitForNativeActivityPane(page.locator('#tab-rules'));
+export async function openActivityRulesForE2E(page: Page, plan: {path: string; days: number}): Promise<void> {
+    await page.goto(`${plan.path}?locale=en`, {waitUntil: 'domcontentloaded'});
+    await waitForFrontendHydration(page);
+    await page.getByRole('tab', {name: 'Rules & auto-assign', exact: true}).click();
     await expect(page.locator('#stayRequirementList input[data-stay-days]')).toHaveCount(plan.days);
     await expect(page.locator('#requirementCoverageStatus')).not.toContainText('Loading coverage');
     await expect(page.locator('[data-requirements-dirty]')).toHaveText('Saved');
-    // Compare the stable saved form after the native read-success notice has
-    // completed its normal lifetime, rather than mismatched feedback moments.
-    if (!pilot) await expect(page.locator('[data-requirements-alert]')).not.toBeVisible({timeout: 15000});
 }
 
-/** Compare sticky Rules content at the same viewport position in both renderers.
+/** Capture sticky Rules content at a consistent viewport position.
  * An element screenshot can inherit an earlier capture's scroll state. Align the
  * actual surface before capturing, keeping production positioning untouched. */
 export async function captureAdvancedActivityPresentation(page: Page, info: TestInfo, name: string, surface: Locator,

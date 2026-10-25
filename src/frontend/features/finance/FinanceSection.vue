@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
-import {useActionState, usePilot} from '../../app/context';
+import {useActionState, useFrontend} from '../../app/context';
 import {eventKeys} from '../../app/queryKeys';
 import {evictQueryFamilies} from '../../app/queryCache';
 import {isReadDenial} from '../../app/transport';
@@ -38,7 +38,7 @@ type Share = components['schemas']['FinanceShare'];
 // Event admission enables this independent private projection. Participant and
 // organizer reads never share a representation, even for an actor with both roles.
 const props = defineProps<{eventId: string; admin: boolean; enabled: boolean}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages, locale} = context;
 const api = useFinanceApi(context);
 const hasPendingEdits = provideFinanceDrafts();
@@ -129,10 +129,10 @@ function sharesForPool(poolId: string): Share[] {
 function hasPreviousSettlement(pool: components['schemas']['FinancePool']): boolean {
     // The domain summary retains this key when any saved payer has nonzero
     // rounded prior credit, including opposite credits whose total is zero.
-    // That is the native share-column condition; its net amount is irrelevant.
+    // That is the share-column condition; its net amount is irrelevant.
     return pool.summary?.saved.some(metric => metric.key === 'paymentCreditAmount') ?? false;
 }
-/** Match the native history disclosure without adding another saved-data owner. */
+/** Match the history disclosure without adding another saved-data owner. */
 function invoiceHistoryOpen(pool: components['schemas']['FinancePool']): boolean {
     // Closed pools prioritize saved shares unless an invoice still needs review.
     return pool.status !== 'CLOSED' || invoicesForPool(pool.id).some(invoice => invoice.status === 'NEW');
@@ -193,12 +193,12 @@ function closeRetraction(): void { if (!command.pending.value && !command.recove
 async function retract(): Promise<void> {
     const invoice = retraction.value;
     if (!invoice || !available.isAvailable() || props.admin) return;
-    // Preserve the native review's identity/revision until the operation settles.
+    // Preserve the review's identity/revision until the operation settles.
     const result = await command.run(scope => api.retract(props.eventId, invoice.poolId, invoice.id, invoice.revision, scope),
         true, false, {success: 'finance.invoiceRetracted'});
     if (result) retraction.value = null;
 }
-/** Open the shared native final gate for this admitted own-history invoice.
+/** Open the shared final gate for this admitted own-history invoice.
  * The review keeps its captured identity and owns the participant command. */
 function closeInvoice(invoice: Invoice): void {
     if (!available.isAvailable() || props.admin || !invoice.canClose) return;
@@ -241,21 +241,21 @@ function revealHistory(): void { submissionOpen.value = true; }
             />
         </div>
         <div :class="admin ? 'card bg-dark text-white border-secondary-subtle' : 'accordion-item bg-dark text-white border-secondary-subtle'">
-            <!-- Organizer management is a persistent card, as in the native
-                 dashboard. Its existing creation/read owners share this header. -->
+            <!-- Organizer management is a persistent dashboard card.
+                 Its existing creation/read owners share this header. -->
             <div v-if="admin" class="card-header py-2 d-flex flex-wrap align-items-center justify-content-between gap-2" data-finance-management-header>
                 <div class="d-flex align-items-center gap-2">
                     <i class="bi bi-receipt" aria-hidden="true"></i>
                     <span>{{ messages.t('finance.invoicePools') }}</span>
                 </div>
-                <div class="pilot-action-row justify-content-end">
+                <div class="frontend-action-row justify-content-end">
                     <RefreshButton :state="refreshAction" @refresh="refresh()" />
                     <ActionButton variant="primary" class="btn-sm" :state="available" @click="creating = true">
                         <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>{{ messages.t('finance.createPool') }}
                     </ActionButton>
                 </div>
             </div>
-            <h2 v-else class="accordion-header pilot-accordion-heading d-flex align-items-center">
+            <h2 v-else class="accordion-header frontend-accordion-heading d-flex align-items-center">
                 <AppAccordionButton class="text-white" :expanded="open" :controls="`${id}-finance`" @click="open = !open">
                     <i class="bi bi-cash-coin me-2" aria-hidden="true"></i>
                     {{ messages.t('finance.invoicePoolsAndPayments') }}

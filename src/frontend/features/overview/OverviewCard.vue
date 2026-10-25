@@ -2,8 +2,8 @@
 import {computed, watch} from 'vue';
 import {RouterLink} from 'vue-router';
 import type {components} from '../../../types/api/v1';
-import type {PilotActionState, PilotOverviewCardInteraction, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
-import {usePilot} from '../../app/context';
+import type {FrontendActionState, FrontendOverviewCardInteraction, FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import {useFrontend} from '../../app/context';
 import {useAuthorizedImage} from '../../composables/authorizedImage';
 import {ObsoleteRequestError} from '../../app/transport';
 import {isOrdinaryNavigation} from '../../composables/pageEntry';
@@ -14,9 +14,9 @@ import AppNavigationDropdown from '../../components/AppNavigationDropdown.vue';
 // feature supplies navigation, lifecycle and binary-read operations explicitly.
 const props = withDefaults(defineProps<{
     card: components['schemas']['OverviewCard'];
-    interaction: PilotOverviewCardInteraction;
+    interaction: FrontendOverviewCardInteraction;
     disabled?: boolean;
-    navigationState?: PilotActionState;
+    navigationState?: FrontendActionState;
     expansion?: boolean;
     expansionHref?: string;
     filtered?: boolean;
@@ -31,13 +31,13 @@ const emit = defineEmits<{
     automate: [paused: boolean];
     remove: [];
 }>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 // A collection may require fresh data for writes while keeping retained cards
 // navigable. Other hosts retain their existing overall disabled contract.
 const writeDisabled = computed(() => props.disabled || props.interaction.writesDisabled);
 // This card owns image lifetime and presentation. The region supplies the feature
-// endpoint and SPA eligibility; adding a migrated feature does not add API imports here.
+// endpoint and SPA eligibility; adding a feature does not add API imports here.
 const authorizedHeader = useAuthorizedImage(
     computed(() => props.card.id),
     computed(() => props.interaction.readHeader ? props.card.headerVersion : null),
@@ -48,7 +48,7 @@ const image = computed(() => props.interaction.readHeader ? authorizedHeader.sou
 
 /** A retired feature declaration supplies no binary authority. The image helper
  * already fences actor, resource and version before installing any returned bytes. */
-function readHeader(id: string, scope: PilotRequestScope, signal: AbortSignal): Promise<Blob> {
+function readHeader(id: string, scope: FrontendRequestScope, signal: AbortSignal): Promise<Blob> {
     const read = props.interaction.readHeader;
     if (!read) throw new ObsoleteRequestError();
     return read(id, scope, signal);
@@ -75,7 +75,7 @@ function expand(event: MouseEvent): void {
         :data-type="card.type"
     >
         <component
-            :is="interaction.migrated ? RouterLink : 'a'"
+            :is="interaction.clientNavigation ? RouterLink : 'a'"
             v-if="image"
             :to="card.url"
             :href="card.url"
@@ -87,7 +87,7 @@ function expand(event: MouseEvent): void {
                 loading="lazy"
         /></component>
         <component
-            :is="interaction.migrated ? RouterLink : 'a'"
+            :is="interaction.clientNavigation ? RouterLink : 'a'"
             class="card-body text-decoration-none"
             :to="card.url"
             :href="card.url"
@@ -112,13 +112,13 @@ function expand(event: MouseEvent): void {
                     messages.t(card.visibility === 'hidden' ? 'overview.hiddenBadge' : 'overview.shown')
                 }}</span>
             </div>
-            <div class="pilot-action-row">
-                <AppNavigationDropdown v-if="personalVisibility || (interaction.lifecycle ?? interaction.migrated) && (card.capabilities.archive || card.capabilities.restore || card.automation?.canManage)" :navigation="false" :label="messages.t('common.archival')"
+            <div class="frontend-action-row">
+                <AppNavigationDropdown v-if="personalVisibility || (interaction.lifecycle ?? interaction.clientNavigation) && (card.capabilities.archive || card.capabilities.restore || card.automation?.canManage)" :navigation="false" :label="messages.t('common.archival')"
                     trigger-class="btn btn-sm btn-outline-light dropdown-toggle"
                     :trigger-label="messages.t('overview.archiveMenu', {title: card.title})">
                         <template
                             v-if="
-                                (interaction.lifecycle ?? interaction.migrated) &&
+                                (interaction.lifecycle ?? interaction.clientNavigation) &&
                                 (card.capabilities.archive || card.capabilities.restore || card.automation?.canManage)
                             "
                             ><h6 class="dropdown-header">{{ messages.t('overview.forEveryone') }}</h6>
@@ -178,14 +178,14 @@ function expand(event: MouseEvent): void {
                     class="d-inline btn-group"
                 >
                     <RouterLink
-                        v-if="interaction.migrated && interaction.duplicateUrl && card.capabilities.duplicate"
+                        v-if="interaction.clientNavigation && interaction.duplicateUrl && card.capabilities.duplicate"
                         class="btn btn-sm btn-info"
                         :to="interaction.duplicateUrl"
                         ><i class="bi bi-files me-1" aria-hidden="true"></i
                         >{{ messages.t('common.duplicate') }}</RouterLink
                     >
                     <ActionButton
-                        v-if="interaction.migrated && card.capabilities.remove"
+                        v-if="interaction.clientNavigation && card.capabilities.remove"
                         class="btn-sm"
                         variant="danger"
                         :disabled="writeDisabled || interaction.removeDisabled"

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import {computed} from 'vue';
-import {usePilot} from '../app/context';
+import {useFrontend} from '../app/context';
 import ActionButton from './ActionButton.vue';
 
-// Inline and standalone picker hosts render the same native search/chip/list
+// Inline and standalone picker hosts render the same search/chip/list
 // controls. The picker retains presentation search and the feature owns its zone.
 const props = defineProps<{id: string; search: string; zones: string[]; common: string[]; selected: string;
     label: (zone: string) => string; disabled?: boolean}>();
 const emit = defineEmits<{'update:search': [value: string]; choose: [zone: string]}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const matches = computed(() => props.zones.filter(zone => zone.toLowerCase().includes(props.search.trim().toLowerCase())));
 const displayed = computed(() => matches.value.slice(0, 200));
 </script>

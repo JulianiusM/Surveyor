@@ -97,7 +97,7 @@ function preprocessCreate(body: any): Partial<DriversList> {
     };
 }
 
-/** Share root creation between adapters. Native creation keeps its original
+/** Share root creation between adapters. Direct creation keeps its original
  * later defaults hook; the versioned command supplies its existing transaction. */
 async function createEntity(
     ownerId: string,
@@ -118,10 +118,10 @@ async function afterCreateItems(id: string, data: any) {
     await updateSettings(id, data._body);
 }
 
-/** Preserve native read order and renderer data while sharing only the counter
+/** Preserve shared read order and renderer data while sharing only the counter
  * policy with the versioned snapshot projection. Neither read changes membership. */
 async function fetchForView(list: DriversList, req: Request) {
-    // Native route/session admission has already supplied the active profile.
+    // Caller admission has already supplied the active profile.
     // Keep these existing independent reads and their original failure ordering.
     const items = await driverService.getDriversItems(list.id);
     const session = req.session;
@@ -150,7 +150,7 @@ async function deleteEntity(list: DriversList, session: SessionLike, manager?: E
 // ---------- API ----------
 // API-specific controllers
 async function updateDescription(id: string, body: any, expectedEventId?: string | null) {
-    await saveDriversMetadata(id, normalizeBasicProperties({description: body.description}), {kind: 'native', expectedEventId});
+    await saveDriversMetadata(id, normalizeBasicProperties({description: body.description}), {kind: 'direct', expectedEventId});
     return 'Description updated';
 }
 
@@ -161,13 +161,13 @@ async function reorderItems(id: string, order: Array<{ itemId: string; position:
 }
 
 
-/** Decode native Quick Add's original defaults, numeric fallback and diagnostics;
+/** Decode Quick Add's original defaults, numeric fallback and diagnostics;
  * the admitted profile and stored position reach the shared offer creator. */
 async function quickAddItem(list: DriversList, body: any, session: Request['session']) {
     const {title = '', description = '', maxAssignees = '1'} = body;
     if (!title) throw new APIError('Title required', body, 400);
 
-    // Preserve native ordering: read the position before its original profile
+    // Preserve operation ordering: read the position before its original profile
     // diagnostic, then share construction/persistence with the versioned adapter.
     const last = Number(await driverService.getLastDriversItemNumber(list.id)) || 0;
     if (!session.profile) throw new APIError('Not logged in', body, 400);
@@ -178,21 +178,21 @@ async function quickAddItem(list: DriversList, body: any, session: Request['sess
 
 
 async function updateItemDescription(itemId: string, body: any) {
-    await applyDriversItemPatch(itemId, {description: body.description}, {kind: 'native', body});
+    await applyDriversItemPatch(itemId, {description: body.description}, {kind: 'direct', body});
     return 'Description updated';
 }
 
 
-/** Native attribute edits retain their raw scalar and allowlist. The common
+/** Direct attribute edits retain their raw scalar and allowlist. The common
  * sparse write preserves passengers and the original vanished-row diagnostic. */
 async function updateItemAttr(itemId: string, body: any) {
     const {field, value} = body;
     const allowed: any = {title: 1, description: 1, maxAssignees: 1};
 
-    // Allow only the native method's three columns before forwarding any value.
+    // Allow only the shared method's three columns before forwarding any value.
     if (!allowed[field]) throw new APIError('Invalid field', body, 400);
 
-    await applyDriversItemPatch(itemId, {[field]: value}, {kind: 'native', body});
+    await applyDriversItemPatch(itemId, {[field]: value}, {kind: 'direct', body});
     return 'Item updated';
 }
 
@@ -222,10 +222,10 @@ async function deleteHeaderImg(entity: EntityBase) {
     return 'Image deleted';
 }
 
-/** Select the feature's shared membership owners for the native route factory.
- * The factory captures a session profile and checks the submitted ride scope. */
+/** Select the feature's shared membership owners for the direct operation adapters.
+ * The mapping exposes body-shaped operations with explicit profile and ride identifiers. */
 function getAssignmentAccessMapping() {
-    // Both transports retain the same capacity/idempotency policy; only native
+    // Both transports retain the same capacity/idempotency policy; only direct
     // removal preserves the original unlocked deletion and feedback adapter.
     return {
         assign: (body: any, profileId: string) => assignItem(body.itemId, profileId),
@@ -233,7 +233,7 @@ function getAssignmentAccessMapping() {
     };
 }
 
-/** Native removal retains its original unlocked desired-membership deletion. */
+/** Direct removal retains its original unlocked desired-membership deletion. */
 async function unassignItem(body: any, profileId: string): Promise<void> {
     await applyDriversMembership(body.itemId, profileId, false);
 }
@@ -252,7 +252,7 @@ async function assignItem(itemId: string, profileId: string): Promise<void> {
 
 /** Normalize all submitted fields before acquiring a lock; omitted fields remain unchanged. */
 async function updateProperties(entity: EntityBase, body: unknown) {
-    await saveDriversMetadata(entity.id, normalizeBasicProperties(body), {kind: 'native', expectedEventId: entity.eventId ?? null});
+    await saveDriversMetadata(entity.id, normalizeBasicProperties(body), {kind: 'direct', expectedEventId: entity.eventId ?? null});
     return 'Properties updated';
 }
 
@@ -282,12 +282,12 @@ export default {
 
 
 /**
- * One method policy drives native middleware, versioned command checks and action
- * capabilities. Preserve native asymmetries: attr accepts description through
+ * One method policy drives named controller checks and action
+ * capabilities. Preserve method differences: attr accepts description through
  * EDIT_META, while its dedicated description action uses EDIT_DESC. The driver
- * name is profile-derived and is never an editable item title in the native view.
+ * name is profile-derived and is never an editable item title in the detail view.
  * Cross-feature methods consume the existing administration controller's shared
- * declarations, also used by native factories and the shared relink operation.
+ * declarations, also used by direct callers and the shared relink operation.
  */
 const driversMethodPermissions: Record<DriversMethod, PermissionFieldRule> = {
     selfAssignment: {permission: 'ACCESS_VIEW'},
@@ -323,7 +323,7 @@ const itemFieldMethods: Record<keyof components['schemas']['DriversItemPatch'], 
     maxAssignees: 'editItemCapacity',
 };
 
-/** Resolve each submitted item field through the central native method rule,
+/** Resolve each submitted item field through the central shared method rule,
  * including the distinct description action and its allowed parent fallbacks. */
 function mayEditItemField(permissions: PermView, field: keyof components['schemas']['DriversItemPatch']): boolean {
     return mayPerformDriversMethod(permissions, itemFieldMethods[field]);
@@ -361,9 +361,9 @@ async function authorizeRead(manager: EntityManager, list: DriversList, session:
     return permissions;
 }
 
-/** Field grants and page admission are separate native contracts. Public grant-only
+/** Field grants and page admission are separate contracts. Public grant-only
  * methods need no fabricated session principal; operations with a profile contract
- * still require actorId explicitly before using the same current native grants. */
+ * still require actorId explicitly before using the same current method grants. */
 async function driversPermissions(manager: EntityManager, list: DriversList, session: SessionLike, caches?: PermEngineCaches): Promise<PermView> {
     comparisonActor(session);
     return evaluateSubject({kind: 'entity', entity: {
@@ -414,20 +414,20 @@ export async function readDriversList(id: string, session: SessionLike) {
         const caches: PermEngineCaches = {participant: new Map(), defaults: new Map(), userPerms: new Map()};
         const permissions = await authorizeRead(manager, list, session, caches);
 
-        // Child admission never implies permission to open its parent. Reuse the native URL
+        // Child admission never implies permission to open its parent. Reuse the authorized Event URL
         // policy, but evaluate the captured parent inside this projection's existing snapshot.
         let currentEventUrl: string | null = null;
         if (list.event) {
             const parentViews = await evaluateEntities([{
                 entityType: 'event', entityId: list.event.id, ownerId: list.event.ownerId, eventId: list.event.id,
             }], session, manager);
-            const nativeUrl = getAuthorizedEventUrl(list.event.id, parentViews.get(`event:${list.event.id}`)!);
+            const eventUrl = getAuthorizedEventUrl(list.event.id, parentViews.get(`event:${list.event.id}`)!);
             // Preserve the shared owner's admission and selected admin/detail path;
             // this versioned projection supplies the corresponding Vue destination.
-            currentEventUrl = nativeUrl?.replace(/^\/event(?=\/|$)/u, '/frontend-pilot/event') ?? null;
+            currentEventUrl = eventUrl?.replace(/^\/event(?=\/|$)/u, '/event') ?? null;
         }
 
-        // Group persisted assignments once before building rows and native counters.
+        // Group persisted assignments once before building rows and shared counters.
         const {items, assignments} = await driverService.getDriversSnapshotRows(manager, id);
         const assignmentsByItem = new Map<string, typeof assignments>();
         for (const assignment of assignments) {
@@ -496,7 +496,7 @@ export async function readDriversMetadata(id: string, session: SessionLike) {
     actorId(session);
 
     /** Evaluate independently editable root fields within the read snapshot;
-     * a noneditor must additionally satisfy the native full-page admission. */
+     * a noneditor must additionally satisfy the detail-page admission. */
     async function readSnapshot(manager: EntityManager, row: DriversList | null) {
         const list = requireList(row);
         const permissions = await driversPermissions(manager, list, session);
@@ -551,16 +551,16 @@ export async function readDriversItemOrderBaseline(id: string, session: SessionL
 }
 
 /**
- * Normalize the existing native trim/clear semantics independently of transport errors.
+ * Normalize the existing form trim/clear semantics independently of transport errors.
  * Versioned JSON applies trim/clear before its generated validator. The unchanged
- * native controller retains Joi's distinct optional-value and error semantics.
+ * shared controller retains Joi's distinct optional-value and error semantics.
  */
 export function normalizeDriversMetadataPatch(body: unknown): unknown {
     let normalized = body;
     if (body && typeof body === 'object' && !Array.isArray(body)) {
         const fields = {...body} as Record<string, unknown>;
         // JSON cannot carry undefined. The v1 input therefore treats these values as omitted;
-        // the native adapter separately preserves its original optional own-key semantics.
+        // the direct adapter separately preserves its original optional own-key semantics.
         for (const [key, value] of Object.entries(fields)) if (value === undefined) delete fields[key];
         if (typeof fields.title === 'string') fields.title = fields.title.trim();
         if (fields.description === '') fields.description = null;
@@ -581,7 +581,7 @@ function assertLockedContext(context: LockedArchiveContext): void {
 /**
  * Receive one already normalized, generated-schema-validated command. The HTTP
  * adapter owns structural diagnostics; no second validator runs inside the operation.
- * Native Joi diagnostics remain in their compatibility decoder.
+ * Form Joi diagnostics remain in their compatibility decoder.
  */
 export async function patchDriversMetadata(id: string, patch: components['schemas']['DriversMetadataPatch'], ifMatch: string | undefined, session: SessionLike,
     prepare?: DriversCommandPreparation<ReturnType<typeof metadataResult>>) {
@@ -589,7 +589,7 @@ export async function patchDriversMetadata(id: string, patch: components['schema
     return saveDriversMetadata(id, patch, {kind: 'versioned', ifMatch, session, prepare});
 }
 
-/** The native description method has its own EDIT_DESC grant, independent of
+/** The description method has its own EDIT_DESC grant, independent of
  * principal-only root properties. Its baseline discloses that field alone. */
 function descriptionBaseline(list: DriversList, session: SessionLike): components['schemas']['DriversDescriptionBaseline'] {
     const description = list.description ?? null;
@@ -618,8 +618,8 @@ export async function patchDriversDescription(id: string, patch: components['sch
 
 // These adapter contexts stay private to the metadata owner. Naming each branch
 // keeps overloads readable without exposing persistence/admission details as a shared contract.
-type NativeMetadataContext = {
-    kind: 'native';
+type DirectMetadataContext = {
+    kind: 'direct';
     expectedEventId?: string | null;
 };
 
@@ -637,10 +637,10 @@ type DescriptionMetadataContext = {
     prepare?: DriversCommandPreparation<components['schemas']['DriversDescriptionBaseline']>;
 };
 
-type MetadataContext = NativeMetadataContext | VersionedMetadataContext | DescriptionMetadataContext;
+type MetadataContext = DirectMetadataContext | VersionedMetadataContext | DescriptionMetadataContext;
 
 /**
- * One metadata operation serves both adapters. Native routes already apply the shared
+ * One metadata operation serves both adapters. Direct entry points already apply the shared
  * property/method policy and retain their captured-parent check and root-only lock.
  * Versioned JSON adds current field grants, reviewed values and parent locks. Neither
  * adapter owns an independent property write or changes the other's wire contract.
@@ -648,7 +648,7 @@ type MetadataContext = NativeMetadataContext | VersionedMetadataContext | Descri
 async function saveDriversMetadata(
     id: string,
     patch: BasicEntityPropertyPatch,
-    context: NativeMetadataContext
+    context: DirectMetadataContext
 ): Promise<void>;
 async function saveDriversMetadata(
     id: string,
@@ -669,7 +669,7 @@ async function saveDriversMetadata(
      * sparse command. Each adapter retains its own admission/diagnostic boundary. */
     async function persistMetadata(manager: EntityManager, row: DriversList | null) {
         let permissions: PermView | undefined;
-        if (context.kind === 'native') {
+        if (context.kind === 'direct') {
             assertEntityPropertyContext(row, context.expectedEventId);
         } else {
             const list = requireList(row);
@@ -689,7 +689,7 @@ async function saveDriversMetadata(
         }
 
         await driverService.updateDriversListProperties(id, patch, manager);
-        if (context.kind !== 'native') {
+        if (context.kind !== 'direct') {
             const saved = requireList(await driverService.getDriversSnapshotRoot(manager, id));
             if (context.kind === 'description') {
                 const result = descriptionBaseline(saved, context.session);
@@ -702,7 +702,7 @@ async function saveDriversMetadata(
         }
     }
 
-    if (context.kind === 'native') return driverService.withDriversListLock(id, persistMetadata);
+    if (context.kind === 'direct') return driverService.withDriversListLock(id, persistMetadata);
 
     /** The DBAL acquired parents before the root. Reject a changed relationship
      * before passing that same transaction into the shared metadata operation. */
@@ -742,15 +742,15 @@ export async function setDriversSelfAssignment(listId: string, itemId: string, a
 
 /**
  * Both assignment adapters apply the same membership/capacity decision under their
- * actual item lock. Native unassignment retains its original unlocked DELETE.
+ * actual item lock. Direct unassignment retains its original unlocked DELETE.
  * Existing membership is checked before capacity so a successful retry stays valid when full.
  * Historical nullable capacity remains unrestricted, matching the original offer policy.
  */
 async function applyDriversMembership(itemId: string, profileId: string, assigned: boolean,
     snapshot?: {manager: EntityManager; item: DriversItem; existing: DriversAssignment | null; count: number},
-    transport: 'native' | 'versioned' = 'native'): Promise<number> {
+    transport: 'direct' | 'versioned' = 'direct'): Promise<number> {
     if (!assigned) {
-        // DELETE removes every historical duplicate membership. The native adapter
+        // DELETE removes every historical duplicate membership. The direct adapter
         // ignores the count; v1 projects the count from its current locked snapshot.
         const removed = await driverService.unassignDriversItem(itemId, profileId, snapshot?.manager);
         return (snapshot?.count ?? removed) - removed;
@@ -767,28 +767,28 @@ async function applyDriversMembership(itemId: string, profileId: string, assigne
 }
 
 /**
- * Native and v1 item adapters share sparse persistence and retain assignments when
- * reducing capacity. V1 compares its locked baseline; native sends the raw scalar and
+ * Direct and versioned item adapters share sparse persistence and retain assignments when
+ * reducing capacity. V1 compares its locked baseline; the direct operation sends the raw scalar and
  * preserves its original vanished-row diagnostic.
  */
 async function applyDriversItemPatch(itemId: string, fields: components['schemas']['DriversItemPatch'],
-    context: {kind: 'native'; body: any} | {kind: 'versioned'; manager: EntityManager; item: DriversItem}): Promise<boolean> {
-    // Legacy edits always issue their original sparse write. Versioned edits skip
+    context: {kind: 'direct'; body: any} | {kind: 'versioned'; manager: EntityManager; item: DriversItem}): Promise<boolean> {
+    // Direct edits always issue their original sparse write. Versioned edits skip
     // an unchanged value while retaining every existing passenger assignment.
-    const changed = context.kind === 'native'
+    const changed = context.kind === 'direct'
         || Object.entries(fields).some(([key, value]) => (context.item[key as keyof DriversItem] ?? null) !== value);
     if (changed) {
         const saved = await driverService.updateDriversItem(itemId, driversItemPersistenceFields(fields),
             context.kind === 'versioned' ? context.manager : undefined);
-        if (!saved && context.kind === 'native') throw new APIError('Unknown error while saving', context.body, 500);
+        if (!saved && context.kind === 'direct') throw new APIError('Unknown error while saving', context.body, 500);
     }
     return changed;
 }
 
 /**
- * Retain the established native number-control transport at the persistence boundary.
+ * Retain the established number-control transport at the persistence boundary.
  * TypeORM's entity describes the integer after retrieval, while its parameterized update
- * also accepts the native raw numeric string. Passing that draft unchanged preserves
+ * also accepts the raw numeric string. Passing that draft unchanged preserves
  * MariaDB's half-away rounding, signed bounds and configured invalid-input handling; there is no
  * competing JavaScript converter or copied SQL range. The generated closed request
  * shape and locked field authorization have already constrained the supplied fields.
@@ -804,12 +804,12 @@ async function driversItemPermissions(manager: EntityManager, list: DriversList,
         parent: {entityType: 'drivers', entityId: list.id, ownerId: list.ownerId, eventId: list.eventId}}, session, caches, manager);
 }
 
-/** Keep visible native controls separate from actual method authority. These
+/** Keep visible rendered controls separate from actual method authority. These
  * flags describe presentation; every command still evaluates current grants. */
 function itemCapabilities(permissions: PermView): components['schemas']['DriversItemView']['capabilities'] {
     return {
         // Drivers uses the same metadata grant for its capacity control and
-        // native attr command; title remains absent from the visible ride columns.
+        // direct attr command; title remains absent from the visible ride columns.
         showCapacityEdit: mayEditItemField(permissions, 'maxAssignees'),
         editTitle: mayEditItemField(permissions, 'title'),
         editDescription: mayEditItemField(permissions, 'description'),
@@ -820,7 +820,7 @@ function itemCapabilities(permissions: PermView): components['schemas']['Drivers
 }
 
 /** Keep canonical persisted edit values in one owner for full-detail and minimal
- * baselines. Native numeric drafts remain confined to mutation input/persistence. */
+ * baselines. Numeric drafts remain confined to mutation input/persistence. */
 function itemEditValues(item: DriversItem): Required<components['schemas']['DriversItemEditBaseline']['values']> {
     return {
         title: item.title,
@@ -829,7 +829,7 @@ function itemEditValues(item: DriversItem): Required<components['schemas']['Driv
     };
 }
 
-/** Filtering follows actual command grants, including the native EDIT_META/EDIT_DESC
+/** Filtering follows actual command grants, including the shared EDIT_META/EDIT_DESC
  * asymmetry. The stored title appears only in an independently permitted edit baseline. */
 function itemEditProjection(item: DriversItem, permissions: PermView):
     Pick<components['schemas']['DriversItemEditBaseline'], 'values' | 'editableFields'> {
@@ -880,7 +880,7 @@ function headerProjection(list: DriversList) {
     };
 }
 
-/** Preserve native setup admission, including independent owner deletion and
+/** Preserve settings admission, including independent owner deletion and
  * account-only duplication controls. Opening setup does not grant its private ACL matrix. */
 function mayOpenSettings(list: DriversList, permissions: PermView, session: SessionLike): boolean {
     // Screen admission follows its existing field/method owners without copying their grants.
@@ -920,14 +920,14 @@ export function requireDriversCreation(session: SessionLike): void {
 }
 
 /**
- * Project native account-only creation admission without requiring a profile at the API
+ * Project account-only creation admission without requiring a profile at the API
  * transport boundary. Public duplicate GET deliberately remains independently grantable;
  * its later submission asks this operation with the exact duplicate URL as returnTo.
  */
 export async function readDriversCreateEntry(session: SessionLike, returnTo?: unknown, eventId?: unknown): Promise<components['schemas']['DriversCreateEntry']> {
-    const target = safeFrontendReturn(returnTo ?? '/frontend-pilot/drivers/create');
-    const entry = getAccountPageEntry(session, '/frontend-pilot/users/login', target);
-    // An initial URL is context, not a draft selection. Match the native form by
+    const target = safeFrontendReturn(returnTo ?? '/drivers/create');
+    const entry = getAccountPageEntry(session, '/users/login', target);
+    // An initial URL is context, not a draft selection. Match the form by
     // omitting missing/forbidden events before the client captures its baseline.
     const selected = entry.kind === 'render' ? await readEventLinkSelection(eventId, session) : null;
     const selectedEvent = selected ? projectDriversEventOption(selected) : null;
@@ -937,7 +937,7 @@ export async function readDriversCreateEntry(session: SessionLike, returnTo?: un
         ...(eventId !== undefined ? {selectedEvent} : {})};
 }
 
-/** Project an already admitted native row without another query or additional disclosure. */
+/** Project an already admitted row without another query or additional disclosure. */
 export function projectDriversGuestEntry(list: Pick<DriversList, 'id' | 'title'>): components['schemas']['GuestEntry'] {
     return {id: list.id, title: list.title};
 }
@@ -954,16 +954,16 @@ export async function readDriversGuestEntry(id: string): Promise<components['sch
 
 /**
  * Read only the current root and shared page policy in one snapshot. Detail admission
- * discloses no protected rows; guest entry discloses exactly the native public title.
+ * discloses no protected rows; guest entry discloses exactly the public title.
  * Both initial HTML and client navigation consume this operation, while subsequent
  * projection/command operations independently authorize their own current snapshot.
  */
 export async function readDriversResourceEntry(id: string, view: 'detail' | 'guest', session: SessionLike): Promise<components['schemas']['DriversResourceEntry']> {
-    /** Translate the current native page-admission outcome into render, redirect
+    /** Translate the current document page-admission outcome into render, redirect
      * or denial. Only guest admission projects its intentionally public title. */
     async function readEntry(manager: EntityManager, list: DriversList | null): Promise<components['schemas']['DriversResourceEntry']> {
         if (!list) return {entry: {kind: 'denied', status: 404, messageKey: 'drivers.notFound'}, guest: null};
-        const detailUrl = `/frontend-pilot/drivers/${encodeURIComponent(list.id)}`;
+        const detailUrl = `/drivers/${encodeURIComponent(list.id)}`;
         if (view === 'guest') {
             return session.profile ? {entry: {kind: 'redirect', url: detailUrl, notice: null}, guest: null}
                 : {entry: {kind: 'render'}, guest: projectDriversGuestEntry(list)};
@@ -978,7 +978,7 @@ export async function readDriversResourceEntry(id: string, view: 'detail' | 'gue
     return driverService.withDriversReadSnapshot(id, readEntry);
 }
 
-/** Public form definitions contain no resource data; native duplicate GET can use them without an account. */
+/** Public form definitions contain no resource data; duplicate GET can use them without an account. */
 export function driversFormContext(): components['schemas']['DriversCreateContext'] {
     return {defaults: completeDefaults(getInitialPerms('drivers')), ...permissionDefinitions()};
 }
@@ -1003,7 +1003,7 @@ export async function createDriversList(
     /** The optional parent is already locked. Apply shared attachment admission
      * before committing the root and authored defaults together. */
     async function createLocked(manager: EntityManager, event: Event | null) {
-        // Native submission and v1 use the event controller's same attachment
+        // Direct submission and versioned commands use the event controller's same attachment
         // policy. The v1 adapter supplies its already locked parent and manager.
         await authorizeEventLink(body.eventId, session, manager, event);
         const id = await createEntity(actorId(session), {...body, eventId: body.eventId ?? undefined, description: body.description ?? undefined, headerImg: file?.path}, manager);
@@ -1015,7 +1015,7 @@ export async function createDriversList(
     return driverService.withDriversCreationTransaction(body.eventId, createLocked);
 }
 
-/** Native duplicate GET depends only on DATA_DUPLICATE, independently of detail admission and creation POST. */
+/** Duplicate GET depends only on DATA_DUPLICATE, independently of detail admission and creation POST. */
 export async function readDriversDuplicate(id: string, session: SessionLike, eventId?: unknown): Promise<components['schemas']['DriversDuplicate']> {
     return driverService.withDriversReadSnapshot(id, async function readDuplicate(manager, row) {
         const list = requireList(row);
@@ -1024,7 +1024,7 @@ export async function readDriversDuplicate(id: string, session: SessionLike, eve
         }}, session, undefined, manager);
         if (!mayPerformDriversMethod(permissions, 'duplicate')) throw new ApiProblem('FORBIDDEN');
 
-        // Copy the native form surface only. Assignments, administrators, header,
+        // Copy the form surface only. Assignments, administrators, header,
         // archive state and event membership remain associated with the source.
         const selected = await readEventLinkSelection(eventId, session);
         return {title: list.title, description: list.description ?? null, eventId: null,
@@ -1045,7 +1045,7 @@ export async function readDriversSettings(id: string, session: SessionLike): Pro
         const permissions = await driversPermissions(manager, list, session);
         if (!mayOpenSettings(list, permissions, session)) throw new ApiProblem('FORBIDDEN');
 
-        // Linking a parent does not grant access to its identifying fields. Keep the native
+        // Linking a parent does not grant access to its identifying fields. Keep the established
         // disclosure policy even when this profile may manage the drivers list itself.
         let currentEvent: components['schemas']['DriversCurrentEvent'] | null = null;
         if (list.event) {
@@ -1056,11 +1056,11 @@ export async function readDriversSettings(id: string, session: SessionLike): Pro
                 title: parent.title ?? null,
                 startDate: parent.startDate ?? null,
                 endDate: parent.endDate ?? null,
-                url: parent.url?.replace(/^\/event(?=\/|$)/u, '/frontend-pilot/event') ?? null,
+                url: parent.url?.replace(/^\/event(?=\/|$)/u, '/event') ?? null,
             };
         }
 
-        // Native cards and v1 settings consume the same lifecycle presentation
+        // Overview cards and v1 settings consume the same lifecycle presentation
         // policy. Both its persisted state and permission inputs use this read's
         // existing snapshot, rather than introducing a second lifecycle authority.
         const reference = {type: 'drivers' as const, id};
@@ -1096,7 +1096,7 @@ export async function readDriversSettings(id: string, session: SessionLike): Pro
                 linkEvent: mayPerformDriversMethod(permissions, 'changeEvent'),
                 managePermissions: mayPerformDriversMethod(permissions, 'managePermissions'),
                 duplicate: Boolean(session.auth?.user && mayPerformDriversMethod(permissions, 'duplicate')),
-                // Native deletion is profile-owned; guest owners have the same authority.
+                // Deletion is profile-owned; guest owners have the same authority.
                 remove: isOwner(session, list.ownerId),
                 manageArchive: archive.canManage,
                 archive: archive.canArchive,
@@ -1116,12 +1116,12 @@ export async function readDriversSettings(id: string, session: SessionLike): Pro
 }
 
 /**
- * Add one offer through the common creator/persistence operation. Native Quick
+ * Add one offer through the common creator/persistence operation. Direct Quick
  * Add and the new adapter both use the next stored position and the admitted
- * profile as the driver; native callers retain their original position read order.
+ * profile as the driver; direct callers retain their original position read order.
  */
 async function addDriversItem(id: string, fields: Partial<DriversItem>, profileId: string, manager?: EntityManager, position?: number): Promise<string> {
-    // The stored position and profile relationship match native Quick Add. The
+    // The stored position and profile relationship match Quick Add. The
     // browser label is presentation; the admitted profile is the driver's identity.
     const itemId = generateUniqueId();
     const pos = position ?? (Number(await driverService.getLastDriversItemNumber(id, manager)) || 0) + 1;
@@ -1187,8 +1187,8 @@ export async function deleteDriversItem(id: string, itemId: string, session: Ses
 }
 
 /** Review one complete stored order under the exclusive root/item locks.
- * That root lock coordinates creation/removal and native assignment consumers;
- * the native reorder adapter retains its independent partial-order contract. */
+ * That root lock coordinates creation/removal and direct assignment consumers;
+ * the direct reorder adapter retains its independent partial-order contract. */
 export async function reorderDriversItems(
     id: string,
     body: components['schemas']['DriversItemOrder'],
@@ -1204,7 +1204,7 @@ export async function reorderDriversItems(
         requireEditToken(token, orderEditToken(list, items, session));
 
         // Versioned ordering requires one complete reviewed row set. The API locks
-        // its compared values; native reorder retains its original partial/non-dense contract.
+        // its compared values; direct reorder retains its original partial/non-dense contract.
         const currentItemIds = new Set(items.map(item => item.id));
         if (body.itemIds.length !== items.length || new Set(body.itemIds).size !== items.length
             || body.itemIds.some(itemId => !currentItemIds.has(itemId))) throw new ApiProblem('RESOURCE_CONFLICT');
@@ -1342,24 +1342,24 @@ export async function setDriversAdmin(
     }, prepare);
 }
 
-/** Authorize scoped administrator discovery before using the native secure
+/** Authorize scoped administrator discovery before using the secure
  * account search. Its projected options exclude guest credentials and raw emails;
- * the route shares the native per-IP limiter and admitted API context. */
+ * the route uses the shared per-IP limiter and admitted API context. */
 export async function searchDriversProfiles(id: string, query: string, session: SessionLike): Promise<components['schemas']['DriversProfileOptions']> {
     await driverService.withDriversReadSnapshot(id, async function requireManagement(manager, row) {
         if (!mayPerformDriversMethod(await driversPermissions(manager, requireList(row), session), 'managePermissions')) throw new ApiProblem('FORBIDDEN');
     });
-    // Reuse the native account-only secure search; no guest-token discovery or raw emails enter this DTO.
+    // Reuse the account-only secure search; no guest-token discovery or raw emails enter this DTO.
     return (await userService.searchUsersSecure(query)).map(profile => ({profileId: profile.id, name: profile.name, username: profile.username, isGuest: false}));
 }
 
-/** The native option omits absent descriptions; the JSON contract represents them
+/** The shared option omits absent descriptions; the JSON contract represents them
  * explicitly as null. Discovery and initial form admission share that projection. */
 function projectDriversEventOption(event: EventLinkOption): components['schemas']['DriversEventOption'] {
     return {...event, description: event.description ?? null};
 }
 
-/** Reuse native event-picker admission, filtering and selected-value rules.
+/** Reuse event-picker admission, filtering and selected-value rules.
  * Only the nullable-description spelling is adapted for the JSON contract. */
 export async function searchDriversEvents(query: unknown, session: SessionLike): Promise<components['schemas']['DriversEventOptions']> {
     const result = await getEventLinkOptions(query, session);
@@ -1405,7 +1405,7 @@ export async function changeDriversEvent(
 /**
  * Adapt Drivers archive/restore command to the existing lifecycle controller, keeping
  * its locked authorization and persistence authoritative. The response acknowledges the
- * completed command as the native workflow does; parent changes and inherited archival
+ * completed command as the shared workflow does; parent changes and inherited archival
  * retain their separate recovery codes. This operation never performs hard deletion.
  */
 export async function setDriversArchived(id: string, archived: boolean, session: SessionLike,
@@ -1446,7 +1446,7 @@ export async function setDriversHeader(
 
             // The receipt leaves this callback only after commit. The existing
             // image-swap owner can then remove the confirmed previous file, and
-            // retains its native cleanup of this upload when persistence fails.
+            // retains its file cleanup of this upload when persistence fails.
             const changed = Boolean(file || list.headerImg);
             prepare?.({changed});
             return {previousImage: list.headerImg, changed};
@@ -1518,7 +1518,7 @@ async function settingsEditToken(manager: EntityManager, list: DriversList, sess
 
 /** Both renderer projections count passenger profiles once across all offered
  * rides. Drivers are excluded unless they separately hold a passenger assignment;
- * nullable maximum is not an open ride, matching the native displayed counters. */
+ * nullable maximum is not an open ride, matching the displayed counters. */
 function driversCounters(items: readonly (Pick<DriversItem, 'id' | 'maxAssignees'> & {assignedCount: number})[],
     assignees: ReadonlyMap<string, readonly {profileId?: string | null; name?: string}[]>) {
     const participants = new Set<string | undefined>();

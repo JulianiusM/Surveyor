@@ -3,10 +3,10 @@ import {computed, ref, watch} from 'vue';
 import {useRoute} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../types/api/v1';
-import type {PilotRequestScope} from '../../types/FrontendPilotUiTypes';
+import type {FrontendRequestScope} from '../../types/FrontendUiTypes';
 import type {FrontendListCreationCopy, FrontendListCreationSource} from '../../types/FrontendListTypes';
-import type {PilotPlainMessageKey} from '../../types/FrontendPilotUiTypes';
-import {useActionState, usePilot} from '../app/context';
+import type {FrontendPlainMessageKey} from '../../types/FrontendUiTypes';
+import {useActionState, useFrontend} from '../app/context';
 import {isReadDenial} from '../app/transport';
 import {isPlainMessageKey} from '../../modules/localization/translator';
 import {useCreationCommand} from '../composables/creation';
@@ -26,12 +26,12 @@ import FileField from './FileField.vue';
 
 // One matching root form owns admission, root drafts and confirmed destination.
 // Feature collections are supplied through explicit slots and collector callbacks.
-const props = defineProps<{icon: string; heading: PilotPlainMessageKey; documentTitle?: PilotPlainMessageKey; headerLabel: PilotPlainMessageKey; notFound: PilotPlainMessageKey;
-    created: PilotPlainMessageKey; leaveUnknown: PilotPlainMessageKey; creationUnknown: PilotPlainMessageKey;
-    submitLabel?: PilotPlainMessageKey; fullWidthSubmit?: boolean; resourceParam?: string;
+const props = defineProps<{icon: string; heading: FrontendPlainMessageKey; documentTitle?: FrontendPlainMessageKey; headerLabel: FrontendPlainMessageKey; notFound: FrontendPlainMessageKey;
+    created: FrontendPlainMessageKey; leaveUnknown: FrontendPlainMessageKey; creationUnknown: FrontendPlainMessageKey;
+    submitLabel?: FrontendPlainMessageKey; fullWidthSubmit?: boolean; resourceParam?: string;
     descriptionName?: string; headerName?: string;
     source: FrontendListCreationSource<TCopy>}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const route = useRoute();
 const sourceId = computed(() =>
@@ -93,11 +93,11 @@ const creation = usePageEntry({
     key: computed(() => props.source.creationKey(context.session.value?.context, initialEventId.value)),
     initial: initialCreationEntry(),
     // Duplicate GET supplies its own admitted form definitions. The separate
-    // create-context endpoint retains the native account-only create GET policy.
+    // create-context endpoint retains the account-only create GET policy.
     enabled: computed(() => !sourceId.value && !bootstrapError.value),
     read: readCreationEntry,
 });
-function readCreationEntry(scope: PilotRequestScope, signal: AbortSignal): Promise<components['schemas']['PackingCreateEntry']> {
+function readCreationEntry(scope: FrontendRequestScope, signal: AbortSignal): Promise<components['schemas']['PackingCreateEntry']> {
     return props.source.createEntry(scope, signal, route.fullPath, initialEventId.value);
 }
 // A locale entry read must not unmount a focused creation draft. Retain only this
@@ -127,12 +127,12 @@ const duplicate = useQuery({
     queryFn: ({signal}) => props.source.duplicate(sourceId.value!, context.capture(), signal, initialEventId.value),
 });
 
-/** Cold duplicate admission uses the same native message card as its document route.
+/** Cold duplicate admission uses the same message card as its document route.
  * Only validated read denial selects that card; an unusable proxy response keeps
  * the ordinary admission recovery available instead of declaring the source gone.
  * Once copied, these fields are an independent creation draft: a later source denial
  * must not destroy them or turn an already admitted copy into an inaccessible source. */
-function duplicateAdmissionKey(): PilotPlainMessageKey | undefined {
+function duplicateAdmissionKey(): FrontendPlainMessageKey | undefined {
     const failure = duplicate.error.value;
     if (!sourceId.value || baseline.value !== null || !isReadDenial(failure)) return;
     if (failure.status === 404) return props.notFound;
@@ -221,12 +221,12 @@ const {command, blocked, createAction, submissionAdmissionError, submissionAdmit
 
 /** A duplicate grant admits its form independently of creation. The server projects the
  * account-login journey and exact duplicate return; the browser does not duplicate that policy. */
-async function readSubmissionEntry(scope: PilotRequestScope, returnTo: string): Promise<components['schemas']['PageEntryOutcome']> {
+async function readSubmissionEntry(scope: FrontendRequestScope, returnTo: string): Promise<components['schemas']['PageEntryOutcome']> {
     return (await props.source.createEntry(scope, undefined, returnTo)).entry;
 }
 
-/** Revalidate account-only admission before submitting the native-equivalent draft.
- * The feature collector preserves its native item rules. Unknown delivery retains input;
+/** Revalidate account-only admission before submitting the feature-specific draft.
+ * The feature collector preserves its item rules. Unknown delivery retains input;
  * a confirmed creation transfers its destination to the shared navigation owner so
  * a canceled or failed route load cannot make the creation command available again. */
 async function create(): Promise<void> {
@@ -247,10 +247,10 @@ function collectCreation() {
 </script>
 
 <template>
-    <!-- Native creation title/description controls have no HTML length caps. Keep
+    <!-- Standalone creation title/description controls have no HTML length caps. Keep
          their browser input behavior; the generated command contract and persistence
          retain their independent structural/storage bounds. Metadata editing has
-         different native limits and must not lend them to this creation form. -->
+         different limits and must not lend them to this creation form. -->
     <!-- Shared feedback presents rejected creation through the common notification
          scope. Admission denials retain their separate full Error/Home outcome. -->
     <CommandFeedback v-if="!admissionError" :feedback="command.feedback" part="error" error-kind="danger" />
@@ -271,14 +271,14 @@ function collectCreation() {
             <!-- Both create and duplicate use one admitted initial projection. The
                  event picker loads independently; a refresh never replaces this draft. -->
             <LoadingSkeleton v-if="initialLoading" v-bind="route.meta.loadingSkeleton" />
-            <!-- An initialized local draft keeps its native controls/FileList on
+            <!-- An initialized local draft keeps its controls/FileList on
                  confirmed denial. Retire server-owned definitions below and disable
                  submission until fresh admission; a cold denied visit has no form. -->
             <form v-if="defaults && (formContext || baseline !== null)" :aria-busy="reading" @submit.prevent="create">
-                <!-- Additional native draft controls opt in to the shared mount boundary.
+                <!-- Additional draft controls opt in to the shared mount boundary.
                      Hydration restores their models without submitting or replaying actions. -->
                 <fieldset :disabled="blocked || !formContext">
-                    <!-- Features with dated roots supply their native title/date row;
+                    <!-- Features with dated roots supply their title/date row;
                          title still belongs to this shared creation draft owner. -->
                     <!-- Only Create's admission/write lifetime can own Enter focus;
                          unrelated admission recovery still uses the wider blocked policy. -->
@@ -318,7 +318,7 @@ function collectCreation() {
                         </div>
                     </div>
                     <slot :disabled="blocked || !formContext" :pending="createAction.pending.value"></slot>
-                    <div :class="fullWidthSubmit ? 'd-grid mt-4' : 'pilot-action-row justify-content-between'">
+                    <div :class="fullWidthSubmit ? 'd-grid mt-4' : 'frontend-action-row justify-content-between'">
                         <slot name="before-submit" :disabled="blocked || !formContext"></slot>
                         <ActionButton type="submit" variant="success" :state="createAction"
                             ><i class="bi bi-check-lg me-1" aria-hidden="true"></i

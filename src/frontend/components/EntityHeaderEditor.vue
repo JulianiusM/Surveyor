@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import type {EntityHeaderEditorProps} from '../../types/FrontendEntitySettingsTypes';
-import {usePilot} from '../app/context';
+import {useFrontend} from '../app/context';
 import FileField from './FileField.vue';
 import ActionButton from './ActionButton.vue';
 import StatusNotice from './StatusNotice.vue';
 
 // The feature supplies admitted presentation and retains the selected file/token.
-// This shared panel owns native layout, DOM hooks and interaction events only.
+// This shared panel owns layout, DOM hooks and interaction events only.
 defineProps<EntityHeaderEditorProps>();
 const emit = defineEmits<{choose: [file: File | null]; review: []; upload: [source: Event]; remove: [source: Event]}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 </script>
 
 <template>
@@ -31,7 +31,7 @@ const {messages} = usePilot();
                         }}</ActionButton>
                     </template></StatusNotice
                 >
-                <div class="pilot-action-row">
+                <div class="frontend-action-row">
                     <ActionButton :disabled="disabled || conflict" :pending="uploadPending" :show-spinner="false"
                         @click="emit('upload', $event)">{{
                         labels.upload

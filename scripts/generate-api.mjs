@@ -196,7 +196,7 @@ for (const [route, unresolvedPathItem] of Object.entries(document.paths)) {
             // declaration alone does not install a corresponding runtime codec.
             if (!['path', 'query', 'header'].includes(parameter.in) || parameter.content
                 || (parameter.style && parameter.style !== (parameter.in === 'query' ? 'form' : 'simple'))) {
-                throw new Error(`Unsupported pilot parameter serialization: ${identity}`);
+                throw new Error(`Unsupported API parameter serialization: ${identity}`);
             }
             // Runtime transport metadata must contain resolved shapes, not a second reference resolver.
             parameter.schema = resolve(document, parameter.schema);

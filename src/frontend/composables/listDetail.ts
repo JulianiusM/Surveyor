@@ -2,9 +2,9 @@ import {computed, onBeforeUnmount, shallowRef, watch} from 'vue';
 import {useQuery, type QueryFunctionContext} from '@tanstack/vue-query';
 import type {FrontendListCommandSource, FrontendListSettingsRetirement, FrontendListSettingsRetirementSource,
     FrontendListSource} from '../../types/FrontendListTypes';
-import type {PilotCommandDraft, PilotPlainMessageKey, PilotRead} from '../../types/FrontendPilotUiTypes';
+import type {FrontendCommandDraft, FrontendPlainMessageKey, FrontendRead} from '../../types/FrontendUiTypes';
 import type {components} from '../../types/api/v1';
-import {refreshInterval, useActionState, usePilot} from '../app/context';
+import {refreshInterval, useActionState, useFrontend} from '../app/context';
 import {belongsToQueryFamily} from '../app/queryKeys';
 import {evictQueryFamilies, refetchFreshQuery, useQueryAdmission} from '../app/queryCache';
 import {isReadDenial, ObsoleteRequestError} from '../app/transport';
@@ -15,10 +15,10 @@ import {useReadRetry, useReadRetryAt} from './feedback';
  * recovery. Each feature supplies actual transport, query scope and denied-data
  * retirement; this owner retains no draft, business action or permission mirror. */
 export function useListDetail<T>(source: FrontendListSource<T>) {
-    const context = usePilot();
+    const context = useFrontend();
     const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
     let active = true;
-    const previous = shallowRef<{query: Parameters<typeof belongsToQueryFamily>[0]; result: PilotRead<T>} | null>(null);
+    const previous = shallowRef<{query: Parameters<typeof belongsToQueryFamily>[0]; result: FrontendRead<T>} | null>(null);
     const revoked = shallowRef(false);
     onBeforeUnmount(() => { active = false; });
     const admission = useQueryAdmission(context, source.queryKey,
@@ -51,10 +51,10 @@ export function useListDetail<T>(source: FrontendListSource<T>) {
 
     /** A fresh admitted response alone restores authority after a denied read.
      * Retired requests cannot publish a previous actor or resource's projection. */
-    async function read({signal, queryKey}: QueryFunctionContext<readonly unknown[]>): Promise<PilotRead<T>> {
+    async function read({signal, queryKey}: QueryFunctionContext<readonly unknown[]>): Promise<FrontendRead<T>> {
         const scope = context.capture();
         const resource = source.resourceId.value;
-        const result = await source.read(resource, scope, signal, context.queryClient.getQueryData<PilotRead<T>>(queryKey));
+        const result = await source.read(resource, scope, signal, context.queryClient.getQueryData<FrontendRead<T>>(queryKey));
         if (!active || signal.aborted || !context.isCurrent(scope) || resource !== source.resourceId.value)
             throw new ObsoleteRequestError();
         revoked.value = false;
@@ -67,7 +67,7 @@ export function useListDetail<T>(source: FrontendListSource<T>) {
         if (!active || !context.mayRead()) throw new ObsoleteRequestError();
         const scope = context.capture();
         const resource = source.resourceId.value;
-        await refetchFreshQuery<PilotRead<T>>(context.queryClient, source.queryKey.value,
+        await refetchFreshQuery<FrontendRead<T>>(context.queryClient, source.queryKey.value,
             () => list.refetch({throwOnError: true}),
             () => active && resource === source.resourceId.value && context.mayRead(scope));
     }
@@ -88,7 +88,7 @@ export function useListDetail<T>(source: FrontendListSource<T>) {
 /** Share Settings retirement across detail families without introducing another
  * command, query or draft. Callers retain dialog closing and their fresh-read policy. */
 export function useSettingsAccessRetirement(source: FrontendListSettingsRetirementSource) {
-    const context = usePilot();
+    const context = useFrontend();
 
     /** Losing Settings authority retires only the feature-selected editor family.
      * A still-current page recovers independent detail authority through its own
@@ -107,8 +107,8 @@ export function useSettingsAccessRetirement(source: FrontendListSettingsRetireme
  * server snapshot or draft. Features inject their actual fresh read (including
  * Survey's ballot merge), lifetime and dirty policy; generated mutations stay
  * with their feature. Recovery never repeats those mutations. */
-export function useListCommands(source: FrontendListCommandSource, draft: PilotCommandDraft) {
-    const context = usePilot();
+export function useListCommands(source: FrontendListCommandSource, draft: FrontendCommandDraft) {
+    const context = useFrontend();
     const retryAvailable = useReadRetry(source.error);
     const retryAt = useReadRetryAt(source.error, retryAvailable);
     const command = useCommand(refreshAfterCommand, false, draft);
@@ -148,7 +148,7 @@ export function useListCommands(source: FrontendListCommandSource, draft: PilotC
 
     /** Unknown creation cannot be identified by a later collection read. Require
      * explicit review of that current collection before releasing uncertainty. */
-    async function reviewUnknownCreation(confirmation: PilotPlainMessageKey): Promise<void> {
+    async function reviewUnknownCreation(confirmation: FrontendPlainMessageKey): Promise<void> {
         const reconciled = await refresh();
         // Keep input/status protected unless a fresh read succeeded and the user
         // deliberately acknowledges it. No creation is inferred or replayed.
@@ -167,9 +167,9 @@ export function useListCommands(source: FrontendListCommandSource, draft: PilotC
     return {command, blocked, readAction, retryAt, refresh, retireSettingsAccess, reviewUnknownCreation, denyInlineEdit};
 }
 
-/** Packing and Drivers retain the native list permission wording. Other detail
+/** Packing and Drivers retain the list permission wording. Other detail
  * families opt into their own presentation; safe future Problems keep the
  * existing shared decoder fallback rather than becoming guessed catalog keys. */
-export function listProblemKey(problem: components['schemas']['Problem']): PilotPlainMessageKey | undefined {
+export function listProblemKey(problem: components['schemas']['Problem']): FrontendPlainMessageKey | undefined {
     if (problem.code === 'FORBIDDEN') return 'common.notAllowed';
 }

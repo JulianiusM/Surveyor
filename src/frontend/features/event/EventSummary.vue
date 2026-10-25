@@ -2,14 +2,14 @@
 import {computed, onBeforeUnmount, onMounted, ref} from 'vue';
 import {RouterLink} from 'vue-router';
 import type {components} from '../../../types/api/v1';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {formatEventCivilDate} from './presentation';
 import EntityDescription from '../../components/EntityDescription.vue';
 
 // Detail and organizer pages share the same bounded Event presentation. This
 // countdown changes display only; registration deadlines remain server-owned.
 const props = defineProps<{event: components['schemas']['EventView']; admin?: boolean}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const now = ref(Date.now());
 let timer: ReturnType<typeof setInterval> | undefined;
 onMounted(() => { timer = setInterval(tick, 60000); });
@@ -27,7 +27,7 @@ function deadline(zone?: string): string {
     return new Date(props.event.bindingDeadline).toLocaleString(messages.value.locale, {dateStyle: 'full', timeStyle: 'full', ...(zone ? {timeZone: zone} : {})});
 }
 
-/** Match native minute-resolution countdown geometry with localized whole wording. */
+/** Match minute-resolution countdown geometry with localized whole wording. */
 function deadlineCountdown(): string {
     if (!props.event.bindingDeadline) return '';
     const milliseconds = Date.parse(props.event.bindingDeadline) - now.value;
@@ -39,7 +39,7 @@ function deadlineCountdown(): string {
 </script>
 
 <template>
-    <!-- Both page intents use this same admitted summary. Optional native fields
+    <!-- Both page intents use this same admitted summary. Optional fields
          retain their conditions; description lines render as escaped text. -->
     <div class="card mb-3 bg-dark text-white border-secondary-subtle">
         <div class="card-body">
@@ -77,9 +77,9 @@ function deadlineCountdown(): string {
             <!-- The feature capability grants navigation presentation only;
                  the destination's own entry owner rechecks admission. -->
             <div v-if="admin || event.capabilities.admin" class="row">
-                <div class="col-12 pilot-action-row justify-content-end">
+                <div class="col-12 frontend-action-row justify-content-end">
                     <RouterLink class="btn btn-primary"
-                        :to="`/frontend-pilot/event/${event.id}${admin ? '' : '/admin'}`"><i class="bi me-1" :class="admin ? 'bi-calendar2-event' : 'bi-check2-circle'" aria-hidden="true"></i>{{ messages.t(admin ? 'event.eventPage' : 'event.admin') }}</RouterLink>
+                        :to="`/event/${event.id}${admin ? '' : '/admin'}`"><i class="bi me-1" :class="admin ? 'bi-calendar2-event' : 'bi-check2-circle'" aria-hidden="true"></i>{{ messages.t(admin ? 'event.eventPage' : 'event.admin') }}</RouterLink>
                 </div>
             </div>
         </div>

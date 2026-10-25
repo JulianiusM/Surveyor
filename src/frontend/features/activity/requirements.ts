@@ -4,7 +4,7 @@ import type {Translator} from '../../../types/LocalizationTypes';
 import {applyRounding, calculateRequirementAnalysis, countInclusiveDays} from '../../../modules/activity/requirements';
 import type {RequirementAnalysisInput} from '../../../modules/activity/requirements';
 
-/** Copy the native local-minute editor projection; timestamps remain ISO on the wire. */
+/** Copy the local-minute editor projection; timestamps remain ISO on the wire. */
 function localDeadline(value: string | null): string {
     if (!value) return '';
     const date = new Date(value);
@@ -19,7 +19,7 @@ export function createRequirementDraft(config: ActivityRequirementConfiguration)
     const days = countInclusiveDays(config.plan.startDate, config.plan.endDate);
     const stays = new Map(config.stayRequirements.map(row => [row.stayDays, row.requiredShifts]));
     const roles = new Map(config.roleRequirements.map(row => [row.roleId, row.requiredShifts]));
-    // Saved duration rows take precedence. Only absent rows inherit the native
+    // Saved duration rows take precedence. Only absent rows inherit the configured
     // rounded proportional suggestion; this does not persist a calculation.
     return {
         assignmentMode: config.plan.assignmentMode,
@@ -41,12 +41,12 @@ export function createRequirementDraft(config: ActivityRequirementConfiguration)
     };
 }
 
-/** Submit the native omission/null/zero meanings from lexical controls. Invalid
+/** Submit the omission/null/zero meanings from lexical controls. Invalid
  * values remain subject to generated validation and the existing controller. */
 export function requirementInput(draft: ActivityRequirementDraft): components['schemas']['ActivityRequirementsInput'] {
     const deadline = draft.bindingDeadline ? new Date(draft.bindingDeadline) : null;
-    // Empty role rows are absent, while empty override counts retain native zero.
-    // Negative/NaN role rows are omitted exactly as in the native collector.
+    // Empty role rows are absent, while empty override counts retain zero.
+    // Negative/NaN role rows are omitted exactly as in the collector.
     return {
         assignmentMode: draft.assignmentMode, generalRequiredShifts: draft.generalRequiredShifts.trim() ? Number(draft.generalRequiredShifts) : null,
         roundingMode: draft.roundingMode || null, bindingDeadline: deadline && Number.isFinite(deadline.getTime()) ? deadline.toISOString() : null,
@@ -68,7 +68,7 @@ export function requirementAnalysisInput(config: ActivityRequirementConfiguratio
     const input = requirementInput(draft);
     // Wire data and drafts keep canonical string identities. Convert only at
     // this shared domain-engine boundary: Analyze and Calculate must see the
-    // same numeric role membership and override ordering as the native engine.
+    // same numeric role membership and override ordering as the engine.
     return {plan: {...config.plan, ...input},
         participants: config.calculationContext.participants.map(person => ({...person, roleIds: person.roleIds.map(Number)})),
         roleRequirements: input.roleRequirements.map(row => ({...row, roleId: Number(row.roleId)})),
@@ -93,7 +93,7 @@ export function analyzeRequirementDraft(config: ActivityRequirementConfiguration
         assignmentMode: draft.assignmentMode}))};
 }
 
-/** Preserve the native distinction between a hard cap and permitted overfill.
+/** Preserve the distinction between a hard cap and permitted overfill.
  * Coverage models demand only; it neither assigns roles nor proves feasibility. */
 export function requirementCoverage(config: ReturnType<typeof analyzeRequirementDraft>['capacitySummary'], draft: ActivityRequirementDraft,
     t: Translator): ActivityRequirementCoverage {

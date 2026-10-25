@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type {components} from '../../../types/api/v1';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {answerVariants} from './presentation';
 import StatusNotice from '../../components/StatusNotice.vue';
 import SurveyCombinationHeaders from './SurveyCombinationHeaders.vue';
@@ -8,7 +8,7 @@ import SurveyCombinationHeaders from './SurveyCombinationHeaders.vue';
 // Named results are an admitted shared projection. Missing answers retain the
 // native lowercase No presentation and never become another person's draft.
 defineProps<{combinations: components['schemas']['SurveyCombination'][]; responses: components['schemas']['SurveyView']['responses']}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const labels = {yes: 'survey.answer.yes', maybe: 'survey.answer.maybe', no: 'survey.answer.no'} as const;
 </script>
 

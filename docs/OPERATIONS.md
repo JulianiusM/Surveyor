@@ -5,11 +5,11 @@ documentation-metadata
 audience: operators; site reliability engineers; incident responders; maintainers
 owner: application operators
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: Native installation, configuration, storage, authentication, backup/restore and advisory verification procedures; no new deployment rehearsal claimed.
-source-anchors: src/modules/entityArchival.ts; src/modules/database/services/EntityLifecycleService.ts; src/migrations/1789862400000-AddEntityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; docs/user-guide/INVOICE_POOLS.md; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/database/dataSource.ts; src/modules/invoice/retention.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/controller/helpController.ts; src/controller/eventPoolController.ts; src/modules/email.ts; src/modules/oidc.ts
-next-review: D04V
+verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
+source-anchors: src/modules/entityArchival.ts; src/modules/database/services/EntityLifecycleService.ts; src/migrations/1789862400000-AddEntityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/database/dataSource.ts; src/modules/invoice/retention.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/controller/helpController.ts; src/controller/eventPoolController.ts; src/modules/email.ts; src/modules/oidc.ts; docs/UPGRADING.md; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/calculation.ts; src/frontend/composables/command.ts; src/frontend/composables/feedback.ts; src/frontend/features/finance/
+next-review: release-layout-or-operational-procedure-change
 -->
 
 This runbook covers one production Surveyor instance deployed from the release archive. Read the
@@ -19,7 +19,10 @@ separate [upgrade procedure](UPGRADING.md) for an existing instance.
 ## Operational model
 
 A Surveyor release archive contains the compiled application in `dist/`, its matching `docs/` and `fonts/`, and the
-production dependency manifests. It does not replace the need for:
+production dependency manifests. Express serves the application and its compiled frontend assets from this same
+release; production requires no Vite development server or separate frontend asset service. Keep server rendering,
+fingerprinted client files, generated contracts, language catalogs and reviewed Help together with their matching
+production dependencies. The archive does not replace the need for:
 
 - A protected external settings file.
 - A prepared MariaDB schema.
@@ -97,6 +100,12 @@ A valid release root contains at least:
 
 ```text
 dist/
+  server.js
+  frontend-server/entry-server.mjs
+  public/app/.vite/manifest.json
+  public/app/assets/
+  api-contracts/
+  modules/localization/generated/
 docs/
 fonts/
 package.json
@@ -104,7 +113,10 @@ package-lock.json
 .npmrc
 ```
 
-The `docs/user-guide/` directory must be present because the application serves it as in-app help.
+The `docs/user-guide/` directory and its reviewed language corpora/assets must be present because the application
+serves them as in-app help. `dist/api-contracts/` contains the generated contract description, operation manifest and
+server validators; the language resources and manifest are packaged under `dist/modules/localization/generated/`.
+Install the entire release rather than copying individual server files or client chunks from another build.
 
 ### 3. Install runtime dependencies
 
@@ -117,6 +129,14 @@ chown -R root:root /opt/surveyor/releases/vX.Y.Z
 
 After dependency installation, the versioned runtime tree is made read-only to the service account. Do not run a build in the release directory. The archive already contains the compiled output, and its package manifest
 is stripped of development dependencies.
+
+The application detects a changed frontend build through normal session refresh. Compatible edits already open in
+the browser may finish. Only eligible dynamic content pages, currently Overview, Packing/Drivers/Survey/Activity detail, and Event
+detail/admin, can reload automatically when clean and idle. Creation, duplication, user-management, Help and static error/completion pages
+retain deliberate recovery, even when untouched. Draft/pending/unknown and loop guards still apply. A missing client
+chunk or incompatible command retains mounted drafts for deliberate recovery rather than automatically replaying
+writes. Operators do not maintain an old-asset directory. Users with unsaved or uncertain work should review the
+displayed recovery choices before reloading. Session/security revalidation and periodic content reads are unchanged.
 
 ### 4. Attach persistent files
 
@@ -357,7 +377,7 @@ Backup copies of invoice proofs are separate retained copies. Apply the same pri
 retention and disposal.
 
 For the participant- and organizer-visible invoice lifecycle, proof-access boundary, and settlement workflow, see
-[Invoice Pools and Payments](user-guide/INVOICE_POOLS.md#privacy-proof-access-storage-and-retention).
+[Invoice Pools and Payments](user-guide/en/INVOICE_POOLS.md#privacy-proof-access-storage-and-retention).
 
 ### Invoice pool factors, rebates, and recalculation
 
@@ -373,9 +393,11 @@ Migration does not replace stored shares or send settlement notifications. Exist
 payment credits start at zero; the next recalculation recognizes paid amounts from those saved flags.
 
 The organizer-expense feature also requires `1789603200000-AddOrganizerInvoices.ts` before the new release starts.
-It adds the recorder profile and name snapshot to invoice records. Organizer expenses have no participant registration,
-can omit proof, and enter accepted shared costs immediately; they never reimburse the recorder through personal
-invoice credit. An authorized organizer does not need to attend the event to record one. Adding an expense after
+It adds the recorder profile and name snapshot to invoice records. Organizer expenses can omit proof and enter
+accepted shared costs immediately. They may optionally identify an eligible participant who paid; that participant's
+invoice history and the pool's invoice-credit setting apply. Without participant attribution, the expense creates no
+personal invoice credit. Recorder attribution remains separate and does not itself grant personal invoice credit.
+An authorized organizer does not need to attend the event to record one. Adding an expense after
 closure preserves existing shares/payments and requires explicit recalculation. Deleting the recorder profile clears
 its audit relation but retains the recorded name. Back up these financial records and any optional proofs together.
 
@@ -415,23 +437,26 @@ Invoice upload success confirms persistence and does not wait for confirmation e
 uncertain upload outcome, have them check **Your invoice history** before retrying. Investigate repeated slow uploads
 through proxy request limits, storage latency, application errors, and database connectivity. Review SMTP logs separately
 when a persisted invoice has no receipt email.
-After confirmed success, the participant form clears the invoice details and proof and briefly stays locked while the
-page automatically refreshes to the saved invoice history. The invoice sections reopen and retain the available pool
-selection for another upload. An uncertain outcome intentionally stays locked until the participant checks history.
+After confirmed success, the participant form clears the completed invoice details and proof while retaining an
+eligible pool. Required invoice-history reads refresh in the same document. An uncertain outcome retains the draft
+and requires saved-history inspection and acknowledgement before another submission.
 
 Acceptance, rejection, and closure also finish their database change before starting email delivery. A slow or failed
 SMTP connection does not delay their success response or reverse the saved review. Delivery runs in the application
 process without a persisted outbox; inspect the saved invoice or payment state before retrying any financial action.
 Do not repeat a review to retry an email. Settlement notices can be requested separately with **Send settlement emails**.
 
-Pool actions show immediate progress and a further status message after five seconds while awaiting server confirmation.
-Transient result notices disappear after ten seconds; ongoing progress and stale-calculation notices remain visible.
-Payment feedback appears above the ledger even if filtering removes the updated row. The Paid switch reflects the last
-confirmed state while saving; use the saved status rather than the switch's initial click position when investigating.
+Pool controls retain their pending state through server confirmation and required follow-up reads. Keep the page open
+and do not repeat an action while it is pending. Transient result notices disappear after ten seconds; unresolved
+outcomes and stale-calculation conditions remain visible.
+Settlement actions open a confirmation dialog for the saved payment or refund amount. The ledger keeps its last
+confirmed status while the command is pending. Shared page/dialog feedback survives changes to filtered rows;
+investigate the saved status and inspect uncertain results before attempting another settlement action.
 For slow pool loads, inspect database connectivity, query duration, and resource usage separately from SMTP. Pool relation
 reads use a consistent database snapshot; do not change transaction isolation or bypass revision checks as a workaround.
 
-Authorized organizers can use **Export as PDF** to download all saved shares as portrait A4 pages. The export includes
+Authorized organizers can choose **Export shares PDF with example** or **Export shares PDF without example**
+to download all saved shares as portrait A4 pages. The export includes
 current recorded payments and indicates pending recalculation; screen filters do not limit its contents. Treat exported
 copies as sensitive financial data with an appropriate storage and deletion policy.
 
@@ -474,6 +499,11 @@ Complete all checks before ending a maintenance window:
 10. A test service email is delivered with working public links.
 11. The active release version shown by the application matches the change record.
 12. Database, upload filesystem, certificate, and backup monitors are green.
+
+For a page that uses the Vue frontend, also check its emitted scripts/styles and one actual interaction after browser
+initialization. Confirm that the expected controls become usable, no startup notice or asset-load error remains, and
+Help links/search work in each enabled interface language. Server-rendered HTML alone does not prove that browser
+initialization or commands work. These checks supplement the enabled sign-in/provider and delivery checks above.
 
 Remove disposable test data according to normal application and retention procedures.
 
@@ -621,6 +651,13 @@ retention policy.
 
 Treat `/healthz` as basic HTTP liveness. Check MariaDB, disk capacity, application errors, SMTP, OIDC, and the reverse
 proxy independently.
+
+### A frontend page cannot finish loading after a release change
+
+Check that the server renderer, current manifest, client scripts/styles, generated contracts and language resources all
+come from the same release. Review browser asset failures and proxy responses as well as application logs. Preserve
+unsaved input and review any uncertain command against current saved data before refreshing; do not resend a creation
+or upload merely because its response was lost. Reinstall the coherent release when files are missing or mismatched.
 
 ## Decommissioning
 

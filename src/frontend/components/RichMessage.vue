@@ -4,13 +4,13 @@ import type {VNode} from 'vue';
 import {TranslationComponent as I18next} from 'i18next-vue';
 import type {MessageNodes, MessageParameters, RichMessageKey} from '../../types/LocalizationTypes';
 import {assertRichMessageNodes} from '../../modules/localization/translator';
-import {usePilot} from '../app/context';
+import {useFrontend} from '../app/context';
 
 // Catalog declarations own placement and names; features supply authored nodes.
 // Parameters remain required here, including an explicit empty object for a
 // node-only message. The shared translator checks their runtime scalar types.
 const props = defineProps<{message: TKey; parameters: MessageParameters[TKey]}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const slots = defineSlots<{[TNode in MessageNodes[TKey]]: () => VNode[]}>();
 const content = computed(() => messages.value.rich(props.message, props.parameters));
 

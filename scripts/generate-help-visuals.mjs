@@ -4,8 +4,7 @@
  * data. Explanatory diagrams are deliberately separate from application screenshots.
  * Run after npm run build: node scripts/generate-help-visuals.mjs --locale=de --figure=navigation
  * Omit --figure to reproduce all three figures; selecting one leaves other PNGs untouched.
- * During frontend migration, figures and their labels belong exclusively beside
- * the release-owned localized guides. This tool never writes into the native help corpus.
+ * Figures and their labels belong exclusively beside the release-owned localized guides.
  * Each language owns visual-labels.json beside its guides; UI labels come from the
  * same application catalog used by the actual Vue header. Inspect every PNG export.
  */
@@ -24,7 +23,7 @@ if (!['all', 'navigation', 'survey', 'packing'].includes(selectedFigure)) throw 
 const catalogPath = `src/locales/${locale}.json`;
 const catalog = JSON.parse(await fs.readFile(path.join(root, catalogPath), 'utf8'));
 // Both source labels and generated pictures belong to the approved runtime corpus. Keeping
-// one fixed destination prevents a missing CLI flag from changing native help.
+// one fixed destination keeps authoring within the locale's reviewed Help corpus.
 const outputRoot = 'docs/user-guide';
 if (catalog.locale !== locale || catalog.help?.directory !== locale) throw new Error('The catalog must name its own fixed Help directory.');
 const labelsPath = path.join(outputRoot, catalog.help.directory, 'visual-labels.json');
@@ -86,17 +85,16 @@ const embeddedIcons = iconStyles.toString().replace(/url\("\.\/fonts\/bootstrap-
     `url("data:font/woff2;base64,${iconFont.toString('base64')}")`);
 const manifest = JSON.parse(await fs.readFile(path.join(root, 'dist/public/app/.vite/manifest.json'), 'utf8'));
 const entry = manifest['src/frontend/app/entry-client.ts'];
-const pilotCss = (await Promise.all(entry.css.map(name => fs.readFile(path.join(root, 'dist/public/app', name), 'utf8')))).join('\n');
-const nativeCss = await fs.readFile(path.join(root, 'dist/public/style/style.css'), 'utf8');
+const applicationCss = (await Promise.all(entry.css.map(name => fs.readFile(path.join(root, 'dist/public/app', name), 'utf8')))).join('\n');
 const logo = await fs.readFile(path.join(root, 'src/public/img/logo.png'));
 const renderer = await import(pathToFileURL(path.join(root, 'dist/frontend-server/entry-server.mjs')).href);
 const profile = {id: '00000000-0000-4000-8000-000000000001', name: labels.fictionalProfile};
-const rendered = await renderer.render(`/frontend-pilot/help?locale=${locale}`, {session: {
+const rendered = await renderer.render(`/help?locale=${locale}`, {session: {
     kind: 'account', context: 'fictional-help-figure', csrfToken: 'fictional-not-a-token', locale,
     // The actual shell requires deployment metadata even for a server-only
     // figure. Reuse its generated compatibility owner; this fixture never sends commands.
     deployment: {buildId: 'fictional-help-figure', apiCompatibility},
-    activeProfile: profile, profiles: [profile], loginUrl: '/frontend-pilot/users/login', logoutUrl: '/frontend-pilot/users/login',
+    activeProfile: profile, profiles: [profile], loginUrl: '/users/login', logoutUrl: '/users/login',
     shell: {version: '', imprintUrl: '', privacyPolicyUrl: '', localLoginEnabled: true, oidcEnabled: false, oidcName: ''},
 }});
 
@@ -106,7 +104,7 @@ const exports = [];
 try {
     // Keep the application markup and translated labels intact. Only resolve its
     // shipped image URL to inline bytes so this source capture stays server-free.
-    await page.setContent(`<!doctype html><html lang="${locale}" data-bs-theme="dark"><head><style>${bootstrap}</style><style>${embeddedIcons}</style><style>${nativeCss}</style><style>${pilotCss}</style></head><body>${rendered.html.replaceAll('/img/logo.png', `data:image/png;base64,${logo.toString('base64')}`)}</body></html>`);
+    await page.setContent(`<!doctype html><html lang="${locale}" data-bs-theme="dark"><head><style>${bootstrap}</style><style>${embeddedIcons}</style><style>${applicationCss}</style></head><body>${rendered.html.replaceAll('/img/logo.png', `data:image/png;base64,${logo.toString('base64')}`)}</body></html>`);
     await page.evaluate(() => document.fonts.ready);
     const header = page.locator('header');
     const headerLabels = await header.innerText();

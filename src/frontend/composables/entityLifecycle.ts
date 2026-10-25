@@ -2,10 +2,10 @@ import {onBeforeUnmount} from 'vue';
 import type {Ref} from 'vue';
 import {useRouter} from 'vue-router';
 import type {LocalizationContext} from '../../types/LocalizationTypes';
-import type {PilotConfirmedNavigation, PilotPlainMessageKey, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
+import type {FrontendConfirmedNavigation, FrontendPlainMessageKey, FrontendRequestScope} from '../../types/FrontendUiTypes';
 import type {useCommand} from './command';
 import type {EntityAutomationMessages, EntityLifecycleOperations, EntityRemovalRequest} from '../../types/FrontendEntitySettingsTypes';
-import {useActionState, usePilot} from '../app/context';
+import {useActionState, useFrontend} from '../app/context';
 import {overviewKeys} from '../app/queryKeys';
 import {frontendOverviewPath} from '../../modules/lib/frontendIdentity';
 
@@ -27,7 +27,7 @@ export function createEntityLifecycle(api: EntityLifecycleOperations,
      * The caller supplies its current resource state;
      * personal visibility and permanent deletion remain separate operations. */
     async function archive(listId: string, restore: boolean, inherited: boolean,
-                           confirmationKey?: PilotPlainMessageKey, hasAutomaticSchedule = false): Promise<void> {
+                           confirmationKey?: FrontendPlainMessageKey, hasAutomaticSchedule = false): Promise<void> {
         // Restore takes precedence over inherited archival, matching both existing
         // journeys. Read wording from the current locale at the user action boundary.
         // Independent schedules pause on restoration in the existing backend.
@@ -42,7 +42,7 @@ export function createEntityLifecycle(api: EntityLifecycleOperations,
         await command.run(changeArchive, true, false, {
             success: restore ? 'overview.restored' : 'overview.archived'});
 
-        function changeArchive(scope: PilotRequestScope) {
+        function changeArchive(scope: FrontendRequestScope) {
             return api.archive(listId, restore, scope);
         }
     }
@@ -66,7 +66,7 @@ export function createEntityLifecycle(api: EntityLifecycleOperations,
             success: paused ? labels.pausedSuccess : labels.resumedSuccess,
         });
 
-        function changeSchedule(scope: PilotRequestScope) {
+        function changeSchedule(scope: FrontendRequestScope) {
             return changeAutomation(id, paused, scope);
         }
     }
@@ -78,8 +78,8 @@ export function createEntityLifecycle(api: EntityLifecycleOperations,
  * covers the irreversible write and its first delivery attempt; later departures
  * review current drafts, while confirmed Retry can only read/deliver, never write. */
 export function useEntityRemoval(command: Pick<ReturnType<typeof useCommand>, 'run' | 'prepareDeparture' | 'pending' | 'outcome' | 'action'>,
-                                 destination: PilotConfirmedNavigation) {
-    const context = usePilot();
+                                 destination: FrontendConfirmedNavigation) {
+    const context = useFrontend();
     const {messages} = context;
     const router = useRouter();
     // Receipt capacity is application-owned, while this action retains its
@@ -127,7 +127,7 @@ export function useEntityRemoval(command: Pick<ReturnType<typeof useCommand>, 'r
             releaseApprovedDeparture();
         }
 
-        async function deleteResource(commandScope: PilotRequestScope): Promise<boolean> {
+        async function deleteResource(commandScope: FrontendRequestScope): Promise<boolean> {
             await request.operation(commandScope);
             return true;
         }

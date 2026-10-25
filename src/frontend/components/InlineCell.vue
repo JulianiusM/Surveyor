@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, ref, watch} from 'vue';
-import {usePilot} from '../app/context';
+import {useFrontend} from '../app/context';
 import {useDraftProtection} from '../composables/command';
 import {usePendingFocus} from '../composables/pendingFocus';
 import ActionButton from './ActionButton.vue';
@@ -9,13 +9,13 @@ const props = withDefaults(defineProps<{
     value: string | number | null;
     token: string;
     editable: boolean;
-    // Native field affordance can be broader than its browser write guard.
+    // Field affordance can be broader than its browser write guard.
     // The feature supplies that distinction; this component derives no grants.
     writeAdmission?: boolean;
     label: string;
     numeric?: boolean;
     // Input presentation does not define a feature's accepted values. Callers opt
-    // into constraints only where their native editor already enforces them.
+    // into constraints only where their editor already enforces them.
     required?: boolean;
     maxLength?: number;
     disabled?: boolean;
@@ -26,14 +26,14 @@ const props = withDefaults(defineProps<{
     save: (value: string, token: string) => Promise<boolean>;
 }>(), {writeAdmission: true});
 const emit = defineEmits<{editing: [active: boolean]; denied: [source?: Event]}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const editing = ref(false);
 const input = ref<HTMLInputElement | HTMLTextAreaElement | null>(null);
 // Keep the DOM's string value even for number inputs. Vue's numeric v-model coercion
 // otherwise changes this draft to a number before its trim/validation/save boundary.
 const local = ref('');
-// The raw snapshot remains the concurrency authority. Native editing presents trimmed
+// The raw snapshot remains the concurrency authority. Editing presents trimmed
 // text, so its no-change baseline must be separate: merely opening padded stored text
 // must neither normalize persistence nor mark the enclosing page dirty.
 const original = ref('');
@@ -75,7 +75,7 @@ function isEditorAvailable(): boolean {
 
 /** Capture the displayed value and comparison token once on editor entry.
  * Display permission remains distinct from command admission; the original
- * lexical value also preserves native trim/no-change and focus behavior. */
+ * lexical value also preserves trim/no-change and focus behavior. */
 async function begin(source?: Event): Promise<void> {
     if (!props.editable || props.disabled || editing.value) return;
     if (!props.writeAdmission) {
@@ -91,7 +91,7 @@ async function begin(source?: Event): Promise<void> {
     emit('editing', true);
 
     await nextTick();
-    // Native editing focuses the existing value without selecting it. Selecting
+    // Editing focuses the existing value without selecting it. Selecting
     // here changes the first typed character from an insertion into a replacement.
     input.value?.focus();
 }
@@ -104,14 +104,14 @@ function review(): void {
     token.value = props.token;
     original.value = String(props.value ?? '');
     // Reviewing new authority retains the user's draft, while no-change detection
-    // adopts the same normalized baseline as a newly opened native editor.
+    // adopts the same normalized baseline as a newly opened editor.
     editableOriginal.value = original.value.trim();
     void nextTick(() => input.value?.focus());
 }
 
 /** Submit an explicit Enter shortcut only after text composition has finished.
  * The same boundary serves input Enter and textarea Ctrl+Enter; blur keeps its
- * independent native save behavior through the existing commit owner. */
+ * independent save behavior through the existing commit owner. */
 function commitOnEnter(event: KeyboardEvent): Promise<void> | void {
     // A composing Enter belongs to the browser/IME, including its default action.
     // Guard before preventing it so no partial draft is saved or editor removed.
@@ -136,7 +136,7 @@ async function commit(source?: Event): Promise<void> {
         emit('denied', source);
         return;
     }
-    // Native inline editors submit on blur/Enter without validating a containing
+    // Inline editors submit on blur/Enter without validating a containing
     // form. A number input's implicit step must not add a new rejection policy;
     // validate only constraints explicitly supplied by the field's owner.
     if ((props.required || props.maxLength !== undefined) && !input.value?.reportValidity()) return;
@@ -192,7 +192,7 @@ defineExpose({begin});
                 class="btn-sm mt-1" variant="outline-secondary" :disabled="pending || disabled" @click="cancel">
                 {{ messages.t('common.cancel') }}
             </ActionButton>
-            <div v-if="remoteChanged" class="pilot-inline-conflict small text-warning mt-1">
+            <div v-if="remoteChanged" class="frontend-inline-conflict small text-warning mt-1">
                 {{ messages.t('draft.readConflict') }}
                 <div>{{ messages.t('draft.conflictValue', {value: String(value ?? '')}) }}</div>
                 <ActionButton

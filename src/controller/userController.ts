@@ -46,13 +46,13 @@ import type {components, operations} from '../types/api/v1';
 
 const CREATE_TEMPLATE = 'users/register';
 
-/** Native creation admits an account with an active profile; a guest remains a separate identity. */
+/** Direct creation admits an account with an active profile; a guest remains a separate identity. */
 export function hasAccountProfile(session: SessionLike): boolean {
     return Boolean(session.auth?.user && session.profile);
 }
 
 /**
- * Project the established account-only admission for any migrating feature. Adapters supply
+ * Project the established account-only admission for any feature. Adapters supply
  * their own bounded login/return URLs; this decision never depends on a browser's session guess.
  * The creation command independently repeats account admission before doing work.
  */
@@ -65,30 +65,29 @@ const LOGIN_TEMPLATE = 'users/login';
 
 /**
  * Build identity-mail destinations for the shared registration/recovery operations.
- * Pilot callers opt into their bounded return destination and encoded query value;
- * native callers retain their established route and literal next spelling.
+ * Frontend callers opt into their bounded return destination and encoded query value;
+ * direct callers retain their established route and literal next spelling.
  */
 function identityLink(path: string, options?: IdentityLinkOptions): string {
-    const prefix = options?.frontend ? '/frontend-pilot' : '';
     const next = options?.next ? (options.frontend ? safeFrontendReturn(options.next) : options.next) : undefined;
-    // Only the opt-in pilot serializes its bounded return destination. Native mail
+    // The frontend option serializes its bounded return destination. Direct mail
     // retains its original literal next parameter and route contract.
-    return `${settings.value.rootUrl}${prefix}${path}${next ? `?next=${options?.frontend ? encodeURIComponent(next) : next}` : ''}`;
+    return `${settings.value.rootUrl}${path}${next ? `?next=${options?.frontend ? encodeURIComponent(next) : next}` : ''}`;
 }
 
 /**
- * Validate registration fields once while retaining native diagnostic order and
- * renderer data. Stable causes let pilot adapters localize the same outcome;
+ * Validate registration fields once while retaining form diagnostic order and
+ * renderer data. Stable causes let frontend adapters localize the same outcome;
  * credentials are never returned as form-error presentation data.
  */
 function validateUserRegistration(body: any) {
-    // Resolve the shared recipient/display name first. Native form errors retain
+    // Resolve the shared recipient/display name first. Form errors retain
     // only username and email; submitted credentials never become render data.
     const {username, displayname, password, password_repeat, email} = body;
     const name = resolveEmailRecipientName(typeof displayname === 'string' ? displayname : undefined, typeof username === 'string' ? username : undefined);
     const returnInfo = {username, email};
 
-    // Required-field diagnostics precede repetition checks, preserving the native
+    // Required-field diagnostics precede repetition checks, preserving the established
     // rejection order for both adapters before either allocates identity records.
     if (!username || !name || !password || !password_repeat || !email) {
         throw new ValidationError(CREATE_TEMPLATE, 'Not all fields were filled out.', returnInfo);
@@ -109,7 +108,7 @@ async function requireAvailableUsername(username: string, email: string, manager
     }
 }
 
-/** Native registration keeps its established persistence, activation and default mail error ordering. */
+/** Registration keeps its established persistence, activation and default mail error ordering. */
 export async function registerUser(body: any, next?: string, options?: IdentityLinkOptions) {
     const {username, name, password, email} = validateUserRegistration(body);
     await requireAvailableUsername(username, email);
@@ -125,7 +124,7 @@ export async function registerUser(body: any, next?: string, options?: IdentityL
 }
 
 /**
- * Prepare a pilot account, default profile and activation token in one registration
+ * Prepare a frontend account, default profile and activation token in one registration
  * transaction. Signup preserves the current actor; only document completion opts
  * into an atomic staged flash write. Tokens remain inside the prepared mail owner.
  */
@@ -135,7 +134,7 @@ export async function registerUserWithSession<Result>(body: any, req: Request,
 
     /** Create the inactive account and prepare all fallible activation/completion work before commit. */
     async function createAccount(manager: EntityManager, session: Request['session']) {
-        // Reuse native validation under this transaction. Database uniqueness
+        // Reuse shared validation under this transaction. Database uniqueness
         // remains authoritative when separate sessions submit the same username.
         await requireAvailableUsername(input.username, input.email, manager);
         const id = await userService.registerUser(input.username, input.name, input.password, input.email, manager);
@@ -153,13 +152,13 @@ export async function registerUserWithSession<Result>(body: any, req: Request,
 }
 
 /**
- * Share credential and activation checks between native and versioned login.
+ * Share credential and activation checks between direct and versioned login.
  * An API caller may recheck its admitted session immediately before identity
  * mutation; only an active account reaches that hook and rotates the context.
- * Native validation prose and renderer values remain owned by this controller.
+ * Shared validation prose and renderer values remain owned by this controller.
  */
 export async function loginUser(body: any, session: Request["session"], options?: IdentityTransitionOptions) {
-    // Credential rejection and inactive-account resend preserve native ordering.
+    // Credential rejection and inactive-account resend preserve operation ordering.
     const user = await resolveLoginUser(body, options);
     await options?.beforeTransition?.();
     await saveAccountIdentity(session, user);
@@ -171,7 +170,7 @@ export async function loginUser(body: any, session: Request["session"], options?
  * established workflow outside an identity transaction that would roll it back.
  */
 async function resolveLoginUser(body: any, options?: IdentityLinkOptions) {
-    // Keep credentials inside this check; rejected native forms redisplay only
+    // Keep credentials inside this check; rejected forms redisplay only
     // the submitted username and retain their common invalid-login diagnostic.
     const {username, password} = body;
     const returnInfo = {username};
@@ -181,7 +180,7 @@ async function resolveLoginUser(body: any, options?: IdentityLinkOptions) {
     }
 
     // Preserve username-first resolution and indistinguishable missing-user /
-    // invalid-password errors, rather than adding another frontend's auth policy.
+    // invalid-password errors.
     const user = await resolveNamedAccount(username);
     if (!user) {
         throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
@@ -213,7 +212,7 @@ async function resolveLoginUser(body: any, options?: IdentityLinkOptions) {
     return user;
 }
 
-/** Native saves immediately; isolated pilot saves defer to their enclosing completion transaction. */
+/** Direct saves immediately; isolated frontend saves defer to their enclosing completion transaction. */
 async function saveAccountIdentity(session: Request['session'], user: User): Promise<void> {
     // Save the validated account/default profile with one new frontend scope.
     // A staged session cannot leak into request autosave if preparation rejects.
@@ -223,7 +222,7 @@ async function saveAccountIdentity(session: Request['session'], user: User): Pro
     await persistSession(session);
 }
 
-/** Complete a validated pilot account login and its transport result in one stored-session commit. */
+/** Complete a validated frontend account login and its transport result in one stored-session commit. */
 export async function loginUserWithSession<Result>(body: any, req: Request,
     options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
     // Resolve credentials/resend before locking, without mutating request authority.
@@ -496,7 +495,7 @@ export async function getOverviewRegion(session: SessionLike, query: unknown): P
  * page is not sufficient authority to save a preference after membership has been removed.
  */
 export function setPersonalVisibility(entityType: string, id: string, body: unknown, session: SessionLike): Promise<PersonalVisibilityResult>;
-/** An explicit adapter completion replaces only the native postcommit presentation read. */
+/** An explicit adapter completion replaces only the default postcommit presentation read. */
 export function setPersonalVisibility<Result>(entityType: string, id: string, body: unknown, session: SessionLike,
     completion: PersonalVisibilityCompletion<Result>): Promise<Result>;
 /** Share admission and membership policy while preparing requested completion under the existing target lock. */
@@ -544,13 +543,13 @@ export async function setPersonalVisibility<Result>(entityType: string, id: stri
     }
     const prepared = await lifecycleService.withLockedArchiveTarget(reference, saveVisibility);
 
-    // The supplied completion has already prepared its exact result. Native
+    // The supplied completion has already prepared its exact result. Direct
     // callers retain their original presentation read after the preference commit.
     if (completion) return prepared as Result;
     return personalVisibilityResult(reference, visibility, session);
 }
 
-/** Project personal placement once, using a supplied transaction or the native ordinary read. */
+/** Project personal placement once, using a supplied transaction or the ordinary read. */
 async function personalVisibilityResult(reference: ArchiveReference, visibility: PersonalVisibility, session: SessionLike,
     manager?: EntityManager): Promise<PersonalVisibilityResult> {
     // Recompute placement against current authoritative state after the private write.
@@ -564,7 +563,7 @@ async function personalVisibilityResult(reference: ArchiveReference, visibility:
     };
 }
 
-/** Share native/pilot recovery mail while keeping an unknown account a quiet
+/** Share direct and guarded recovery mail while keeping an unknown account a quiet
  * no-op. Only the trusted link option selects the destination frontend route. */
 export async function sendPasswordForgotMail(username: string, options?: IdentityLinkOptions) {
     const user = await resolveNamedAccount(username);
@@ -580,19 +579,19 @@ export async function sendPasswordForgotMail(username: string, options?: Identit
     await mailer.sendPasswordResetEmail({name: resolveEmailRecipientName(user.name, user.username), address: user.email}, resetLink);
 }
 
-/** Own native/pilot username-first account resolution, retaining the caller's optional persistence scope. */
+/** Own direct and guarded username-first account resolution, retaining the caller's optional persistence scope. */
 async function resolveNamedAccount(username: string, manager?: EntityManager) {
     // An exact username wins over the email fallback. Locked callers pass the
-    // same manager for both reads; native callers keep their default DBAL scope.
+    // same manager for both reads; direct callers keep their default DBAL scope.
     const user = await userService.getUserByUsername(username, manager);
     return user ?? await userService.getUserByEmail(username, manager);
 }
 
 /**
- * Prepare pilot recovery's existing generic confirmation and optional token/mail
+ * Prepare frontend recovery's existing generic confirmation and optional token/mail
  * on the locked completion transaction. Unknown accounts stay a quiet no-op;
  * setup errors roll back, while caught SMTP failure retains normal confirmation.
- * Native forgot-mail and inactive-login resend keep their original owners/order.
+ * Direct forgot-mail and inactive-login resend keep their original owners/order.
  */
 export async function requestPasswordResetWithSession<Result>(username: string, req: Request,
     options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
@@ -620,14 +619,14 @@ export async function requestPasswordResetWithSession<Result>(username: string, 
     return Object.freeze({session: committed.session, result: committed.result.result});
 }
 
-/** Token-page admission uses the existing verification owner and native message;
+/** Token-page admission uses the existing verification owner and controller message;
  * TOKEN_INVALID supplies the versioned adapter's stable, private-data-free cause. */
 export async function checkPasswordForgotToken(token: string) {
     // Admission and consumption share the same token diagnostic owner.
     await requirePasswordResetToken(token);
 }
 
-/** Preserve the native reset form's mismatch-before-token diagnostic order.
+/** Preserve the reset form's mismatch-before-token diagnostic order.
  * A successful command re-verifies the token before delegating the password write;
  * page admission is not a lasting authorization to submit an expired token. */
 export async function resetPassword(token: string, body: any) {
@@ -640,7 +639,7 @@ export async function resetPassword(token: string, body: any) {
     await userService.resetPassword(user.username, password);
 }
 
-/** Preserve the native mismatch-before-token check and renderer data for both completion paths. */
+/** Preserve the mismatch-before-token check and renderer data for both completion paths. */
 function validatePasswordResetInput(token: string, body: any) {
     const {password, confirmPassword} = body;
     if (password !== confirmPassword) {
@@ -649,10 +648,10 @@ function validatePasswordResetInput(token: string, body: any) {
     return password;
 }
 
-/** Share reset-token diagnostics; only a locked pilot read rechecks expiry after its wait. */
+/** Share reset-token diagnostics; only a locked frontend read rechecks expiry after its wait. */
 async function requirePasswordResetToken(token: string, manager?: EntityManager, lock = false) {
     const user = await userService.verifyPasswordResetToken(token, manager, lock);
-    // Native queries retain their existing expiry predicate. A pilot lock can
+    // Ordinary queries retain their existing expiry predicate. A frontend lock can
     // wait past that query timestamp, so validate its returned expiry again.
     if (!user || lock && (!user.resetTokenExpiration || user.resetTokenExpiration <= new Date())) {
         throw new ExpectedError('Invalid or expired token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
@@ -661,8 +660,8 @@ async function requirePasswordResetToken(token: string, manager?: EntityManager,
 }
 
 /**
- * Consume a pilot reset capability exactly once with its prepared API/document
- * completion. Native reset remains unchanged above. The session/token locks and
+ * Consume a frontend reset capability exactly once with its prepared API/document
+ * completion. Direct reset remains unchanged above. The session/token locks and
  * password update share one manager; unchanged actor state needs no JSON write.
  */
 export async function resetPasswordWithSession<Result>(token: string, body: any, req: Request,
@@ -680,7 +679,7 @@ export async function resetPasswordWithSession<Result>(token: string, body: any,
 }
 
 /** Activation submission verifies current token evidence again before the shared
- * account write. The native literal error and versioned stable cause stay distinct. */
+ * account write. The controller literal error and versioned stable cause stay distinct. */
 export async function activateAccount(token: string) {
     // Überprüfe, ob der Aktivierungs-Token gültig ist
     const user = await userService.verifyActivationToken(token);
@@ -693,8 +692,8 @@ export async function activateAccount(token: string) {
 }
 
 /**
- * Commit a pilot token consumption with its prepared API/document completion.
- * Session and token locks share one connection; native activation keeps its
+ * Commit a frontend token consumption with its prepared API/document completion.
+ * Session and token locks share one connection; direct activation keeps its
  * original owner above. No mutable-context check, flash save or token projection
  * follows this commit, and the public receipt never contains the capability.
  */
@@ -744,7 +743,7 @@ export async function logoutUserOidc(session: Request['session']) {
 }
 
 /**
- * Complete only ordinary pilot logout on fresh locked session evidence. Every
+ * Complete only ordinary frontend logout on fresh locked session evidence. Every
  * truthy token object belongs to the existing provider workflow, including an
  * empty object; its preparation/failure ordering is deliberately untouched.
  * Anonymous authority and the prepared completion share this operation's commit.
@@ -766,7 +765,7 @@ export async function logoutUserWithSession<Result>(req: Request,
 }
 
 // Guests
-/** Replace guest authority and rotate its scope identically for native and guarded transitions. */
+/** Replace guest authority and rotate its scope identically for direct and guarded transitions. */
 function setGuestIdentity(session: Request['session'], guest: Guest): void {
     session.auth = {guest};
     session.profile = guest.profile;
@@ -775,7 +774,7 @@ function setGuestIdentity(session: Request['session'], guest: Guest): void {
 
 /**
  * Resolve a private guest login token before replacing the active identity. An API
- * caller rechecks its captured context after the lookup; native callers keep the
+ * caller rechecks its captured context after the lookup; direct callers keep the
  * same invalid-token diagnostic and session persistence without that extra guard.
  */
 export async function loginGuest(guestId: string, token: string, session: Request["session"], options?: IdentityTransitionOptions,
@@ -796,7 +795,7 @@ export async function loginGuest(guestId: string, token: string, session: Reques
 /** Reuse guest-token admission under the locked completion transaction, without a second connection. */
 export async function loginGuestWithSession<Result>(guestId: string, token: string, req: Request,
     options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
-    /** Native validation/authority logic runs only on isolated staging until its result is ready. */
+    /** Shared validation/authority logic runs only on isolated staging until its result is ready. */
     async function prepareGuestLogin(manager: EntityManager, session: Request['session']): Promise<Result> {
         await loginGuest(guestId, token, session, undefined, manager);
         return options.prepareResult(session, manager);
@@ -804,26 +803,26 @@ export async function loginGuestWithSession<Result>(guestId: string, token: stri
     return commitIdentityCompletion(req, options.context, prepareGuestLogin, true);
 }
 
-/** Normalize the common registration input without changing native name/email acceptance. */
+/** Normalize the common registration input without changing name/email acceptance. */
 function normalizeGuestContact(username: string, email: string | undefined): string | undefined {
     if (!username) throw new ValidationError('users/register-guest', 'Username required', {username, email});
     return email?.trim().toLowerCase();
 }
 
 /**
- * Preserve native feature registration and its injectable persistence hook. The
+ * Preserve shared feature registration and its injectable persistence hook. The
  * guarded versioned workflow below uses this same input and guest/profile DBAL,
  * but owns atomic stored-session persistence and an immutable completion receipt.
  */
 export async function registerGuest(username: string, email: string | undefined, session: Request['session'],
     options?: IdentityLinkOptions, createGuest: typeof userService.createGuest = userService.createGuest): Promise<string> {
-    // Native factories supply their existing creator; preserve its ordering and
-    // link destination options without introducing a new native transaction scope.
+    // Direct callers supply their existing creator; preserve its ordering and
+    // link destination options without introducing a new transaction scope.
     const normalizedEmail = normalizeGuestContact(username, email);
 
     const guest = await createGuest(username, normalizedEmail);
 
-    // Persist native authority before delivering its existing private link/mail.
+    // Persist session authority before delivering its existing private link/mail.
     // The atomic API operation never enters this post-creation session-save path.
     setGuestIdentity(session, guest);
     await persistSession(session);
@@ -898,7 +897,7 @@ async function settleIdentityDelivery(receipt: PreparedIdentityEmail): Promise<b
 }
 
 /**
- * Prepare a captured pilot identity operation on fresh locked session evidence.
+ * Prepare a captured frontend identity operation on fresh locked session evidence.
  * Callbacks own business checks and completion data; DBAL owns the transaction.
  * Original request authority stays untouched until a successful adapter adopts
  * the receipt, preventing Express autosave from leaking rolled-back state.
@@ -951,7 +950,7 @@ async function commitIdentityCompletion<Result>(req: Request, context: string | 
 
 /**
  * Deliver every matching guest's existing recovery link through the selected
- * native or pilot destination. An unknown email remains a quiet no-op; this
+ * direct or bounded frontend destination. An unknown email remains a quiet no-op; this
  * operation neither creates identities nor exposes recovery tokens in its reply.
  */
 export async function recoverGuestAccount(email: string, options?: IdentityLinkOptions) {
@@ -983,9 +982,9 @@ export async function getMigrationToken(profileId: string) {
     return await userService.generateMigrationToken(profileId);
 }
 
-/** Resolve the native migration capability before any transfer. Its stable rejection
+/** Resolve the migration capability before any transfer. Its stable rejection
  * cause lets JSON distinguish an invalid token from an already entered transfer,
- * while native routes retain the same status, message and validation order. */
+ * while direct entry points retain the same status, message and validation order. */
 export async function getProfileToMigrate(token: string) {
     const profile = await userService.verifyMigrationToken(token);
     if (!profile) {
@@ -996,11 +995,11 @@ export async function getProfileToMigrate(token: string) {
 
 export function migrateProfile(userId: number, token: string): Promise<string>;
 export function migrateProfile(userId: number, token: string, presentation: 'facts'): Promise<ProfileOwnerCleanup>;
-/** Transfer and notify through the existing shared workflow. Native callers keep
+/** Transfer and notify through the existing shared workflow. Direct callers keep
  * their exact prose; the API requests cleanup facts without parsing that prose or
  * repeating a read, persistence operation or mail side effect. */
 export async function migrateProfile(userId: number, token: string, presentation?: 'facts'): Promise<string | ProfileOwnerCleanup> {
-    // Keep capability validation, transfer and notification in their native order.
+    // Keep capability validation, transfer and notification in their established order.
     const profile = await getProfileToMigrate(token);
     const previousOwner = await userService.moveProfileToUserTx(profile.id, userId);
     if (previousOwner?.email) {
@@ -1034,7 +1033,7 @@ async function handlePreviousProfileOwner(previousOwner?: User | Guest): Promise
     return 'none';
 }
 
-/** Native callers retain the original English suffix, including its empty value.
+/** Direct callers retain the original English suffix, including its empty value.
  * Only the existing controller's semantic result selects this presentation. */
 function profileOwnerCleanupMessage(cleanup: ProfileOwnerCleanup): string {
     if (cleanup === 'account-deleted') return 'Previous user account permanently deleted!';
@@ -1042,7 +1041,7 @@ function profileOwnerCleanupMessage(cleanup: ProfileOwnerCleanup): string {
     return '';
 }
 
-/** Verify the native typed username before selecting the existing account or
+/** Verify the typed username before selecting the existing account or
  * guest deletion workflow, including its mail and provider/logout completion. */
 export async function deleteAccount(body: any, session: Request['session']) {
     const {username} = body;
@@ -1088,7 +1087,7 @@ export async function deleteGuest(session: Request['session']) {
 
 export function deactivateProfile(body: any, session: Request['session']): Promise<string>;
 export function deactivateProfile(body: any, session: Request['session'], presentation: 'facts'): Promise<ProfileOwnerCleanup>;
-/** Preserve native confirmation, ownership removal and former-owner cleanup.
+/** Preserve confirmation, ownership removal and former-owner cleanup.
  * The optional API projection reports facts after the same completed sequence;
  * default callers retain their exact original string and trailing empty suffix. */
 export async function deactivateProfile(body: any, session: Request['session'], presentation?: 'facts'): Promise<string | ProfileOwnerCleanup> {
@@ -1112,7 +1111,7 @@ export async function deactivateProfile(body: any, session: Request['session'], 
 /**
  * Select an account-owned profile, or its existing default, before replacing the
  * active profile. The optional API guard rechecks the originally admitted context
- * after persistence reads; native selection and diagnostics remain unchanged.
+ * after persistence reads; profile selection and diagnostics remain unchanged.
  */
 export async function changeActiveProfile(session: Request['session'], profileId?: string, beforeTransition?: () => Promise<void>,
     manager?: EntityManager) {
@@ -1145,7 +1144,7 @@ export async function changeActiveProfile(session: Request['session'], profileId
     await persistSession(session);
 }
 
-/** Commit an account-owned profile selection with its prepared pilot completion, preserving native rules. */
+/** Commit an account-owned profile selection with its prepared frontend completion, preserving shared rules. */
 export async function changeActiveProfileWithSession<Result>(profileId: string, req: Request,
     options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
     /** Keep profile ownership reads and the eventual session write on the same locked manager. */
@@ -1190,7 +1189,7 @@ export async function validateSession(session: Request['session']) {
     return ok;
 }
 
-/** Retain native blank-name validation, optional rename and default selection,
+/** Retain blank-name validation, optional rename and default selection,
  * then reload the saved active profile before persisting the session copy. */
 export async function updateProfile(body: any, session: Request['session']) {
     const {name, isDefault} = body;
@@ -1218,7 +1217,7 @@ export async function getProfilesForUser(userId: number) {
  * selection and session changes remain with their existing separate workflows. */
 export async function createProfile(body: any, userId: number) {
     const {name} = body;
-    // Keep submitted form data on native rejection without entering persistence.
+    // Keep submitted form data on form rejection without entering persistence.
     if (name?.trim()?.length === 0) {
         throw new ValidationError("users/profile/create", "Invalid profile name", body, {cause: 'PROFILE_NAME_REQUIRED'});
     }
@@ -1250,7 +1249,7 @@ export async function getIdentityProfiles(session: SessionLike): Promise<compone
 }
 
 /**
- * Project the unchanged native capability preview for an admitted full account.
+ * Project the shared capability preview for an admitted full account.
  * Invalid capability presentation is distinct from loss of the viewing session;
  * this read never consumes the token or changes ownership/previous-owner cleanup.
  */
@@ -1262,14 +1261,14 @@ export async function getProfileMigrationPreview(session: SessionLike, token: st
     try {
         profile = await getProfileToMigrate(token);
     } catch (error) {
-        // The native read's known invalid-token result owns a full 401 message,
+        // The shared read's known invalid-token result owns a full 401 message,
         // not authentication loss. Preserve that presentation without clearing an
         // otherwise valid account or interpreting arbitrary exception prose.
         if (!(error instanceof ExpectedError) || error.status !== 401) throw error;
         return {kind: 'denied', status: 401, messageKey: 'profile.invalidMigrationToken'};
     }
 
-    // Token holders see exactly the existing native preview fields. Never expose
+    // Token holders see exactly the existing preview fields. Never expose
     // ORM account credentials, private guest links or unrelated relationships.
     const owner = profile.user ? {kind: 'account' as const, name: profile.user.name,
         username: profile.user.username, email: profile.user.email}
@@ -1277,15 +1276,15 @@ export async function getProfileMigrationPreview(session: SessionLike, token: st
     return {kind: 'preview', token: profile.migrationToken!, profile: {id: profile.id, name: profile.name, owner}};
 }
 
-/** Share native-document and mounted-navigation admission without returning private fields. */
+/** Share document and mounted-navigation admission without returning private fields. */
 export function getProfileAdministrationEntry(session: SessionLike,
     view: operations['getProfileAdministrationEntry']['parameters']['query']['view'], returnTo?: unknown): components['schemas']['PageEntryOutcome'] {
     // A guest remains a valid identity when a full-account page redirects to login.
     // The adapter supplies the view; the established account owner decides admission.
-    const destination = safeFrontendReturn(returnTo ?? `/frontend-pilot/users/profile${view === 'edit' ? '' : `/${view}`}`);
-    if (view !== 'edit') return getAccountPageEntry(session, '/frontend-pilot/users/login', destination);
+    const destination = safeFrontendReturn(returnTo ?? `/users/profile${view === 'edit' ? '' : `/${view}`}`);
+    if (view !== 'edit') return getAccountPageEntry(session, '/users/login', destination);
     return session.profile ? {kind: 'render'}
-        : {kind: 'redirect', url: `/frontend-pilot/users/login?next=${encodeURIComponent(destination)}`, notice: null};
+        : {kind: 'redirect', url: `/users/login?next=${encodeURIComponent(destination)}`, notice: null};
 }
 
 /** Read-only workflow admission; selecting a page never issues or consumes its capability. */
@@ -1297,7 +1296,7 @@ export function getProfileWorkflowEntry(session: SessionLike,
     return {entry: getProfileAdministrationEntry(session, view, returnTo)};
 }
 
-/** Preserve native account/guest admission without a second identity or session owner. */
+/** Preserve account/guest admission without a second identity or session owner. */
 function requireProfileWorkflow(session: SessionLike, accountOnly: boolean): void {
     if (!session.profile || !(session.auth?.user || session.auth?.guest)) throw new ApiProblem('AUTH_REQUIRED');
     if (accountOnly && !session.auth?.user) throw new ApiProblem('FORBIDDEN');
@@ -1322,7 +1321,7 @@ export async function requestProfileMigrationToken(session: SessionLike): Promis
 function profileWorkflowCompletion(req: Request, destination: string, messageKey: MessageKey, redirect: string | null = null):
     components['schemas']['ProfileWorkflowCompletion'] {
     // Explicit selection/logout rotates a complete metadata pair. A transfer
-    // preserves the admitted actor, including read-only legacy fallback when a
+    // preserves the admitted actor, including read-only stored-data fallback when a
     // stored generation is partial. Its raw context alone is not that actor's scope.
     const completeContext = req.session.frontendContext && req.session.frontendCsrfToken
         ? req.session.frontendContext : req.apiActor?.context ?? null;
@@ -1331,7 +1330,7 @@ function profileWorkflowCompletion(req: Request, destination: string, messageKey
 }
 
 // Complete catalog messages preserve each confirmed cleanup detail without
-// concatenating translated fragments or inspecting legacy English response text.
+// concatenating translated fragments or inspecting unstructured English response text.
 const profileWorkflowNoticeKeys = {
     migration: {none: 'profile.migrationCompleted', 'account-deleted': 'profile.migrationCompletedAccountDeleted',
         'guest-deleted': 'profile.migrationCompletedGuestDeleted'},
@@ -1343,10 +1342,10 @@ const profileWorkflowNoticeKeys = {
 export async function executeIdentityProfileMigration(req: Request, token: string): Promise<components['schemas']['ProfileWorkflowCompletion']> {
     requireProfileWorkflow(req.apiActor!, true);
     try {
-        // The native owner validates the capability before moving the profile,
+        // The shared owner validates the capability before moving the profile,
         // then performs its established mail and previous-owner cleanup sequence.
         const cleanup = await migrateProfile(req.apiActor!.auth!.user!.id, token, 'facts');
-        return profileWorkflowCompletion(req, '/frontend-pilot/users/profile/manage', profileWorkflowNoticeKeys.migration[cleanup]);
+        return profileWorkflowCompletion(req, '/users/profile/manage', profileWorkflowNoticeKeys.migration[cleanup]);
     } catch (error) {
         // Only the shared owner's explicitly annotated initial token rejection
         // proves no transfer occurred. Every later failure may be partial work.
@@ -1360,11 +1359,11 @@ export async function deactivateIdentityProfile(req: Request, body: components['
     Promise<components['schemas']['ProfileWorkflowCompletion']> {
     requireProfileWorkflow(req.apiActor!, true);
     try {
-        // Confirmation validation is the native operation's first step. Its
+        // Confirmation validation is the shared operation's first step. Its
         // existing separate deactivation and selection commits remain unchanged.
         const cleanup = await deactivateProfile(body, req.session, 'facts');
         await changeActiveProfile(req.session);
-        return profileWorkflowCompletion(req, '/frontend-pilot/users/profile/manage', profileWorkflowNoticeKeys.deactivation[cleanup]);
+        return profileWorkflowCompletion(req, '/users/profile/manage', profileWorkflowNoticeKeys.deactivation[cleanup]);
     } catch (error) {
         if (error instanceof ValidationError) throw error;
         // In particular, the inherited last-profile 400 occurs after mutation;
@@ -1381,7 +1380,7 @@ export async function deleteIdentityAccount(req: Request, body: components['sche
         // The existing owner supplies the real provider/root destination. Do not
         // preflight or replace that workflow with a new session transaction.
         const redirect = await deleteAccount(body, req.session);
-        return profileWorkflowCompletion(req, '/frontend-pilot', 'profile.accountDeleted',
+        return profileWorkflowCompletion(req, '/', 'profile.accountDeleted',
             redirect === settings.value.rootUrl ? null : redirect);
     } catch (error) {
         if (error instanceof ValidationError) throw error;

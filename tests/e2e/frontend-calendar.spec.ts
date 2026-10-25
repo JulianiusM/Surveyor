@@ -2,9 +2,10 @@ import {expect, test, type Locator, type Page, type TestInfo} from '@playwright/
 import type {components} from '../../src/types/api/v1';
 import type {Locale} from '../../src/types/LocalizationTypes';
 import {createTranslator} from '../../src/modules/localization/translator';
-import {captureActivityPresentation, waitForNativeActivityPane} from '../keywords/frontendActivityE2EKeywords';
+import {captureActivityPresentation} from '../keywords/frontendActivityE2EKeywords';
+import {updateEntityMetadataForE2E} from '../keywords/e2eCoreKeywords';
 import {createAdvancedActivityForE2E, readActivityRecommendationsForE2E} from '../keywords/frontendActivityAdvancedE2EKeywords';
-import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
+import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
 import {frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 
 // Each real DST weekend also crosses Monday. The explicit expected days/groups
@@ -68,21 +69,21 @@ async function expectActivityCalendar(surface: Locator, range: CalendarRange, wo
         createTranslator(locale).t('activity.weekOf', {date: week.start})));
 }
 
-/** Inspect native diagnostic originals and the built Vue creation/detail/review
- * consumers using the same saved plan. No parity projection changes date text;
- * the approved correction is asserted independently on the real Vue surfaces. */
+/** Inspect built creation/detail/review consumers using the same saved plan.
+ * Explicit expectations retain the approved calendar correction independently
+ * of the finite recorded native screenshot baseline. */
 async function inspectActivityCalendars(page: Page, info: TestInfo, fixture: CalendarFixture,
     range: CalendarRange, wording: CalendarWording, locale: Locale): Promise<void> {
-    for (const pilot of [false, true]) {
-        const prefix = pilot ? 'vue' : 'native';
-        const path = `${pilot ? '/frontend-pilot' : ''}${fixture.path}`;
+    {
+        const prefix = 'vue';
+        const path = fixture.path;
         // A clean copied form exercises the actual creation renderer without
         // introducing another persisted plan or accepting a dirty departure.
         await page.goto(`${path}/duplicate?locale=${locale}`, {waitUntil: 'domcontentloaded'});
-        if (pilot) await waitForPilotHydration(page);
+        await waitForFrontendHydration(page);
         await expect(page.locator('#slotArea th').first()).toBeVisible();
         const creation = page.locator('#slotArea');
-        if (pilot) {
+        {
             await expect(page.locator('#startDate')).toHaveValue(range.days[0]);
             await expect(page.locator('#endDate')).toHaveValue(range.days[2]);
             await expect(creation.locator('.slot')).toHaveCount(fixture.view.slots.length);
@@ -91,21 +92,18 @@ async function inspectActivityCalendars(page: Page, info: TestInfo, fixture: Cal
         await captureActivityPresentation(page, info, `${prefix}-calendar-creation`, creation, ['th', 'label', 'input', 'button']);
 
         await page.goto(`${path}?locale=${locale}`, {waitUntil: 'domcontentloaded'});
-        if (pilot) await waitForPilotHydration(page);
+        await waitForFrontendHydration(page);
         const schedule = page.locator('#tab-schedule');
-        if (!pilot) await waitForNativeActivityPane(schedule);
         await expect(schedule.locator('.slot')).toHaveCount(fixture.view.slots.length);
-        if (pilot) await expectActivityCalendar(schedule, range, wording, locale);
+        await expectActivityCalendar(schedule, range, wording, locale);
         await captureActivityPresentation(page, info, `${prefix}-calendar-detail`, schedule, ['h4', 'th', '.slot', 'small', '.badge']);
 
         // Existing page entry prepares recommendations once. Merely reading
         // these calendars must not press Auto or submit a recommendation batch.
-        if (pilot) await page.getByRole('tab', {name: createTranslator(locale).t('activity.rules'), exact: true}).click();
-        else await page.locator('[data-bs-target="#tab-rules"]').click();
-        if (!pilot) await waitForNativeActivityPane(page.locator('#tab-rules'));
+        await page.getByRole('tab', {name: createTranslator(locale).t('activity.rules'), exact: true}).click();
         const recommendations = page.locator('#recommendationScheduleView');
         await expect(recommendations.locator('[data-rec-id]')).toHaveCount(1);
-        if (pilot) {
+        {
             await expectActivityCalendar(recommendations, range, wording, locale);
             await expect(recommendations.locator('[data-rec-id]')).toHaveAttribute('data-slot-id', fixture.view.slots[1]!.id);
             await expect(recommendations.locator('[data-rec-id]')).toContainText(fixture.other.name);
@@ -120,19 +118,13 @@ async function inspectActivityCalendars(page: Page, info: TestInfo, fixture: Cal
  * local timestamp formatter instead of accidentally adopting civil-date UTC. */
 async function inspectEventCalendar(page: Page, info: TestInfo, fixture: CalendarFixture, range: CalendarRange,
     wording: CalendarWording, locale: Locale, link: components['schemas']['EventRegistrationLink']): Promise<void> {
-    for (const pilot of [false, true]) {
-        await page.goto(`${pilot ? '/frontend-pilot' : ''}${fixture.event.path}?locale=${locale}`, {waitUntil: 'domcontentloaded'});
-        if (pilot) await waitForPilotHydration(page);
-        else {
-            // Native loads its formatter after SSR. Keep the untouched settled
-            // original rather than capturing its temporary raw ISO placeholder.
-            await expect(page.locator('#startSpan')).not.toHaveText(range.days[0]);
-            await expect(page.locator('#arrival')).not.toHaveText(range.days[0]);
-        }
+    {
+        await page.goto(`${fixture.event.path}?locale=${locale}`, {waitUntil: 'domcontentloaded'});
+        await waitForFrontendHydration(page);
         const participants = page.locator('.event-participants');
         await participants.locator('.accordion-button').click();
         await expect(participants.locator('tbody .fw-semibold')).toHaveCount(2);
-        if (pilot) {
+        {
             await expect(page.locator('html')).toHaveAttribute('lang', locale);
             const summary = page.locator('main dl').first();
             await expect(summary.locator('dd').first()).toHaveText(wording.days[0]!.full + '→' + wording.days[2]!.full);
@@ -149,12 +141,12 @@ async function inspectEventCalendar(page: Page, info: TestInfo, fixture: Calenda
         }
         // One full Event original includes the summary, saved attendance and
         // disclosed roster; separate screenshots would repeat the same content.
-        await captureActivityPresentation(page, info, `${pilot ? 'vue' : 'native'}-calendar-event`, page.locator('main'),
+        await captureActivityPresentation(page, info, 'vue-calendar-event', page.locator('main'),
             ['dt', 'dd', '#arrival', '#departure', 'input[type="date"]', 'th', 'tbody td']);
     }
 
-    await page.goto(`/frontend-pilot${fixture.event.path}/admin?locale=${locale}`, {waitUntil: 'domcontentloaded'});
-    await waitForPilotHydration(page);
+    await page.goto(`${fixture.event.path}/admin?locale=${locale}`, {waitUntil: 'domcontentloaded'});
+    await waitForFrontendHydration(page);
     const links = page.locator('.reg-links');
     await links.locator('.accordion-button').click();
     const row = links.locator(`[data-link-id="${link.id}"]`);
@@ -182,9 +174,9 @@ for (const range of calendarRanges) {
                     expect(fixture.view.weeks).toEqual(range.weeks);
                     expect(fixture.view.slots.every(slot => slot.day === range.days[0])).toBe(true);
                     const headers = await frontendEventHeaders(page.request);
-                    expect((await page.request.post(`/api/event/${fixture.event.id}/update`, {data: {
+                    await updateEntityMetadataForE2E(page.request, 'events', fixture.event.id, {
                         bindingDeadline: range.days[1] + 'T01:30', deadlineTz: 'Europe/Berlin',
-                    }})).status()).toBe(200);
+                    });
                     expect((await page.request.post(`/api/v1/events/${fixture.event.id}/links`, {headers,
                         data: {maxUses: 1, expiresAt: range.days[1] + 'T00:45:00.000Z'}})).status()).toBe(200);
                     const detail = await page.request.get(`/api/v1/events/${fixture.event.id}`, {headers});

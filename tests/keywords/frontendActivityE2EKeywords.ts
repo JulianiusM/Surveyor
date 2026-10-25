@@ -5,11 +5,10 @@ import type {components} from '../../src/types/api/v1';
 import type {Locale} from '../../src/types/LocalizationTypes';
 import {createTranslator} from '../../src/modules/localization/translator';
 import {createE2EActivityPlan, createE2ELogin} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, loginForE2E, projectCreationPermissionDisclosure, readVisiblePresentation, expectUsableFrontendLayout} from './e2eCoreKeywords';
+import {commandHeadersForE2E, createResourceViaForm, loginForE2E, projectCreationPermissionDisclosure, readVisiblePresentation, expectUsableFrontendLayout} from './e2eCoreKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from './frontendEventE2EKeywords';
 
-/** Create production records through the unchanged native form. The resulting
- * actor and records are shared by the native comparator and built Vue routes. */
+/** Create persisted Activity inputs through the admitted production operations. */
 export async function createActivityForE2E(request: APIRequestContext, eventId?: string,
     period: Pick<components['schemas']['ActivityCreateInput'], 'startDate' | 'endDate'> = {startDate: '2030-06-01', endDate: '2030-06-02'}) {
     await loginForE2E(request, createE2ELogin());
@@ -28,8 +27,7 @@ export async function createActivityForE2E(request: APIRequestContext, eventId?:
     return {...resource, view: await readActivityForE2E(request, resource.id)};
 }
 
-/** Read only the bounded Activity projection. Native recommendation entry can
- * perform maintenance/enqueue work and is deliberately absent from these P5 fixtures. */
+/** Read the bounded Activity projection without starting recommendation work. */
 export async function readActivityForE2E(request: APIRequestContext, planId: string): Promise<components['schemas']['ActivityView']> {
     const response = await request.get(`/api/v1/activity-plans/${planId}`, {headers: await frontendEventHeaders(request)});
     expect(response.status()).toBe(200);
@@ -54,22 +52,14 @@ export async function observeActivityCommand(page: Page, planId: string, suffix:
     expect((await response).status()).toBe(status);
 }
 
-/** Native Bootstrap panes become measurable before their fade is painted.
- * Compare only the actually shown, fully opaque pane after tab activation. */
-export async function waitForNativeActivityPane(pane: Locator): Promise<void> {
-    await expect(pane).toHaveClass(/\bshow\b/u);
-    await expect(pane).toHaveCSS('opacity', '1');
-}
-
-/** Exercise the same real keyboard journey in both renderers. Page keys retain
+/** Exercise the real keyboard journey. Page keys retain
  * browser scrolling, while Bootstrap's six tab keys wrap and activate in place. */
 export async function expectActivityTabKeyboard(page: Page): Promise<void> {
     const tabs = page.locator('main .nav-tabs [role="tab"]');
     const count = await tabs.count();
     expect(count).toBeGreaterThan(1);
-    // Keyboard entry starts at the selected roving tab. Focusing an inactive
-    // native tab before its load-time initializer runs can bypass its real owner;
-    // the selected Rules tab was already activated through the actual click.
+    // Keyboard entry starts at the selected roving tab, after its actual click
+    // has activated the associated panel.
     await page.locator('main .nav-tabs [role="tab"][aria-selected="true"]').evaluate(element => (element as HTMLElement).focus({preventScroll: true}));
     // Opening Rules may already have started Bootstrap's smooth scrolling, and
     // Vue renders its focus-selected panel asynchronously. Observe the actual
@@ -100,12 +90,10 @@ export async function expectActivityTabKeyboard(page: Page): Promise<void> {
         const selected = tabs.nth(step.index);
         await expect(selected).toBeFocused();
         await expect(selected).toHaveAttribute('aria-selected', 'true');
-        // Native Bootstrap declares its panel through data-bs-target. Vue's
-        // shared tab owner declares aria-controls; require its explicit link.
-        const nativeTarget = await selected.getAttribute('data-bs-target');
+        // The shared tab owner declares its selected panel explicitly.
         const controls = await selected.getAttribute('aria-controls');
-        if (!nativeTarget) expect(controls).toBeTruthy();
-        const target = nativeTarget ?? '#' + controls;
+        expect(controls).toBeTruthy();
+        const target = '#' + controls;
         expect(target).toMatch(/^#tab-(?:schedule|participants|rules)$/u);
         await expect(page.locator(target)).toBeVisible();
         // Page keys keep the browser's default scroll, which may still settle
@@ -114,11 +102,10 @@ export async function expectActivityTabKeyboard(page: Page): Promise<void> {
     }
 }
 
-/** Retain an inspectable screenshot and complete visible text/control measures.
- * The caller compares corresponding same-actor native and Vue surfaces. */
+/** Retain an inspectable screenshot and complete visible text/control measures. */
 export async function captureActivityPresentation(page: Page, info: TestInfo, name: string, surface: Locator,
     selectors: string[], creation = false) {
-    if (new URL(page.url()).pathname.startsWith('/frontend-pilot')) await expectUsableFrontendLayout(surface);
+    await expectUsableFrontendLayout(surface);
     await page.evaluate(() => document.fonts.ready);
     await page.evaluate(function releaseFocus() {
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -134,65 +121,34 @@ export async function captureActivityPresentation(page: Page, info: TestInfo, na
     return creation ? projectCreationPermissionDisclosure(surface, measured) : measured;
 }
 
-/** Preserve raw schedule evidence and verify R9's approved total separately.
- * Bootstrap hides native's empty badge. After asserting the real visible Vue
- * total, omit only that added node from the comparison value. The live DOM and
- * artifacts stay untouched; all other text, controls and styles stay covered. */
+/** Preserve the raw schedule and assert its visible saved-slot total. */
 export async function captureActivitySchedulePresentation(page: Page, info: TestInfo, name: string,
     surface: Locator, total: number) {
     const selectors = ['h4', 'th', 'small', 'strong', '.badge', '[data-count]', '[data-max]', '.slot', 'button', 'a'];
     const measured = await captureActivityPresentation(page, info, name, surface, selectors);
     const badge = surface.locator('.fs-6').filter({has: page.locator('.bi-card-checklist')}).locator('.badge').first();
-    const pilot = new URL(page.url()).pathname.startsWith('/frontend-pilot');
-    await expect(badge).toHaveText(pilot ? String(total) : '');
-    if (!pilot) return measured;
+    await expect(badge).toHaveText(String(total));
     await expect(badge).toBeVisible();
-
-    // Find this exact visible node in the measured selector order. No other
-    // empty badge, number or feature text becomes a comparator exception.
-    const index = await surface.evaluate(function totalBadgeIndex(root, selectors) {
-        const badge = root.querySelector('.bi-card-checklist')?.closest('span')?.querySelector('.badge');
-        return Array.from(root.querySelectorAll<HTMLElement>(selectors.join(',')))
-            .filter(node => node.checkVisibility({opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true}))
-            .indexOf(badge as HTMLElement);
-    }, selectors);
-    expect(index).toBeGreaterThanOrEqual(0);
-    expect(measured.content.elements[index]!.text).toBe(String(total));
-    const label = createTranslator('en').t('activity.slots') + total;
-    expect(measured.content.text.split(label)).toHaveLength(2);
-
-    return {...measured, content: {...measured.content,
-        text: measured.content.text.replace(label, createTranslator('en').t('activity.slots')),
-        elements: measured.content.elements.filter((_element, current) => current !== index)},
-        geometry: measured.geometry.filter((_rectangle, current) => current !== index + 1)};
+    return measured;
 }
 
-/** Keep raw creation evidence while comparing the approved R4/R6 label addition.
- * Native IMP-017 remains open: only Vue's five validated initial-slot label nodes
- * are projected out of the comparator. Controls, constraints, paint and all other
- * text remain covered; the live document and saved evidence are never rewritten. */
+/** Keep complete creation evidence and verify the five visible initial-slot
+ * labels, their exact control associations and localized removal action. */
 export async function captureActivityCreationPresentation(page: Page, info: TestInfo, name: string, surface: Locator,
     locale: Locale = 'en') {
     const selectors = ['label', 'input:not([type="hidden"])', 'textarea', 'select', 'th', 'td', 'button'];
     const measured = await captureActivityPresentation(page, info, name, surface, selectors, true);
-    if (!new URL(page.url()).pathname.startsWith('/frontend-pilot')) return measured;
 
     const messages = createTranslator(locale);
     const labels = [messages.t('packing.title') + ' *', messages.t('packing.description'),
         messages.t('activity.startTime'), messages.t('activity.endTime'), messages.t('activity.maxParticipants')];
-    const projection = await surface.evaluate(function compareInitialSlotLabels(element, expected) {
+    const failures = await surface.evaluate(function inspectInitialSlotLabels(element, expected) {
         const root = element as HTMLElement;
         const failures: string[] = [];
-        const omitted = new Set<HTMLElement>();
-        // Its separate shared projection already checked the opened disclosure.
-        // Retain the same exact heading exception while reviewing slot labels.
-        const permissionHeading = root.querySelector<HTMLElement>('[data-creation-permissions] .accordion-header');
-        if (permissionHeading) omitted.add(permissionHeading);
         const slots = root.querySelectorAll<HTMLElement>('#slotArea .slot');
         if (!slots.length) failures.push('No initial slot to review');
 
-        // Admit only the exact added field set. An extra, hidden or incorrectly
-        // associated label is a failure, never another comparator exception.
+        // Every initial field has exactly one readable label inside its slot.
         for (const slot of slots) {
             const controls = slot.querySelectorAll<HTMLInputElement>('input');
             if (controls.length !== 5 || slot.querySelectorAll('label').length !== 5) {
@@ -213,68 +169,68 @@ export async function captureActivityCreationPresentation(page: Page, info: Test
                     || label.classList.contains('visually-hidden') || box.width <= 0 || box.height <= 0
                     || box.left < boundary.left - 1 || box.right > boundary.right + 1
                     || label.scrollWidth > label.clientWidth + 1) failures.push(`Unreadable initial-slot label ${index + 1}`);
-                omitted.add(label);
             }
             const remove = slot.querySelectorAll('button');
             if (remove.length !== 1 || remove[0]!.getAttribute('aria-label') !== expected.removeLabel)
                 failures.push('Initial slot removal must keep its localized accessible name');
         }
 
-        /** Read complete unaffected subtrees through their original innerText.
-         * Descend only around the exact admitted label nodes, retaining every
-         * other text subtree and block separation without matching label words. */
-        function comparisonText(current: HTMLElement): string {
-            if (omitted.has(current)) return '';
-            if (!Array.from(omitted).some(label => current.contains(label))) return current.innerText;
-            // Only a containing ancestor needs decomposition. Unaffected child
-            // subtrees keep the browser's original rendered text as one piece.
-            const parts: string[] = [];
-            for (const child of current.childNodes) {
-                if (child instanceof HTMLElement) parts.push(comparisonText(child));
-                else if (child.nodeType === Node.TEXT_NODE) parts.push(child.textContent ?? '');
-            }
-            return parts.join(' ');
-        }
-
-        const elements = Array.from(root.querySelectorAll<HTMLElement>(expected.selectors.join(',')))
-            .filter(node => node.checkVisibility({opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true})
-                && !permissionHeading?.contains(node));
-        return {failures, text: comparisonText(root).replace(/\s+/gu, ' ').trim(),
-            elements: elements.map((node, index) => ({index, omitted: omitted.has(node),
-                text: comparisonText(node).replace(/\s+/gu, ' ').trim()}))};
-    }, {selectors, labels, removeLabel: messages.t('packing.removeRow')});
-    expect(projection.failures, 'Approved initial-slot labels must remain visible and associated').toEqual([]);
-    expect(projection.elements).toHaveLength(measured.content.elements.length);
-
-    // Return a separate comparison value. The screenshot and raw measured JSON
-    // above still include every new label, position and original field property.
-    const retained = projection.elements.filter(element => !element.omitted);
-    return {content: {...measured.content, text: projection.text,
-        elements: retained.map(element => ({...measured.content.elements[element.index]!, text: element.text}))},
-        geometry: [measured.geometry[0]!, ...retained.map(element => measured.geometry[element.index + 1]!)]};
+        return failures;
+    }, {labels, removeLabel: messages.t('packing.removeRow')});
+    expect(failures, 'Initial-slot labels must remain visible and associated').toEqual([]);
+    return measured;
 }
 
-/** Preview and join through native HTTP to prepare a real sibling commitment.
- * Explicit fixture confirmation is separate from the Vue review being tested. */
-export async function assignActivityThroughNative(request: APIRequestContext, planId: string, slotId: string): Promise<void> {
-    const preview = await request.post(`/api/activity/${planId}/slot/${slotId}/warnings`, {data: {}});
+/** Preview and join through admitted HTTP to prepare a real sibling commitment.
+ * Explicit fixture confirmation is separate from the browser review under test. */
+export async function assignActivityForE2E(request: APIRequestContext, planId: string, slotId: string): Promise<void> {
+    const endpoint = `/api/v1/activity-plans/${planId}/slots/${slotId}`;
+    const preview = await request.post(`${endpoint}/warnings`, {headers: await commandHeadersForE2E(request), data: {}});
     expect(preview.status()).toBe(200);
-    const {data} = await preview.json() as {data: {overlapConfirmation?: string}};
-    const assigned = await request.post(`/api/activity/${planId}/assign`, {
-        data: {itemId: slotId, overlapConfirmation: data.overlapConfirmation},
+    const data = await preview.json() as components['schemas']['ActivityWarningPreview'];
+    const assigned = await request.put(`${endpoint}/self-assignment`, {
+        headers: await commandHeadersForE2E(request), data: {assigned: true, overlapConfirmation: data.overlapConfirmation},
     });
     expect(assigned.status()).toBe(200);
 }
 
-/** Prepare two Event-linked plans whose real participant has one sibling
- * commitment. Both native and Vue warning readers see the same persisted overlap. */
+/** Prepare two Event-linked plans whose real participant has one persisted
+ * sibling commitment for the warning and confirmation workflow. */
 export async function createActivityOverlapForE2E(request: APIRequestContext) {
     const event = await createFrontendEventFixture(request);
-    expect((await request.post(`/api/event/${event.id}/register`, {
+    expect((await request.put(`/api/v1/events/${event.id}/registration`, {
+        headers: await commandHeadersForE2E(request),
         data: {arrivalDate: '2030-06-01', departureDate: '2030-06-04', dietary: ['MEAT']},
     })).status()).toBe(200);
     const target = await createActivityForE2E(request, event.id);
     const sibling = await createActivityForE2E(request, event.id);
-    await assignActivityThroughNative(request, sibling.id, sibling.view.slots[0]!.id);
+    await assignActivityForE2E(request, sibling.id, sibling.view.slots[0]!.id);
     return {target, sibling};
+}
+
+/** Capture the current slot baseline before one sparse fixture edit. The actual
+ * comparison token preserves the same lost-update boundary as the browser. */
+export async function patchActivitySlotForE2E(request: APIRequestContext, planId: string, slotId: string,
+    values: components['schemas']['ActivitySlotPatch']): Promise<void> {
+    const endpoint = `/api/v1/activity-plans/${planId}/slots/${slotId}`;
+    const baseline = await request.get(`${endpoint}/edit-baseline`, {headers: await commandHeadersForE2E(request)});
+    expect(baseline.status()).toBe(200);
+    const {editToken} = await baseline.json() as components['schemas']['ActivitySlotBaseline'];
+    const response = await request.patch(endpoint, {
+        headers: {...await commandHeadersForE2E(request), 'If-Match': editToken}, data: values,
+    });
+    expect(response.status()).toBe(200);
+}
+
+/** Obtain a newly persisted role from the real read model after its invariant
+ * mutation receipt, without depending on the retired native response envelope. */
+export async function createActivityRoleForE2E(request: APIRequestContext, planId: string, name: string): Promise<string> {
+    const response = await request.post(`/api/v1/activity-plans/${planId}/roles`, {
+        headers: await commandHeadersForE2E(request), data: {name},
+    });
+    expect(response.status()).toBe(200);
+    const view = await readActivityForE2E(request, planId);
+    const matching = view.allRoles.filter(role => role.title === name);
+    expect(matching).toHaveLength(1);
+    return matching[0]!.id;
 }

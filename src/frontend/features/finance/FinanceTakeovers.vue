@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
-import {useActionState, usePilot} from '../../app/context';
+import {useActionState, useFrontend} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
 import ActionButton from '../../components/ActionButton.vue';
@@ -23,7 +23,7 @@ const props = defineProps<{
     refresh: () => Promise<void>;
 }>();
 const emit = defineEmits<{close: []}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useFinanceApi(context);
 const id = useId();
@@ -56,7 +56,7 @@ function filteredChoices() {
 function coverageSummary(): string {
     const payer = choices.value.find(person => person.id === payerId.value);
     if (!payer) return messages.value.t('finance.chooseAPayerToManageCoverage');
-    // The native responsibility summary remains meaningful even for self-only
+    // The responsibility summary remains meaningful even for self-only
     // coverage, including the participant view without an editable payer field.
     return selected.value.length ? messages.value.t('finance.payerCoversOthers', {payer: payer.name, count: selected.value.length})
         : messages.value.t('finance.payerCoversSelf', {payer: payer.name});
@@ -130,8 +130,8 @@ function covering(id: string): components['schemas']['FinanceCoverageGroup'] | u
     return groups.value.find(group => group.beneficiaries.some(person => person.id === id));
 }
 
-/** Explain unavailable choices from admitted coverage facts, matching native
- * one-level selection rules without replacing server validation or permission. */
+/** Explain unavailable choices from admitted coverage facts, using the one-level
+ * selection rules without replacing server validation or permission. */
 function blockedReason(personId: string): string | null {
     // Existing legacy coverage can still be cleared from a covered payer. Only
     // new beneficiaries are unavailable; the shared operation permits cleanup.
@@ -232,7 +232,7 @@ function close(): void {
 </template>
 
 <style>
-/* Native takeover editing reserves the desktop viewport for its coverage picker.
+/* Takeover editing reserves the desktop viewport for its coverage picker.
    The shared phone fullscreen rule and body-local scrolling remain its owners. */
 @media (min-width: 576px) {
     .finance-takeover-dialog { height: calc(100dvh - 3.5rem); }

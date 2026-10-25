@@ -2,7 +2,7 @@ import {hashKey, matchQuery} from '@tanstack/vue-query';
 import type {QueryCacheNotifyEvent, QueryClient, QueryFilters} from '@tanstack/vue-query';
 import {computed, onBeforeUnmount, ref, watch} from 'vue';
 import type {ComputedRef} from 'vue';
-import type {PilotContext, PilotQueryAdmission, PilotQueryReadPolicy, PilotQueryRefreshOptions} from '../../types/FrontendPilotUiTypes';
+import type {FrontendContext, FrontendQueryAdmission, FrontendQueryReadPolicy, FrontendQueryRefreshOptions} from '../../types/FrontendUiTypes';
 import {belongsToQueryFamily} from './queryKeys';
 import {ApiFailure, UnconfirmedResponseError} from './transport';
 
@@ -33,8 +33,8 @@ export function useQueryInvalidation(client: QueryClient, key: ComputedRef<reado
  * Later automatic resumes use that visit's terminal policy. Eligibility stays with
  * its actual observer so explicit command dependencies can read a paused terminal
  * query without reopening hidden, retired or differently scoped consumers. */
-export function useQueryAdmission(context: PilotContext, key: ComputedRef<readonly unknown[]>,
-                                  eligible: ComputedRef<boolean>): PilotQueryAdmission {
+export function useQueryAdmission(context: FrontendContext, key: ComputedRef<readonly unknown[]>,
+                                  eligible: ComputedRef<boolean>): FrontendQueryAdmission {
     // A second observer can join an already dispatched/paused read without another
     // fetch action. That real pending operation consumes this visit's first admission.
     const dispatched = ref(hasPendingRead());
@@ -120,7 +120,7 @@ export async function refetchFreshQuery<T>(client: QueryClient, key: readonly un
  * Optional dependents may be absent after the caller's own required authority read.
  * Selected read failures still propagate, and required recovery remains strict. */
 export async function refetchFreshQueries(client: QueryClient, filter: QueryFilters, mayRead: () => boolean,
-                                          options: PilotQueryRefreshOptions = {}): Promise<void> {
+                                          options: FrontendQueryRefreshOptions = {}): Promise<void> {
     const reads: Promise<unknown>[] = [];
     // TanStack's active filter excludes a terminal-paused observer. Inspect its
     // existing observer metadata instead; a closed region remains ineligible.
@@ -197,7 +197,7 @@ function eligibleReadObserver(query: Parameters<typeof matchQuery>[1]): Paramete
     // Select from actual observer options: the query-level metadata may belong
     // to a later hidden consumer, and legacy enabled observers still participate.
     for (const observer of query.observers) {
-        const policy = observer.options.meta?.surveyorRead as PilotQueryReadPolicy | undefined;
+        const policy = observer.options.meta?.surveyorRead as FrontendQueryReadPolicy | undefined;
         if (policy ? policy.mayRead(query.queryKey) : observer.getCurrentResult().isEnabled) return observer;
     }
 }

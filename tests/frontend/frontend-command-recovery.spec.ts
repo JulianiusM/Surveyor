@@ -5,13 +5,13 @@ import {mount, flushPromises} from '@vue/test-utils';
 import {defineComponent, nextTick, onBeforeUnmount, ref} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import I18NextVue from 'i18next-vue';
-import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
+import {createFrontendContext, frontendContextKey} from '../../src/frontend/app/context';
 import {ApiFailure, InvalidInputError, ObsoleteRequestError} from '../../src/frontend/app/transport';
 import {useCommand} from '../../src/frontend/composables/command';
 import {useSettingsAccessRetirement} from '../../src/frontend/composables/listDetail';
 import CommandFeedback from '../../src/frontend/components/CommandFeedback.vue';
 import type {components} from '../../src/types/api/v1';
-import type {PilotRequestScope} from '../../src/types/FrontendPilotUiTypes';
+import type {FrontendRequestScope} from '../../src/types/FrontendUiTypes';
 
 const session: components['schemas']['SessionView'] = {
     kind: 'account', context: 'command-context-1234567890', csrfToken: 'command-csrf-1234567890', locale: 'en',
@@ -24,7 +24,7 @@ const cleanups: (() => void)[] = [];
 afterEach(() => { cleanups.splice(0).forEach(cleanup => cleanup()); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 async function mountedCommand(review = false, request?: typeof fetch) {
-    const context = createPilotContext({session}, false, request);
+    const context = createFrontendContext({session}, false, request);
     // This fixture exercises initialized command ownership; startup admission has
     // its own assertions and must not be bypassed by the shared action state.
     context.hydrated.value = true;
@@ -39,7 +39,7 @@ async function mountedCommand(review = false, request?: typeof fetch) {
     const router = createRouter({history: createMemoryHistory(), routes: [{path: '/', component}]});
     await router.push('/');
     const wrapper = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [I18NextVue, {i18next: context.i18next}]], provide: {[pilotContextKey as symbol]: context},
+        plugins: [router, [I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
     }});
     await flushPromises();
     cleanups.push(() => { wrapper.unmount(); context.queryClient.clear(); context.updates.dispose(); });
@@ -49,7 +49,7 @@ async function mountedCommand(review = false, request?: typeof fetch) {
 /** Remove the actual command-root component while its HTTP operation is outstanding.
  * The router/context remain mounted, as they do when a denied read closes an editor. */
 async function mountedRetirableCommand(refresh: () => Promise<unknown> = async () => undefined) {
-    const context = createPilotContext({session}, false);
+    const context = createFrontendContext({session}, false);
     context.hydrated.value = true;
     const visible = ref(true);
     let command!: ReturnType<typeof useCommand>;
@@ -63,7 +63,7 @@ async function mountedRetirableCommand(refresh: () => Promise<unknown> = async (
     ]});
     await router.push('/');
     const wrapper = mount(defineComponent({template: '<RouterView />'}), {global: {
-        plugins: [router, [I18NextVue, {i18next: context.i18next}]], provide: {[pilotContextKey as symbol]: context},
+        plugins: [router, [I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
     }});
     await flushPromises();
     cleanups.push(() => { wrapper.unmount(); context.queryClient.clear(); context.updates.dispose(); });
@@ -180,7 +180,7 @@ describe('reconcile-only commands', () => {
                 onBeforeUnmount(() => { active = false; });
                 return {};
             }, template: '<p>Settings retirement owner</p>',
-        }), {global: {plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[pilotContextKey as symbol]: context}}});
+        }), {global: {plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context}}});
         cleanups.push(() => owner.unmount());
         const editorKey = ['private-editors', resource] as const;
         const detailKey = ['independent-detail', resource] as const;
@@ -228,7 +228,7 @@ describe('reconcile-only commands', () => {
         const presentation = mount(CommandFeedback, {attachTo: document.body,
             props: {feedback: command.feedback, part: 'error'}, global: {
                 plugins: [[I18NextVue, {i18next: context.i18next}]],
-                provide: {[pilotContextKey as symbol]: context},
+                provide: {[frontendContextKey as symbol]: context},
             }});
         try {
             // Transient receipts use the shared notification presentation.
@@ -285,7 +285,7 @@ describe('reconcile-only commands', () => {
         await draft.setValue('Retained unknown command draft');
         draft.element.focus();
         draft.element.setSelectionRange(3, 11);
-        function submitLogout(scope: PilotRequestScope) { return context.api.logout(scope); }
+        function submitLogout(scope: FrontendRequestScope) { return context.api.logout(scope); }
         const write = vi.fn(submitLogout);
 
         await command.run(write, false);
@@ -506,13 +506,13 @@ describe('reconcile-only commands', () => {
         const prerequisite = new Promise<void>(function holdPrerequisite(resolve) { releasePrerequisite = resolve; });
         const response = new Promise<{changed: boolean}>(function holdExternalResult(resolve) { finishRequest = resolve; });
         const {context, command, router, visible} = await mountedRetirableCommand();
-        const request = vi.fn(function submitAdmittedRequest(_scope: PilotRequestScope) { return response; });
+        const request = vi.fn(function submitAdmittedRequest(_scope: FrontendRequestScope) { return response; });
         const confirm = vi.fn(() => true);
         vi.stubGlobal('confirm', confirm);
 
         /** The public command is admitted while mounted. Its own operation may
          * legitimately wait before reaching the external request boundary. */
-        async function submitAfterPrerequisite(scope: PilotRequestScope) {
+        async function submitAfterPrerequisite(scope: FrontendRequestScope) {
             await prerequisite;
             return request(scope);
         }
@@ -656,7 +656,7 @@ describe('reconcile-only commands', () => {
     });
 
     it('aggregates parent and child drafts into one departure, preserving cancellation and blocking pending work', async () => {
-        const context = createPilotContext({session}, false);
+        const context = createFrontendContext({session}, false);
         context.hydrated.value = true;
         const parentDirty = ref(true);
         const childDirty = ref(true);
@@ -686,7 +686,7 @@ describe('reconcile-only commands', () => {
         ]});
         await router.push('/');
         const wrapper = mount(defineComponent({template: '<RouterView />'}), {global: {
-            plugins: [router, [I18NextVue, {i18next: context.i18next}]], provide: {[pilotContextKey as symbol]: context},
+            plugins: [router, [I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
         }});
         cleanups.push(() => { wrapper.unmount(); context.queryClient.clear(); context.updates.dispose(); });
         await flushPromises();

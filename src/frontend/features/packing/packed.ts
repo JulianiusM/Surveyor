@@ -5,7 +5,7 @@ export function packedStorageKey(listId: string, itemId: string): string {
     return `packed_${listId}_${itemId}`;
 }
 
-/** Read the native checklist key without treating inaccessible storage as an unchecked value.
+/** Read the checklist key without treating inaccessible storage as an unchecked value.
  * The page retains its current-tab fallback and presents failure through the shared notice. */
 export function readPacked(storage: Pick<Storage, 'getItem'> | undefined, listId: string, itemId: string): PackingPackedRead {
     // A rejected browser storage getter arrives as an absent facility. A working
@@ -28,7 +28,7 @@ export function writePacked(storage: Pick<Storage, 'setItem' | 'removeItem'> | u
     if (!storage) return false;
 
     try {
-        // Preserve the native key/value and removal contract for both checked and
+        // Preserve the key/value and removal contract for both checked and
         // unchecked changes. No server/profile state participates in this operation.
         const key = packedStorageKey(listId, itemId);
         if (packed) storage.setItem(key, '1');

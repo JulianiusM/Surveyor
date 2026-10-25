@@ -3,7 +3,7 @@ import {computed, onBeforeUnmount, ref, shallowRef, watch} from 'vue';
 import {useRoute} from 'vue-router';
 import type {components} from '../../../types/api/v1';
 import type {ActivityAssignmentReview} from '../../../types/FrontendActivityTypes';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {activityKeys, overviewKeys} from '../../app/queryKeys';
 import {evictQueryFamilies, retireQueryFamily} from '../../app/queryCache';
 import {ApiFailure} from '../../app/transport';
@@ -31,7 +31,7 @@ import AppTabList from '../../components/AppTabList.vue';
 // A single detail/read/command owner covers the schedule. Specialized editors retain their
 // own drafts beneath its departure protection; ordinary refresh never resets them.
 const route = useRoute();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useActivityApi(context);
 const planId = computed(() => String(route.params.planId).toLowerCase());
@@ -139,7 +139,7 @@ watch(() => [!!(data.value?.currentEventId && data.value.capabilities.rulesWorks
 async function advancedChanged(): Promise<void> {
     try {
         // Refresh only the schedule/participant projection. Recommendation
-        // maintenance remains with its explicit native-equivalent lifecycle.
+        // maintenance remains with its explicit feature-specific lifecycle.
         await readFresh();
     } catch {
         // The existing detail state presents the failure and retires denied data.
@@ -165,7 +165,7 @@ async function reorder(order: components['schemas']['ActivityOrderInput']['order
     return command.run(scope => api.reorder(planId.value, order, token, scope), true, false,
         {success: 'common.orderSaved'});
 }
-/** Confirm the native destructive slot action before its independent server check. */
+/** Confirm the destructive slot action before its independent server check. */
 async function removeSlot(slot: components['schemas']['ActivitySlotView']): Promise<void> {
     // Existing controller deletion retains its own assignment cleanup semantics.
     if (!blocked.value && slot.capabilities.remove && window.confirm(messages.value.t('activity.deleteSlot'))) {
@@ -187,7 +187,7 @@ async function removeAssignment(id: string): Promise<void> {
     } finally { pendingControl.value = null; }
 }
 
-/** Read fresh warnings before Join or an available named role. Native role review
+/** Read fresh warnings before Join or an available named role. Role review
  * concerns the role's unoccupied position even when the actor already joined. */
 async function assign(slot: components['schemas']['ActivitySlotView'], assigned: boolean, role?: string): Promise<void> {
     if (blocked.value) return;
@@ -304,7 +304,7 @@ async function confirmAssignment(): Promise<void> {
                     />
                 </div>
                 <!-- Keep admitted advanced workspaces mounted across local tabs.
-                Native initializes these on page entry; ordinary detail polling must
+                Initialize these on page entry; ordinary detail polling must
                 never repeat recommendation maintenance or replace their drafts. -->
                 <div v-if="data.capabilities.rulesWorkspace" v-show="tab === 'rules'" id="tab-rules" role="tabpanel" aria-labelledby="activity-rules-tab">
                     <h4 class="mb-3">{{ messages.t('activity.rules') }}</h4>

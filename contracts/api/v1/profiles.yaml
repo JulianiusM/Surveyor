@@ -99,7 +99,7 @@ paths:
             schema: {$ref: '#/schemas/ProfileMigrationInput'}
       responses:
         '200':
-          description: Private native preview or invalid-capability presentation, independently of session admission
+          description: Private preview or invalid-capability presentation, independently of session admission
           content:
             application/json:
               schema: {$ref: '#/schemas/ProfileMigrationPreviewOutcome'}
@@ -157,7 +157,7 @@ paths:
             schema: {$ref: '#/schemas/ProfileCreateInput'}
       responses:
         '200':
-          description: Confirmed native profile creation; display data is refreshed separately
+          description: Confirmed profile creation; display data is refreshed separately
           content:
             application/json:
               schema: {$ref: './packing.yaml#/schemas/MutationResult'}
@@ -180,7 +180,7 @@ paths:
     patch:
       operationId: updateIdentityProfile
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
-      summary: Save active-profile fields through the unchanged native operation
+      summary: Save active-profile fields through the shared controller operation
       parameters:
         - {$ref: './openapi.yaml#/components/parameters/Context'}
         - {$ref: './openapi.yaml#/components/parameters/Locale'}
@@ -192,7 +192,7 @@ paths:
             schema: {$ref: '#/schemas/ProfileUpdateInput'}
       responses:
         '200':
-          description: Confirmed native profile update; display data is refreshed separately
+          description: Confirmed profile update; display data is refreshed separately
           content:
             application/json:
               schema: {$ref: './packing.yaml#/schemas/MutationResult'}

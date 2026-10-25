@@ -9,7 +9,7 @@ schemas:
       title: {type: string}
       path: {type: string}
       url: {type: string}
-      # Pilot summaries identify their reviewed source; omitted by native adapters.
+      # Summaries identify the language of their selected reviewed article.
       contentLocale: {type: string}
   HelpNavigationGroup:
     type: object

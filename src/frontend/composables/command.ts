@@ -1,37 +1,37 @@
 import {computed, effectScope, inject, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch} from 'vue';
 import {useRouter} from 'vue-router';
 import type {NavigationFailure, RouteLocationNormalized} from 'vue-router';
-import {useActionState, usePilot} from '../app/context';
+import {useActionState, useFrontend} from '../app/context';
 import {ApiFailure, InvalidInputError, ObsoleteRequestError} from '../app/transport';
-import type {PilotCommandDraft, PilotCommandFeedback, PilotCommandOutcome, PilotDraftState, PilotPlainMessageKey,
-    PilotRecoveryRead, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
+import type {FrontendCommandDraft, FrontendCommandFeedback, FrontendCommandOutcome, FrontendDraftState, FrontendPlainMessageKey,
+    FrontendRecoveryRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
 import {useFeedbackError, useReadRetry} from './feedback';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
-import type {PilotCommandPresentation} from '../../types/FrontendFeedbackTypes';
+import type {FrontendCommandPresentation} from '../../types/FrontendFeedbackTypes';
 
 /** These collaborators are private to the mounted draft tree. No draft values or callbacks
  * enter server rendering data, query caches, browser storage or another application request. */
 interface DraftOwner {
-    register(read: () => PilotDraftState): () => void;
+    register(read: () => FrontendDraftState): () => void;
     prepareDeparture(): (() => void) | undefined;
-    retainCommand(read: () => PilotDraftState, scope: PilotRequestScope, onDeparture?: () => void): () => void;
+    retainCommand(read: () => FrontendDraftState, scope: FrontendRequestScope, onDeparture?: () => void): () => void;
 }
 
 /** Only command status survives a retired editor. Form values and edit authority stay with
  * their component; actor/visit scope prevents these leases from blocking a later identity. */
 interface RetainedCommand {
-    read: () => PilotDraftState;
-    scope: PilotRequestScope;
+    read: () => FrontendDraftState;
+    scope: FrontendRequestScope;
     origin: string;
     onDeparture?: () => void;
 }
 
-const draftOwnerKey = Symbol.for('surveyor.pilot.draft-owner');
+const draftOwnerKey = Symbol.for('surveyor.frontend.draft-owner');
 
 /** Each visible notice is its own receipt, including a repeated identical no-op.
  * No feature intent or translated text is inferred from another command's result. */
 interface CommandNotice {
-    key: PilotPlainMessageKey;
+    key: FrontendPlainMessageKey;
     kind: 'success' | 'warning';
     transient: boolean;
     readError?: Error;
@@ -43,12 +43,12 @@ interface CommandNotice {
  * This lets a page, its dialog and inline editors ask once without discarding on consent:
  * the owning form releases values only after navigation commits or a confirmed result.
  */
-export function useDraftProtection(draft: PilotCommandDraft) {
-    const context = usePilot();
+export function useDraftProtection(draft: FrontendCommandDraft) {
+    const context = useFrontend();
     const router = useRouter();
     const parent = inject<DraftOwner | null>(draftOwnerKey, null);
     const ownerScope = context.capture();
-    const children = new Set<() => PilotDraftState>();
+    const children = new Set<() => FrontendDraftState>();
     const approvedDepartures = new Set<{origin: string}>();
     const commands = new Set<RetainedCommand>();
     let mounted = true;
@@ -57,7 +57,7 @@ export function useDraftProtection(draft: PilotCommandDraft) {
 
     /** Attach a child's live draft state to this owner until that child unmounts.
      * Only its reader is retained; field values remain in the child component. */
-    function register(read: () => PilotDraftState): () => void {
+    function register(read: () => FrontendDraftState): () => void {
         // Read current state at each departure decision instead of copying a
         // dirty/pending snapshot that could outlive the child's actual work.
         children.add(read);
@@ -65,12 +65,12 @@ export function useDraftProtection(draft: PilotCommandDraft) {
     }
 
     /** Pending work wins over prompts. One unknown outcome also covers other unsaved input. */
-    function readState(): PilotDraftState {
+    function readState(): FrontendDraftState {
         // A persistent shell owner can admit later commands after an actor transition.
         // Ordinary fields still belong to their original draft scope; each status lease
         // and child reader supplies its own authority instead of inheriting that scope.
         const currentDraft = mounted && context.isCurrent(ownerScope);
-        const state: PilotDraftState = {
+        const state: FrontendDraftState = {
             busy: currentDraft && (draft.busy?.() ?? false),
             dirty: currentDraft && draft.dirty(),
             unknownMessage: currentDraft && draft.uncertain?.() ? draft.unknownMessage : null,
@@ -102,7 +102,7 @@ export function useDraftProtection(draft: PilotCommandDraft) {
         return !state.dirty || window.confirm(context.messages.value.t('draft.discard'));
     }
 
-    /** Native anchors remain in the same document. They do not discard input or
+    /** Anchors remain in the same document. They do not discard input or
      * acknowledge uncertainty; actual path/query departures still need one decision. */
     function admitNavigation(to: RouteLocationNormalized, from: RouteLocationNormalized): boolean {
         return frontendDocumentUrl(to.fullPath) === frontendDocumentUrl(from.fullPath) || mayLeave();
@@ -128,7 +128,7 @@ export function useDraftProtection(draft: PilotCommandDraft) {
     /** A command outlives a component when a denied read retires that component first.
      * Delegate its small status lease to the root, preserving one aggregated decision for
      * pending work and unknown results even after its ordinary child registration is gone. */
-    function retainCommand(read: () => PilotDraftState, scope: PilotRequestScope, onDeparture?: () => void): () => void {
+    function retainCommand(read: () => FrontendDraftState, scope: FrontendRequestScope, onDeparture?: () => void): () => void {
         if (parent) return parent.retainCommand(read, scope, onDeparture);
         const command = {read, scope, onDeparture, origin: router.currentRoute.value.fullPath};
         commands.add(command);
@@ -241,8 +241,8 @@ export function useDraftProtection(draft: PilotCommandDraft) {
  * blocks further commands until an authoritative read reconciles a desired-state update, or
  * the user explicitly reviews an unknown creation. A confirmed write followed by a failed
  * refresh remains a saved write, not a reason to submit again. */
-export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview = false, draft?: PilotCommandDraft) {
-    const context = usePilot();
+export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview = false, draft?: FrontendCommandDraft) {
+    const context = useFrontend();
     const router = useRouter();
     const pending = ref(false);
     const recovering = ref(false);
@@ -255,7 +255,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     // success receipt's lifetime or dismissal renewal.
     const notice = computed({
         get: () => noticeReceipt.value?.key ?? null,
-        set: (key: PilotPlainMessageKey | null) => {
+        set: (key: FrontendPlainMessageKey | null) => {
             noticeReceipt.value = key === null ? null : {key, kind: key === 'state.saved' ? 'success' : 'warning',
                 transient: key === 'state.saved'};
         },
@@ -265,14 +265,14 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     const noticeRenewal = computed(() => noticeReceipt.value);
     const noticeReadError = computed(() => noticeReceipt.value?.readError ?? null);
     const readRetryAvailable = useReadRetry(() => noticeReadError.value ?? errorReadError.value);
-    const outcome = shallowRef<PilotCommandOutcome | null>(null);
+    const outcome = shallowRef<FrontendCommandOutcome | null>(null);
     const needsUnknownReview = ref(requireUnknownReview);
     // Consumers may explain the current command's manual review without
     // confusing unrelated dirty fields with an unconfirmed creation outcome.
     const reviewRequired = computed(() => needsUnknownReview.value);
     const unknownMessage = draft?.unknownMessage ?? 'draft.leaveUnknown';
     const externalBusy = draft?.busy;
-    let commandScope: PilotRequestScope | undefined;
+    let commandScope: FrontendRequestScope | undefined;
     let releaseCommandProtection: (() => void) | undefined;
     let mounted = true;
     onBeforeUnmount(() => { mounted = false; });
@@ -324,7 +324,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
 
     /** This retained status carries no fields or callbacks into another feature. Ordinary
      * mounted drafts remain in the component tree; only admitted command uncertainty lasts. */
-    function readCommandState(): PilotDraftState {
+    function readCommandState(): FrontendDraftState {
         return {busy: pending.value || recovering.value || (externalBusy?.() ?? false), dirty: false,
             unknownMessage: uncertain.value ? unknownMessage : null};
     }
@@ -346,7 +346,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
      * Return eligibility for any explicit follow-up so retired reads cannot open review prompts.
      * An explicit recovery may supply a fresh read distinct from its normal post-write follow-up;
      * both use the same scoped protection and never infer authority from a skipped callback. */
-    async function reconcile(read: PilotRecoveryRead = refreshAuthority): Promise<boolean> {
+    async function reconcile(read: FrontendRecoveryRead = refreshAuthority): Promise<boolean> {
         if (!recoveryAction.isAvailable()) return false;
         const scope = context.capture();
         const origin = frontendDocumentUrl(router.currentRoute.value.fullPath);
@@ -373,7 +373,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
         if (reviewedUnknown && !needsUnknownReview.value) acknowledge();
         else if (noticeReceipt.value === reviewedNotice && (reviewedNotice?.key === 'state.stale'
             || reviewedNotice?.key === 'state.savedRefreshFailed')) {
-            // Native Refresh clears its own read warning, while validation and
+            // Refresh clears its own read warning, while validation and
             // confirmed success retain their independently owned transient lifetime.
             notice.value = null;
         }
@@ -388,7 +388,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     /** Deliberate UI recovery consumes a failed read at its existing query surface.
      * Unlike a causal post-command refresh, an event handler has no awaiting owner
      * to receive rejection. Preserve its draft/status and report unsuccessful recovery. */
-    async function reconcileSafely(read: PilotRecoveryRead = refreshAuthority): Promise<boolean> {
+    async function reconcileSafely(read: FrontendRecoveryRead = refreshAuthority): Promise<boolean> {
         const reviewedNotice = noticeReceipt.value;
         const reviewedError = errorReadError.value;
         const reviewedErrorRenewal = errorRenewal.value;
@@ -414,7 +414,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
      * mail request. One retained status lease protects the whole read, even if a denied
      * response retires this editor. Actor/document/component retirement stops follow-up
      * reads and feedback; it never interrupts the authoritative session update itself. */
-    async function recover(read: PilotRecoveryRead = refreshAuthority, presentFailure = true): Promise<boolean> {
+    async function recover(read: FrontendRecoveryRead = refreshAuthority, presentFailure = true): Promise<boolean> {
         // Related editors propagate failure to their confirmed parent command. They
         // still share this same retained read lifetime instead of duplicating leases.
         return readAuthority(read, presentFailure);
@@ -423,7 +423,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     /** One status lifetime covers identity recovery and unknown resource reconciliation.
      * Their callers own distinct error surfaces: explicit identity recovery presents its
      * durable warning here, while resource queries keep their existing throwing contract. */
-    async function readAuthority(read: PilotRecoveryRead, presentFailure: boolean): Promise<boolean> {
+    async function readAuthority(read: FrontendRecoveryRead, presentFailure: boolean): Promise<boolean> {
         if (!recoveryAction.isAvailable()) return false;
         const scope = context.capture();
         const origin = frontendDocumentUrl(router.currentRoute.value.fullPath);
@@ -469,19 +469,19 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     }
 
     /** Confirmed no-ops create a fresh localized receipt without opening a write lease. */
-    function setInformation(key: PilotPlainMessageKey): void {
+    function setInformation(key: FrontendPlainMessageKey): void {
         notice.value = null;
         setFeedbackInformation(key);
     }
 
     /** Success wording belongs to the operation, while lifetime and repeat renewal
      * remain generic. A confirmed result uses this same path after its follow-up read. */
-    function setNotice(key: PilotPlainMessageKey): void {
+    function setNotice(key: FrontendPlainMessageKey): void {
         publishNotice(key);
     }
 
     /** Only the operation confirms success. Shared presentation owns its visible host. */
-    function publishNotice(key: PilotPlainMessageKey): void {
+    function publishNotice(key: FrontendPlainMessageKey): void {
         noticeReceipt.value = {key, kind: 'success', transient: true};
     }
 
@@ -497,8 +497,8 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
      * a write; refresh failure cannot undo it, and unknown delivery never replays.
      * Return that confirmed result even when its follow-up remains stale. New
      * operations require a mounted owner; already admitted work can outlive it. */
-    async function run<T>(operation: (scope: PilotRequestScope) => Promise<T>, refreshAfter = true,
-                          reviewUnknown = requireUnknownReview, feedback?: PilotCommandFeedback): Promise<T | undefined> {
+    async function run<T>(operation: (scope: FrontendRequestScope) => Promise<T>, refreshAfter = true,
+                          reviewUnknown = requireUnknownReview, feedback?: FrontendCommandFeedback): Promise<T | undefined> {
         // A delayed preflight can finish after admission retires its form. Reject
         // that new submission before capturing authority or retaining a status lease.
         // Work admitted before unmount keeps its existing deferred steps and settlement.
@@ -608,7 +608,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     // Share the actual refs rather than copying their current values into another
     // reactive store. No write, draft or authority callback reaches presentation;
     // guarded read-only recovery delegates to this same command owner.
-    const feedback: PilotCommandPresentation = {error, transientError, errorRenewal, feedbackKind,
+    const feedback: FrontendCommandPresentation = {error, transientError, errorRenewal, feedbackKind,
         notice, noticeKind, transientNotice, noticeRenewal, uncertain, errorReadError, noticeReadError,
         readRecoveryAction, reconcileRead, dismissError, dismissNotice};
 

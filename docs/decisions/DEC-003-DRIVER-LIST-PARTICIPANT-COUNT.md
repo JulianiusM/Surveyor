@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-09-05
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: feature-specific-static-behavior
-source-anchors: src/controller/driversController.ts; src/modules/database/services/DriverService.ts; src/modules/database/entities/drivers/DriversAssignment.ts; src/modules/database/entities/drivers/DriversItem.ts; src/views/drivers/drivers-view.pug; tests/integration/controller-smoke-workflows.spec.ts; docs/user-guide/DRIVERS_LISTS.md; docs/backlog/documentation-remediation.yml
+source-anchors: src/controller/driversController.ts; src/modules/database/services/DriverService.ts; src/modules/database/entities/drivers/DriversAssignment.ts; src/modules/database/entities/drivers/DriversItem.ts; tests/integration/controller-smoke-workflows.spec.ts; docs/backlog/documentation-remediation.yml; src/frontend/; src/routes/api/v1/
 next-review: D11
 -->
 
@@ -34,7 +34,7 @@ The computation and presentation establish one consistent meaning:
 - `src/modules/database/services/DriverService.ts` builds the assignee lists from `DriversAssignment` records joined to
   profiles. Driver identity is loaded separately from the profile that owns each `DriversItem` and is returned as
   `driverName`; it is never added to the participant set by virtue of owning the item.
-- `src/views/drivers/drivers-view.pug` displays `data.counters.participants` under **Participants** and separately displays
+- `drivers-view.pug` (the retired native owner) displays `data.counters.participants` under **Participants** and separately displays
   **Drivers** as the number of driver rows. The two figures intentionally describe different sets.
 - `tests/integration/controller-smoke-workflows.spec.ts` confirms that one assignment produces a participant count of
   one. The set-based source establishes the multi-row deduplication and driver-exclusion behavior that the current test
@@ -81,3 +81,9 @@ No runtime, test, view, or in-app guide change is part of this decision package.
 Changing the counter to include drivers, to count raw assignments, or to represent total capacity would be a product
 behavior change. Such a change would require coordinated controller, test, UI-label, D11, and D14 updates. Until then,
 “unique assigned people across the list” is the authoritative meaning.
+
+## P11 evidence reconciliation (2026-10-25)
+
+The explicitly requested cutover retires the native template/route owners identified in the original implementation
+evidence. Their source remains in Git history. The decision itself is unchanged; current component and versioned
+adapter consumers reuse the same controller/domain policy. Source anchors above identify retained owners.

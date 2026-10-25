@@ -3,8 +3,8 @@ import {computed, nextTick, onBeforeUnmount} from 'vue';
 import {RouterLink} from 'vue-router';
 import {hashKey} from '@tanstack/vue-query';
 import type {EntityHeaderProps} from '../../types/FrontendEntitySettingsTypes';
-import type {PilotRequestScope} from '../../types/FrontendPilotUiTypes';
-import {usePilot} from '../app/context';
+import type {FrontendRequestScope} from '../../types/FrontendUiTypes';
+import {useFrontend} from '../app/context';
 import {observeQueryReads} from '../app/queryCache';
 import {useAuthorizedImage} from '../composables/authorizedImage';
 import ActionButton from './ActionButton.vue';
@@ -15,7 +15,7 @@ import PageHeading from './PageHeading.vue';
 // neither a cached query nor a visible settings action grants server authority.
 const props = defineProps<EntityHeaderProps>();
 const emit = defineEmits<{settings: []}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const image = useAuthorizedImage(
     computed(() => props.resourceId),
@@ -27,7 +27,7 @@ const source = image.source;
 const stopReads = observeQueryReads(context.queryClient, () => props.imageQueryKey, recoverHeaderAfterRead);
 onBeforeUnmount(stopReads);
 
-function readHeader(id: string, scope: PilotRequestScope, signal: AbortSignal): Promise<Blob> {
+function readHeader(id: string, scope: FrontendRequestScope, signal: AbortSignal): Promise<Blob> {
     return props.readImage(id, scope, signal);
 }
 

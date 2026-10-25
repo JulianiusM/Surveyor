@@ -1,6 +1,6 @@
 import type {ComputedRef} from 'vue';
-import type {PilotRead, PilotRequestScope} from './FrontendPilotUiTypes';
-import type {PilotEventPickerSource, PilotPlainMessageKey} from './FrontendPilotUiTypes';
+import type {FrontendRead, FrontendRequestScope} from './FrontendUiTypes';
+import type {FrontendEventPickerSource, FrontendPlainMessageKey} from './FrontendUiTypes';
 import type {components} from './api/v1';
 
 /** Features select their own operation and actor/resource query families. Shared
@@ -9,7 +9,7 @@ export interface FrontendListSource<T> {
     resourceId: ComputedRef<string>;
     queryKey: ComputedRef<readonly unknown[]>;
     resourceFamily(): readonly unknown[];
-    read(id: string, scope: PilotRequestScope, signal: AbortSignal, previous?: PilotRead<T>): Promise<PilotRead<T>>;
+    read(id: string, scope: FrontendRequestScope, signal: AbortSignal, previous?: FrontendRead<T>): Promise<FrontendRead<T>>;
     denied(failure: Error): void;
 }
 
@@ -73,22 +73,22 @@ export interface FrontendListCreationValues {
 export type FrontendListCreationCopy = Pick<components['schemas']['PackingDuplicate'],
     'title' | 'description' | 'defaultPermissions' | 'formContext' | 'selectedEvent'>;
 
-/** One feature supplies generated operations, scoped keys and its native item
+/** One feature supplies generated operations, scoped keys and its item
  * collector. The shared form has no endpoint construction or business checks. */
 export interface FrontendListCreationSource<TCopy extends FrontendListCreationCopy> {
     creationKey(context: string | null | undefined, eventId?: string): readonly unknown[];
     duplicateKey(context: string | null | undefined, id: string | null, eventId?: string): readonly unknown[];
-    eventPicker: PilotEventPickerSource;
+    eventPicker: FrontendEventPickerSource;
     initialContext?: components['schemas']['PackingCreateContext'];
     initialSelectedEvent?: components['schemas']['EventPickerOption'] | null;
     initialDuplicate?: TCopy;
-    initialError?: PilotPlainMessageKey;
-    createEntry(scope: PilotRequestScope, signal?: AbortSignal, returnTo?: string, eventId?: string): Promise<components['schemas']['PackingCreateEntry']>;
-    duplicate(id: string, scope: PilotRequestScope, signal?: AbortSignal, eventId?: string): Promise<TCopy>;
+    initialError?: FrontendPlainMessageKey;
+    createEntry(scope: FrontendRequestScope, signal?: AbortSignal, returnTo?: string, eventId?: string): Promise<components['schemas']['PackingCreateEntry']>;
+    duplicate(id: string, scope: FrontendRequestScope, signal?: AbortSignal, eventId?: string): Promise<TCopy>;
     initialize?(copy?: TCopy): void;
     reset?(): void;
     draft?(): unknown;
     destination(result: components['schemas']['PackingCreated']): string;
     prepare(values: FrontendListCreationValues, image: File | null):
-        {error: PilotPlainMessageKey} | {operation(scope: PilotRequestScope): Promise<components['schemas']['PackingCreated']>};
+        {error: FrontendPlainMessageKey} | {operation(scope: FrontendRequestScope): Promise<components['schemas']['PackingCreated']>};
 }

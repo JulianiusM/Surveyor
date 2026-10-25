@@ -3,7 +3,7 @@ import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
 import {defineComponent, provide, ref, shallowRef} from 'vue';
 import I18NextVue from 'i18next-vue';
-import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
+import {createFrontendContext, frontendContextKey} from '../../src/frontend/app/context';
 import {noticeTargetKey} from '../../src/frontend/composables/feedback';
 import StatusNotice from '../../src/frontend/components/StatusNotice.vue';
 import {createFrontendEventSession} from '../factories/frontendEventFactory';
@@ -21,7 +21,7 @@ async function mounted(initialError: Error | null, ready = true) {
     // Happy DOM has no layout. Supply visible geometry while the production
     // helper still checks hidden/disclosed ancestors independently.
     vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
-    const context = createPilotContext({session: createFrontendEventSession()}, true);
+    const context = createFrontendContext({session: createFrontendEventSession()}, true);
     context.hydrated.value = true;
     const readError = shallowRef(initialError);
     const commonError = shallowRef(initialError);
@@ -31,11 +31,11 @@ async function mounted(initialError: Error | null, ready = true) {
         const target = ref<HTMLElement | null>(null);
         provide(noticeTargetKey, target);
         return {readError, commonError, common, hostReady, target};
-    }, template: '<section><div v-if="hostReady" ref="target" data-pilot-notices></div>'
+    }, template: '<section><div v-if="hostReady" ref="target" data-frontend-notices></div>'
         + '<StatusNotice class="local-read" :read-error="readError" :last-updated-at="1700000000000" :retry-at="1900000000000">Ordinary read</StatusNotice>'
         + '<StatusNotice v-if="common" class="common-read" placement="notification" :read-error="commonError">Confirmed action; read failed</StatusNotice></section>'});
     const wrapper = mount(source, {attachTo: document.body, global: {
-        plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[pilotContextKey as symbol]: context},
+        plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
     }});
     cleanups.push(() => { wrapper.unmount(); context.queryClient.clear(); });
     await flushPromises();
@@ -46,7 +46,7 @@ describe('Common read-failure presentation ownership', () => {
     it('presents the same failed GET once with its actual query freshness and deadline', async () => {
         const {wrapper} = await mounted(new Error('Private transport text'));
         expect(wrapper.find('.local-read').exists()).toBe(false);
-        const common = wrapper.get('[data-pilot-notices] .common-read');
+        const common = wrapper.get('[data-frontend-notices] .common-read');
         expect(common.get('[data-last-successful-refresh] time').attributes('datetime')).toBe(new Date(1700000000000).toISOString());
         expect(common.get('[data-read-retry-at] time').attributes('datetime')).toBe(new Date(1900000000000).toISOString());
         expect(wrapper.findAll('.status-notice')).toHaveLength(1);
@@ -74,7 +74,7 @@ describe('Common read-failure presentation ownership', () => {
 
     it('restores the ordinary warning when its matching common host is hidden and deduplicates again on disclosure', async () => {
         const {wrapper} = await mounted(new Error('Failed GET'));
-        const host = wrapper.get<HTMLElement>('[data-pilot-notices]');
+        const host = wrapper.get<HTMLElement>('[data-frontend-notices]');
         expect(wrapper.find('.local-read').exists()).toBe(false);
         host.element.hidden = true;
         await flushPromises();
@@ -96,7 +96,7 @@ describe('Common read-failure presentation ownership', () => {
         const notice = wrapper.get('.common-read').element;
         hostReady.value = true;
         await flushPromises();
-        expect(wrapper.get('[data-pilot-notices] .common-read').element).toBe(notice);
+        expect(wrapper.get('[data-frontend-notices] .common-read').element).toBe(notice);
         expect(wrapper.findAll('.status-notice')).toHaveLength(1);
         common.value = false;
         await flushPromises();

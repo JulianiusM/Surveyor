@@ -2,8 +2,8 @@
 import {computed, ref} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {EntityMetadataSnapshot, EntityMetadataValues} from '../../../types/FrontendEntityMetadataTypes';
-import type {PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
-import {usePilot} from '../../app/context';
+import type {FrontendRead, FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import {useFrontend} from '../../app/context';
 import {activityKeys} from '../../app/queryKeys';
 import {normalizeNullableMetadataText} from '../../composables/metadataDraft';
 import {useMetadataEditorHandle} from '../../composables/metadataEditor';
@@ -15,7 +15,7 @@ import FormField from '../../components/FormField.vue';
 // review and departure protection remain with the shared metadata editor.
 const props = withDefaults(defineProps<{planId: string; planTitle?: string; disabled?: boolean; busy?: boolean; active?: boolean}>(), {active: true});
 const emit = defineEmits<{close: []; saved: []; accessLost: []}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useActivityApi(context);
 const editor = ref<InstanceType<typeof EntityMetadataEditor> | null>(null);
@@ -34,10 +34,10 @@ function fieldLabel(field: string): string {
     return messages.value.t(field === 'startDate' ? 'event.startDateLabel' : field === 'endDate' ? 'event.endDateLabel'
         : field === 'title' ? 'packing.title' : 'packing.description');
 }
-function read(id: string, scope: PilotRequestScope, signal?: AbortSignal, previous?: PilotRead<EntityMetadataSnapshot>) {
-    return api.metadata(id, scope, signal, previous as PilotRead<components['schemas']['ActivityMetadata']> | undefined);
+function read(id: string, scope: FrontendRequestScope, signal?: AbortSignal, previous?: FrontendRead<EntityMetadataSnapshot>) {
+    return api.metadata(id, scope, signal, previous as FrontendRead<components['schemas']['ActivityMetadata']> | undefined);
 }
-function save(id: string, patch: EntityMetadataValues, token: string, scope: PilotRequestScope) {
+function save(id: string, patch: EntityMetadataValues, token: string, scope: FrontendRequestScope) {
     return api.saveMetadata(id, patch as components['schemas']['ActivityMetadataPatch'], token, scope);
 }
 defineExpose(useMetadataEditorHandle(editor));
@@ -67,7 +67,7 @@ defineExpose(useMetadataEditorHandle(editor));
                 class="entity-property-group mb-3"
                 :open="index === 0">
                 <summary class="fw-semibold">{{ messages.t(group.label) }}</summary>
-                <!-- Native Details and Dates are separate disclosures in one save.
+                <!-- Details and Dates are separate disclosures in one save.
                 Every field still follows its own controller grant. -->
                 <div class="row g-3 pt-3">
                     <FormField

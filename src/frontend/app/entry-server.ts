@@ -1,14 +1,14 @@
 import {renderToString} from 'vue/server-renderer';
-import type {FrontendPilotBootstrap, FrontendPilotRenderResult} from '../../types/FrontendPilotTypes';
-import {createPilotApp} from './createApp';
+import type {FrontendBootstrap, FrontendRenderResult} from '../../types/FrontendTypes';
+import {createFrontendApp} from './createApp';
 import {serializeBootstrap} from './serializeBootstrap';
 
 /** Express supplies the already-authorized session/help projection; SSR never calls its own HTTP server. */
-export async function render(url: string, bootstrap: FrontendPilotBootstrap): Promise<FrontendPilotRenderResult> {
+export async function render(url: string, bootstrap: FrontendBootstrap): Promise<FrontendRenderResult> {
     // The renderer already supplies the request-safe declaration. Preserve its complete
     // projection; the browser codec validates every declared field before hydration.
-    const initial: FrontendPilotBootstrap = {...bootstrap, initialUrl: url};
-    const {app, router, context} = createPilotApp(initial, false);
+    const initial: FrontendBootstrap = {...bootstrap, initialUrl: url};
+    const {app, router, context} = createFrontendApp(initial, false);
     try {
         await router.push(url);
         await router.isReady();

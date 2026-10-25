@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {DialogRoot, DialogPortal, DialogOverlay, DialogContent, DialogTitle, DialogClose} from 'reka-ui';
 import {computed, inject, provide, ref, watch} from 'vue';
-import {usePilot} from '../app/context';
+import {useFrontend} from '../app/context';
 import {noticeTargetKey} from '../composables/feedback';
 
 const props = withDefaults(
@@ -12,7 +12,7 @@ const props = withDefaults(
         subtitle?: string;
         pending?: boolean;
         compact?: boolean;
-        // Feature dialogs preserve native geometry/type without replacing this
+        // Feature dialogs preserve geometry/type without replacing this
         // shared focus, pending-dismissal and portal owner. Defaults retain Settings.
         standard?: boolean;
         titleClass?: string;
@@ -26,7 +26,7 @@ const props = withDefaults(
     {fullscreenOnSmall: true},
 );
 const emit = defineEmits<{close: []}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 // A modal owns a presentation host above its body, using the same notice renderer
 // and receipts as the page. Visible receipts reserve space above the scroll body.
 const inheritedNoticeTarget = inject(noticeTargetKey, null);
@@ -49,10 +49,10 @@ watch(
     {immediate: true, flush: 'sync'},
 );
 
-/** Native Bootstrap dialogs initially focus their container, without highlighting Close.
+/** Dialogs initially focus their container without highlighting Close.
  * A feature may instead request a field or confirmation Cancel control. Keep
  * Reka's trap and focus return, but do not let its first-control default change that
- * observable native entry behavior when no usable feature target is present. */
+ * documented initial focus behavior when no usable feature target is present. */
 function focusInitial(event: Event): void {
     if (!(event.target instanceof HTMLElement)) return;
     const target = props.initialFocus ? event.target.querySelector<HTMLElement>(props.initialFocus) : null;
@@ -77,11 +77,11 @@ function restoreFocus(event: Event): void {
 <template>
     <DialogRoot :open="open" @update:open="requestOpen">
         <DialogPortal>
-            <DialogOverlay class="pilot-dialog-backdrop" />
+            <DialogOverlay class="frontend-dialog-backdrop" />
             <DialogContent
                 :id="id"
-                class="pilot-dialog modal-content bg-dark"
-                :class="[contentClass ?? 'text-white', {'pilot-dialog-compact': compact, 'pilot-dialog-standard': standard, 'pilot-dialog-fullscreen': fullscreenOnSmall}]"
+                class="frontend-dialog modal-content bg-dark"
+                :class="[contentClass ?? 'text-white', {'frontend-dialog-compact': compact, 'frontend-dialog-standard': standard, 'frontend-dialog-fullscreen': fullscreenOnSmall}]"
                 :aria-describedby="undefined"
                 @escape-key-down="preventPending"
                 @pointer-down-outside="preventPending"
@@ -100,15 +100,15 @@ function restoreFocus(event: Event): void {
                     />
                 </header>
                 <slot name="navigation" />
-                <div class="pilot-notice-region">
-                    <div ref="noticeTarget" class="pilot-notice-stack" data-pilot-notices></div>
+                <div class="frontend-notice-region">
+                    <div ref="noticeTarget" class="frontend-notice-stack" data-frontend-notices></div>
                 </div>
                 <div class="modal-body">
                     <slot />
-                    <!-- Native editors may finish within their scroll body.
+                    <!-- Editors may finish within their scroll body.
                          The caller keeps the same actions and operation owners;
                          true confirmation/create footers retain their own slot. -->
-                    <div v-if="$slots.bodyActions" class="pilot-action-row justify-content-end mt-3">
+                    <div v-if="$slots.bodyActions" class="frontend-action-row justify-content-end mt-3">
                         <slot name="bodyActions" />
                     </div>
                 </div>

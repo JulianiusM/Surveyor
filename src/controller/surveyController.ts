@@ -124,7 +124,7 @@ async function afterCreateItems() {
     // Nothing to do here.
 }
 
-/** Preserve the native independent read order for both presentation consumers. */
+/** Preserve the independent read order for both presentation consumers. */
 async function fetchForView(survey: Survey, req?: Request) {
     const combinations = await surveyService.getCombinationsBySurveyId(survey.id);
     const responses = await surveyService.getResponsesSorted(survey.id);
@@ -164,7 +164,7 @@ async function submitResponses(survey: Survey, session: SessionLike, body: any) 
         if (invalidEntry) {
             throw new ExpectedError('Invalid survey response', 'error', 400, {}, {cause: 'SURVEY_RESPONSE_INVALID'});
         }
-        // Keep the native persistence order and its independently saved rows.
+        // Keep the persistence order and its independently saved rows.
         await surveyService.deleteResponsesByProfileId(gid, survey.id);
         for (const [combId, ans] of Object.entries(answers)) {
             await surveyService.saveResponse(survey.id, gid, Number(combId), ans);
@@ -198,13 +198,13 @@ async function updateProperties(entity: EntityBase, body: unknown) {
  * response from the same current row without a fallible postcommit read. */
 async function saveSurveyProperties(id: string, patch: BasicEntityPropertyPatch, session?: SessionLike) {
     return surveyService.withSurveyLock(id, async function saveLocked(manager, current) {
-        // Native admission remains with its existing adapter. The added transport
+        // Direct-call admission remains with its existing adapter. The added transport
         // checks its own actor against current ownership before the shared write.
         assertEntityPropertyContext(current);
         if (session) requireSurveyOwner(current as Survey, session);
 
         // Metadata tokens identify returned values for draft refresh only. They
-        // are not write preconditions and do not change native last-write behavior.
+        // are not write preconditions and do not change last-write behavior.
         const result = session ? surveyMetadataResult({...current, ...patch} as Survey, session) : undefined;
         await surveyService.updateSurveyProperties(id, patch, manager);
         return result;
@@ -230,17 +230,17 @@ async function requireSurvey(id: string): Promise<Survey> {
     return survey;
 }
 
-/** Account-only creation matches the native create form and its duplicate POST. */
+/** Account-only creation matches the creation form and its duplicate POST. */
 export function requireSurveyCreation(session: SessionLike): void {
     requireSurveyProfile(session);
     if (!hasAccountProfile(session)) throw new ApiProblem('FORBIDDEN');
 }
 
-/** Project the native account-only creation redirect without creating a draft,
+/** Project the account-only creation redirect without creating a draft,
  * identity or survey. Surveys expose no event or permission form context. */
 export function readSurveyCreateEntry(session: SessionLike, returnTo?: unknown): components['schemas']['SurveyCreateEntry'] {
-    const target = safeFrontendReturn(returnTo ?? '/frontend-pilot/survey/create');
-    const entry = getAccountPageEntry(session, '/frontend-pilot/users/login', target);
+    const target = safeFrontendReturn(returnTo ?? '/survey/create');
+    const entry = getAccountPageEntry(session, '/users/login', target);
     return {entry, context: entry.kind === 'render' ? {} : null};
 }
 
@@ -260,8 +260,8 @@ export async function readSurveyResourceEntry(id: string, view: 'detail' | 'gues
     const survey = await surveyService.getSurveyById(id);
     if (!survey) return {entry: {kind: 'denied', status: 404, messageKey: 'survey.notFound'}, guest: null};
 
-    // Resource existence precedes admission as in the native parameter loader.
-    const url = `/frontend-pilot/survey/${encodeURIComponent(id)}`;
+    // Resource existence precedes admission as in the resource parameter loader.
+    const url = `/survey/${encodeURIComponent(id)}`;
     if (view === 'guest') return session.profile ? {entry: {kind: 'redirect', url, notice: null}, guest: null}
         : {entry: {kind: 'render'}, guest: projectSurveyGuestEntry(survey)};
     return session.profile ? {entry: {kind: 'render'}, guest: null}
@@ -275,7 +275,7 @@ function surveyHeaderProjection(survey: Survey) {
         headerVersion: getHeaderImageVersion(survey.headerImg)};
 }
 
-/** Project named answers from the same shared reads as the native voting page.
+/** Project named answers from the same shared reads as the voting projection.
  * Missing choices remain omitted and display No in the client. No profile email,
  * account identity, raw response handle or stored image path crosses this boundary. */
 export async function readSurvey(id: string, session: SessionLike) {
@@ -283,7 +283,7 @@ export async function readSurvey(id: string, session: SessionLike) {
     const survey = await requireSurvey(id);
     const {combinations, responses} = await fetchForView(survey);
 
-    // Keep one answer map per visible participant. The native grouped query is
+    // Keep one answer map per visible participant. The grouped query is
     // authoritative for names and grouping; no second ballot or results owner exists.
     const results: components['schemas']['SurveyResponseView'][] = [];
     for (const [respondentId, answers] of Object.entries(responses)) {
@@ -302,8 +302,8 @@ export async function readSurvey(id: string, session: SessionLike) {
     return {data, etag: entityTag('survey-view', {data, profileId})};
 }
 
-/** Decode the versioned recurring-choice names into the native create parser,
- * then invoke its existing transactional creator. The native operation alone owns
+/** Decode the versioned recurring-choice names into the form parser,
+ * then invoke its existing transactional creator. The shared operation alone owns
  * validation/normalization and persistence; this adapter adds no parent or ACLs. */
 export async function createSurvey(body: components['schemas']['SurveyCreateInput'], file: Express.Multer.File | undefined, session: SessionLike): Promise<components['schemas']['SurveyCreated']> {
     requireSurveyCreation(session);
@@ -317,7 +317,7 @@ export async function createSurvey(body: components['schemas']['SurveyCreateInpu
     return {id};
 }
 
-/** Duplicate reads retain the native owner grant and copy only form content.
+/** Duplicate reads retain the shared owner grant and copy only form content.
  * Ballots, header, owner, archival and any unrelated feature state are excluded. */
 export async function readSurveyDuplicate(id: string, session: SessionLike): Promise<components['schemas']['SurveyDuplicate']> {
     const survey = await requireSurvey(id);
@@ -344,7 +344,7 @@ export async function readSurveyMetadata(id: string, session: SessionLike) {
     return surveyMetadataResult(survey, session);
 }
 
-/** Reuse native trim/clear semantics before the generated closed-shape validator. */
+/** Reuse form trim/clear semantics before the generated closed-shape validator. */
 export function normalizeSurveyMetadataPatch(body: unknown): unknown {
     if (!body || typeof body !== 'object' || Array.isArray(body)) return body;
     const patch = {...body} as Record<string, unknown>;
@@ -353,7 +353,7 @@ export function normalizeSurveyMetadataPatch(body: unknown): unknown {
     return patch;
 }
 
-/** Versioned property saves retain native last-write behavior under its existing
+/** Versioned property saves retain last-write behavior under its existing
  * root lock. No comparison token is accepted as authority or stale-write evidence. */
 export async function patchSurveyMetadata(id: string, body: components['schemas']['SurveyMetadataPatch'], session: SessionLike) {
     const survey = await requireSurvey(id);
@@ -407,7 +407,7 @@ export async function addSurveyCombination(id: string, body: components['schemas
     return {changed: true};
 }
 
-/** Submit exactly this profile's supplied ballot through the shared native
+/** Submit exactly this profile's supplied ballot through the shared
  * validator/replacement operation. Omitted choices and empty ballots retain their
  * existing meaning, and no stronger concurrent persistence guarantee is added. */
 export async function submitSurveyBallot(id: string, body: components['schemas']['SurveyBallotInput'], session: SessionLike,
@@ -419,7 +419,7 @@ export async function submitSurveyBallot(id: string, body: components['schemas']
     return {changed: true};
 }
 
-/** Upload admission uses owner authority before bytes are written. Native survey
+/** Upload admission uses owner authority before bytes are written. Survey
  * settings expose the same owner method without adding a general ACL interface. */
 export async function requireSurveyHeaderWrite(id: string, session: SessionLike): Promise<Survey> {
     const survey = await requireSurvey(id);
@@ -465,7 +465,7 @@ export async function setSurveyArchived(id: string, archived: boolean, session: 
 }
 
 /** Delete through the original simple survey operation, then retire its header
- * using the same best-effort cleanup as native deletion. Archive is independent. */
+ * using the same best-effort cleanup as shared deletion. Archive is independent. */
 export async function deleteSurvey(id: string, session: SessionLike,
     prepare?: SurveyMutationPreparation): Promise<components['schemas']['MutationResult']> {
     const survey = await requireSurvey(id);

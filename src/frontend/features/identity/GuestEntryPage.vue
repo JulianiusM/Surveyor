@@ -2,9 +2,9 @@
 import {computed, reactive, ref, watch} from 'vue';
 import {useRoute, useRouter, RouterLink} from 'vue-router';
 import type {components} from '../../../types/api/v1';
-import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import {useQuery} from '@tanstack/vue-query';
-import {useActionState, usePilot} from '../../app/context';
+import {useActionState, useFrontend} from '../../app/context';
 import type {FrontendGuestEntryProps} from '../../../types/FrontendGuestEntryTypes';
 import {useCommand} from '../../composables/command';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
@@ -20,7 +20,7 @@ import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import {isReadDenial} from '../../app/transport';
 
 const props = withDefaults(defineProps<FrontendGuestEntryProps>(), {presentation: 'generic'});
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 // Only the Event caller selects its linked-registration guidance and confirmation.
 // Titles and routes never infer this context; admission and commands stay injected.
@@ -81,7 +81,7 @@ watch(() => [resourceId.value, next.value], () => {
     Object.assign(fields, {name: '', email: ''});
     choiceOpen.value = false;
 });
-// The native guest document uses its Join wording without an application suffix.
+// The guest document uses its Join wording without an application suffix.
 // Its admitted title remains text even when the resource name contains markup.
 usePageTitle(() => messages.value.t('auth.join', {title: guestEntry.value?.title ?? messages.value.t(props.titleKey)}), true);
 const blocked = computed(() => checkingEmail.value || command.action.disabled.value
@@ -106,7 +106,7 @@ async function retryGuestTitle(): Promise<void> {
 
 /** The shared recovery owner protects the full read. Its actor/document/mount predicate
  * prevents a retired guest form from restarting a query after a held bootstrap completes. */
-async function readGuestAuthority(_scope: PilotRequestScope, isCurrent: () => boolean): Promise<void> {
+async function readGuestAuthority(_scope: FrontendRequestScope, isCurrent: () => boolean): Promise<void> {
     await context.refreshSession();
     if (isCurrent()) await entry.refetch({throwOnError: true});
     // An unchanged session and title cannot identify the lost registration's outcome.
@@ -117,7 +117,7 @@ async function readGuestAuthority(_scope: PilotRequestScope, isCurrent: () => bo
 async function register(): Promise<void> {
     if (blocked.value) return;
     choiceOpen.value = false;
-    // Match the native order: advisory email discovery/choice comes first, then
+    // Match the order: advisory email discovery/choice comes first, then
     // Event's configured confirmation. Cancel keeps the draft and starts no command.
     if (eventPresentation.value && !window.confirm(messages.value.t('auth.eventGuestConfirmation'))) return;
     const origin = route.fullPath;
@@ -135,14 +135,14 @@ async function register(): Promise<void> {
     } finally { registeringGuest.value = false; }
 }
 
-/** Native guest names are saved exactly as submitted. Email normalization remains the
+/** Guest names are saved exactly as submitted. Email normalization remains the
  * existing identity rule; command attribution and the list are captured before the request. */
-function registerIdentity(scope: PilotRequestScope): Promise<components['schemas']['IdentityResult']> {
+function registerIdentity(scope: FrontendRequestScope): Promise<components['schemas']['IdentityResult']> {
     return props.registerGuest({username: fields.name,
         email: fields.email.trim().toLowerCase() || null}, scope);
 }
 
-/** Preserve the native advisory email choice; a failed lookup does not block a new guest. */
+/** Preserve the advisory email choice; a failed lookup does not block a new guest. */
 async function submit(): Promise<void> {
     if (blocked.value) return;
     if (fields.email.trim()) {
@@ -156,7 +156,7 @@ async function submit(): Promise<void> {
                 return;
             }
         } catch {
-            // The native lookup is advisory. A failed read must not prevent creating a new
+            // The lookup is advisory. A failed read must not prevent creating a new
             // guest, but an obsolete identity must never carry the form into another actor.
             if (!context.isCurrent(scope)) return;
         } finally {
@@ -166,7 +166,7 @@ async function submit(): Promise<void> {
     await register();
 }
 
-/** Confirmed recovery has the same complete message outcome as the native form. Pending or
+/** Confirmed recovery has the same complete message outcome as the form. Pending or
  * unknown mail delivery stays on this form with its entered values and explicit recovery. */
 async function recover(): Promise<void> {
     if (blocked.value) return;
@@ -175,12 +175,12 @@ async function recover(): Promise<void> {
     const origin = route.fullPath;
     if (await command.run(requestRecovery, false)) {
         Object.assign(fields, {name: '', email: ''});
-        await completePageEntry(context, router, '/frontend-pilot/guest/recovery',
+        await completePageEntry(context, router, '/guest/recovery',
             'auth.recoverySent', 'success', scope, origin, completion);
     }
 }
 
-function requestRecovery(scope: PilotRequestScope): Promise<components['schemas']['MutationResult']> {
+function requestRecovery(scope: FrontendRequestScope): Promise<components['schemas']['MutationResult']> {
     return context.api.recoverGuest({email: fields.email.trim().toLowerCase(), next: next.value}, scope);
 }
 </script>
@@ -207,7 +207,7 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
                 @action="refreshIdentityState">
                 <template #uncertain>{{ ' ' + messages.t('auth.unconfirmedRequest') }}</template>
             </CommandFeedback>
-            <!-- Event guests need the native warning about access to their registration
+            <!-- Event guests need the warning about access to their registration
                  and linked planning data; other features retain their generic guidance. -->
             <StatusNotice v-if="eventPresentation" kind="info" class="text-center border-info" :margin-bottom="4">
                 <div class="d-flex">
@@ -232,18 +232,18 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
                     </li>
                 </ul>
             </div>
-            <div class="pilot-action-row justify-content-center mb-4">
-                <RouterLink class="btn btn-primary d-inline-flex align-items-center gap-2" :to="{path: '/frontend-pilot/users/login', query: {next}}"
+            <div class="frontend-action-row justify-content-center mb-4">
+                <RouterLink class="btn btn-primary d-inline-flex align-items-center gap-2" :to="{path: '/users/login', query: {next}}"
                     ><i class="bi bi-box-arrow-in-right" aria-hidden="true"></i
                     >{{ messages.t('auth.logIn') }}</RouterLink
                 ><RouterLink
                     class="btn btn-outline-warning d-inline-flex align-items-center gap-2"
-                    :to="{path: '/frontend-pilot/users/login', query: {next}}"
+                    :to="{path: '/users/login', query: {next}}"
                     ><i class="bi bi-envelope" aria-hidden="true"></i
                     >{{ messages.t('auth.recoverGuest') }}</RouterLink
                 ><RouterLink
                     class="btn btn-outline-primary d-inline-flex align-items-center gap-2"
-                    :to="{path: '/frontend-pilot/users/register', query: {next}}"
+                    :to="{path: '/users/register', query: {next}}"
                     ><i class="bi bi-person-plus" aria-hidden="true"></i
                     >{{ messages.t('auth.createAccount') }}</RouterLink
                 >
@@ -320,11 +320,11 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
             <div class="text-center mt-4">
                 <RouterLink
                     class="text-decoration-none me-3"
-                    :to="{path: '/frontend-pilot/users/login', query: {next}}"
+                    :to="{path: '/users/login', query: {next}}"
                     ><i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('auth.backLogin') }}</RouterLink
                 ><RouterLink
                     class="text-decoration-none"
-                    :to="{path: '/frontend-pilot/users/register', query: {next}}"
+                    :to="{path: '/users/register', query: {next}}"
                     ><i class="bi bi-person-plus me-1" aria-hidden="true"></i>{{ messages.t('auth.fullAccount') }}</RouterLink
                 >
             </div>

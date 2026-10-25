@@ -1,5 +1,5 @@
 import type {components} from './api/v1';
-import type {PilotRequestScope} from './FrontendPilotUiTypes';
+import type {FrontendRequestScope} from './FrontendUiTypes';
 
 /** New manual rows have no persisted ID until the shared server saves the review. */
 export type ActivityRecommendationRow = Omit<components['schemas']['ActivityRecommendations']['recommendations'][number], 'id' | 'profile'> & {
@@ -31,7 +31,7 @@ export type ActivityRecommendationReviewAction = {kind: 'status'; status: 'PENDI
 
 /** A chooser retains intent/evidence only. No draft row changes before confirmation. */
 export interface ActivityRecommendationPairChoice {
-    scope: PilotRequestScope;
+    scope: FrontendRequestScope;
     rowIdentity: string;
     rowVersion: string;
     action: ActivityRecommendationReviewAction;

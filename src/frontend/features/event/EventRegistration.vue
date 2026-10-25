@@ -2,8 +2,8 @@
 import {computed, reactive, ref, watch} from 'vue';
 import {useRoute} from 'vue-router';
 import type {components} from '../../../types/api/v1';
-import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
-import {useActionState, usePilot} from '../../app/context';
+import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import {useActionState, useFrontend} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useEventApi} from './api';
 import {formatEventCivilDate} from './presentation';
@@ -13,7 +13,7 @@ import CommandFeedback from '../../components/CommandFeedback.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 
 const props = defineProps<{event: components['schemas']['EventView']; refresh: () => Promise<void>}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useEventApi(context);
 const route = useRoute();
@@ -30,12 +30,12 @@ let ownerId: string | null = null;
 // buttons retain separate pending/focus and existing spinner presentation.
 const pendingControl = ref<'save' | 'cancel' | null>(null);
 const command = useCommand(props.refresh, false, {dirty: isDirty, unknownMessage: 'draft.leaveUnknown'});
-// Native displays a usable form to every admitted profile. The deliberate write
+// The page displays a usable form to every admitted profile. The deliberate write
 // owns its current permission rejection; the projection never grants authority.
 const saveAction = useActionState({eligible: () => command.action.isAvailable(),
     pending: () => command.pending.value && pendingControl.value === 'save'});
 // Cancellation follows its own participant admission; losing registration-write
-// permission must not silently remove the native participant cancellation action.
+// permission must not silently remove the participant cancellation action.
 const cancelAction = useActionState({eligible: () => !!props.event.registration && command.action.isAvailable(),
     pending: () => command.pending.value && pendingControl.value === 'cancel'});
 const blocked = computed(() => command.action.disabled.value);
@@ -79,7 +79,7 @@ function resetFields(registration: components['schemas']['EventRegistration'] | 
     command.clearRecoveredError('event.registration.mealRequired');
 }
 
-/** Copy the native meal interaction: meat and fish can coexist, while selecting
+/** Copy the meal interaction: meat and fish can coexist, while selecting
  * vegetarian or vegan clears the other meals. Non-meal requirements remain. */
 function selectDiet(choice: Dietary, event: Event): void {
     const checked = (event.target as HTMLInputElement).checked;
@@ -129,10 +129,10 @@ async function save(): Promise<void> {
             if (command.notice.value !== 'state.savedRefreshFailed') resetFields(props.event.registration);
         }
     } finally { pendingControl.value = null; }
-    function writeRegistration(scope: PilotRequestScope) { return api.saveRegistration(eventId, input, scope); }
+    function writeRegistration(scope: FrontendRequestScope) { return api.saveRegistration(eventId, input, scope); }
 }
 
-/** Native cancellation has its own confirmation and deadline policy on the server. */
+/** Cancellation has its own confirmation and deadline policy on the server. */
 async function cancel(): Promise<void> {
     if (!cancelAction.isAvailable() || !window.confirm(messages.value.t('event.registration.cancelConfirm'))) return;
     const eventId = props.event.id;
@@ -144,7 +144,7 @@ async function cancel(): Promise<void> {
             {success: 'event.registration.cancelled'});
         if (result) resetFields(null);
     } finally { pendingControl.value = null; }
-    function removeRegistration(scope: PilotRequestScope) { return api.cancelRegistration(eventId, scope); }
+    function removeRegistration(scope: FrontendRequestScope) { return api.cancelRegistration(eventId, scope); }
 }
 </script>
 
@@ -191,7 +191,7 @@ async function cancel(): Promise<void> {
                      Their selections remain local until one deliberate save. -->
                 <div v-if="event.requireDietaryInfo" class="col-12">
                     <label class="form-label"><i class="bi bi-egg-fried me-1" aria-hidden="true"></i>{{ messages.t('event.registration.meals') }}</label>
-                    <div class="pilot-choice-grid">
+                    <div class="frontend-choice-grid">
                         <div v-for="choice in meals" :key="choice">
                             <div class="form-check">
                                 <input :id="'diet-' + choice.toLowerCase()" class="form-check-input" type="checkbox"
@@ -205,10 +205,10 @@ async function cancel(): Promise<void> {
                     <div class="form-text">{{ messages.t('event.registration.chooseMeal') }}</div>
                     <hr />
 
-                    <!-- Native uses a different requirements icon before the first
+                    <!-- The form uses a different requirements icon before the first
                          registration; retain that visible distinction on updates. -->
                     <label class="form-label"><i class="bi me-1" :class="event.registration ? 'bi-exclamation-circle' : 'bi-egg-fried'" aria-hidden="true"></i>{{ messages.t('event.registration.requirements') }}</label>
-                    <div class="pilot-choice-grid">
+                    <div class="frontend-choice-grid">
                         <div v-for="choice in requirements" :key="choice">
                             <div class="form-check">
                                 <input :id="'diet-' + choice.toLowerCase()" class="form-check-input" type="checkbox"
@@ -229,7 +229,7 @@ async function cancel(): Promise<void> {
                     <template v-if="event.allowDietComment">
                         <hr />
                         <label class="form-label"><i class="bi bi-chat-dots me-1" aria-hidden="true"></i>{{ messages.t('event.registration.comments') }}</label>
-                        <div class="pilot-choice-grid">
+                        <div class="frontend-choice-grid">
                             <div>
                                 <div class="form-check">
                                     <input id="diet-comment" class="form-check-input" type="checkbox" name="dietary"
@@ -250,7 +250,7 @@ async function cancel(): Promise<void> {
 
                 <!-- Cancellation has separate server policy from saving changes.
                      Both controls reflect their existing shared command lifetime. -->
-                <div class="col-12 pilot-action-row justify-content-end">
+                <div class="col-12 frontend-action-row justify-content-end">
                     <ActionButton type="submit" :variant="event.registration ? 'primary' : 'success'"
                         :state="saveAction"><i class="bi me-1" :class="event.registration ? 'bi-save' : 'bi-check2-circle'" aria-hidden="true"></i>{{ messages.t(event.registration ? 'event.registration.update' : 'event.registration.save') }}</ActionButton>
                     <ActionButton v-if="event.registration" id="cancelRegistrationBtn" variant="outline-danger"

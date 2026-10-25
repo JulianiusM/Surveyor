@@ -87,8 +87,8 @@ async function applicationOrigin(): Promise<string> {
 
 /** Decode the actual emitted bootstrap through its exhaustive browser boundary. */
 async function documentBootstrap(html: string) {
-    const serialized = /<script id="surveyor-pilot-state" type="application\/json">([^<]+)<\/script>/u.exec(html)?.[1];
-    if (!serialized) throw new Error('The admitted HTTP document did not emit a pilot bootstrap.');
+    const serialized = /<script id="surveyor-frontend-state" type="application\/json">([^<]+)<\/script>/u.exec(html)?.[1];
+    if (!serialized) throw new Error('The admitted HTTP document did not emit a frontend bootstrap.');
     return decodeBootstrap(JSON.parse(serialized));
 }
 
@@ -96,12 +96,12 @@ async function documentBootstrap(html: string) {
  * session signatures, admission and persistence for every tested API request. */
 function createHttpActor() {
     let cookie = '';
-    /** Deliver native forms and generated API commands through one real browser
+    /** Deliver documents and generated API commands through one real browser
      * cookie jar; every actor keeps its own production-issued session identity. */
     async function dispatch(target: string, method = 'GET', body?: unknown, headers?: Record<string, string>) {
         const base = await applicationOrigin();
-        // Native login retains form encoding; versioned commands retain explicit
-        // JSON/context headers and the application's same-origin admission.
+        // Versioned commands retain explicit JSON/context headers and the
+        // application's same-origin admission.
         const requestHeaders = new Headers({Connection: 'close', ...headers});
         if (cookie) requestHeaders.set('Cookie', cookie);
         if (method !== 'GET') {
@@ -130,14 +130,15 @@ function sessionHeaders(proof: SessionProof): Record<string, string> {
         ...(proof.context && proof.csrfToken ? {'X-Surveyor-Context': proof.context, 'X-CSRF-Token': proof.csrfToken} : {})};
 }
 
-/** Reuse native account login; optional credentials create another independent
+/** Reuse generated account login; optional credentials create another independent
  * browser session of the same account for concurrent profile-default writes. */
 async function accountActor(account?: Awaited<ReturnType<typeof registerLocalAccount>>) {
     const user = account ?? await registerLocalAccount('p1-profile');
     await userService.activateUser(user.id);
     const agent = createHttpActor();
-    expect((await agent.dispatch('/users/login', 'POST', new URLSearchParams({username: user.username,
-        password: 'initial-secret'}))).status).toBe(302);
+    const anonymous = await (await agent.dispatch('/api/v1/session')).json() as components['schemas']['SessionView'];
+    expect((await agent.dispatch('/api/v1/auth/login', 'POST', {username: user.username,
+        password: 'initial-secret'}, sessionHeaders(anonymous))).status).toBe(200);
     const session = await (await agent.dispatch('/api/v1/session')).json() as components['schemas']['SessionView'];
     return {agent, session, user};
 }
@@ -175,8 +176,13 @@ describe('versioned profile administration reuses native persistence', () => {
         expect(await readSettings(actor)).toMatchObject({id: actor.session.activeProfile!.id, name, isDefault: false});
         const session = await (await actor.agent.dispatch('/api/v1/session')).json();
         expect(session.activeProfile).toEqual({id: actor.session.activeProfile!.id, name});
-        const native = await actor.agent.dispatch('/users/profile');
-        expect(await native.text()).toContain(`value="${name}"`);
+        const document = await actor.agent.dispatch('/users/profile');
+        expect(document.status).toBe(200);
+        // Profile fields load through their admitted API after hydration; the
+        // initial document carries the same renamed active identity and shell.
+        const html = await document.text();
+        expect((await documentBootstrap(html)).session.activeProfile).toEqual({id: actor.session.activeProfile!.id, name});
+        expect(html).toContain('data-frontend-initial-loading');
     });
 
     it('keeps the existing sibling-default transaction and native profile creation without switching identity', async function createsNativeProfile() {
@@ -237,7 +243,8 @@ describe('versioned profile administration reuses native persistence', () => {
         const first = await accountActor();
         const sibling = await userService.createProfile(first.user.id, 'Independent sibling');
         const second = await accountActor(first.user);
-        expect((await second.agent.dispatch(`/users/profile/change/${sibling.id}`)).status).toBe(302);
+        expect((await second.agent.dispatch('/api/v1/auth/profile', 'PUT', {profileId: sibling.id},
+            sessionHeaders(second.session))).status).toBe(200);
         second.session = await (await second.agent.dispatch('/api/v1/session')).json();
         const responses = await Promise.all([
             profileCommand(first, 'PATCH', {name: 'First concurrent profile', isDefault: true}),
@@ -265,10 +272,10 @@ describe('admitted common documents through the actual Express application', () 
         expect(await initial.json()).toMatchObject({kind: 'anonymous', context: null, csrfToken: null});
         expect(await repository.count()).toBe(before);
 
-        const redirect = await visitor.dispatch('/frontend-pilot/packing/create?locale=en');
+        const redirect = await visitor.dispatch('/packing/create?locale=en');
         expect(redirect.status).toBe(302);
         expect(redirect.headers.get('set-cookie')).toContain('connect.sid=');
-        expect(redirect.headers.get('location')).toBe('/frontend-pilot/users/login?next=%2Ffrontend-pilot%2Fpacking%2Fcreate%3Flocale%3Den&locale=en');
+        expect(redirect.headers.get('location')).toBe('/users/login?next=%2Fpacking%2Fcreate%3Flocale%3Den&locale=en');
         expect(await repository.count()).toBe(before + 1);
 
         // Return the server's actual cookie and redirect, then observe the real
@@ -286,11 +293,11 @@ describe('admitted common documents through the actual Express application', () 
         expect(await repository.count()).toBe(before + 1);
     });
 
-    it('keeps public Home at the pilot root and personal Overview at the native dashboard path', async function preservesHomeAndOverview() {
+    it('keeps public Home at the root and personal Overview at the dashboard path', async function preservesHomeAndOverview() {
         const base = await applicationOrigin();
-        const landing = await fetch(`${base}/frontend-pilot`);
+        const landing = await fetch(`${base}/`);
         const actor = await accountActor();
-        const overview = await actor.agent.dispatch('/frontend-pilot/users/dashboard');
+        const overview = await actor.agent.dispatch('/users/dashboard');
         expect(landing.status).toBe(200);
         expect(overview.status).toBe(200);
 
@@ -304,11 +311,11 @@ describe('admitted common documents through the actual Express application', () 
         expect(overviewState.landing).toBeUndefined();
         expect(overviewState.pageEntry).toEqual({kind: 'render'});
         expect(overviewState.commonPage).toBeUndefined();
-        expect(overviewHtml).toContain('data-pilot-initial-loading');
+        expect(overviewHtml).toContain('data-frontend-initial-loading');
         expect(landingHtml).toContain('property="og:title"');
     });
 
-    it.each(['/frontend-pilot/users/dashboard', '/FRONTEND-PILOT/USERS/DASHBOARD/'])(
+    it.each(['/users/dashboard', '/USERS/DASHBOARD/'])(
         'keeps anonymous Dashboard entry %s on the native Login journey', async path => {
             const visitor = createHttpActor();
             const target = path + '?owner_main_q=equipment&locale=de';
@@ -316,7 +323,7 @@ describe('admitted common documents through the actual Express application', () 
             expect(response.status).toBe(302);
             const destination = response.headers.get('location')!;
             const url = new URL(destination, await applicationOrigin());
-            expect(url.pathname).toBe('/frontend-pilot/users/login');
+            expect(url.pathname).toBe('/users/login');
             expect(url.searchParams.get('next')).toBe(target);
             expect(url.searchParams.get('locale')).toBe('de');
 
@@ -337,14 +344,14 @@ describe('admitted common documents through the actual Express application', () 
         ['/USERS/PROFILE/', 'edit'], ['/USERS/ACCOUNT/DELETE/', 'delete-account'],
     ] as const)('uses registered profile intent for admitted mixed-case route %s', async (path, admitted) => {
         const actor = await guestActor();
-        const target = '/FRONTEND-PILOT' + path + '?locale=de';
+        const target = path + '?locale=de';
         const response = await actor.agent.dispatch(target);
         if (!admitted) {
             // Guests cannot gain account-only profile creation/management or
             // deactivation by changing an otherwise valid URL's spelling.
             expect(response.status).toBe(302);
             const destination = new URL(response.headers.get('location')!, await applicationOrigin());
-            expect(destination.pathname).toBe('/frontend-pilot/users/login');
+            expect(destination.pathname).toBe('/users/login');
             expect(destination.searchParams.get('next')).toBe(target);
         } else {
             expect(response.status).toBe(200);
@@ -361,12 +368,12 @@ describe('admitted common documents through the actual Express application', () 
             const configured = vi.spyOn(settings, 'value', 'get').mockReturnValue({...previous,
                 localLoginEnabled: false, oidcEnabled: false});
             try {
-                const target = '/FRONTEND-PILOT' + path + '?next=%2Ffrontend-pilot%2Fhelp&locale=de';
+                const target = path + '?next=%2Fhelp&locale=de';
                 const response = await createHttpActor().dispatch(target);
                 expect(response.status).toBe(302);
                 const destination = new URL(response.headers.get('location')!, await applicationOrigin());
-                expect(destination.pathname).toBe('/frontend-pilot/users/oidc/login');
-                expect(destination.searchParams.get('next')).toBe('/frontend-pilot/help');
+                expect(destination.pathname).toBe('/users/oidc/login');
+                expect(destination.searchParams.get('next')).toBe('/help');
                 expect(destination.searchParams.get('locale')).toBe('de');
             } finally { configured.mockReturnValue(previous); }
         });
@@ -384,10 +391,10 @@ describe('admitted common documents through the actual Express application', () 
             else if (family === 'activity') id = await createActivityPlanWithSlot(ownerId);
             else id = await createIntegrationEvent(ownerId, 'Case-admitted Event');
             const visitor = createHttpActor();
-            const canonical = await visitor.dispatch(`/frontend-pilot/${family}/${id}/guest?locale=de`);
+            const canonical = await visitor.dispatch(`/${family}/${id}/guest?locale=de`);
             expect(canonical.status, family).toBe(200);
             const expected = await documentBootstrap(await canonical.text());
-            const response = await visitor.dispatch(`/FRONTEND-PILOT/${family.toUpperCase()}/${id}/GUEST/?locale=de`);
+            const response = await visitor.dispatch(`/${family.toUpperCase()}/${id}/GUEST/?locale=de`);
             expect(response.status, family).toBe(200);
             const state = await documentBootstrap(await response.text());
             expect(state.pageEntry, family).toEqual({kind: 'render'});
@@ -403,8 +410,8 @@ describe('admitted common documents through the actual Express application', () 
         // Admin admission must not fall back to participant detail for a valid
         // alternative spelling. The real controller denies this unrelated guest.
         const unrelated = await guestActor();
-        expect((await unrelated.agent.dispatch(`/frontend-pilot/event/${eventId}/admin`)).status).toBe(403);
-        const denied = await unrelated.agent.dispatch(`/FRONTEND-PILOT/EVENT/${eventId}/ADMIN/`);
+        expect((await unrelated.agent.dispatch(`/event/${eventId}/admin`)).status).toBe(403);
+        const denied = await unrelated.agent.dispatch(`/EVENT/${eventId}/ADMIN/`);
         expect(denied.status).toBe(403);
         // Event admission retains its owner's shared Forbidden wording; an
         // accepted alternative route spelling must preserve that catalog key.
@@ -415,7 +422,7 @@ describe('admitted common documents through the actual Express application', () 
     it('keeps the localized Packing not-found outcome for an admitted uppercase namespace', async () => {
         const visitor = createHttpActor();
         const id = randomUUID();
-        const response = await visitor.dispatch(`/FRONTEND-PILOT/PACKING/${id}/?locale=de`);
+        const response = await visitor.dispatch(`/PACKING/${id}/?locale=de`);
         expect(response.status).toBe(404);
         const state = await documentBootstrap(await response.text());
         expect(state.packingError).toBe('packing.notFound');
@@ -427,7 +434,7 @@ describe('admitted common documents through the actual Express application', () 
         const previousEnvironment = application!.get('env');
         application!.set('env', 'production');
         try {
-            const response = await fetch(`${base}/frontend-pilot/p1-missing-route?message=Forged%20body&stack=Private%20trace`);
+            const response = await fetch(`${base}/p1-missing-route?message=Forged%20body&stack=Private%20trace`);
             const html = await response.text();
             const state = await documentBootstrap(html);
 
@@ -440,14 +447,14 @@ describe('admitted common documents through the actual Express application', () 
             expect(state.commonPage?.message).not.toContain('Forged body');
             expect(state.commonPage && 'stack' in state.commonPage ? state.commonPage.stack : undefined).toBeUndefined();
             expect(html).toContain('(Status 404)');
-            expect(html).not.toContain('data-pilot-initial-loading');
+            expect(html).not.toContain('data-frontend-initial-loading');
             expect(html).not.toContain('id="name"');
         } finally { application!.set('env', previousEnvironment); }
     });
 
     it('retains the Help owner contextual message and404 in the selected language', async function preservesContextualHelpError() {
         const base = await applicationOrigin();
-        const response = await fetch(`${base}/frontend-pilot/help/p1-missing-article?locale=de`);
+        const response = await fetch(`${base}/help/p1-missing-article?locale=de`);
         const state = await documentBootstrap(await response.text());
 
         // Expected document errors keep their existing contextual wording rather
@@ -460,7 +467,7 @@ describe('admitted common documents through the actual Express application', () 
 
     it('preserves the native400 for an Express route-parameter decode failure', async function preservesMalformedParameterStatus() {
         const base = await applicationOrigin();
-        const response = await fetch(`${base}/frontend-pilot/help/%E0%A4%A`);
+        const response = await fetch(`${base}/help/%E0%A4%A`);
         const state = await documentBootstrap(await response.text());
 
         // Express owns malformed percent encoding. Its transport rejection must
@@ -477,12 +484,12 @@ describe('admitted common documents through the actual Express application', () 
         expect(await api.json()).toMatchObject({code: 'NOT_FOUND', status: 404});
 
         // Health remains plain Express output, and a missing built chunk cannot
-        // become a successful or hydrated pilot document through an HTML fallback.
+        // become a successful or hydrated frontend document through an HTML fallback.
         const health = await fetch(`${base}/healthz`);
         expect(health.status).toBe(200);
         expect(await health.text()).toBe('ok');
         const asset = await fetch(`${base}/app/p1-missing-chunk.js`);
         expect(asset.status).toBe(404);
-        expect(await asset.text()).not.toContain('id="surveyor-pilot"');
+        expect(await asset.text()).not.toContain('id="surveyor-frontend"');
     });
 });

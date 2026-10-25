@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, ref} from 'vue';
-import {usePilot} from '../app/context';
+import {useFrontend} from '../app/context';
 import ActionButton from './ActionButton.vue';
 import AppDialog from './AppDialog.vue';
 import TimezoneOptions from './TimezoneOptions.vue';
 
-// Creation and property editing share the copied native discovery/alias behavior.
+// Creation and property editing share the zone discovery and alias behavior.
 // The feature retains the submitted zone and local deadline; this picker stores
 // only disclosure/search state and never rewrites a deadline instant itself.
 const props = withDefaults(defineProps<{modelValue: string; id: string; disabled?: boolean; reference?: string | null;
     mode?: 'inline' | 'modal'}>(), {mode: 'inline'});
 const emit = defineEmits<{'update:modelValue': [value: string]}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const open = ref(false);
 const search = ref('');
 const trigger = ref<HTMLButtonElement | null>(null);
@@ -24,8 +24,8 @@ const common = ['UTC', 'Europe/Berlin', 'Europe/London', 'America/New_York', 'Am
 const guessed = guessedZone();
 const zones = computed(discoverZones);
 
-/** Canonical browser zones are supplemented by valid saved/common aliases, as in
- * native. Initialization preserves the configured value without emitting an edit. */
+/** Supplement canonical browser zones with valid saved/common aliases.
+ * Keep the selected zone even when discovery omits its alias. Initialization preserves the configured value without emitting an edit. */
 function discoverZones(): string[] {
     const supported = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : common;
     const choices = new Set(['UTC', ...supported]);
@@ -37,7 +37,7 @@ function discoverZones(): string[] {
 }
 
 /** Offset labels use the supplied reference instant so saved DST offsets retain
- * their native meaning. Invalid reference dates leave a selectable plain name. */
+ * their meaning. Invalid reference dates leave a selectable plain name. */
 function label(zone: string): string {
     try {
         const date = props.reference ? new Date(props.reference) : new Date();
@@ -51,7 +51,7 @@ function label(zone: string): string {
 function choose(zone: string, closePicker = true): void {
     if (props.disabled || !zones.value.includes(zone)) return;
     emit('update:modelValue', zone);
-    // Native choices close the picker and briefly acknowledge the selected zone.
+    // Choices close the picker and briefly acknowledge the selected zone.
     // One owned timer avoids accumulated callbacks after repeated selections.
     chosen.value = true;
     clearTimeout(feedbackTimer);
@@ -82,7 +82,7 @@ function close(): void {
 </script>
 
 <template>
-    <!-- Keep the native button, common-zone chips and searchable list geometry;
+    <!-- Keep the button, common-zone chips and searchable list geometry;
          inline disclosure avoids nested Bootstrap modals inside Entity settings. -->
     <div class="timezone-picker tz-picker-compact">
         <input :id="id" type="hidden" name="deadlineTz" :value="modelValue" :disabled="disabled" />

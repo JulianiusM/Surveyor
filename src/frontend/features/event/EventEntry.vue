@@ -2,9 +2,9 @@
 import {computed, ref, watch} from 'vue';
 import {useRoute} from 'vue-router';
 import type {components} from '../../../types/api/v1';
-import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {EntityEntryRetirement} from '../../../types/FrontendEntityEntryTypes';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {resourceRouteIntent} from '../../composables/pageEntry';
 import {eventKeys} from '../../app/queryKeys';
 import {useEventApi} from './api';
@@ -13,7 +13,7 @@ import EventPage from './EventPage.vue';
 import EntityEntryPage from '../../components/EntityEntryPage.vue';
 import GuestEntryPage from '../identity/GuestEntryPage.vue';
 
-const context = usePilot();
+const context = useFrontend();
 const api = useEventApi(context);
 const route = useRoute();
 const eventId = computed(() => String(route.params.eventId).toLowerCase());
@@ -24,35 +24,35 @@ const regToken = computed(() => typeof route.query.regToken === 'string' ? route
 // family uses an ordinal; shared page entry also binds the exact document URL.
 const tokenVisit = ref(0);
 watch(regToken, () => { tokenVisit.value++; }, {flush: 'sync'});
-const destination = computed(() => '/frontend-pilot/event/' + eventId.value
+const destination = computed(() => '/event/' + eventId.value
     + (regToken.value ? '?regToken=' + encodeURIComponent(regToken.value) : ''));
 
 // Initial admission belongs to one URL and identity. Reusing this wrapper for another
 // Event, locale or explicit guest route gets its own query through the shared entry owner.
-const nativeInitial = context.initialDocumentFor(route.fullPath);
-const initialEntry = nativeInitial?.eventEntry;
+const initialDocument = context.initialDocumentFor(route.fullPath);
+const initialEntry = initialDocument?.eventEntry;
 
 
 /** Admission and detail reads are independent. A typed entry denial must retire private
  * projections even when it unmounts the detail before that read can report its own failure.
  * Public guest admission has its own policy; a participant denial does not revoke it.
  * Copied duplicate drafts also remain independent of their source Event's read authority. */
-function deniedQueries(entry: {readonly status: number}, scope: PilotRequestScope): EntityEntryRetirement {
+function deniedQueries(entry: {readonly status: number}, scope: FrontendRequestScope): EntityEntryRetirement {
     return eventDeniedQueries(scope.context, eventId.value, intent.value, entry.status);
 }
 
 /** The server owns the distinction between detail admission and the explicit public guest
  * entry exception. The feature supplies only its route intent and resource identifier. */
-function readEntry(scope: PilotRequestScope, signal: AbortSignal): Promise<components['schemas']['EventResourceEntry']> {
+function readEntry(scope: FrontendRequestScope, signal: AbortSignal): Promise<components['schemas']['EventResourceEntry']> {
     return api.resourceEntry(eventId.value, intent.value, scope, signal, regToken.value);
 }
 
 /** Inject Event's generated operations into the shared guest presentation. */
-function readGuestEntry(scope: PilotRequestScope, signal?: AbortSignal) {
+function readGuestEntry(scope: FrontendRequestScope, signal?: AbortSignal) {
     return api.guestEntry(eventId.value, scope, signal, regToken.value);
 }
 
-function registerGuest(input: components['schemas']['GuestRegistrationInput'], scope: PilotRequestScope) {
+function registerGuest(input: components['schemas']['GuestRegistrationInput'], scope: FrontendRequestScope) {
     return api.registerGuest(eventId.value, input, scope, regToken.value);
 }
 

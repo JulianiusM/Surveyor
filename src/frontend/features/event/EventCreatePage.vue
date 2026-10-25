@@ -2,9 +2,9 @@
 import {computed, reactive, ref, watch} from 'vue';
 import {useRoute, RouterLink} from 'vue-router';
 import type {components} from '../../../types/api/v1';
-import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {EntityMetadataValues} from '../../../types/FrontendEntityMetadataTypes';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {eventKeys} from '../../app/queryKeys';
 import {useCreationCommand} from '../../composables/creation';
 import {usePageEntry} from '../../composables/pageEntry';
@@ -20,7 +20,7 @@ import CommandFeedback from '../../components/CommandFeedback.vue';
 import CreationAdmissionNotices from '../../components/CreationAdmissionNotices.vue';
 import FileField from '../../components/FileField.vue';
 
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useEventApi(context);
 const route = useRoute();
@@ -42,7 +42,7 @@ const retryAt = useReadRetryAt(() => entry.error.value, entry.retryAvailable);
 const submission = useCreationCommand<components['schemas']['EventCreated']>({
     dirty: isDirty, eligible: () => !!definitions.value && baseline.value !== null,
     readEntry: readSubmissionEntry, navigateEntry: entry.navigate,
-    destination: result => '/frontend-pilot/event/' + result.id,
+    destination: result => '/event/' + result.id,
     success: 'event.created', unknownMessage: 'event.leaveUnknown',
 });
 const {command, blocked, createAction, submissionAdmissionError, submissionAdmittedAt,
@@ -61,7 +61,7 @@ function initialCreation(): Creation | undefined {
 
 /** Duplicate admission copies only its bounded form values. This GET never
  * creates an Event, uploads bytes or consumes a registration capability. */
-async function readCreation(scope: PilotRequestScope, signal: AbortSignal): Promise<Creation> {
+async function readCreation(scope: FrontendRequestScope, signal: AbortSignal): Promise<Creation> {
     const source = sourceId.value;
     if (!source) return api.createEntry(scope, signal, route.fullPath);
     // Tag this local adaptation with its admitted source. On warm navigation the
@@ -103,9 +103,9 @@ function resetCreation(): void {
     defaults.value = {participant: 0, guest: 0, authenticated: 0, public: 0};
 }
 
-/** Duplication admits copying, while creation retains its independent native
+/** Duplication admits copying, while creation retains its independent account
  * account journey. The shared owner captures this read's actor and return URL. */
-async function readSubmissionEntry(scope: PilotRequestScope, returnTo: string): Promise<components['schemas']['PageEntryOutcome']> {
+async function readSubmissionEntry(scope: FrontendRequestScope, returnTo: string): Promise<components['schemas']['PageEntryOutcome']> {
     return (await api.createEntry(scope, undefined, returnTo)).entry;
 }
 
@@ -113,7 +113,7 @@ async function create(): Promise<void> {
     await submission.submit(collectCreation);
 }
 
-/** Preserve native lexical date/capacity/deadline values and all audience masks.
+/** Preserve lexical date/capacity/deadline values and all audience masks.
  * Business parsing stays with the existing Event creation operation. */
 function collectCreation() {
     const input: components['schemas']['EventCreateInput'] = {
@@ -128,7 +128,7 @@ function collectCreation() {
         defaultPermissions: {...defaults.value},
     };
     const selectedImage = image.value;
-    return function createEvent(scope: PilotRequestScope) { return api.createEvent(input, selectedImage, scope); };
+    return function createEvent(scope: FrontendRequestScope) { return api.createEvent(input, selectedImage, scope); };
 }
 </script>
 
@@ -175,8 +175,8 @@ function collectCreation() {
                         </div>
                     </div>
 
-                    <div class="pilot-action-row justify-content-end">
-                        <RouterLink class="btn btn-outline-secondary" to="/frontend-pilot"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>{{ messages.t('common.cancel') }}</RouterLink>
+                    <div class="frontend-action-row justify-content-end">
+                        <RouterLink class="btn btn-outline-secondary" to="/"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>{{ messages.t('common.cancel') }}</RouterLink>
                         <ActionButton type="submit" variant="success" :state="createAction"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>{{ messages.t('event.create') }}</ActionButton>
                     </div>
                 </fieldset>

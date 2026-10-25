@@ -1,6 +1,6 @@
 import type {components} from '../../../types/api/v1';
-import type {PilotContext, PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
-import type {PilotApi} from '../../app/api';
+import type {FrontendContext, FrontendRead, FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import type {FrontendApi} from '../../app/api';
 import {createMultipartForm, generatedInputError, InvalidInputError} from '../../app/transport';
 import {validateSurveyView} from '../../../../.generated/api/v1/browser/validateSurveyView.mjs';
 import {validateSurveyCreateEntry} from '../../../../.generated/api/v1/browser/validateSurveyCreateEntry.mjs';
@@ -24,11 +24,11 @@ type Metadata = components['schemas']['SurveyMetadata'];
  * transport owns actor scope, cancellation, cooldown and outcome classification;
  * existing server controllers remain the only business/authorization owners. */
 export class SurveysApi {
-    constructor(private readonly transport: PilotApi) {}
+    constructor(private readonly transport: FrontendApi) {}
 
     /** A conditional detail read stays bound to its caller's actor/resource key. */
-    async survey(surveyId: string, scope: PilotRequestScope, signal?: AbortSignal,
-                 previous?: PilotRead<Survey>): Promise<PilotRead<Survey>> {
+    async survey(surveyId: string, scope: FrontendRequestScope, signal?: AbortSignal,
+                 previous?: FrontendRead<Survey>): Promise<FrontendRead<Survey>> {
         const transport = this.transport;
         async function readSurvey() {
             // Carry the previous representation's validator through the same
@@ -43,7 +43,7 @@ export class SurveysApi {
 
     /** Creation is an account-only journey, independently admitted from reading
      * a duplication source. Preserve the exact requested return destination. */
-    async createEntry(scope: PilotRequestScope, signal?: AbortSignal, returnTo?: string) {
+    async createEntry(scope: FrontendRequestScope, signal?: AbortSignal, returnTo?: string) {
         const transport = this.transport;
         async function readEntry() {
             // The server chooses render/login/denied; the browser validates that
@@ -58,7 +58,7 @@ export class SurveysApi {
 
     /** Explicit guest and detail URLs retain their distinct native admission.
      * A private detail grant cannot stand in for the public guest exception. */
-    async resourceEntry(surveyId: string, view: 'detail' | 'guest', scope: PilotRequestScope, signal?: AbortSignal) {
+    async resourceEntry(surveyId: string, view: 'detail' | 'guest', scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
         async function readEntry() {
             // Carry route intent and actor through the same cancelable read.
@@ -72,7 +72,7 @@ export class SurveysApi {
 
     /** Copy only the admitted metadata and recurring choices. Votes, uploaded
      * files and ownership are never part of this independent creation draft. */
-    async duplicate(surveyId: string, scope: PilotRequestScope, signal?: AbortSignal) {
+    async duplicate(surveyId: string, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
         async function readDuplicate() {
             // Reading a copy does not authorize its later creation command.
@@ -86,7 +86,7 @@ export class SurveysApi {
 
     /** Capture generated machine data and optional bytes in the native multipart
      * boundary. A validated receipt confirms creation; no failure replays it. */
-    async createSurvey(input: components['schemas']['SurveyCreateInput'], image: File | null, scope: PilotRequestScope) {
+    async createSurvey(input: components['schemas']['SurveyCreateInput'], image: File | null, scope: FrontendRequestScope) {
         // Reject malformed local values before allocating or dispatching bytes.
         // Admission and business validation remain with the server controller.
         if (!validateSurveyCreateInput(input)) {
@@ -118,7 +118,7 @@ export class SurveysApi {
 
     /** Replace only the captured profile's displayed ballot. The shared command
      * owner decides when a confirmed result releases its local personal draft. */
-    async submitBallot(surveyId: string, input: components['schemas']['SurveyBallotInput'], scope: PilotRequestScope) {
+    async submitBallot(surveyId: string, input: components['schemas']['SurveyBallotInput'], scope: FrontendRequestScope) {
         // Structural validation precedes dispatch; the server checks that every
         // answer belongs to this Survey before its unchanged replacement write.
         if (!validateSurveyBallotInput(input)) throw generatedInputError(validateSurveyBallotInput.errors, () => undefined);
@@ -131,7 +131,7 @@ export class SurveysApi {
 
     /** Submit one collaborative recurring choice. A missing reply does not
      * identify a created row and cannot authorize automatic creation replay. */
-    async addCombination(surveyId: string, input: components['schemas']['SurveyCombinationInput'], scope: PilotRequestScope) {
+    async addCombination(surveyId: string, input: components['schemas']['SurveyCombinationInput'], scope: FrontendRequestScope) {
         // Generated validation owns the finite weekday/occurrence wire values.
         if (!validateSurveyCombinationInput(input)) {
             throw generatedInputError(validateSurveyCombinationInput.errors, () => 'survey.combinationInvalid');
@@ -145,9 +145,9 @@ export class SurveysApi {
 
     /** ETags identify admitted representations for shared draft reconciliation.
      * They do not introduce a new server write precondition for legacy Surveys. */
-    async metadata(surveyId: string, scope: PilotRequestScope, signal?: AbortSignal,
-                   previous?: PilotRead<Metadata>): Promise<PilotRead<Metadata>> {
-        const transport: PilotApi = this.transport;
+    async metadata(surveyId: string, scope: FrontendRequestScope, signal?: AbortSignal,
+                   previous?: FrontendRead<Metadata>): Promise<FrontendRead<Metadata>> {
+        const transport: FrontendApi = this.transport;
         async function readMetadata() {
             // The returned identity belongs to this admitted metadata baseline,
             // independently of public results and another profile's ballot.
@@ -167,7 +167,7 @@ export class SurveysApi {
     /** Preserve the existing blind metadata operation. The shared editor token
      * stays local comparison evidence and is deliberately not sent as If-Match. */
     async saveMetadata(surveyId: string, patch: components['schemas']['SurveyMetadataPatch'], _token: string,
-                       scope: PilotRequestScope): Promise<PilotRead<Metadata>> {
+                       scope: FrontendRequestScope): Promise<FrontendRead<Metadata>> {
         // Keep the generated sparse patch distinct from its local baseline token.
         if (!validateSurveyMetadataPatch(patch)) {
             throw generatedInputError(validateSurveyMetadataPatch.errors, path => path === '/title' ? {label: 'survey.title'}
@@ -183,7 +183,7 @@ export class SurveysApi {
 
     /** Read the owner's applicable settings separately from public participation.
      * The projection supplies no event, administrator or permission controls. */
-    async settings(surveyId: string, scope: PilotRequestScope, signal?: AbortSignal) {
+    async settings(surveyId: string, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
         async function readSettings() {
             // The generated projection, rather than the detail's edit button,
@@ -198,7 +198,7 @@ export class SurveysApi {
 
     /** Fetch authorized image bytes through the shared binary/error decoder.
      * Cancellation and cooldown share the JSON read's captured identity. */
-    async header(surveyId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<Blob> {
+    async header(surveyId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<Blob> {
         const transport = this.transport;
         async function readHeader() {
             // Successful media becomes a Blob; Problems retain normal JSON
@@ -213,7 +213,7 @@ export class SurveysApi {
 
     /** Selected bytes retain their file draft but keep native unversioned image
      * semantics. Settings tokens identify client baselines, never new DB locks. */
-    async uploadHeader(surveyId: string, image: File, _token: string, scope: PilotRequestScope) {
+    async uploadHeader(surveyId: string, image: File, _token: string, scope: FrontendRequestScope) {
         // Capture the selected bytes without placing them in a query cache or
         // sending the local comparison token as new write authority.
         const form = createMultipartForm(null, image);
@@ -225,7 +225,7 @@ export class SurveysApi {
 
     /** Remove the current image through the existing owner-only operation.
      * Local settings comparison evidence does not strengthen its write contract. */
-    async removeHeader(surveyId: string, _token: string, scope: PilotRequestScope) {
+    async removeHeader(surveyId: string, _token: string, scope: FrontendRequestScope) {
         // Decode the invariant acknowledgement before the caller releases image
         // state; uncertain delivery stays with its existing shared command owner.
         return this.transport.read('deleteSurveyHeader', await this.transport.client.DELETE('/surveys/{surveyId}/header', {
@@ -235,7 +235,7 @@ export class SurveysApi {
 
     /** Select the desired archive state without inferring eligibility or dates.
      * The shared lifecycle/controller owners retain authorization and idempotence. */
-    async archive(surveyId: string, restore: boolean, scope: PilotRequestScope) {
+    async archive(surveyId: string, restore: boolean, scope: FrontendRequestScope) {
         const options = {params: {path: {surveyId}, header: this.transport.headers(scope)}, cache: 'no-store' as const};
 
         // Both generated operations share transport/result handling while keeping
@@ -247,7 +247,7 @@ export class SurveysApi {
 
     /** Permanently remove an owned Survey independently of archival. Confirmed
      * destination delivery is handled by the existing shared removal command. */
-    async deleteSurvey(surveyId: string, scope: PilotRequestScope) {
+    async deleteSurvey(surveyId: string, scope: FrontendRequestScope) {
         // Send no browser-selected profile, lifecycle timestamp or deletion state.
         return this.transport.read('deleteSurvey', await this.transport.client.DELETE('/surveys/{surveyId}', {
             params: {path: {surveyId}, header: this.transport.headers(scope)}, cache: 'no-store',
@@ -256,7 +256,7 @@ export class SurveysApi {
 
     /** Public guest entry exposes only its title and admission information.
      * Registering an identity remains a separate explicit command below. */
-    async guestEntry(surveyId: string, scope: PilotRequestScope, signal?: AbortSignal) {
+    async guestEntry(surveyId: string, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
         async function readGuest() {
             // Keep the title surface independent from private ballots/settings.
@@ -270,7 +270,7 @@ export class SurveysApi {
 
     /** Register the explicitly submitted guest through the existing identity
      * completion boundary; a title/admission read can never issue this command. */
-    async registerGuest(surveyId: string, input: components['schemas']['GuestRegistrationInput'], scope: PilotRequestScope) {
+    async registerGuest(surveyId: string, input: components['schemas']['GuestRegistrationInput'], scope: FrontendRequestScope) {
         // Shared identity decoding installs only the validated captured completion.
         // Its command owner retains input and uncertainty after failed delivery.
         return this.transport.identity('registerSurveyGuest', await this.transport.client.POST('/surveys/{surveyId}/guest', {
@@ -279,11 +279,11 @@ export class SurveysApi {
     }
 }
 
-const owners = new WeakMap<PilotApi, SurveysApi>();
+const owners = new WeakMap<FrontendApi, SurveysApi>();
 
 /** One wrapper per request/application transport avoids sharing actors or drafts
  * globally while allowing mounted matching components to reuse their API owner. */
-export function useSurveysApi(context: PilotContext): SurveysApi {
+export function useSurveysApi(context: FrontendContext): SurveysApi {
     let owner = owners.get(context.api);
     if (!owner) {
         owner = new SurveysApi(context.api);

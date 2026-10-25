@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
-import type {PilotPlainMessageKey} from '../../../types/FrontendPilotUiTypes';
-import {useActionState, usePilot} from '../../app/context';
+import type {FrontendPlainMessageKey} from '../../../types/FrontendUiTypes';
+import {useActionState, useFrontend} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
 import {financeMoney, financeSettlementMessages} from './presentation';
@@ -20,8 +20,8 @@ const props = defineProps<{
     active: boolean;
     refresh: () => Promise<void>;
 }>();
-const emit = defineEmits<{close: []; saved: [notice: PilotPlainMessageKey]; pending: [pending: boolean]}>();
-const context = usePilot();
+const emit = defineEmits<{close: []; saved: [notice: FrontendPlainMessageKey]; pending: [pending: boolean]}>();
+const context = useFrontend();
 const {messages, locale} = context;
 const api = useFinanceApi(context);
 const reviewed = ref({...props.share});

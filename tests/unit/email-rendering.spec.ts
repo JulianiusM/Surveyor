@@ -222,7 +222,7 @@ describe('transactional email rendering', () => {
         const create = vi.spyOn(nodemailer, 'createTransport').mockReturnValue(transport as unknown as Transporter);
         const send = vi.spyOn(transport, 'sendMail');
         const log = vi.spyOn(console, 'error').mockImplementation(function quietDeliveryLog() {});
-        const privateLink = 'https://surveyor.example/frontend-pilot/guest/example/login/private-token';
+        const privateLink = 'https://surveyor.example/guest/example/login/private-token';
         try {
             const prepared = prepareGuestLinkEmail(recipient, privateLink);
             expect(create).not.toHaveBeenCalled();

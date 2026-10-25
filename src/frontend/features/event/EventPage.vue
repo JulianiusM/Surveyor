@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue';
 import {useRoute} from 'vue-router';
-import {useActionState, usePilot} from '../../app/context';
+import {useActionState, useFrontend} from '../../app/context';
 import {belongsToQueryFamily, eventKeys, overviewKeys} from '../../app/queryKeys';
 import {evictQueryFamilies, refetchFreshQueries} from '../../app/queryCache';
 import {isReadDenial} from '../../app/transport';
@@ -22,7 +22,7 @@ import StatusNotice from '../../components/StatusNotice.vue';
 import EntityHeader from '../../components/EntityHeader.vue';
 import RefreshButton from '../../components/RefreshButton.vue';
 
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useEventApi(context);
 const route = useRoute();
@@ -41,7 +41,7 @@ const financeEnabled = computed(() => !!event.value && (admin.value
 const editorOpen = ref(false);
 const retireSettingsAccess = useSettingsAccessRetirement({active: () => section.readAction.isAvailable(), refresh: refreshPresentation});
 // Event supplies its admitted image/query operation to the same displayed
-// header as Packing. Dashboard headings deliberately retain their native shape.
+// header as Packing. Dashboard headings deliberately retain their shape.
 const readHeader = api.header.bind(api);
 usePageTitle(pageTitle, true);
 watch(section.denied, closeDeniedSettings);
@@ -74,7 +74,7 @@ function retireDeniedProjections(failure: Error | null): void {
 
 function pageTitle(): string {
     // Document branding differs from the visible dashboard heading. Keep both
-    // native page intents explicit while the shared owner follows locale changes.
+    // page intents explicit while the shared owner follows locale changes.
     if (!event.value) return messages.value.t('event.createDocumentTitle');
     return messages.value.t(admin.value ? 'event.adminDocumentTitle' : 'event.documentTitle', {title: event.value.title});
 }
@@ -174,7 +174,7 @@ async function refresh(mode: 'dependencies' | 'page' = 'dependencies'): Promise<
 
                 <EventRegistration v-if="!admin" :event="event" :refresh="refresh" />
                 <EventBypassLinks v-if="admin && event.capabilities.manageRegistrations" :event-id="event.id" />
-                <!-- Native participant Finance precedes the roster and related
+                <!-- Participant Finance precedes the roster and related
                      content. Both page intents reuse its role-scoped owner. -->
                 <FinanceSection v-if="!admin && financeEnabled" :key="`${event.id}:${admin}`"
                     :event-id="event.id" :admin="admin" :enabled="financeEnabled" />

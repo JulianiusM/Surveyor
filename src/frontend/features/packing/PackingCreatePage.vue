@@ -2,16 +2,16 @@
 import {ref} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {FrontendListCreationSource} from '../../../types/FrontendListTypes';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {packingKeys} from '../../app/queryKeys';
 import {usePackingApi} from './api';
 import EntityListCreation from '../../components/EntityListCreation.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import FormField from '../../components/FormField.vue';
 
-// Packing owns the only collection draft and its native trimming/parseInt
+// Packing owns the only collection draft and its trimming/parseInt
 // collector. The shared matching list form owns root fields and admission.
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = usePackingApi(context);
 type Row = Omit<components['schemas']['PackingDuplicateItem'], 'maxAssignees' | 'description'>
@@ -24,8 +24,8 @@ function newRow(value?: components['schemas']['PackingDuplicateItem']): Row {
         maxAssignees: String(value?.maxAssignees || 1), requiredByAll: value?.requiredByAll ?? false};
 }
 
-/** Collection creation keeps its native lexical number control and blank-row
- * omission; root metadata fields retain their separate native whitespace rules. */
+/** Collection creation keeps its lexical number control and blank-row
+ * omission; root metadata fields retain their separate whitespace rules. */
 function collectedItems(): components['schemas']['PackingNewItem'][] {
     const items: components['schemas']['PackingNewItem'][] = [];
     for (const row of rows.value) {
@@ -44,9 +44,9 @@ const source: FrontendListCreationSource<components['schemas']['PackingDuplicate
     createEntry: api.createEntry.bind(api), duplicate: api.duplicate.bind(api),
     initialize(copy) { rows.value = copy ? copy.items.map(newRow) : [newRow()]; },
     reset() { rows.value = []; }, draft: () => rows.value,
-    destination: result => '/frontend-pilot/packing/' + result.id,
+    destination: result => '/packing/' + result.id,
     prepare(values, image) {
-        // A confirmed empty collection uses the native field error without sending
+        // A confirmed empty collection uses the field error without sending
         // an invalid generated command. This check owns no backend permission.
         const items = collectedItems();
         if (!items.length) return {error: 'packing.itemsRequired'};
@@ -103,7 +103,7 @@ const source: FrontendListCreationSource<components['schemas']['PackingDuplicate
                                         :pending="pending" />
                                 </td>
                                 <td class="text-center">
-                                    <!-- Native Everyone text is descriptive rather than a
+                                    <!-- Everyone text is descriptive rather than a
                                          second click target. Keep switch/keyboard behavior
                                          and its accessible name without implicit label activation. -->
                                     <div

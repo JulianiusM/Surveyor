@@ -2,7 +2,7 @@
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {flushPromises} from '@vue/test-utils';
-import {createPilotApp, initializePilotApp} from '../../src/frontend/app/createApp';
+import {createFrontendApp, initializeFrontendApp} from '../../src/frontend/app/createApp';
 import {render} from '../../src/frontend/app/entry-server';
 import type {components} from '../../src/types/api/v1';
 
@@ -49,7 +49,7 @@ afterEach(async () => {
 
 const firstList = '22222222-2222-4222-8222-222222222222';
 const secondList = '33333333-3333-4333-8333-333333333333';
-const firstPacking = `/frontend-pilot/packing/${firstList}`;
+const firstPacking = `/packing/${firstList}`;
 
 /** Keep the real SSR tree, initialization, router, admission, validation and
  * update coordinator. Only HTTP and the final document reload are substituted;
@@ -78,16 +78,16 @@ async function mountedDenial(initial: boolean) {
             'X-Surveyor-Context': state.session.context}});
     }
 
-    const path = initial ? firstPacking : '/frontend-pilot/home';
+    const path = initial ? firstPacking : '/';
     const rendered = await render(path, {session, ...(initial ? {packingError: 'packing.notFound' as const} : {})});
     const host = document.createElement('div');
     host.innerHTML = rendered.html;
     document.body.append(host);
     window.history.replaceState({}, '', path);
     vi.stubGlobal('fetch', request);
-    const application = createPilotApp(JSON.parse(rendered.state), true);
+    const application = createFrontendApp(JSON.parse(rendered.state), true);
     await application.router.isReady();
-    const stop = await initializePilotApp(application, host);
+    const stop = await initializeFrontendApp(application, host);
     cleanups.push(async function disposeMountedDenial(): Promise<void> {
         application.app.unmount();
         stop();
@@ -105,17 +105,17 @@ describe('retired route module recovery', () => {
         'Failed to fetch dynamically imported module: https://example.invalid/app/assets/HelpPage-old.js',
         'Importing a module script failed.',
     ])('keeps the current route and its edit guard after %s', async message => {
-        window.history.replaceState({}, '', '/frontend-pilot/help');
-        const {router, context} = createPilotApp({session}, true);
+        window.history.replaceState({}, '', '/help');
+        const {router, context} = createFrontendApp({session}, true);
         const failure = new TypeError(message);
-        router.addRoute({path: '/frontend-pilot/unavailable-fixture', component: () => Promise.reject(failure)});
+        router.addRoute({path: '/unavailable-fixture', component: () => Promise.reject(failure)});
         const editMayBeDiscarded = vi.fn(() => false);
         context.updates.registerGuard(editMayBeDiscarded);
         try {
-            await router.push('/frontend-pilot/help');
-            await expect(router.push('/frontend-pilot/unavailable-fixture')).rejects.toBe(failure);
+            await router.push('/help');
+            await expect(router.push('/unavailable-fixture')).rejects.toBe(failure);
             await Promise.resolve();
-            expect(router.currentRoute.value.path).toBe('/frontend-pilot/help');
+            expect(router.currentRoute.value.path).toBe('/help');
             expect(context.updates.available.value).toBe(true);
             expect(context.updates.requestReload()).toBe(false);
             // Help requires deliberate recovery even when clean. That explicit
@@ -129,13 +129,13 @@ describe('retired route module recovery', () => {
     });
 
     it('keeps ordinary route bugs visible without suggesting a release reload', async () => {
-        window.history.replaceState({}, '', '/frontend-pilot/help');
-        const {router, context} = createPilotApp({session}, true);
+        window.history.replaceState({}, '', '/help');
+        const {router, context} = createFrontendApp({session}, true);
         const failure = new TypeError('Cannot read properties of undefined');
-        router.addRoute({path: '/frontend-pilot/broken-fixture', component: () => Promise.reject(failure)});
+        router.addRoute({path: '/broken-fixture', component: () => Promise.reject(failure)});
         try {
-            await router.push('/frontend-pilot/help');
-            await expect(router.push('/frontend-pilot/broken-fixture')).rejects.toBe(failure);
+            await router.push('/help');
+            await expect(router.push('/broken-fixture')).rejects.toBe(failure);
             expect(context.updates.available.value).toBe(false);
         } finally {
             router.options.history.destroy();
@@ -145,28 +145,28 @@ describe('retired route module recovery', () => {
 });
 
 describe('dynamic-content automatic document replacement', () => {
-    const packing = '/frontend-pilot/packing/22222222-2222-4222-8222-222222222222';
+    const packing = '/packing/22222222-2222-4222-8222-222222222222';
     const families = ['packing', 'event', 'drivers', 'survey', 'activity'];
-    const activity = `/frontend-pilot/activity/${firstList}`;
-    const eventAdmin = `/frontend-pilot/event/${firstList}/admin`;
+    const activity = `/activity/${firstList}`;
+    const eventAdmin = `/event/${firstList}/admin`;
 
     it.each([
         // Creation/copy/guest visits remain deliberate recovery in every family,
         // even when their saved detail/admin counterpart is dynamic content.
-        ...families.flatMap(family => [`/frontend-pilot/${family}/create`,
-            `/frontend-pilot/${family}/${firstList}/duplicate`, `/frontend-pilot/${family}/${firstList}/guest`]),
-        '/frontend-pilot/users/profile', '/frontend-pilot/users/profile/manage',
-        '/frontend-pilot/users/profile/create', '/frontend-pilot/users/profile/migrate/request',
-        '/frontend-pilot/users/profile/migrate/show', '/frontend-pilot/users/profile/delete', '/frontend-pilot/users/account/delete',
-        '/frontend-pilot/users/login', '/frontend-pilot/users/register', '/frontend-pilot/users/oidc/login',
-        '/frontend-pilot/users/forgot-password', '/frontend-pilot/users/reset-password/fixture-token',
-        '/frontend-pilot/users/activate/fixture-token', `/frontend-pilot/guest/${firstList}/login/fixture-token`,
-        '/frontend-pilot/guest/recovery', '/frontend-pilot/help', '/frontend-pilot/help/packing', '/frontend-pilot/home',
-        '/frontend-pilot/message', '/frontend-pilot/missing-page',
+        ...families.flatMap(family => [`/${family}/create`,
+            `/${family}/${firstList}/duplicate`, `/${family}/${firstList}/guest`]),
+        '/users/profile', '/users/profile/manage',
+        '/users/profile/create', '/users/profile/migrate/request',
+        '/users/profile/migrate/show', '/users/profile/delete', '/users/account/delete',
+        '/users/login', '/users/register', '/users/oidc/login',
+        '/users/forgot-password', '/users/reset-password/fixture-token',
+        '/users/activate/fixture-token', `/guest/${firstList}/login/fixture-token`,
+        '/guest/recovery', '/help', '/help/packing', '/',
+        '/message', '/missing-page',
     ])('keeps static %s during startup and release changes while allowing deliberate recovery', async path => {
         window.history.replaceState({}, '', path);
         const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {});
-        const application = createPilotApp({session, initialUrl: path}, true);
+        const application = createFrontendApp({session, initialUrl: path}, true);
         const {router, context} = application;
         try {
             // Dispatch before the first route commits: policy must already know
@@ -187,11 +187,11 @@ describe('dynamic-content automatic document replacement', () => {
         }
     });
 
-    it.each(['/frontend-pilot/users/dashboard', ...families.map(family => `/frontend-pilot/${family}/${firstList}`), eventAdmin])(
+    it.each(['/users/dashboard', ...families.map(family => `/${family}/${firstList}`), eventAdmin])(
         'retains one guarded automatic startup recovery for dynamic %s', async path => {
         window.history.replaceState({}, '', path);
         const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {});
-        const {router, context} = createPilotApp({session, initialUrl: path}, true);
+        const {router, context} = createFrontendApp({session, initialUrl: path}, true);
         try {
             context.updates.chunkFailed();
             await Promise.resolve();
@@ -207,7 +207,7 @@ describe('dynamic-content automatic document replacement', () => {
     it('keeps an admitted static error document at an otherwise dynamic URL', async () => {
         window.history.replaceState({}, '', packing);
         const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {});
-        const {router, context} = createPilotApp({session, initialUrl: packing, packingError: 'packing.notFound'}, true);
+        const {router, context} = createFrontendApp({session, initialUrl: packing, packingError: 'packing.notFound'}, true);
         try {
             context.updates.chunkFailed();
             await Promise.resolve();
@@ -225,14 +225,14 @@ describe('dynamic-content automatic document replacement', () => {
     it('uses the committed cross-feature visit instead of retaining the initial dynamic classification', async () => {
         window.history.replaceState({}, '', activity);
         const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {});
-        const {router, context} = createPilotApp({session, initialUrl: activity}, true);
+        const {router, context} = createFrontendApp({session, initialUrl: activity}, true);
         try {
             await router.isReady();
-            await router.push('/frontend-pilot/users/profile/migrate/request');
+            await router.push('/users/profile/migrate/request');
             context.updates.observe({...session.deployment, buildId: 'replacement'});
             await Promise.resolve();
             expect(reload).not.toHaveBeenCalled();
-            await router.push('/frontend-pilot/help');
+            await router.push('/help');
             expect(context.updates.requestReload()).toBe(false);
 
             // Another family's admitted dynamic destination can recover the
@@ -249,14 +249,14 @@ describe('dynamic-content automatic document replacement', () => {
     it('blocks automatic replacement while history points at a static target before route commitment', async () => {
         window.history.replaceState({}, '', packing);
         const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {});
-        const {router, context} = createPilotApp({session, initialUrl: packing}, true);
+        const {router, context} = createFrontendApp({session, initialUrl: packing}, true);
         try {
             await router.isReady();
             // Exercise the real history boundary independently of route commitment.
             // Back/Forward exposes this same address mismatch while asynchronous
             // admission or a lazy component is still pending. Reload would use
             // the static target's GET, rather than the visible source list's URL.
-            const target = '/frontend-pilot/users/profile/migrate/request';
+            const target = '/users/profile/migrate/request';
             router.options.history.replace(target);
             expect(router.currentRoute.value.path).toBe(packing);
             expect(router.options.history.location).toBe(target);
@@ -281,7 +281,7 @@ describe('mounted static admission and automatic document replacement', () => {
         const {host, application, reload} = await mountedDenial(initial);
         const {context, router} = application;
         expect(host.textContent).toContain(context.messages.value.t('packing.notFound'));
-        expect(host.querySelector('[data-pilot-initial-loading]')).toBeNull();
+        expect(host.querySelector('[data-frontend-initial-loading]')).toBeNull();
         expect(context.initialDocumentFor(firstPacking)).toBeUndefined();
         expect(context.requiresClientInitialization(router.currentRoute.value)).toBe(false);
 
@@ -319,7 +319,7 @@ describe('mounted static admission and automatic document replacement', () => {
     it('does not let one resource denial classify a later admitted resource', async () => {
         const {host, application, reload} = await mountedDenial(true);
         const {context, router} = application;
-        await router.push(`/frontend-pilot/packing/${secondList}`);
+        await router.push(`/packing/${secondList}`);
         await flushPromises();
         await vi.waitFor(() => expect(host.textContent).toContain(`Admitted ${secondList}`));
         expect(host.textContent).not.toContain(context.messages.value.t('packing.notFound'));

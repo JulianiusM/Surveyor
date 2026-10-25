@@ -305,7 +305,7 @@ export async function createActivityPlanTx(
         }
 
         // The optional caller prepares its result while this existing transaction
-        // can still roll back. Persistence order and native callers are unchanged.
+        // can still roll back. Persistence order and direct callers are unchanged.
         complete?.(id);
         return id;
     });

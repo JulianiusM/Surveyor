@@ -1,59 +1,41 @@
-/*
- * Copyright 2026 Julian Malovanij
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-import express, {Request, Response} from 'express';
-import * as helpController from '../controller/helpController';
-import {ExpectedError} from '../modules/lib/errors';
+import {Router, type Request, type Response} from 'express';
 import {asyncHandler} from '../modules/lib/asyncHandler';
+import {requestLocale} from '../modules/api/problem';
+import {createTranslator} from '../modules/localization/translator';
+import {renderFrontend} from '../modules/frontendRenderer';
+import {fetchHelpDoc, fetchHelpIndex, fetchHelpSearch, resolveHelpAssetSource} from '../controller/helpController';
+import {ExpectedError} from '../modules/lib/errors';
+import {resolveFrontendHelpQuery} from '../modules/lib/helpNavigation';
+import {bootstrap} from './frontend';
 
-const router = express.Router();
+const router = Router();
 
-// GET /help - task-oriented help home
-router.get('/', asyncHandler(async (_req: Request, res: Response) => {
-    // Omitting a locale deliberately selects the native reference and its existing Pug data.
-    res.render('help', helpController.fetchHelpIndex());
+/** GET forms remain usable with JavaScript disabled and hydrate into the same search page. */
+async function renderHelpFrontend(req: Request, res: Response): Promise<void> {
+    const query = resolveFrontendHelpQuery(req.params.doc, req.query);
+    const state = await bootstrap(req);
+    // The browser uses this exact path/query selection. In particular, existing search
+    // without q is its prompt, and article aliases ignore conflicting query selectors.
+    const data = query.q !== undefined ? fetchHelpSearch(query.q, state.session.locale)
+        : query.doc !== undefined ? fetchHelpDoc(query.doc, state.session.locale) : fetchHelpIndex(state.session.locale);
+    state.help = data;
+    await renderFrontend(res, req.originalUrl, state);
+}
+
+router.get('/', asyncHandler(renderHelpFrontend));
+
+// Each localized visual stays within the article's selected reviewed corpus.
+router.get('/assets/:assetName', asyncHandler(async function readFrontendHelpAsset(req, res) {
+    const locale = requestLocale(req);
+    const source = resolveHelpAssetSource(String(req.params.assetName), locale);
+    if (!source) throw new ExpectedError(createTranslator(locale).t('help.notFound'), 'error', 404, {}, {messageKey: 'help.notFound'});
+    // The article has already selected one complete language bundle. Asset requests
+    // stay in that exact corpus; an absent file is 404 rather than an English figure
+    // substituted into translated text. Whole-article fallback emits English URLs.
+    res.set('Content-Language', source.locale ?? 'en').set('X-Content-Type-Options', 'nosniff');
+    res.sendFile(source.filePath);
 }));
 
-// GET /help/search?q=... - search the fixed, release-shipped user guides
-router.get('/search', asyncHandler(async (req: Request, res: Response) => {
-    // The adapter accepts text only; query normalization and native catalog selection
-    // remain controller-owned and do not consume pilot language hints.
-    const query = typeof req.query.q === 'string' ? req.query.q : '';
-    res.render('help', helpController.fetchHelpSearch(query));
-}));
-
-// GET /help/assets/:assetName - serve maintained visual aids from the fixed help source
-router.get('/assets/:assetName', asyncHandler(async (req: Request, res: Response) => {
-    // Resolve a safe basename through the controller before sendFile. No locale argument
-    // keeps native asset payloads independent of localized pilot fallback and URL hints.
-    const assetName = req.params.assetName as string;
-    const assetPath = helpController.resolveHelpAssetPath(assetName);
-    if (!assetPath) {
-        throw new ExpectedError('Help asset not found', 'error', 404);
-    }
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.sendFile(assetPath);
-}));
-
-// GET /help/:docName - specific maintained help document
-router.get('/:docName', asyncHandler(async (req: Request, res: Response) => {
-    // The controller validates the route slug and supplies the complete native page data;
-    // its not-found/load errors flow through the established async error adapter.
-    const docName = req.params.docName as string;
-    res.render('help', helpController.fetchHelpDoc(docName));
-}));
+router.get('/:doc', asyncHandler(renderHelpFrontend));
 
 export default router;

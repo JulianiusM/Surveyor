@@ -1,6 +1,6 @@
 import type {components, paths} from '../../../types/api/v1';
-import type {PilotContext, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
-import type {PilotApi} from '../../app/api';
+import type {FrontendContext, FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import type {FrontendApi} from '../../app/api';
 import type {LocationQuery} from 'vue-router';
 import {validateOverviewRegion} from '../../../../.generated/api/v1/browser/validateOverviewRegion.mjs';
 import {validateOverviewVisibilityResult} from '../../../../.generated/api/v1/browser/validateOverviewVisibilityResult.mjs';
@@ -12,7 +12,7 @@ export function overviewQueryParameters(values: LocationQuery, collection: compo
                                         region: components['schemas']['OverviewRegion']['region']): NonNullable<paths['/overview']['get']['parameters']['query']> {
     const prefix = collection + '_' + region + '_';
 
-    // Native bookmarked values admit only a single string. The server remains
+    // Bookmarked values admit only a single string. The server remains
     // responsible for type validation, normalization, paging and canonical results.
     function field(name: string): string | undefined {
         const value = values[prefix + name];
@@ -25,12 +25,12 @@ export function overviewQueryParameters(values: LocationQuery, collection: compo
 
 /** Feature operations own their generated validators; transport and actor admission are shared. */
 export class OverviewApi {
-    constructor(private transport: PilotApi) {}
+    constructor(private transport: FrontendApi) {}
 
     /** Fetch only the requested collection/region/filter projection. The query
      * identifies its recovery deadline; the mounted region separately fences
      * navigation generation and adopts the server's canonical page/query state. */
-    async overview(query: NonNullable<paths['/overview']['get']['parameters']['query']>, scope: PilotRequestScope, signal?: AbortSignal) {
+    async overview(query: NonNullable<paths['/overview']['get']['parameters']['query']>, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
         async function readOverview(): Promise<components['schemas']['OverviewRegion']> {
             const response = await transport.client.GET('/overview', {
@@ -41,17 +41,17 @@ export class OverviewApi {
         return transport.allowedRead('overview/' + JSON.stringify(query), scope, readOverview, signal);
     }
 
-    async visibility(type: components['schemas']['OverviewCard']['type'], entityId: string, visibility: components['schemas']['OverviewVisibilityInput']['visibility'], scope: PilotRequestScope) {
+    async visibility(type: components['schemas']['OverviewCard']['type'], entityId: string, visibility: components['schemas']['OverviewVisibilityInput']['visibility'], scope: FrontendRequestScope) {
         return this.transport.read('setOverviewVisibility', await this.transport.client.PUT('/overview/{entityType}/{entityId}/visibility', {
             params: {path: {entityType: type, entityId}, header: this.transport.headers(scope)}, body: {visibility}, cache: 'no-store',
         }), validateOverviewVisibilityResult, scope).data;
     }
 }
 
-// The transport is application/request-local and survives each component's usePilot wrapper.
-const owners = new WeakMap<PilotApi, OverviewApi>();
+// The transport is application/request-local and survives each component's useFrontend wrapper.
+const owners = new WeakMap<FrontendApi, OverviewApi>();
 /** Reuse the request/application transport owner through component-local translation bindings. */
-export function useOverviewApi(context: PilotContext): OverviewApi {
+export function useOverviewApi(context: FrontendContext): OverviewApi {
     let owner = owners.get(context.api);
     if (!owner) { owner = new OverviewApi(context.api); owners.set(context.api, owner); }
     return owner;

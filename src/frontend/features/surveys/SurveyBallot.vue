@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type {components} from '../../../types/api/v1';
-import type {PilotActionState} from '../../../types/FrontendPilotUiTypes';
-import {usePilot} from '../../app/context';
+import type {FrontendActionState} from '../../../types/FrontendUiTypes';
+import {useFrontend} from '../../app/context';
 import {answerVariants} from './presentation';
 import ActionButton from '../../components/ActionButton.vue';
 import SurveyCombinationHeaders from './SurveyCombinationHeaders.vue';
@@ -9,9 +9,9 @@ import SurveyCombinationHeaders from './SurveyCombinationHeaders.vue';
 // This personal table renders the parent's current ballot draft. The detail
 // owner merges background reads and submits all visible radio values together.
 defineProps<{combinations: components['schemas']['SurveyCombination'][]; answers: Record<string, string>;
-    profileName: string; disabled: boolean; action: PilotActionState}>();
+    profileName: string; disabled: boolean; action: FrontendActionState}>();
 const emit = defineEmits<{answer: [id: string, answer: 'yes' | 'maybe' | 'no']; submit: []}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const choices = ['yes', 'maybe', 'no'] as const;
 const labels = {yes: 'survey.yes', maybe: 'survey.maybe', no: 'survey.no'} as const;
 </script>

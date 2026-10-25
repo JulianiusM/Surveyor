@@ -5,7 +5,7 @@ import type {Component} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
-import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
+import {createFrontendContext, frontendContextKey} from '../../src/frontend/app/context';
 import App from '../../src/frontend/app/App.vue';
 import {createFrontendEventSession, frontendEventId} from '../factories/frontendEventFactory';
 
@@ -18,20 +18,20 @@ export function frontendEventJson(value: unknown): Response {
 /** Mount the actual Event consumer with request-local identity, routing and query owners.
  * Only HTTP is supplied by the test; disposal retires all observers and held reads. */
 export async function mountFrontendEvent(component: Component, handler: (request: Request) => Promise<Response>,
-    props: Record<string, unknown>, path = `/frontend-pilot/event/${frontendEventId}`, withShell = false) {
+    props: Record<string, unknown>, path = `/event/${frontendEventId}`, withShell = false) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
-    const context = createPilotContext({session: createFrontendEventSession()}, true, request);
+    const context = createFrontendContext({session: createFrontendEventSession()}, true, request);
     context.hydrated.value = true;
     context.visible.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/frontend-pilot/event/:eventId', component: withShell ? component : defineComponent({template: '<p>Event host</p>'}),
+        {path: '/event/:eventId', component: withShell ? component : defineComponent({template: '<p>Event host</p>'}),
             props: withShell ? () => props : undefined},
-        {path: '/frontend-pilot/packing/:listId', component: defineComponent({template: '<p>Packing destination</p>'})},
+        {path: '/packing/:listId', component: defineComponent({template: '<p>Packing destination</p>'})},
     ]});
     await router.push(path);
     const wrapper = mount(withShell ? App : component, {props: withShell ? undefined : props, attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[pilotContextKey as symbol]: context},
+        provide: {[frontendContextKey as symbol]: context},
     }});
     await flushPromises();
 

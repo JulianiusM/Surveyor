@@ -2,8 +2,9 @@ import {test, expect} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import type {components} from '../../src/types/api/v1';
 import {createE2ELogin} from '../factories/e2eCoreFactory';
-import {expectUsableFrontendLayout, loginForE2E} from '../keywords/e2eCoreKeywords';
-import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
+import {commandHeadersForE2E, expectUsableFrontendLayout, loginForE2E} from '../keywords/e2eCoreKeywords';
+import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
+import {createTranslator} from '../../src/modules/localization/translator';
 
 /** Record actual form/footer content, state, paint and raw responsive geometry. */
 function profilePresentation() {
@@ -58,24 +59,6 @@ function profilePresentation() {
     }
 }
 
-/** Match fields, explanations, onward actions and painted hierarchy. Raw layout
- * remains evidence; equivalent responsive interfaces need not share rectangles. */
-function compareProfilePresentation(native: ReturnType<typeof profilePresentation>, pilot: typeof native): void {
-    const {width: nativeWidth, height: nativeHeight, controls: nativeControls, ...nativeFields} = native.form;
-    const {width: pilotWidth, height: pilotHeight, controls: pilotControls, ...pilotFields} = pilot.form;
-    expect(pilotFields).toEqual(nativeFields);
-    expect(pilotControls.map(visibleMeaning)).toEqual(nativeControls.map(visibleMeaning));
-    expect(visibleMeaning(pilot.footer)).toEqual(visibleMeaning(native.footer));
-    expect(pilot.footer.links.map(link => ({...visibleMeaning(link), href: link.href})))
-        .toEqual(native.footer.links.map(link => ({...visibleMeaning(link), href: link.href})));
-
-    function visibleMeaning(element: typeof nativeControls[number]) {
-        return {text: element.text, font: element.font, weight: element.weight,
-            color: element.color, background: element.background, border: element.border,
-            visibility: element.visibility, opacity: element.opacity};
-    }
-}
-
 test('profile creation, switching and editing share the built application and native persistence', async ({page}) => {
     await loginForE2E(page.request, createE2ELogin());
     const before = await (await page.request.get('/api/v1/session')).json() as components['schemas']['SessionView'];
@@ -83,8 +66,8 @@ test('profile creation, switching and editing share the built application and na
 
     // Confirm the native creation first, then read its separate display data.
     // Creating another profile must not switch the active profile.
-    await page.goto('/frontend-pilot/users/profile/create?locale=en');
-    await waitForPilotHydration(page);
+    await page.goto('/users/profile/create?locale=en');
+    await waitForFrontendHydration(page);
     await page.locator('#name').fill(name);
     const createdResponse = page.waitForResponse(response => response.url().endsWith('/api/v1/profiles')
         && response.request().method() === 'POST');
@@ -94,16 +77,16 @@ test('profile creation, switching and editing share the built application and na
     expect(await created.json()).toEqual({changed: true});
     const afterCreation = await (await page.request.get('/api/v1/session')).json() as components['schemas']['SessionView'];
     expect(afterCreation.activeProfile?.id).toBe(before.activeProfile?.id);
-    await expect(page).toHaveURL(/\/frontend-pilot\/users\/profile\/manage/u);
+    await expect(page).toHaveURL(/\/users\/profile\/manage/u);
     const profileRow = page.locator('main li').filter({hasText: name});
     await expect(profileRow).toBeVisible();
 
     // The roster adopts the existing switch operation. Its new context retires
     // private state, and the next editor must read this newly selected profile.
     await profileRow.getByRole('button', {name: 'Switch to profile', exact: true}).click();
-    await expect(page).toHaveURL('/frontend-pilot/users/dashboard');
-    await page.goto('/frontend-pilot/users/profile?locale=en');
-    await waitForPilotHydration(page);
+    await expect(page).toHaveURL('/users/dashboard');
+    await page.goto('/users/profile?locale=en');
+    await waitForFrontendHydration(page);
     await expect(page.locator('#name')).toHaveValue(name);
     const renamed = `${name} edited`;
     await page.locator('#name').fill(renamed);
@@ -115,46 +98,55 @@ test('profile creation, switching and editing share the built application and na
     await expect(page.locator('#name')).toHaveValue(renamed);
     await expect(page.locator('#isDefault')).not.toBeChecked();
 
-    // Read the same saved fields through the unchanged native form. This checks
-    // actual shared persistence, rather than a second frontend's copied rules.
-    const native = await page.request.get('/users/profile');
-    expect(native.status()).toBe(200);
-    expect(await native.text()).toContain(`value="${renamed}"`);
+    // Independently reload the saved projection after the real UI command.
+    const saved = await page.request.get('/api/v1/profiles/current', {headers: await commandHeadersForE2E(page.request)});
+    expect(saved.status()).toBe(200);
+    expect(await saved.json()).toMatchObject({name: renamed, isDefault: false});
 });
 
 for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) {
-    test(`profile presentation retains native fields at ${viewport.width}px`, async ({page}, testInfo) => {
+    test(`profile presentation retains saved fields at ${viewport.width}px`, async ({page}, testInfo) => {
         await page.setViewportSize(viewport);
         const browserErrors: string[] = [];
         page.on('pageerror', error => browserErrors.push(error.message));
         await loginForE2E(page.request, createE2ELogin());
 
-        // Equivalent actor/data, loaded fonts and viewport make both screenshots
-        // and measured assertions meaningful. Persisted profile fields are shared.
-        await page.goto('/users/profile');
-        const nativeName = await page.locator('#name').inputValue();
-        await page.evaluate(() => document.fonts.ready);
-        const native = await page.evaluate(profilePresentation);
-        await page.screenshot({path: testInfo.outputPath('native-profile.png'), fullPage: true});
-        await page.goto('/frontend-pilot/users/profile?locale=en');
-        await waitForPilotHydration(page);
-        await expect(page.locator('#name')).toHaveValue(nativeName);
+        const response = await page.request.get('/api/v1/profiles/current', {headers: await commandHeadersForE2E(page.request)});
+        expect(response.status()).toBe(200);
+        const saved = await response.json();
+        const savedName = saved.name as string;
+        await page.goto('/users/profile?locale=en');
+        await waitForFrontendHydration(page);
+        await expect(page.locator('#name')).toHaveValue(savedName);
         await expect(page.locator('#isDefault')).toBeVisible();
         await expect(page.locator('footer')).toBeVisible();
         await page.evaluate(() => document.fonts.ready);
-        const pilot = await page.evaluate(profilePresentation);
+        const frontend = await page.evaluate(profilePresentation);
         await testInfo.attach('profile-presentation', {
-            body: JSON.stringify({native, pilot, browserErrors}, null, 2), contentType: 'application/json',
+            body: JSON.stringify({frontend, browserErrors}, null, 2), contentType: 'application/json',
         });
-        compareProfilePresentation(native, pilot);
+        const translator = createTranslator('en');
+        expect(frontend.form).toMatchObject({name: savedName, checked: saved.isDefault,
+            placeholder: translator.t('profile.profileNamePlaceholder'), required: true, nameDisabled: false, checkboxDisabled: false});
+        const form = page.locator('form:has(#name)');
+        await expect(page.getByLabel(`${translator.t('profile.profileName')} *`, {exact: true})).toHaveValue(savedName);
+        await expect(page.getByLabel(translator.t('profile.defaultProfile'), {exact: true})).toBeChecked({checked: saved.isDefault});
+        await expect(form).toContainText(translator.t('profile.defaultExplanation'));
+        await expect(page.getByRole('button', {name: translator.t('profile.saveProfile'), exact: true})).toBeEnabled();
+        await expect(form.getByRole('link', {name: translator.t('profile.backHome'), exact: true})).toHaveAttribute('href', '/');
+        await expect(form.getByRole('link', {name: translator.t('profile.showMigrationToken'), exact: true}))
+            .toHaveAttribute('href', '/users/profile/migrate/request');
+        await expect(form.getByRole('link', {name: translator.t('profile.deleteProfile'), exact: true}))
+            .toHaveAttribute('href', '/users/profile/delete');
+        expect(frontend.form.controls.length).toBeGreaterThan(3);
         await expectUsableFrontendLayout(page.locator('form:has(#name)'));
         await expectUsableFrontendLayout(page.locator('footer'));
         const refreshed = page.waitForResponse(response => response.request().method() === 'GET'
             && new URL(response.url()).pathname === '/api/v1/profiles/current');
         await page.getByRole('button', {name: 'Refresh', exact: true}).click();
         expect((await refreshed).status()).toBe(200);
-        await expect(page.locator('#name')).toHaveValue(nativeName);
-        await page.screenshot({path: testInfo.outputPath('pilot-profile.png'), fullPage: true});
+        await expect(page.locator('#name')).toHaveValue(savedName);
+        await page.screenshot({path: testInfo.outputPath('frontend-profile.png'), fullPage: true});
         expect(browserErrors).toEqual([]);
     });
 }

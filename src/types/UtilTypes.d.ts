@@ -24,6 +24,9 @@ export type GuestKey = "guest";
 export type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
 export type UserOrGuestKey = UserKey | GuestKey;
 
+/** Retained document parameter loaders preserve their existing resource shape. */
+export type ResourceLoader = (id: any) => Promise<any | null>;
+
 /** The existing image-swap owner receives this only after a locked write commits. */
 export interface ImageSwapReceipt {
     previousImage: string | null | undefined;

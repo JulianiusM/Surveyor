@@ -2,7 +2,7 @@
 import {computed, inject, onBeforeUnmount, ref, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
-import {useActionState, usePilot} from '../../app/context';
+import {useActionState, useFrontend} from '../../app/context';
 import {useHelpApi} from './api';
 import {usePageTitle} from '../../composables/pageTitle';
 import {isOrdinaryNavigation} from '../../composables/pageEntry';
@@ -11,22 +11,22 @@ import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {helpKeys} from '../../app/queryKeys';
 import {useQueryAdmission} from '../../app/queryCache';
 import {ApiFailure} from '../../app/transport';
-import {pilotHelpUrl, resolvePilotHelpQuery} from '../../../modules/lib/helpNavigation';
+import {frontendHelpUrl, resolveFrontendHelpQuery} from '../../../modules/lib/helpNavigation';
 import {createTranslator} from '../../../modules/localization/translator';
 import PageMessage from '../../components/PageMessage.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import RefreshButton from '../../components/RefreshButton.vue';
 
-const context = usePilot();
+const context = useFrontend();
 const api = useHelpApi(context);
 const {messages, locale} = context;
 const englishMessages = createTranslator('en');
 const route = useRoute();
 const router = useRouter();
-// Explicit native path aliases and ordinary pilot query links share the SSR resolver.
-// Ignored native parameters must never become a different article/search after hydration.
-const query = computed(() => resolvePilotHelpQuery(route.params.doc, route.query));
+// Explicit path aliases and ordinary frontend query links share the SSR resolver.
+// Ignored parameters must never become a different article/search after hydration.
+const query = computed(() => resolveFrontendHelpQuery(route.params.doc, route.query));
 const search = ref(query.value.q ?? '');
 watch(() => query.value.q, value => { search.value = value ?? ''; });
 const key = computed(() => helpKeys.page(context.session.value?.context, locale.value, query.value));
@@ -53,7 +53,7 @@ function sectionDescription(title: string, sourceLocale?: string): string {
     const translator = isEnglishFallback(sourceLocale) ? englishMessages : messages.value;
     return translator.t('help.inSection', {title});
 }
-// A validated missing-document rejection owns the native complete Error page. An
+// A validated missing-document rejection owns the complete Error page. An
 // unconfirmed transport/read failure instead retains the warning and confirmed article.
 const notFound = computed(() => help.error.value instanceof ApiFailure && help.error.value.problem?.code === 'NOT_FOUND');
 // Skeletons describe missing authority only. Complete SSR/cached articles remain mounted
@@ -68,9 +68,9 @@ const retryAvailable = useReadRetry(() => help.error.value);
 const retryAt = useReadRetryAt(() => help.error.value, retryAvailable);
 usePageTitle(pageTitle);
 
-/** Only release-shipped help links become SPA destinations. Files and external links stay native. */
+/** Only release-shipped help links become SPA destinations. Files and external links retain document navigation. */
 function helpRoute(href: string): string {
-    return pilotHelpUrl(href, locale.value);
+    return frontendHelpUrl(href, locale.value);
 }
 
 // Rewrite only already validated, fixed-source anchors. SSR and enhanced navigation share the same
@@ -78,7 +78,7 @@ function helpRoute(href: string): string {
 const content = computed(() => (page.value?.content ?? '').replace(/href="(\/help(?:[/?][^"]*)?)"/gu,
     (_match, href: string) => `href="${helpRoute(href.replaceAll('&amp;', '&')).replaceAll('&', '&amp;')}"`));
 function submitSearch(): void {
-    void router.push({path: '/frontend-pilot/help', query: {
+    void router.push({path: '/help', query: {
         q: search.value, locale: locale.value,
     }});
 }
@@ -93,21 +93,21 @@ async function retryHelp(): Promise<void> {
     await help.refetch();
 }
 /** Enhance ordinary reviewed article links only. Modified clicks and packaged
- * image/full-size links keep their native href, while article navigation retains
+ * image/full-size links keep their href, while article navigation retains
  * the selected interface locale through the shared Help URL adapter. */
 function followContentLink(event: MouseEvent): void {
     const anchor = (event.target as Element | null)?.closest('a');
     if (!anchor || !isOrdinaryNavigation(event, anchor)) return;
     const href = anchor.getAttribute('href') ?? '';
     const target = helpRoute(href);
-    // Pilot assets share the route namespace but remain files, like the native
-    // help assets. Do not route a full-size image link into the article component.
-    if (!target.startsWith('/frontend-pilot/help') || target.startsWith('/frontend-pilot/help/assets/')) return;
+    // Help assets share the route namespace but remain separate files.
+    // Do not route a full-size image link into the article component.
+    if (!target.startsWith('/help') || target.startsWith('/help/assets/')) return;
     event.preventDefault();
     void router.push(target);
 }
 
-// The locale query and ignored native parameters do not identify another article
+// The locale query and ignored parameters do not identify another article
 // visit. Only the resolved article/search, actual path and requested fragment do.
 const anchorVisit = computed(() => JSON.stringify([route.path, query.value, route.hash]));
 // Router alone owns anchors and browser restoration. A late read signals its
@@ -155,7 +155,7 @@ function retainReadingSpace(): void {
         :style="{minHeight: retainedReadingHeight === undefined ? undefined : `${retainedReadingHeight}px`}">
         <div class="card-header d-flex justify-content-between align-items-center gap-2">
             <h1 class="card-title mb-0" :lang="contentLocale"><i class="bi bi-question-circle me-2" aria-hidden="true"></i>{{ pageTitle }}</h1>
-            <div class="pilot-action-row">
+            <div class="frontend-action-row">
                 <RouterLink :to="helpRoute('/help')" class="btn btn-sm btn-outline-light">
                     <i class="bi bi-house me-1" aria-hidden="true"></i>{{ messages.t('help.home') }}
                 </RouterLink>
@@ -171,11 +171,11 @@ function retainReadingSpace(): void {
                     <section class="card bg-dark text-white mb-3">
                         <div class="card-header"><h2 class="h5 mb-0"><i class="bi bi-search me-2" aria-hidden="true"></i>{{ messages.t('help.searchTitle') }}</h2></div>
                         <div class="card-body">
-                            <form action="/frontend-pilot/help" method="get" role="search" @submit.prevent="submitSearch">
-                                <label class="form-label visually-hidden" for="pilot-help-search">{{ messages.t('help.searchLabel') }}</label>
+                            <form action="/help" method="get" role="search" @submit.prevent="submitSearch">
+                                <label class="form-label visually-hidden" for="frontend-help-search">{{ messages.t('help.searchLabel') }}</label>
                                 <input type="hidden" name="locale" :value="locale" />
                                 <div class="input-group">
-                                    <input id="pilot-help-search" v-model="search" class="form-control text-bg-dark" type="search" name="q"
+                                    <input id="frontend-help-search" v-model="search" class="form-control text-bg-dark" type="search" name="q"
                                            maxlength="100" required :placeholder="messages.t('help.searchPlaceholder')" />
                                     <button class="btn btn-primary" type="submit" :aria-label="messages.t('help.searchTitle')"><i class="bi bi-search" aria-hidden="true"></i></button>
                                 </div>

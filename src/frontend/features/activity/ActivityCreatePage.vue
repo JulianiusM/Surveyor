@@ -3,7 +3,7 @@ import {computed, ref, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {ActivitySlotDraft} from '../../../types/FrontendActivityTypes';
 import type {FrontendListCreationSource} from '../../../types/FrontendListTypes';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {activityKeys} from '../../app/queryKeys';
 import {useActivityApi} from './api';
 import {activityDateLabel, activityDayLabel, activityCreationWeeks} from './presentation';
@@ -13,7 +13,7 @@ import FormField from '../../components/FormField.vue';
 
 // Root admission, file, event, access and confirmed navigation are shared. This
 // feature owns only the dated slot draft, including hidden out-of-range days.
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useActivityApi(context);
 const startDate = ref('');
@@ -24,7 +24,7 @@ const calendarEnd = ref('');
 const weeks = computed(() => activityCreationWeeks(calendarStart.value, calendarEnd.value));
 watch([startDate, endDate, context.locale], synchronizeDates, {flush: 'post'});
 
-/** Preserve native one-day defaulting and invalid-range recovery. Date controls
+/** Preserve one-day defaulting and invalid-range recovery. Date controls
  * own the submitted values; the last valid calendar keeps its mounted slot drafts. */
 function synchronizeDates(): void {
     if (!startDate.value) return;
@@ -73,9 +73,9 @@ const source: FrontendListCreationSource<components['schemas']['ActivityDuplicat
     initialDuplicate: context.bootstrap.activityDuplicate,
     createEntry: api.createEntry.bind(api), duplicate: api.duplicate.bind(api), initialize, reset,
     draft: () => ({startDate: startDate.value, endDate: endDate.value, slots: slots.value}),
-    destination: result => '/frontend-pilot/activity/' + result.id,
+    destination: result => '/activity/' + result.id,
     prepare(values, image) {
-        // Native creation keeps removed-range inputs in memory, submitting only
+        // Standalone creation keeps removed-range inputs in memory, submitting only
         // the current date interval. Normalization happens at this one boundary.
         const positions = new Map<string, number>();
         const admittedSlots = slots.value.filter(slot => slot.day >= startDate.value && slot.day <= endDate.value);
@@ -110,7 +110,7 @@ const source: FrontendListCreationSource<components['schemas']['ActivityDuplicat
         header-name="headerImg">
         <template #root-fields="{title, updateTitle, disabled, pending}">
             <!-- The shared fieldset contains the row's negative gutter margin.
-            Keep native form-relative top spacing without moving other consumers. -->
+            Keep form-relative top spacing without moving other consumers. -->
             <div class="row g-3 mb-3 mt-0">
                 <FormField
                     id="title"
@@ -164,7 +164,7 @@ const source: FrontendListCreationSource<components['schemas']['ActivityDuplicat
                                         <span v-if="!daySlots(day).length" class="badge d-block w-100 text-center mb-2">
                                             <i class="bi bi-info-circle me-2" aria-hidden="true"></i> {{ messages.t('activity.noSlots') }}</span>
                                         <!-- Every initial slot field needs a visible name, including
-                                        native time/number controls whose placeholders may not display.
+                                        time/number controls whose placeholders may not display.
                                         Shared controls retain each slot's lexical draft and original
                                         constraints without introducing another form-value owner. -->
                                         <div

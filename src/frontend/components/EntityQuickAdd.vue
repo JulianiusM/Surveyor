@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed} from 'vue';
 import type {FrontendListQuickAddValues} from '../../types/FrontendListTypes';
-import {usePilot} from '../app/context';
+import {useFrontend} from '../app/context';
 import ActionButton from './ActionButton.vue';
 import FormField from './FormField.vue';
 
@@ -20,7 +20,7 @@ const emit = defineEmits<{
     'update:capacity': [value: FrontendListQuickAddValues['maxAssignees']];
     submit: [];
 }>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const capacityDraft = computed({get: readCapacity, set: updateCapacity});
 
 function readCapacity(): FrontendListQuickAddValues['maxAssignees'] { return props.capacity; }
@@ -36,7 +36,7 @@ function updateCapacity(value: FrontendListQuickAddValues['maxAssignees']): void
         </div>
         <form class="card-body row gy-2 gx-2 align-items-end" @submit.prevent="emit('submit')">
             <!-- Packing's editable required title and Drivers' readonly actor
-                 name remain distinct controls, with their native column width. -->
+                 name remain distinct controls, with their column width. -->
             <slot />
             <FormField id="quick-description" class="col-md-4" :name="null"
                 :model-value="description" :label="messages.t('packing.description')"

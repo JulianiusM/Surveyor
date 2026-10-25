@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue';
 import type {ComponentPublicInstance} from 'vue';
-import type {PilotFormFieldControlSlot} from '../../types/FrontendPilotUiTypes';
+import type {FrontendFormFieldControlSlot} from '../../types/FrontendUiTypes';
 import {useClientInitialization} from '../app/context';
 import {usePendingFocus} from '../composables/pendingFocus';
 
@@ -44,7 +44,7 @@ const props = withDefaults(
 );
 const emit = defineEmits<{'update:modelValue': [value: string]; focus: []; blur: []}>();
 const control = ref<HTMLInputElement | HTMLTextAreaElement | null>(null);
-const controlSlot: PilotFormFieldControlSlot = {controlRef: receiveControl};
+const controlSlot: FrontendFormFieldControlSlot = {controlRef: receiveControl};
 const initialized = useClientInitialization();
 const pending = computed(isPending);
 // Enter submission can natively disable a still-focused field. Share the same
@@ -59,7 +59,7 @@ function readValue(): string { return props.modelValue; }
 function isPending(): boolean { return props.pending; }
 function isControlAvailable(): boolean { return initialized.value && !props.disabled; }
 
-/** Custom native controls opt in with their actual ref while retaining their
+/** Custom controls opt in with their actual ref while retaining their
  * directives and models. No descendant lookup or component proxy becomes a
  * second field owner; slot removal releases the previous DOM reference. */
 function receiveControl(element: Element | ComponentPublicInstance | null): void {
@@ -110,7 +110,7 @@ function updateValue(): void {
 <template>
     <div>
         <!-- Label, native field name and accessible feedback remain one shared form contract.
-             Native labels put text immediately after the icon: me-1 owns that gap.
+             Labels put text immediately after the icon: me-1 owns that gap.
              Extra template whitespace would widen it and change narrow-screen wrapping. -->
         <label class="form-label" :class="labelClass" :for="labelFor ?? id">
             <i v-if="labelIcon" class="bi me-1" :class="labelIcon" aria-hidden="true"></i><slot name="label">{{ label }}</slot><template v-if="required && requiredMarker"> *</template>
@@ -132,7 +132,7 @@ function updateValue(): void {
                     @blur="emit('blur')"
                 ></textarea>
                 <!-- Vue normalizes number inputs on change even when its setter
-                     returns a string. The explicit lexical branch retains native
+                     returns a string. The explicit lexical branch retains entered
                      spelling and validity without replacing text composition. -->
                 <input v-else-if="type === 'number' && lexicalNumber"
                     ref="control"

@@ -20,7 +20,7 @@ function request(ip: string, originalUrl: string): Request {
     } as unknown as Request;
 }
 
-/** Capture native and generated Problem output through the same response object.
+/** Capture generated Problem output through the response object.
  * The limiter, its store, classifier, translator and validator remain production code. */
 function response() {
     const result: {status?: number; type?: string; body?: unknown; headers: Record<string, string>} = {headers: {}};
@@ -37,16 +37,16 @@ function response() {
     return {result, res};
 }
 
-describe('shared native/versioned administrator search rate limit', () => {
-    it('retains the native 120-search budget and original plain response', async () => {
+describe('shared versioned administrator search rate limit', () => {
+    it('retains the 120-search budget and emits the admitted Problem response', async () => {
         const ip = '198.51.100.30';
         await searchLimiter.resetKey(ip);
-        const req = request(ip, '/api/packing/search');
+        const req = request(ip, '/api/v1/packing-lists/selected/profiles?q=Example');
         const {result, res} = response();
         let admitted = 0;
         const next: NextFunction = function admitSearch(error) {
-            if (error) throw error;
-            admitted += 1;
+            if (error) handleApiProblem(error, req, res, next);
+            else admitted += 1;
         };
         try {
             for (let index = 0; index < 120; index += 1) await searchLimiter(req, res, next);
@@ -55,17 +55,18 @@ describe('shared native/versioned administrator search rate limit', () => {
             await searchLimiter(req, res, next);
             expect(admitted).toBe(120);
             expect(result.status).toBe(429);
-            expect(result.body).toBe('Too many requests, please try again later.');
+            expect(result.body).toMatchObject({code: 'RATE_LIMITED', status: 429});
+            expect(contractValidator('Problem')(result.body)).toBe(true);
             expect(result.headers['ratelimit-remaining']).toBe('0');
         } finally {
             await searchLimiter.resetKey(ip);
         }
     });
 
-    it('shares that budget across native and v1 paths and emits a localized validated Problem', async () => {
+    it('shares that budget across entity families and emits a localized validated Problem', async () => {
         const ip = '198.51.100.31';
         await searchLimiter.resetKey(ip);
-        const native = request(ip, '/api/packing/search');
+        const anotherFamily = request(ip, '/api/v1/drivers-lists/selected/profiles?q=Example');
         const versioned = request(ip, '/api/v1/packing-lists/selected/profiles?q=Example');
         const {result, res} = response();
         let admitted = 0;
@@ -74,7 +75,7 @@ describe('shared native/versioned administrator search rate limit', () => {
             else admitted += 1;
         };
         try {
-            for (let index = 0; index < 119; index += 1) await searchLimiter(native, res, next);
+            for (let index = 0; index < 119; index += 1) await searchLimiter(anotherFamily, res, next);
             await searchLimiter(versioned, res, next);
             expect(admitted).toBe(120);
             await searchLimiter(versioned, res, next);

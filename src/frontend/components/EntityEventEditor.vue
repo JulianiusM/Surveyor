@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import type {EntityEventEditorProps} from '../../types/FrontendEntitySettingsTypes';
-import {usePilot} from '../app/context';
+import {useFrontend} from '../app/context';
 import ActionButton from './ActionButton.vue';
 import EventPicker from './EventPicker.vue';
 import StatusNotice from './StatusNotice.vue';
 
 // Relationship policy, confirmation, original/token capture and command recovery
-// stay in the feature. The repeated native form receives their explicit state.
+// stay in the feature. The repeated form receives their explicit state.
 defineProps<EntityEventEditorProps>();
 const emit = defineEmits<{'update:modelValue': [value: string | null]; review: []; save: [source: Event]}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 
 /** Forward a deliberate picker choice without replacing the feature's original baseline. */
 function chooseEvent(value: string | null): void {

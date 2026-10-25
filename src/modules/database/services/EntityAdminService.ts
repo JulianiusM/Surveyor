@@ -166,7 +166,7 @@ export async function addAdmin(
 
 /** Upsert one grant through the established entity/profile unique key.
  * Packing uses the same root coordination as add/update/remove; this DBAL does
- * not interpret native fields, decide authority or convert numeric masks. */
+ * not interpret fields, decide authority or convert numeric masks. */
 export async function upsertAdmin(
     entityType: CombEntityType,
     entityId: string,
@@ -186,7 +186,7 @@ export async function upsertAdmin(
 
 /** Remove only the selected grant. Packing's existing writers coordinate
  * against the root so an authorized command's ACL evidence survives to commit;
- * target existence and native/versioned diagnostics remain controller-owned. */
+ * target existence and direct/versioned diagnostics remain controller-owned. */
 export async function removeAdmin(entityType: CombEntityType, entityId: string, profileId: string, manager: EntityManager = AppDataSource.manager): Promise<void> {
     if (entityType === 'packing' && !manager.queryRunner?.isTransactionActive) {
         return withPackingAclWrite(entityId, transaction => removeAdmin(entityType, entityId, profileId, transaction));

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, reactive, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useActivityApi} from './api';
 import {activitySlotLabel} from './presentation';
@@ -13,7 +13,7 @@ import CommandFeedback from '../../components/CommandFeedback.vue';
 // No profile picker or browser actor field can expand the participant set.
 const props = defineProps<{planId: string; slot: components['schemas']['ActivitySlotView']; allRoles: components['schemas']['ActivityRole'][]; refresh(): Promise<void>}>();
 const emit = defineEmits<{close: []}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useActivityApi(context);
 // Role titles are data, including names such as constructor or __proto__.
@@ -48,7 +48,7 @@ function reconcileSelections(): void {
     }
 }
 function close(): void { if (command.mayLeave()) emit('close'); }
-/** Keep native role descriptions as labels while submitting stable role names. */
+/** Keep role descriptions as labels while submitting stable role names. */
 function roleLabel(role: components['schemas']['ActivitySlotRole']): string {
     return props.allRoles.find(candidate => candidate.id === role.id)?.description || role.name;
 }

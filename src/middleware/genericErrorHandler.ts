@@ -1,67 +1,24 @@
-/*
- * Copyright 2026 Julian Malovanij
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import type {NextFunction, Request, Response} from 'express';
+import {classifyApiError, requestLocale, validatedProblemBody} from '../modules/api/problem';
+import {APIError, ExpectedError, ValidationError} from '../modules/lib/errors';
 
-import {NextFunction, Request, Response} from "express";
-
-import {APIError, ExpectedError, ValidationError} from "../modules/lib/errors";
-import renderer from "../modules/renderer";
-
-export function handleGenericError(err: Error, req: Request, res: Response, next: NextFunction) {
-    const status: number = (err as any).status || 500;
-    if (status >= 500) console.error(err);
-    res.status(status);
-    if (status === 503 && err instanceof APIError && "retryAfter" in err.data) {
-        res.setHeader("Retry-After", String((err.data as {retryAfter: number}).retryAfter));
+/** Last-resort delivery when parsing, session admission or SSR itself fails.
+ * Ordinary page errors are rendered by the frontend router; this independent
+ * response needs neither a working renderer nor a database session. */
+export function handleGenericError(error: unknown, req: Request, res: Response, next: NextFunction): void {
+    if (res.headersSent) return next(error);
+    const problem = classifyApiError(error);
+    const body = validatedProblemBody(problem, requestLocale(req));
+    // Preserve recognized document statuses, including the established validation
+    // document outcome. Never trust arbitrary status-shaped exception objects.
+    const status = error instanceof ExpectedError || error instanceof APIError ? error.status
+        : error instanceof ValidationError ? 500
+            : error instanceof URIError && 'status' in error && error.status === 400 ? 400 : body.status;
+    if (status >= 500) console.error('[frontend]', {method: req.method, status, category: 'DeliveryFailure'});
+    if (status === 503 && error instanceof APIError && 'retryAfter' in error.data) {
+        res.set('Retry-After', String((error.data as {retryAfter: number}).retryAfter));
     }
-
-    if (err instanceof ExpectedError) {
-        return renderer.renderMessageData(
-            res,
-            err.severity,
-            err.message,
-            err.data
-        )
-    }
-
-    if (err instanceof APIError) {
-        // API --> JSON
-        return renderer.respondWithErrorDataJson(
-            res,
-            err.message,
-            err.data
-        )
-    }
-
-    console.log(err);
-
-    if (err instanceof ValidationError) {
-        // form validation or business errors with template/data
-        return renderer.renderWithErrorData(
-            res,
-            err.template,
-            err.message,
-            err.data
-        );
-    }
-
-    // set locals, only providing error in development
-    res.locals.message = err.message;
-    res.locals.code = status;
-    res.locals.error = req.app.get('env') === 'development' ? err : {};
-
-    // render the error page
-    renderer.render(res, 'error');
+    // Plain text is intentionally independent of application assets and never
+    // exposes stack traces, database details or submitted credentials.
+    res.status(status).set('Cache-Control', 'private, no-store').type('text/plain').send(body.detail);
 }

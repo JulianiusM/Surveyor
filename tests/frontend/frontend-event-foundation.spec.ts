@@ -7,9 +7,9 @@ import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import type {components} from '../../src/types/api/v1';
-import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
+import type {FrontendBootstrap} from '../../src/types/FrontendTypes';
 import type {EntityMetadataEditorHandle} from '../../src/types/FrontendEntityMetadataTypes';
-import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
+import {createFrontendContext, observeInitialDocument, frontendContextKey} from '../../src/frontend/app/context';
 import {eventKeys} from '../../src/frontend/app/queryKeys';
 import EventCreatePage from '../../src/frontend/features/event/EventCreatePage.vue';
 import EventMetadataFields from '../../src/frontend/features/event/EventMetadataFields.vue';
@@ -45,24 +45,24 @@ function json(value: unknown, token = '"metadata-original"', status = 200): Resp
 /** Mount actual controls/adapters/drafts while substituting HTTP delivery only.
  * These frontend fixtures establish no persistence or complete-system result. */
 async function mounted(component: Component, handler: (request: Request) => Promise<Response>,
-                       path = '/frontend-pilot/event/create', props: Record<string, unknown> = {},
-                       initial: Omit<FrontendPilotBootstrap, 'session'> = {}) {
+                       path = '/event/create', props: Record<string, unknown> = {},
+                       initial: Omit<FrontendBootstrap, 'session'> = {}) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
-    const context = createPilotContext({session, ...initial}, true, request);
+    const context = createFrontendContext({session, ...initial}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/frontend-pilot/event/create', component, props},
-        {path: '/frontend-pilot/event/:eventId/duplicate', component, props},
-        {path: '/frontend-pilot/event/:eventId/guest', component, props},
-        {path: '/frontend-pilot/event/:eventId/admin', component, props},
-        {path: '/frontend-pilot/event/:eventId', component, props},
-        {path: '/frontend-pilot', component: defineComponent({template: '<p>Overview</p>'})},
+        {path: '/event/create', component, props},
+        {path: '/event/:eventId/duplicate', component, props},
+        {path: '/event/:eventId/guest', component, props},
+        {path: '/event/:eventId/admin', component, props},
+        {path: '/event/:eventId', component, props},
+        {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
     ]});
     await router.push(path);
     const stopInitial = observeInitialDocument(context, router);
     const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[pilotContextKey as symbol]: context},
+        provide: {[frontendContextKey as symbol]: context},
         stubs: {AppDialog: defineComponent({template: '<section role="dialog"><slot name="navigation" /><slot /><slot name="footer" /></section>'}),
             // Entry assertions exercise the real admission/router/query owners;
             // its separately tested detail body cannot manufacture admission.
@@ -91,7 +91,7 @@ function selectImage(input: HTMLInputElement): File {
 
 describe('Event foundation production consumers', () => {
     it('retires warm entry intents after a missing Event and requires fresh admission before showing another page intent', async () => {
-        const detail = `/frontend-pilot/event/${eventId}`;
+        const detail = `/event/${eventId}`;
         let missing = false;
         let holdAdmin = false;
         let releaseAdmin: (() => void) | undefined;
@@ -187,7 +187,7 @@ describe('Event foundation production consumers', () => {
         await form.trigger('submit'); await flushPromises();
         expect(request.mock.calls.filter(([input]) => (input as Request).method === 'POST')).toHaveLength(1);
         finishCreation!(); await flushPromises();
-        expect(router.currentRoute.value.path).toBe(`/frontend-pilot/event/${secondId}`);
+        expect(router.currentRoute.value.path).toBe(`/event/${secondId}`);
     });
 
     it('retains the entered Event and FileList after unknown delivery without replay during read recovery', async () => {
@@ -213,18 +213,18 @@ describe('Event foundation production consumers', () => {
     });
 
     it('retains an entered duplicate and selected file after canceled departure, then releases both on accepted warm navigation', async () => {
-        const start = `/frontend-pilot/event/${eventId}/duplicate`;
+        const start = `/event/${eventId}/duplicate`;
         const {wrapper, router, context, request} = await mounted(EventCreatePage, readCreation, start);
         vi.stubGlobal('confirm', vi.fn(() => true));
         // Warm the destination through real admission before starting local work.
-        await router.push(`/frontend-pilot/event/${secondId}/duplicate`); await flushPromises();
+        await router.push(`/event/${secondId}/duplicate`); await flushPromises();
         await router.push(start); await flushPromises();
         const input = wrapper.get<HTMLInputElement>('#event-header-image').element;
         const selected = selectImage(input);
         await wrapper.get('[name="title"]').setValue('Entered title');
         const confirmation = vi.fn(() => false);
         vi.stubGlobal('confirm', confirmation);
-        await router.push(`/frontend-pilot/event/${secondId}/duplicate`); await flushPromises();
+        await router.push(`/event/${secondId}/duplicate`); await flushPromises();
         expect(router.currentRoute.value.fullPath).toBe(start);
         await context.queryClient.invalidateQueries({queryKey: eventKeys.duplicate(session.context, eventId)}); await flushPromises();
         await router.push(start + '#event-header-image'); await flushPromises();
@@ -232,7 +232,7 @@ describe('Event foundation production consumers', () => {
         expect(wrapper.get<HTMLInputElement>('[name="title"]').element.value).toBe('Entered title');
         expect(confirmation).toHaveBeenCalledTimes(1);
         confirmation.mockReturnValue(true);
-        await router.push(`/frontend-pilot/event/${secondId}/duplicate`); await flushPromises();
+        await router.push(`/event/${secondId}/duplicate`); await flushPromises();
         const nextInput = wrapper.get<HTMLInputElement>('#event-header-image').element;
         expect(nextInput).toBe(input);
         expect(nextInput.files).toHaveLength(0);
@@ -251,7 +251,7 @@ describe('Event foundation production consumers', () => {
                 value = {...value, values: {...value.values, ...patch} as components['schemas']['EventMetadataValues'], editToken: '"edit-field-updated"'};
             }
             return json(value, patches.length ? '"metadata-updated"' : '"metadata-original"');
-        }, '/frontend-pilot/event/create', {eventId});
+        }, '/event/create', {eventId});
         await vi.waitFor(() => {
             expect({reads: request.mock.calls.length, ready: context.ready.value, visible: context.visible.value,
                 state: context.queryClient.getQueryState(eventKeys.metadata(session.context, eventId))})
@@ -300,7 +300,7 @@ describe('Event foundation production consumers', () => {
             let current = original;
             const patches: components['schemas']['EventMetadataPatch'][] = [];
             const {wrapper, context, request} = await mounted(EventMetadataFields, deliverMetadata,
-                '/frontend-pilot/event/create', {eventId});
+                '/event/create', {eventId});
 
             /** Exercise the generated Event adapter while retaining wire scalar meaning.
              * Only delivery is substituted; the shared editor owns reads, drafts and review. */
@@ -332,7 +332,7 @@ describe('Event foundation production consumers', () => {
                 await wrapper.get('#event-metadata-form').trigger('submit');
                 await flushPromises();
                 expect(patches).toHaveLength(1);
-                expect(wrapper.findAll('.pilot-conflict-values')).toHaveLength(0);
+                expect(wrapper.findAll('.frontend-conflict-values')).toHaveLength(0);
 
                 // Explicit recovery reads the latest values. It cannot replay the
                 // uncertain PATCH or silently adopt its new comparison baseline.
@@ -347,7 +347,7 @@ describe('Event foundation production consumers', () => {
              * definition lists rather than exposing the component's private formatter. */
             function comparisonRows(): string[][] {
                 const rows: string[][] = [];
-                for (const row of wrapper.findAll('.pilot-conflict-values')) {
+                for (const row of wrapper.findAll('.frontend-conflict-values')) {
                     rows.push(row.findAll('dd').map(cell => cell.text()));
                 }
                 return rows;
@@ -357,7 +357,7 @@ describe('Event foundation production consumers', () => {
                 ['Original', 'Local', 'Remote'], ['—', '—', '—'], ['—', '—', '—'],
                 ['0', '1', '0'], ['No', 'Yes', 'No'], ['Yes', 'No', 'Yes'],
             ]);
-            const comparison = wrapper.get('.pilot-conflict-values').element;
+            const comparison = wrapper.get('.frontend-conflict-values').element;
             const readsBeforeTranslation = request.mock.calls.length;
             context.locale.value = 'de';
             await flushPromises();
@@ -365,7 +365,7 @@ describe('Event foundation production consumers', () => {
                 ['Original', 'Local', 'Remote'], ['—', '—', '—'], ['—', '—', '—'],
                 ['0', '1', '0'], ['Nein', 'Ja', 'Nein'], ['Ja', 'Nein', 'Ja'],
             ]);
-            expect(wrapper.get('.pilot-conflict-values').element).toBe(comparison);
+            expect(wrapper.get('.frontend-conflict-values').element).toBe(comparison);
             expect(request.mock.calls).toHaveLength(readsBeforeTranslation);
 
             // Localized display never changes machine values or acknowledges
@@ -377,7 +377,7 @@ describe('Event foundation production consumers', () => {
             await flushPromises();
             const patch = {title: 'Local', maxParticipants: '1', requireDietaryInfo: true, allowDietComment: false};
             expect(patches).toEqual(outcome === 'lost save response' ? [patch, patch] : [patch]);
-            expect(wrapper.findAll('.pilot-conflict-values')).toHaveLength(0);
+            expect(wrapper.findAll('.frontend-conflict-values')).toHaveLength(0);
         },
     );
 

@@ -36,7 +36,7 @@ import {getEventParticipationQuery} from './EventService';
 import {getPackingParticipationQuery} from './PackingService';
 import {getSurveyParticipationQuery} from './SurveyService';
 
-/** Persist the account/default profile using native transaction scope or the supplied registration manager. */
+/** Persist the account/default profile using standalone transaction scope or the supplied registration manager. */
 export async function registerUser(username: string, name: string, password: string, email: string, manager?: EntityManager) {
     /** Retain existing password storage and both related writes within the caller's persistence unit. */
     async function saveUser(em: EntityManager) {
@@ -111,7 +111,7 @@ export async function generateActivationToken(userId: number, manager: EntityMan
     return token;
 }
 
-/** Read current token evidence, optionally locking its row in a pilot completion transaction. */
+/** Read current token evidence, optionally locking its row in a frontend completion transaction. */
 export async function verifyActivationToken(token: string, manager: EntityManager = AppDataSource.manager, lock = false) {
     const repo = manager.getRepository(User);
     return await repo.findOne({
@@ -119,7 +119,7 @@ export async function verifyActivationToken(token: string, manager: EntityManage
             activationToken: token,
             activationTokenExpiration: MoreThan(new Date())
         },
-        // Atomic pilot completion holds the token row as well as its session.
+        // Atomic frontend completion holds the token row as well as its session.
         // Distinct sessions therefore cannot both consume the same capability.
         ...(lock ? {lock: {mode: 'pessimistic_write' as const}} : {}),
         select: {
@@ -153,7 +153,7 @@ export async function generatePasswordResetToken(username: string, manager: Enti
     return token;
 }
 
-/** Read reset-token evidence, optionally holding its user row throughout pilot consumption. */
+/** Read reset-token evidence, optionally holding its user row throughout frontend consumption. */
 export async function verifyPasswordResetToken(token: string, manager: EntityManager = AppDataSource.manager, lock = false) {
     const repo = manager.getRepository(User);
     return await repo.findOne({
@@ -161,7 +161,7 @@ export async function verifyPasswordResetToken(token: string, manager: EntityMan
             resetToken: token,
             resetTokenExpiration: MoreThan(new Date())
         },
-        // Native reads keep their current projection; locked callers also need
+        // Ordinary reads keep their current projection; locked callers also need
         // expiry evidence to recheck a token after waiting for another consumer.
         ...(lock ? {lock: {mode: 'pessimistic_write' as const}} : {}),
         select: {
@@ -188,7 +188,7 @@ export async function resetPassword(username: string, newPassword: string, manag
 // Guests
 
 /**
- * Persist one guest and its profile together. Native callers keep the existing
+ * Persist one guest and its profile together. Direct callers keep the existing
  * transaction; a controller already holding a guest/session transaction supplies
  * that same manager so all three records share its eventual commit or rollback.
  */

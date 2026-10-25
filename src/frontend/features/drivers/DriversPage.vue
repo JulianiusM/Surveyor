@@ -4,7 +4,7 @@ import {useRoute} from 'vue-router';
 import type {components} from '../../../types/api/v1';
 import type {FrontendListPendingControl, FrontendListQuickAddValues} from '../../../types/FrontendListTypes';
 import {useDriversApi} from './api';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {evictQueryFamilies, retireQueryFamily} from '../../app/queryCache';
 import {overviewKeys, driversKeys} from '../../app/queryKeys';
 import {usePageTitle} from '../../composables/pageTitle';
@@ -27,7 +27,7 @@ import FormField from '../../components/FormField.vue';
 
 type Item = components['schemas']['DriversItemView'];
 const route = useRoute();
-const context = usePilot();
+const context = useFrontend();
 const api = useDriversApi(context);
 const {messages} = context;
 const listId = computed(() => String(route.params.listId).toLowerCase());
@@ -96,12 +96,12 @@ async function settingsAccessLost(): Promise<void> {
     await retireSettingsAccess({resourceId: listId.value, currentResource: () => listId.value,
         families: [driversKeys.editors(actor, listId.value)]});
 }
-/** Preserve the native treatment of historical null capacities (IMP-026). */
+/** Preserve the treatment of historical null capacities (IMP-026). */
 function isFull(item: Item): boolean {
     return item.assignedCount >= (item.maxAssignees ?? 0);
 }
 /** Adapt one reviewed inline field without replacing unrelated item values.
- * The editor supplies its captured token; raw native capacity input is deliberately
+ * The editor supplies its captured token; raw capacity input is deliberately
  * left to the shared server/SQL boundary instead of coerced by this component. */
 async function patch(
     item: Item,
@@ -110,7 +110,7 @@ async function patch(
     token: string,
 ): Promise<boolean> {
     // The driver name belongs to the offering profile and is never an inline
-    // field. Capacity keeps the raw number input so native signed-integer DB
+    // field. Capacity keeps the raw number input so signed-integer DB
     // conversion is not replaced by JavaScript coercion or rounding.
     const patch =
         field === 'maxAssignees'
@@ -135,7 +135,7 @@ async function assign(item: Item): Promise<void> {
             {success: item.selfAssigned ? 'drivers.itemUnassigned' : 'drivers.itemAssigned'});
     } finally { pendingControl.value = null; }
 }
-/** Native item deletion needs deliberate confirmation before its independently authorized command. */
+/** Item deletion needs deliberate confirmation before its independently authorized command. */
 async function removeItem(item: Item): Promise<void> {
     // Confirmation precedes both presentation ownership and dispatch. A blocked
     // sibling gesture cannot overwrite the active command's initiating row.
@@ -149,7 +149,7 @@ async function removeItem(item: Item): Promise<void> {
 }
 /** Remove one admitted saved assignment without touching the Quick Add draft. */
 async function removeAssignment(assignmentId: string): Promise<void> {
-    // Native manager removal submits immediately; its server permission/ownership
+    // Manager removal submits immediately; its server permission/ownership
     // checks remain authoritative and the shared command still prevents replay.
     if (!command.action.isAvailable()) return;
     pendingControl.value = {kind: 'assignment', id: assignmentId};
@@ -158,7 +158,7 @@ async function removeAssignment(assignmentId: string): Promise<void> {
             {success: 'common.removed'});
     } finally { pendingControl.value = null; }
 }
-/** Submit the native Quick Add draft once through the shared creation command.
+/** Submit the Quick Add draft once through the shared creation command.
  * Only a confirmed result clears the entered fields; a missing response retains
  * both that draft and explicit review, since a read cannot identify its new row. */
 async function addItem(): Promise<void> {
@@ -169,7 +169,7 @@ async function addItem(): Promise<void> {
             api.addItem(
                 listId.value,
                 {
-                    // The readonly native title comes from this captured active
+                    // The readonly title comes from this captured active
                     // profile. Authorship itself remains assigned by the server.
                     title: context.session.value?.activeProfile?.name ?? '',
                     description: freshItem.description,
@@ -214,7 +214,7 @@ const reorder = useListReorder({
             <template #actions><RefreshButton :state="readAction" @refresh="refresh" /></template>
         </EntityHeader>
         <div class="card-body">
-            <!-- Native item/assignment commands present transient feedback in the
+            <!-- Item/assignment commands present transient feedback in the
                  shared page alert host; durable reconciliation stays beside the list. -->
             <CommandFeedback :feedback="command.feedback" :disabled="command.pending.value || command.recovering.value"
                 :creation-review="{required: command.reviewRequired.value, message: 'drivers.reviewUnknownItem', state: readAction, paragraphClass: 'mb-2'}"
@@ -245,7 +245,7 @@ const reorder = useListReorder({
                                     {{ messages.t('packing.description') }}
                                 </th>
                                 <th scope="col" class="text-center w-25">{{ messages.t('packing.assignees') }}</th>
-                                <!-- Native separates every capacity-heading word
+                                <!-- The heading separates every capacity word
                                      with nonbreaking spaces; keep that same
                                      minimum width in the scrolling mobile table. -->
                                 <th scope="col" class="text-center text-nowrap w-10">
@@ -300,7 +300,7 @@ const reorder = useListReorder({
                                     {{ item.assignedCount }} / {{ item.maxAssignees }}
                                 </InlineCell>
                                 <td class="text-center">
-                                    <!-- Native admission displays these personal controls
+                                    <!-- Admission displays these personal controls
                                          even when the independent write grant is absent.
                                          Preserve that presentation; the server rechecks
                                          ACCESS_VIEW before every assignment command. -->

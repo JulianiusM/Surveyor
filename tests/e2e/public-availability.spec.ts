@@ -1,5 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {createPublicPageCase} from '../factories/publicPageFactory';
+import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
 
 const publicAvailabilityCases = [
     createPublicPageCase({
@@ -20,15 +21,18 @@ const publicAvailabilityCases = [
 test.describe('public application availability suite', () => {
     for (const pageCase of publicAvailabilityCases) {
         // Canary: protects a high-value production behavior while avoiding private implementation details.
-        test(pageCase.description, async ({request}) => {
-            const response = await request.get(pageCase.path);
-            const body = await response.text();
-
-            expect(response.status()).toBe(pageCase.expectedStatus);
+        test(pageCase.description, async ({request, page}) => {
             if (pageCase.textMatch === 'exact') {
-                expect(body).toBe(pageCase.expectedText);
+                const response = await request.get(pageCase.path);
+                expect(response.status()).toBe(pageCase.expectedStatus);
+                expect(await response.text()).toBe(pageCase.expectedText);
             } else {
-                expect(body).toContain(pageCase.expectedText);
+                // Canonical interactive documents begin with a skeleton. Check
+                // actual mounted content after the integrated session/read flow.
+                const response = await page.goto(pageCase.path + '?locale=en', {waitUntil: 'domcontentloaded'});
+                expect(response?.status()).toBe(pageCase.expectedStatus);
+                await waitForFrontendHydration(page);
+                await expect(page.locator('main')).toContainText(pageCase.expectedText);
             }
         });
     }

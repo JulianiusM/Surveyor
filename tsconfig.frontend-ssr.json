@@ -3,6 +3,6 @@
   "compilerOptions": {
     "types": ["node", "vite/client"]
   },
-  "include": ["src/frontend/app/entry-server.ts", "src/frontend/**/*.vue", "src/types/FrontendPilotTypes.d.ts"],
+  "include": ["src/frontend/app/entry-server.ts", "src/frontend/**/*.vue", "src/types/FrontendTypes.d.ts"],
   "exclude": ["node_modules", "dist", "src/frontend/app/entry-client.ts"]
 }

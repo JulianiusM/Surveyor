@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Matching creation and assignment forms share these three native checkboxes.
+// Matching creation and assignment forms share these three checkboxes.
 // Parents retain drafts, normalization and save authority; this presentation
 // owner emits one changed value and keeps the supplied IDs, names and wording.
 defineProps<{

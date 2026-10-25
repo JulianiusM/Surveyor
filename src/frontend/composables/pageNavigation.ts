@@ -1,22 +1,22 @@
 import {shallowRef, watch} from 'vue';
 import type {InjectionKey} from 'vue';
 import type {NavigationFailure, RouteLocationNormalized, Router} from 'vue-router';
-import type {PilotPageNavigation, PilotPageNavigationOptions, PilotPageReadiness, PilotPageReadinessSource} from '../../types/FrontendPilotUiTypes';
+import type {FrontendPageNavigation, FrontendPageNavigationOptions, FrontendPageReadiness, FrontendPageReadinessSource} from '../../types/FrontendUiTypes';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
 
-export const pageReadinessKey: InjectionKey<PilotPageReadiness> = Symbol('pilot.page-readiness');
+export const pageReadinessKey: InjectionKey<FrontendPageReadiness> = Symbol('frontend.page-readiness');
 
 /** Coordinate Router scrolling with the mounted page's admitted render. The
  * page owns its read; this owner retains only a callback registration and pending
  * subscriptions, never data, request status or another saved-position store. */
-export function createPageReadiness(router: Router): PilotPageReadiness {
-    const source = shallowRef<PilotPageReadinessSource>();
+export function createPageReadiness(router: Router): FrontendPageReadiness {
+    const source = shallowRef<FrontendPageReadinessSource>();
     const waiting = new Set<() => void>();
     let disposed = false;
 
     /** Replace the mounted presentation source, retaining its reactive getters.
      * A retiring page may release only its own registration, never its successor. */
-    function register(current: PilotPageReadinessSource): () => void {
+    function register(current: FrontendPageReadinessSource): () => void {
         if (disposed) return () => {};
         // Readiness stays with the page's existing computed values rather than
         // being copied into a second loading or authorization flag.
@@ -75,7 +75,7 @@ export function createPageReadiness(router: Router): PilotPageReadiness {
 /** Track actual lazy navigation for one mounted/application owner. Callers choose
  * the relevant URL boundary and retain their existing read/feedback decisions;
  * this owner coordinates subscriptions, latest-target retirement and disposal. */
-export function observePageNavigation(router: Router, options: PilotPageNavigationOptions = {}): PilotPageNavigation {
+export function observePageNavigation(router: Router, options: FrontendPageNavigationOptions = {}): FrontendPageNavigation {
     const destination = shallowRef<RouteLocationNormalized>();
     const removeStart = router.beforeEach(rememberDestination);
     const removeFinish = router.afterEach(finishDestination);

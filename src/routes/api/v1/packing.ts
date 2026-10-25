@@ -88,7 +88,7 @@ router.patch('/:listId/metadata', asyncHandler(async function updatePackingMetad
     sendValidatedJson(req, res, 'updatePackingMetadata', 200, result.data, result.etag);
 }));
 
-// The native description method is publicly grantable. Its separate adapter keeps
+// The existing description method is publicly grantable. Its separate adapter keeps
 // the mixed root-property endpoint and its event/archive projection profile-only.
 router.get('/:listId/description', asyncHandler(async function getPackingDescription(req, res) {
     const actor = await requireApiContext(req, res);
@@ -125,7 +125,7 @@ router.get('/:listId/settings', asyncHandler(async function getPackingSettings(r
 }));
 
 router.get('/:listId/duplicate', asyncHandler(async function getPackingDuplicate(req, res) {
-    // Native duplicate GET can be granted publicly; only the later creation POST needs an account.
+    // Existing duplicate GET can be granted publicly; only the later creation POST needs an account.
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'getPackingDuplicate');
     sendValidatedJson(req, res, 'getPackingDuplicate', 200,

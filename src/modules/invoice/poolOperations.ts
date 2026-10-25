@@ -82,7 +82,7 @@ export async function saveInvoicePoolAssignments(poolId: string, isDefault: bool
             if (!validIds.includes(Number(id))) throw new APIError(invoiceText('factorParticipantIsNotAssignedToThisPool'), {}, 400, {cause: invoiceRejectionCause('factorParticipantIsNotAssignedToThisPool')});
             try { validateInvoiceFactor(factor); }
             catch (error) {
-                // Keep the native diagnostic but publish only the authored
+                // Keep the diagnostic but publish only the authored
                 // bounded factor rule through the versioned interface.
                 throw new APIError(error instanceof Error ? error.message : invoiceText('invalidFactor'), {}, 400,
                     {cause: invoiceRejectionCause('factorsMustBeBetweenAndWithAtMostFour')});

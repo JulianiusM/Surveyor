@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed} from 'vue';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {eventKeys} from '../../app/queryKeys';
 import type {EntityAutomationLabels} from '../../../types/FrontendEntityDialogTypes';
 import {useEventApi} from './api';
@@ -11,7 +11,7 @@ import EntitySettingsDialog from '../../components/EntitySettingsDialog.vue';
 // scoped cache families. The shared dialog owns all matching root-settings flows.
 const props = defineProps<{eventId: string; eventTitle?: string; metadataAvailable?: boolean}>();
 const emit = defineEmits<{close: []; saved: []; accessLost: []}>();
-const context = usePilot();
+const context = useFrontend();
 const api = useEventApi(context);
 const key = computed(() => eventKeys.settings(context.session.value?.context, props.eventId));
 const profiles = computed(() => eventKeys.profilesFamily(context.session.value?.context, props.eventId));
@@ -19,7 +19,7 @@ const metadataProps = computed(() => ({eventId: props.eventId, eventTitle: props
 const automationLabels = computed<EntityAutomationLabels>(() => ({pause: context.messages.value.t('event.organizer.pauseAutomation'),
     resume: context.messages.value.t('event.organizer.resumeAutomation'), pausedHint: context.messages.value.t('event.automationPausedHint'),
     confirmResume: 'event.organizer.confirmResumeAutomation', pausedSuccess: 'event.organizer.automationPaused', resumedSuccess: 'event.organizer.automationResumed'}));
-// The existing document export remains available through its independent native
+// The existing document export remains available through its independent document
 // grants. The shared dialog checks the admitted capability before showing it.
 const exportLink = computed(() => ({url: '/event/' + props.eventId + '/export/participants',
     label: context.messages.value.t('event.participantsPdf')}));
@@ -36,6 +36,6 @@ const operations = {settings: api.settings.bind(api), profiles: api.profiles.bin
         :metadata-component="MetadataFields" :metadata-props="metadataProps" :operations="operations"
         :settings-key="key" :profile-key="profileKey" :profile-family="profiles"
         :automation-labels="automationLabels" :export-link="exportLink"
-        :duplicate-to="'/frontend-pilot/event/' + eventId + '/duplicate'" deleted-key="event.deleted" restore-confirmation="event.confirmRestore" archive-confirmation="event.confirmArchive"
+        :duplicate-to="'/event/' + eventId + '/duplicate'" deleted-key="event.deleted" restore-confirmation="event.confirmRestore" archive-confirmation="event.confirmArchive"
         @close="emit('close')" @saved="emit('saved')" @access-lost="emit('accessLost')" />
 </template>

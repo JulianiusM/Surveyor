@@ -130,7 +130,7 @@ schemas:
         items:
           $ref: '#/schemas/SurveyCombinationInput'
   SurveyMetadata:
-    description: Owner-editable metadata. ETag identifies the returned representation for draft refresh only; saves retain native last-write behavior.
+    description: Owner-editable metadata. ETag identifies the returned representation for draft refresh only; saves retain established last-write behavior.
     type: object
     additionalProperties: false
     required: [entityType, id, values, editableFields, currentEventId, archived, inheritedArchived]

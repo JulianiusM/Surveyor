@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {financeMoney, financeSettlementMessages} from './presentation';
 import ActionButton from '../../components/ActionButton.vue';
 import FormField from '../../components/FormField.vue';
@@ -15,7 +15,7 @@ const props = defineProps<{shares: Share[]; admin?: boolean; disabled?: boolean;
     settlement?: boolean; pendingShareId?: string | null; refreshVersion?: number; refreshing?: boolean;
     pools?: Pick<components['schemas']['FinancePool'], 'id' | 'description'>[]}>();
 const emit = defineEmits<{inspect: [share: Share]; settle: [share: Share]; refresh: []}>();
-const {messages, locale} = usePilot();
+const {messages, locale} = useFrontend();
 const id = useId();
 const search = ref('');
 const status = ref('');
@@ -79,18 +79,18 @@ function filteredShares(): Share[] {
         && (!needle || shareSearchText(share).toLocaleLowerCase().includes(needle)))
         .sort(compareShares);
 }
-/** Native amount ordering uses the displayed name as its stable tie-breaker;
+/** Amount ordering uses the displayed name as its stable tie-breaker;
  * case differences alone do not reorder otherwise equivalent names. */
 function compareShares(left: Share, right: Share): number {
     const difference = Number(left.amount) - Number(right.amount);
-    // Sort balances only when they differ, then retain the native name rule for
+    // Sort balances only when they differ, then retain the name rule for
     // both equal balances and the explicit alphabetical ordering option.
     if (difference && sort.value === 'amount-desc') return -difference;
     if (difference && sort.value === 'amount-asc') return difference;
     return (props.admin ? left.payerName : left.poolName).localeCompare(
         props.admin ? right.payerName : right.poolName, locale.value, {sensitivity: 'base'});
 }
-/** Preserve each native ledger's searchable saved context without broadening
+/** Preserve each ledger's searchable saved context without broadening
  * the rows or recalculating accounting from another participant's data. */
 function shareSearchText(share: Share): string {
     // Organizer search includes applied covered names; personal search includes
@@ -106,7 +106,7 @@ function statusLabel(status: string): string {
 </script>
 
 <template>
-    <!-- Personal shares retain the native heading outside the ledger border.
+    <!-- Personal shares retain the heading outside the ledger border.
          Organizer exports and payer count remain associated with their table. -->
     <h6 v-if="shares.length && !admin" class="mt-3">{{ messages.t('finance.yourPoolShares') }}</h6>
     <section
@@ -122,7 +122,7 @@ function statusLabel(status: string): string {
                 {{ messages.t('finance.calculatedShares') }}
                 <span v-if="admin" class="badge bg-secondary ms-2" data-finance-payer-count>{{ messages.t('finance.payersCount', {count: shares.length}) }}</span>
             </h3>
-            <div v-if="$slots.actions" class="pilot-action-row"><slot name="actions" /></div>
+            <div v-if="$slots.actions" class="frontend-action-row"><slot name="actions" /></div>
         </div>
         <p v-if="admin" class="text-secondary small">{{ messages.t('finance.statusDescribesPayer') }}</p>
         <StatusNotice v-if="refreshNotice" placement="notification" transient :renewal="refreshNotice" @dismiss="refreshNotice = 0">

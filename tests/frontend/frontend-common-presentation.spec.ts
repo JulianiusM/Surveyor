@@ -7,8 +7,6 @@ import {renderToString} from 'vue/server-renderer';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
-import {resolve} from 'node:path';
-import * as pug from 'pug';
 import LandingPage from '../../src/frontend/features/common/LandingPage.vue';
 import CommonPage from '../../src/frontend/features/common/CommonPage.vue';
 import PageMessage from '../../src/frontend/components/PageMessage.vue';
@@ -17,13 +15,13 @@ import FormField from '../../src/frontend/components/FormField.vue';
 import FileField from '../../src/frontend/components/FileField.vue';
 import ActionButton from '../../src/frontend/components/ActionButton.vue';
 import AppHeader from '../../src/frontend/components/AppHeader.vue';
-import {createPilotContext, observeInitialDocument, pilotContextKey, useActionState} from '../../src/frontend/app/context';
-import {pilotRoutes} from '../../src/frontend/app/createApp';
+import {createFrontendContext, observeInitialDocument, frontendContextKey, useActionState} from '../../src/frontend/app/context';
+import {frontendRoutes} from '../../src/frontend/routes';
 import {render} from '../../src/frontend/app/entry-server';
 import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
 import type {components} from '../../src/types/api/v1';
-import type {FrontendCommonPage, FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
-import type {PilotContext} from '../../src/types/FrontendPilotUiTypes';
+import type {FrontendCommonPage, FrontendBootstrap} from '../../src/types/FrontendTypes';
+import type {FrontendContext} from '../../src/types/FrontendUiTypes';
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 
 const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {
@@ -33,9 +31,6 @@ const session: components['schemas']['SessionView'] & {context: string; csrfToke
     shell: {version: 'fixture', imprintUrl: 'https://example.test/imprint', privacyPolicyUrl: 'https://example.test/privacy',
         localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'},
 };
-const renderNativeLanding = pug.compileFile(resolve('src/views/index.pug'));
-const renderNativeMessage = pug.compileFile(resolve('src/views/message.pug'));
-const renderNativeError = pug.compileFile(resolve('src/views/error.pug'));
 const routePlaceholder = defineComponent({template: '<p>Independent route</p>'});
 const cleanups: Array<() => void> = [];
 
@@ -49,22 +44,22 @@ afterEach(() => {
 /** Mount the actual presentation with its request-local translator and route scope.
  * Any accidental network dispatch is rejected instead of substituting application data. */
 async function mounted(component: Component, props: Record<string, unknown> = {},
-    bootstrap: Partial<FrontendPilotBootstrap> = {}, path = '/frontend-pilot/home',
+    bootstrap: Partial<FrontendBootstrap> = {}, path = '/',
     requestFetch: typeof fetch = rejectUnexpectedRequest) {
     const request = vi.fn(requestFetch);
-    const context = createPilotContext({session, initialUrl: path, ...bootstrap}, true, request);
+    const context = createFrontendContext({session, initialUrl: path, ...bootstrap}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/frontend-pilot/home', component: routePlaceholder},
-        {path: '/frontend-pilot/message', component: routePlaceholder},
-        {path: '/frontend-pilot', component: routePlaceholder},
-        {path: '/frontend-pilot/:pathMatch(.*)*', component: routePlaceholder},
+        {path: '/', component: routePlaceholder},
+        {path: '/message', component: routePlaceholder},
+        {path: '/users/dashboard', component: routePlaceholder},
+        {path: '/:pathMatch(.*)*', component: routePlaceholder},
     ]});
     await router.push(path);
     await router.isReady();
     const wrapper = mount(component, {props, attachTo: document.body, global: {
         plugins: [router, [I18NextVue, {i18next: context.i18next}]],
-        provide: {[pilotContextKey as symbol]: context},
+        provide: {[frontendContextKey as symbol]: context},
     }});
     await flushPromises();
     cleanups.push(function disposeMountedPage() {wrapper.unmount(); context.queryClient.clear();});
@@ -81,19 +76,19 @@ async function dashboardJourney(login?: () => Promise<Component>, requestFetch: 
     const request = vi.fn(requestFetch);
     const anonymous: components['schemas']['SessionView'] = {...session, kind: 'anonymous', context: null, csrfToken: null,
         activeProfile: null, profiles: [], logoutUrl: null};
-    const context: PilotContext = createPilotContext({session: anonymous, initialUrl: '/frontend-pilot'}, true, request);
+    const context: FrontendContext = createFrontendContext({session: anonymous, initialUrl: '/'}, true, request);
     context.hydrated.value = true;
-    const router = createRouter({history: createMemoryHistory(), routes: pilotRoutes.map(route =>
-        login && route.path === '/frontend-pilot/users/login' ? {path: route.path, meta: route.meta, component: login} : route)});
+    const router = createRouter({history: createMemoryHistory(), routes: frontendRoutes.map(route =>
+        login && route.path === '/users/login' ? {path: route.path, meta: route.meta, component: login} : route)});
     const stopDocument = observeInitialDocument(context, router);
-    await router.push('/frontend-pilot');
+    await router.push('/');
     await router.isReady();
     const wrapper = mount(defineComponent({
         setup: () => ({ready: context.ready, epoch: context.epoch}),
         template: '<RouterView v-if="ready" :key="epoch" />',
     }), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[pilotContextKey as symbol]: context},
+        provide: {[frontendContextKey as symbol]: context},
     }});
     cleanups.push(function disposeDashboardJourney() {
         wrapper.unmount();
@@ -104,28 +99,69 @@ async function dashboardJourney(login?: () => Promise<Component>, requestFetch: 
     return {wrapper, context, router, request};
 }
 
-/** Native templates remain the independent text/layout oracle; scripts never run in this detached tree. */
-function nativePage(renderPage: pug.compileTemplate, values: Record<string, unknown> = {}): HTMLElement {
-    const root = document.createElement('div');
-    root.innerHTML = renderPage({status: undefined, messages: {}, version: session.shell.version,
-        nxtUrl: encodeURIComponent('/'), profile: undefined, permData: undefined,
-        settings: {rootUrl: 'https://example.test', imprintUrl: session.shell.imprintUrl,
-            privacyPolicyUrl: session.shell.privacyPolicyUrl}, ...values});
-    return root;
-}
-
 function texts(root: Element, selector: string): string[] {
     return Array.from(root.querySelectorAll(selector), normalizedText);
 }
 
-/** Keep the native landing copy as the oracle except for the one explicitly
- * corrected Survey occurrence description. No other text or ordering changes. */
-function expectedLandingText(native: Element): string[] {
-    const original = 'Define date combinations such as specific weekdays and weeks of a month.';
-    const current = 'Define date combinations from weekdays and their occurrences in a month.';
-    const content = texts(native, 'h1, h2, p, li');
-    expect(content.filter(text => text === original)).toHaveLength(1);
-    return content.map(text => text === original ? current : text);
+/** Assert the accepted visible information and its order after native retirement. */
+function expectedLandingText(signedIn = false): string[] {
+    const introduction = signedIn ? [
+    "Surveyor",
+    "Welcome back, <Fixture profile>.",
+    "See all your surveys, events, packing lists, activity plans and drivers lists in one place.",
+    "Quickly create new plans and share links so others can respond or sign up.",
+    "Coordinate who brings what and who drives with whom.",
+    "Keep track of participants, assignments and access rights from your dashboard."
+] : [
+    "Surveyor",
+    "Organize and coordinate group activities in one place.",
+    "Plan surveys, events and activity schedules.",
+    "Share a single link so people can respond or sign up.",
+    "Keep packing lists and drivers lists together with your events.",
+    "See everything you created on your personal dashboard.",
+    "If you received an invitation link, you can also participate as a guest without creating an account."
+];
+    return [...introduction, ...[
+    "Surveys",
+    "Find suitable dates and collect responses.",
+    "Define date combinations such as specific weekdays and weeks of a month.",
+    "Let people answer with options like Yes, Maybe or No.",
+    "See everyone’s availability in a combined view.",
+    "Allow both registered users and guests to participate.",
+    "Events",
+    "Create events with participant registration and links to related plans.",
+    "Store event details such as title, dates and location.",
+    "Manage participant registration and track who is attending.",
+    "Link related packing lists, activity plans and drivers lists.",
+    "Optionally collect information such as dietary notes.",
+    "Use invoice pools to assign costs, record payments and see balances.",
+    "Packing lists",
+    "Coordinate what needs to be brought for trips or events.",
+    "Create items with descriptions and quantities.",
+    "Track how many of each item are still needed.",
+    "Assign items to people so everyone knows what they bring.",
+    "Support participation via shared links, including guests.",
+    "Activity plans",
+    "Schedule activities with time slots and roles.",
+    "Create time-based schedules organized by date and time.",
+    "Define roles for activities, such as helpers or facilitators.",
+    "Assign people to activity slots and see who is where.",
+    "Track how many assignments participants should take.",
+    "Link plans to events to reuse participant lists.",
+    "Allow guests to take part using shared plan links.",
+    "Drivers lists",
+    "Coordinate transportation by organizing drivers and passengers.",
+    "Register drivers and specify the number of seats they offer.",
+    "Let participants sign up for available rides.",
+    "Track who is riding with whom.",
+    "Support participation via links so guests can join.",
+    "Access and participation",
+    "People can take part either with a registered account or as guests using links shared by organizers.",
+    "Your dashboard works as your personal homepage and shows the surveys, events, packing lists, activity plans and drivers lists you have created.",
+    "Permissions",
+    "Surveyor uses a permission system to control who can view and edit entities and their items.",
+    "Permissions can be assigned to audiences as group permissions and to individual users, while the creator of an entity always keeps full access."
+]];
 }
 
 function normalizedText(element: Element): string {
@@ -150,7 +186,7 @@ function releaseDisabledFocus(button: HTMLButtonElement | HTMLInputElement | HTM
 describe('common frontend presentation', () => {
     it.each(['anonymous', 'account', 'guest'] as const)('keeps Home public and separate from personal Overview for %s visitors', async kind => {
         const selected = kind === 'anonymous' ? session : accountSession(kind);
-        const home = await render('/frontend-pilot', {session: selected, landing: {quickCreate: 'event'}});
+        const home = await render('/', {session: selected, landing: {quickCreate: 'event'}});
         const root = document.createElement('div');
         root.innerHTML = home.html;
 
@@ -161,34 +197,34 @@ describe('common frontend presentation', () => {
         expect(root.querySelector('.js-overview-region')).toBeNull();
         const homeLink = [...root.querySelectorAll('header a')].find(link => link.textContent?.trim() === 'Home')!;
         const overviewLink = [...root.querySelectorAll('header a')].find(link => link.textContent?.trim() === 'Your overview')!;
-        expect(homeLink.getAttribute('href')).toBe('/frontend-pilot');
-        expect(overviewLink.getAttribute('href')).toBe('/frontend-pilot/users/dashboard');
+        expect(homeLink.getAttribute('href')).toBe('/');
+        expect(overviewLink.getAttribute('href')).toBe('/users/dashboard');
 
         // The distinct dashboard retains progressive private reads. The prior
         // explicit Home URL remains an alias for existing bookmarks.
         if (kind !== 'anonymous') {
-            const overview = await render('/frontend-pilot/users/dashboard', {session: selected, pageEntry: {kind: 'render'}});
+            const overview = await render('/users/dashboard', {session: selected, pageEntry: {kind: 'render'}});
             expect(overview.html).toContain('data-loading-skeleton="overview"');
         }
         // Anonymous Dashboard HTTP admission redirects before SSR; the real
         // Express integration covers its Login/notice/cookie journey separately.
-        const alias = await render('/frontend-pilot/home', {session: selected, landing: {quickCreate: 'event'}});
+        const alias = await render('/', {session: selected, landing: {quickCreate: 'event'}});
         root.innerHTML = alias.html;
         expect(root.querySelector('main h1')?.textContent?.trim()).toBe('Surveyor');
         expect(root.querySelector('[data-loading-skeleton="overview"]')).toBeNull();
     });
 
-    it.each(['/frontend-pilot/users/dashboard', '/FRONTEND-PILOT/USERS/DASHBOARD/'])(
+    it.each(['/users/dashboard', '/USERS/DASHBOARD/'])(
         'routes anonymous warm Dashboard entry %s to Login without a private read', async path => {
             const target = path + '?owner_main_q=equipment&locale=de#overview-owner';
             const {wrapper, context, router, request} = await dashboardJourney();
             await router.push(target);
             // The real Login route lazily imports its component; wait for that
             // delivery rather than assuming one microtask finishes compilation.
-            await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login'));
+            await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/users/login'));
             await flushPromises();
 
-            expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');
+            expect(router.currentRoute.value.path).toBe('/users/login');
             expect(router.currentRoute.value.query.next).toBe(target);
             expect(wrapper.find('#username').exists()).toBe(true);
             expect(wrapper.find('.js-overview-region').exists()).toBe(false);
@@ -201,15 +237,15 @@ describe('common frontend presentation', () => {
         const destination = new Promise<Component>(resolve => { release = resolve; });
         const {wrapper, context, router, request} = await dashboardJourney(() => destination);
         try {
-            await router.push('/frontend-pilot/users/dashboard?owner_main_q=equipment');
+            await router.push('/users/dashboard?owner_main_q=equipment');
             await flushPromises();
-            expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/dashboard');
+            expect(router.currentRoute.value.path).toBe('/users/dashboard');
             expect(context.pageNotice.value).toBeNull();
-            await router.push('/frontend-pilot');
+            await router.push('/');
             release(routePlaceholder);
             await flushPromises();
 
-            expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot');
+            expect(router.currentRoute.value.fullPath).toBe('/');
             expect(wrapper.find('h1').text()).toBe('Surveyor');
             expect(context.pageNotice.value).toBeNull();
             expect(request).not.toHaveBeenCalled();
@@ -222,15 +258,15 @@ describe('common frontend presentation', () => {
         const account = accountSession('account');
         const {context, router} = await dashboardJourney(() => destination, admitAccount);
         try {
-            await router.push('/frontend-pilot/users/dashboard');
+            await router.push('/users/dashboard');
             await flushPromises();
-            expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/dashboard');
+            expect(router.currentRoute.value.path).toBe('/users/dashboard');
             await context.acceptIdentity({session: account, personalLink: null, redirect: null});
             await flushPromises();
             release(routePlaceholder);
             await flushPromises();
 
-            expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/dashboard');
+            expect(router.currentRoute.value.path).toBe('/users/dashboard');
             expect(context.pageNotice.value).toBeNull();
         } finally { release(routePlaceholder); await flushPromises(); }
 
@@ -246,16 +282,16 @@ describe('common frontend presentation', () => {
         const account = accountSession('account');
         const {context, router} = await dashboardJourney(() => destination, admitAccount);
         try {
-            await router.push('/frontend-pilot/users/dashboard');
+            await router.push('/users/dashboard');
             await flushPromises();
             await context.acceptIdentity({session: account, personalLink: null, redirect: null});
-            const deliberate = router.push('/frontend-pilot/users/login?next=/frontend-pilot/users/dashboard');
+            const deliberate = router.push('/users/login?next=/users/dashboard');
             await flushPromises();
             release(routePlaceholder);
             await deliberate;
             await flushPromises();
 
-            expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');
+            expect(router.currentRoute.value.path).toBe('/users/login');
             expect(context.pageNotice.value).toBeNull();
         } finally { release(routePlaceholder); await flushPromises(); }
 
@@ -268,10 +304,10 @@ describe('common frontend presentation', () => {
     it('waits for identity admission without redirecting or reading private collections when no session is present', async () => {
         const {context, router, request, wrapper} = await dashboardJourney();
         context.session.value = null;
-        await router.push('/frontend-pilot/users/dashboard');
+        await router.push('/users/dashboard');
         await flushPromises();
 
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/dashboard');
+        expect(router.currentRoute.value.path).toBe('/users/dashboard');
         expect(wrapper.find('.js-overview-region').exists()).toBe(false);
         expect(context.pageNotice.value).toBeNull();
         expect(request).not.toHaveBeenCalled();
@@ -280,9 +316,9 @@ describe('common frontend presentation', () => {
     it.each([false, true])('retains locale selector focus after its actual preference command unless the user moves elsewhere (%s)', async cancelled => {
         let finish!: (response: Response) => void;
         const held = new Promise<Response>(function holdLocaleResponse(resolve) { finish = resolve; });
-        const {wrapper, context, request} = await mounted(AppHeader, {}, {}, '/frontend-pilot/home',
+        const {wrapper, context, request} = await mounted(AppHeader, {}, {}, '/',
             function changePreference() { return held; });
-        const select = wrapper.get<HTMLSelectElement>('#pilot-locale');
+        const select = wrapper.get<HTMLSelectElement>('#frontend-locale');
         select.element.focus();
         const focus = vi.spyOn(select.element, 'focus');
 
@@ -298,7 +334,7 @@ describe('common frontend presentation', () => {
                 'Content-Type': 'application/json', 'X-Surveyor-Context': session.context,
             }}));
             await flushPromises();
-            expect(wrapper.get<HTMLSelectElement>('#pilot-locale').element).toBe(select.element);
+            expect(wrapper.get<HTMLSelectElement>('#frontend-locale').element).toBe(select.element);
             expect(select.element.disabled).toBe(false);
             expect(select.element.value).toBe('de');
             expect(context.locale.value).toBe('de');
@@ -736,9 +772,8 @@ describe('common frontend presentation', () => {
     });
 
     it('retains anonymous landing copy, card order and responsive groups from the native template', async () => {
-        const native = nativePage(renderNativeLanding).querySelector('main > .card')!;
         const {wrapper, context, request} = await mounted(LandingPage);
-        expect(texts(wrapper.element, 'h1, h2, p, li')).toEqual(expectedLandingText(native));
+        expect(texts(wrapper.element, 'h1, h2, p, li')).toEqual(expectedLandingText());
         expect(texts(wrapper.element, '.row > .col h2')).toEqual(['Surveys', 'Events', 'Packing lists', 'Activity plans', 'Drivers lists']);
         expect(wrapper.findAll('.row')[0]!.classes()).toEqual(['row', 'row-cols-1', 'row-cols-md-2', 'row-cols-xl-3', 'g-4', 'mb-4']);
         expect(wrapper.findAll('.row')[1]!.classes()).toEqual(['row', 'row-cols-1', 'row-cols-md-2', 'g-4', 'mb-4']);
@@ -749,49 +784,47 @@ describe('common frontend presentation', () => {
     it.each(['account', 'guest'] as const)('retains the %s welcome and admitted quick-create target without treating the profile name as HTML', async kind => {
         vi.spyOn(Math, 'random').mockReturnValue(0);
         const current = accountSession(kind);
-        const native = nativePage(renderNativeLanding, {profile: {name: current.activeProfile!.name,
-            ...(kind === 'account' ? {userId: 1} : {guestId: 'guest'})}}).querySelector('main > .card')!;
         const {wrapper, request} = await mounted(LandingPage, {}, {session: current, landing: {quickCreate: 'survey'}});
-        expect(texts(wrapper.element, 'h1, h2, p, li')).toEqual(expectedLandingText(native));
-        expect(wrapper.get('a.btn-outline-light').attributes('href')).toBe('/frontend-pilot/survey/create');
-        expect(wrapper.get('a.btn-primary').attributes('href')).toBe('/frontend-pilot/users/dashboard');
+        expect(texts(wrapper.element, 'h1, h2, p, li')).toEqual(expectedLandingText(true));
+        expect(wrapper.get('a.btn-outline-light').attributes('href')).toBe('/survey/create');
+        expect(wrapper.get('a.btn-primary').attributes('href')).toBe('/users/dashboard');
         expect(wrapper.find('fixture').exists()).toBe(false);
         expect(request).not.toHaveBeenCalled();
     });
 
     it('preserves the complete landing return path and chooses native or migrated creation navigation explicitly', async () => {
-        const path = '/frontend-pilot/home?locale=en#about';
+        const path = '/?locale=en#about';
         const anonymous = await mounted(LandingPage, {}, {}, path);
         for (const link of anonymous.wrapper.findAll('a.btn')) {
             expect(new URL(link.attributes('href')!, 'https://example.test').searchParams.get('next')).toBe(path);
         }
         const signed = await mounted(LandingPage, {}, {session: accountSession('account'), landing: {quickCreate: 'packing'}});
-        expect(signed.wrapper.get('a.btn-outline-light').attributes('href')).toBe('/frontend-pilot/packing/create');
+        expect(signed.wrapper.get('a.btn-outline-light').attributes('href')).toBe('/packing/create');
     });
 
     it('keeps a warm visit suggestion stable while translating labels in place', async () => {
         const random = vi.spyOn(Math, 'random').mockReturnValue(0.99);
-        const {wrapper, context} = await mounted(LandingPage, {}, {session: accountSession('guest'), initialUrl: '/frontend-pilot/help'});
+        const {wrapper, context} = await mounted(LandingPage, {}, {session: accountSession('guest'), initialUrl: '/help'});
         const link = wrapper.get('a.btn-outline-light');
-        expect(link.attributes('href')).toBe('/frontend-pilot/drivers/create');
+        expect(link.attributes('href')).toBe('/drivers/create');
         random.mockReturnValue(0);
         context.locale.value = 'de';
         await flushPromises();
         expect(wrapper.get('a.btn-outline-light').element).toBe(link.element);
-        expect(link.attributes('href')).toBe('/frontend-pilot/drivers/create');
+        expect(link.attributes('href')).toBe('/drivers/create');
         expect(link.text()).toBe('Neue Fahrgemeinschaftsliste starten');
         expect(context.pageTitle.value).toBe('Surveyor – Gruppenaktivitäten organisieren und koordinieren');
     });
 
     it('renders the server-selected landing suggestion without resampling during SSR', async () => {
-        const bootstrap: FrontendPilotBootstrap = {session: accountSession('account'), initialUrl: '/frontend-pilot/home',
+        const bootstrap: FrontendBootstrap = {session: accountSession('account'), initialUrl: '/',
             landing: {quickCreate: 'packing'}};
-        const context = createPilotContext(bootstrap, false);
-        const router = createRouter({history: createMemoryHistory(), routes: [{path: '/frontend-pilot/home', component: LandingPage}]});
+        const context = createFrontendContext(bootstrap, false);
+        const router = createRouter({history: createMemoryHistory(), routes: [{path: '/', component: LandingPage}]});
         await router.push(bootstrap.initialUrl!);
         await router.isReady();
         const application = createSSRApp(LandingPage);
-        application.provide(pilotContextKey, context);
+        application.provide(frontendContextKey, context);
         application.use(router);
         application.use(I18NextVue, {i18next: context.i18next});
         const random = vi.spyOn(Math, 'random').mockReturnValue(0);
@@ -799,62 +832,61 @@ describe('common frontend presentation', () => {
             const html = await renderToString(application);
             const root = document.createElement('div');
             root.innerHTML = html;
-            expect(root.querySelector('a.btn-outline-light')!.getAttribute('href')).toBe('/frontend-pilot/packing/create');
+            expect(root.querySelector('a.btn-outline-light')!.getAttribute('href')).toBe('/packing/create');
             expect(random).not.toHaveBeenCalled();
         } finally {context.queryClient.clear();}
     });
 
     it('adopts landing and static error outcomes through the actual application renderer and bootstrap decoder', async () => {
-        const landing = await render('/frontend-pilot/home', {session: accountSession('account'), landing: {quickCreate: 'drivers'}});
+        const landing = await render('/', {session: accountSession('account'), landing: {quickCreate: 'drivers'}});
         expect(landing.title).toBe('Surveyor – Organize and coordinate group activities');
         expect(landing.javascriptRequired).toBe(false);
-        expect(landing.html).toContain('href="/frontend-pilot/drivers/create"');
+        expect(landing.html).toContain('href="/drivers/create"');
         expect((await decodeBootstrap(JSON.parse(landing.state))).landing).toEqual({quickCreate: 'drivers'});
         await expect(decodeBootstrap({...JSON.parse(landing.state), landing: {quickCreate: ['packing']}}))
-            .rejects.toThrow('Invalid pilot bootstrap field: landing');
+            .rejects.toThrow('Invalid frontend bootstrap field: landing');
 
         const page: FrontendCommonPage = {kind: 'error', status: 404, message: 'Safe missing destination', messageKey: 'api:errors.NOT_FOUND'};
-        const error = await render('/frontend-pilot/missing', {session, commonPage: page});
+        const error = await render('/missing', {session, commonPage: page});
         expect(error.javascriptRequired).toBe(false);
         expect(error.html).toContain('(Status 404)');
         expect((await decodeBootstrap(JSON.parse(error.state))).commonPage).toEqual(page);
         await expect(decodeBootstrap({...JSON.parse(error.state), commonPage: {...page, messageKey: 'landing.welcome'}}))
-            .rejects.toThrow('Invalid pilot bootstrap field: commonPage');
+            .rejects.toThrow('Invalid frontend bootstrap field: commonPage');
         await expect(decodeBootstrap({...JSON.parse(error.state), commonPage: {kind: 'message', severity: ['success'], message: 'Admitted text'}}))
-            .rejects.toThrow('Invalid pilot bootstrap field: commonPage');
+            .rejects.toThrow('Invalid frontend bootstrap field: commonPage');
     });
 
     it.each(['info', 'success', 'warning', 'error'] as const)('retains native %s message headings/body policy and returns Home to the landing page', async severity => {
         const message = 'A confirmed <safe> outcome';
-        const native = nativePage(renderNativeMessage, {status: severity, message}).querySelector('main > .card')!;
         const {wrapper, context, request} = await mounted(CommonPage,
-            {page: {kind: 'message', severity, message}}, {}, '/frontend-pilot/message');
-        expect(texts(wrapper.element, 'h1')).toEqual(texts(native, 'h1'));
-        expect(texts(wrapper.element, '.alert')).toEqual(texts(native, '.alert'));
-        expect(wrapper.get('a.btn-primary').attributes('href')).toBe('/frontend-pilot');
-        expect(context.pageTitle.value).toBe(nativePage(renderNativeMessage, {status: severity, message}).querySelector('title')!.textContent);
+            {page: {kind: 'message', severity, message}}, {}, '/message');
+        expect(texts(wrapper.element, 'h1')).toEqual([severity[0]!.toUpperCase() + severity.slice(1)]);
+        expect(texts(wrapper.element, '.alert')).toEqual(severity === 'warning' ? [] : [message]);
+        expect(wrapper.get('a.btn-primary').attributes('href')).toBe('/');
+        expect(context.pageTitle.value).toBe(severity[0]!.toUpperCase() + severity.slice(1) + ' | ControlPanel');
         expect(wrapper.find('safe').exists()).toBe(false);
         expect(request).not.toHaveBeenCalled();
     });
 
     it('preserves the existing default Home destination for prior PageMessage consumers', async () => {
         const {wrapper} = await mounted(PageMessage, {kind: 'info', message: 'Existing feature outcome'});
-        expect(wrapper.get('a.btn-primary').attributes('href')).toBe('/frontend-pilot');
+        expect(wrapper.get('a.btn-primary').attributes('href')).toBe('/');
     });
 
     it('retains native escaped error, status and admitted stack presentation', async () => {
         const page: FrontendCommonPage = {kind: 'error', status: 503, message: '<img src=x onerror=alert(1)>',
             stack: 'Error: <private development trace>\n    at fixture'};
-        const native = nativePage(renderNativeError, {message: page.message, code: page.status, error: {stack: page.stack}}).querySelector('main > .card')!;
-        const {wrapper, context} = await mounted(CommonPage, {page}, {}, '/frontend-pilot/unavailable');
-        expect(texts(wrapper.element, 'h1, strong, summary, code')).toEqual(texts(native, 'h1, strong, summary, code'));
-        expect(normalizedText(wrapper.get('.status-notice').element)).toEqual(normalizedText(native.querySelector('.status-notice')!));
+        const {wrapper, context} = await mounted(CommonPage, {page}, {}, '/unavailable');
+        expect(texts(wrapper.element, 'h1, strong, summary, code')).toEqual([
+            'Oops! Something went wrong', page.message, 'View stack trace', page.stack!.replace(/\s+/gu, ' ')]);
+        expect(normalizedText(wrapper.get('.status-notice').element)).toBe(page.message + ' (Status 503)');
         expect(wrapper.find('img').exists()).toBe(false);
         expect(context.pageTitle.value).toBe('Error | Surveyor');
     });
 
     it('never manufactures a completion or development diagnostics from route query data', async () => {
-        const {wrapper} = await mounted(CommonPage, {}, {}, '/frontend-pilot/message?message=Forged&status=200&stack=Private');
+        const {wrapper} = await mounted(CommonPage, {}, {}, '/message?message=Forged&status=200&stack=Private');
         expect(wrapper.find('details').exists()).toBe(false);
         expect(wrapper.text()).not.toContain('Forged');
         expect(wrapper.text()).not.toContain('Private');
@@ -862,7 +894,7 @@ describe('common frontend presentation', () => {
     });
 
     it('retranslates an admitted initial error key and status without replacing its escaped literal fallback or stack', async () => {
-        const path = '/frontend-pilot/missing';
+        const path = '/missing';
         const admitted: FrontendCommonPage = {kind: 'error', status: 404, message: 'Safe native fallback',
             messageKey: 'api:errors.NOT_FOUND', stack: 'Development-only <trace>'};
         const {wrapper, context} = await mounted(CommonPage, {}, {commonPage: admitted}, path);
@@ -880,15 +912,15 @@ describe('common frontend presentation', () => {
     });
 
     it('admits only the current actor and exact destination completion on a warm message visit', async () => {
-        const destination = '/frontend-pilot/message?receipt=fixture';
-        const {wrapper, context} = await mounted(CommonPage, {}, {initialUrl: '/frontend-pilot/help'}, destination);
+        const destination = '/message?receipt=fixture';
+        const {wrapper, context} = await mounted(CommonPage, {}, {initialUrl: '/help'}, destination);
         context.pageCompletion.value = {context: session.context, destination, kind: 'success', messageKey: 'auth.resetDone'};
         await flushPromises();
         expect(wrapper.get('h1').text()).toBe('Success');
         context.pageCompletion.value = {...context.pageCompletion.value!, context: 'retired-actor-context'};
         await flushPromises();
         expect(wrapper.text()).toContain('(Status 404)');
-        context.pageCompletion.value = {context: session.context, destination: '/frontend-pilot/other', kind: 'success', messageKey: 'auth.resetDone'};
+        context.pageCompletion.value = {context: session.context, destination: '/other', kind: 'success', messageKey: 'auth.resetDone'};
         await flushPromises();
         expect(wrapper.text()).toContain('(Status 404)');
     });
@@ -898,8 +930,8 @@ describe('common frontend presentation', () => {
         // Happy DOM has no layout; make the actual mounted notice visible to its
         // existing expiry owner rather than bypassing that owner's timer policy.
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
-        const destination = '/frontend-pilot/message';
-        const {wrapper, context} = await mounted(CommonPage, {}, {initialUrl: '/frontend-pilot/help'}, destination);
+        const destination = '/message';
+        const {wrapper, context} = await mounted(CommonPage, {}, {initialUrl: '/help'}, destination);
         context.pageCompletion.value = {context: session.context, destination, kind: 'success', messageKey: 'auth.resetDone'};
         await flushPromises();
         expect(wrapper.find('.alert').exists()).toBe(true);

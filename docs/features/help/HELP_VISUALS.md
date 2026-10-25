@@ -5,10 +5,10 @@ documentation-metadata
 audience: documentation contributors; feature maintainers
 owner: product documentation maintainers
 status: current
-last-verified: 2026-10-20
+last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Existing per-corpus authoring rules retained; current Survey control/catalog ownership and bounded generator bindings reconciled; German survey output inspection recorded separately in current pilot evidence
-source-anchors: docs/user-guide/assets/; docs/user-guide/README.md; docs/user-guide/SURVEYS.md; docs/user-guide/PACKING_LISTS.md; docs/user-guide/en/; docs/user-guide/de/; src/views/layout.pug; src/views/surveyor/survey-vote.pug; src/views/packing/packing-view.pug; src/frontend/components/AppHeader.vue; src/frontend/features/packing/; src/frontend/features/surveys/; src/locales/; scripts/generate-help-visuals.mjs; .github/workflows/release.yml; tests/unit/help-documentation.spec.ts
+verification-scope: P11 retained component/catalog/asset ownership reconciled after native comparison retirement; authoring rules unchanged; no image regeneration or fresh visual acceptance claimed
+source-anchors: docs/user-guide/en/; docs/user-guide/de/; src/frontend/components/AppHeader.vue; src/frontend/features/packing/; src/frontend/features/surveys/; src/locales/; scripts/generate-help-visuals.mjs; .github/workflows/release.yml; tests/unit/help-documentation.spec.ts
 next-review: help-visual-or-visible-UI-change
 -->
 
@@ -30,9 +30,9 @@ The product documentation maintainers own the asset set. A feature maintainer id
 
 | Asset | Used by | Implementation sources to compare |
 |---|---|---|
-| `navigation-at-a-glance.png` | User-guide home | The article's actual rendered header; current template owners are `src/views/layout.pug`/`src/views/users/dashboard.pug`, and the localized component owner is `src/frontend/components/AppHeader.vue`. |
-| `survey-recurring-pattern.png` | Surveys | The article's actual combination/answer controls: native `src/views/surveyor/` and localized `src/frontend/features/surveys/CombinationFields.vue`, `src/frontend/features/surveys/SurveyPage.vue` and `src/locales/`. |
-| `packing-shared-vs-local.png` | Packing Lists | The article's actual shared-assignment and browser-local Packed controls; current owners are `src/views/packing/`, `src/public/js/packing.ts` and `src/frontend/features/packing/`. |
+| `navigation-at-a-glance.png` | User-guide home | The article's actual rendered header from `src/frontend/components/AppHeader.vue`. |
+| `survey-recurring-pattern.png` | Surveys | The article's actual combination/answer controls: `src/frontend/features/surveys/CombinationFields.vue`, `src/frontend/features/surveys/SurveyPage.vue` and `src/locales/`. |
+| `packing-shared-vs-local.png` | Packing Lists | The article's actual shared-assignment and browser-local Packed controls; the shared owner is `src/frontend/features/packing/`. |
 
 ## Authoring rules
 
@@ -91,5 +91,5 @@ node scripts/generate-help-visuals.mjs --locale=de --figure=navigation
 `--figure` limits exports; omitting it regenerates all three and requires inspecting every changed image.
 Labels and output are fixed under the catalog-selected `docs/user-guide/<locale>/` directory. Requests and flags do
 not select arbitrary source or output roots. This script uses the built Vue renderer, fictional account data and
-pinned styling without a database or application server; it does not regenerate the root corpus's template images.
+the built Vite styling without a database or application server.
 Ignored `.temp/help-visuals-<locale>/` fingerprints/previews are authoring evidence, not runtime dependencies.

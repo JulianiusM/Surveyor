@@ -2,11 +2,10 @@ import {expect, type APIRequestContext, type Locator, type Page, type TestInfo} 
 import {randomUUID} from 'node:crypto';
 import type {components} from '../../src/types/api/v1';
 import {createE2ELogin, createE2ESurvey} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, expectVisiblePresentation, loginForE2E, readVisiblePresentation, expectUsableFrontendLayout} from './e2eCoreKeywords';
+import {createResourceViaForm, loginForE2E, readVisiblePresentation, expectUsableFrontendLayout} from './e2eCoreKeywords';
 import {frontendEventHeaders} from './frontendEventE2EKeywords';
 
-/** Seed the unchanged native controller through HTTP. Both renderers later
- * inspect these same records and the same actor, without intercepted delivery. */
+/** Seed the shared controller through current built HTTP commands without intercepted delivery. */
 export async function createFrontendSurveyFixture(request: APIRequestContext, description = '', options: {wide?: boolean} = {}) {
     await loginForE2E(request, createE2ELogin());
     const input = createE2ESurvey();
@@ -14,7 +13,7 @@ export async function createFrontendSurveyFixture(request: APIRequestContext, de
     input.form.description = description;
     if (options.wide) {
         // Enough real recurring columns force both tables to overflow even at
-        // desktop width. They are created by the original production form parser.
+        // desktop width. The versioned creation command persists all choices.
         const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const;
         for (let index = 1; index < 28; index++) {
             Object.assign(input.form, {[`combinations[${index}][weekday]`]: weekdays[index % weekdays.length],
@@ -22,9 +21,9 @@ export async function createFrontendSurveyFixture(request: APIRequestContext, de
         }
     }
     const resource = await createResourceViaForm(request, input);
-    expect((await request.post(`/survey/${resource.id}/add-combination`, {
-        form: {weekday: 'FRI', nthWeek: 'LAST'}, maxRedirects: 0,
-    })).status()).toBe(302);
+    expect((await request.post(`/api/v1/surveys/${resource.id}/combinations`, {
+        headers: await frontendEventHeaders(request), data: {weekday: 'FRI', nthWeek: 'LAST'},
+    })).status()).toBe(200);
     return resource;
 }
 
@@ -49,7 +48,7 @@ export async function observeSurveyCommand(page: Page, id: string, suffix: strin
  * comparison. Measurements stay unmodified even when an assertion fails. */
 export async function captureSurveyPresentation(page: Page, info: TestInfo, name: string, surface: Locator,
     selectors: string[]) {
-    if (new URL(page.url()).pathname.startsWith('/frontend-pilot')) await expectUsableFrontendLayout(surface);
+    await expectUsableFrontendLayout(surface);
     await page.evaluate(() => document.fonts.ready);
     await page.evaluate(function releaseFocus() {
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -82,26 +81,19 @@ export async function readSurveyCardLayout(card: Locator) {
     });
 }
 
-/** Require the same visible sections, each with usable area. Responsive wrapping
- * and integrated Refresh placement do not need a native pixel-coordinate shim. */
-export function expectSurveyCardLayout(native: Awaited<ReturnType<typeof readSurveyCardLayout>>,
-    pilot: Awaited<ReturnType<typeof readSurveyCardLayout>>): void {
-    expect(pilot.width).toBeGreaterThan(0);
-    expect(pilot.height).toBeGreaterThan(0);
-    expect(pilot.boxes).toHaveLength(native.boxes.length);
-    for (const box of pilot.boxes) {
+/** The header/body, three headings, two forms and two table-or-empty surfaces
+ * must all remain present and usable. Callers assert their actual text/content. */
+export function expectSurveyCardLayout(layout: Awaited<ReturnType<typeof readSurveyCardLayout>>): void {
+    expect(layout.width).toBeGreaterThan(0);
+    expect(layout.height).toBeGreaterThan(0);
+    expect(layout.boxes).toHaveLength(9);
+    for (const box of layout.boxes) {
         expect(box.width).toBeGreaterThan(0);
         expect(box.height).toBeGreaterThan(0);
     }
 }
 
-/** Direct SPA actions preserve the visible control without copying submit DOM. */
-export function expectSurveyActionsPresentation(native: Awaited<ReturnType<typeof readVisiblePresentation>>,
-    pilot: Awaited<ReturnType<typeof readVisiblePresentation>>): void {
-    expectVisiblePresentation(native, pilot);
-}
-
-/** Record the native wide-page boundary instead of assuming scrollWidth proves
+/** Record the wide-page boundary instead of assuming scrollWidth proves
  * visible overflow. Absolutely positioned clipped radios can contribute to that
  * metric; actual root scrolling and horizontal boxes establish its consequence. */
 export async function readSurveyPageOverflow(page: Page) {

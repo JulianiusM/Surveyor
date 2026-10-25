@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, nextTick, reactive, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
-import {useActionState, usePilot} from '../../app/context';
+import {useActionState, useFrontend} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
 import {useFinanceDraft} from './drafts';
@@ -23,7 +23,7 @@ const props = defineProps<{
     refresh: () => Promise<void>;
 }>();
 const emit = defineEmits<{close: []}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useFinanceApi(context);
 const id = useId();
@@ -40,7 +40,7 @@ const action = useActionState({eligible: () => props.active, blocked: () => comm
 const visible = computed(visibleRows);
 watch([() => props.pool, () => props.participants], receiveSaved, {immediate: true});
 
-/** Search only presentation; every factor node remains mounted for native
+/** Search only presentation; every factor node remains mounted for browser
  * validity checks and to preserve an unfinished value when filtering changes. */
 function visibleRows() {
     // Admitted email/name text is data, never a query or permission input.
@@ -61,7 +61,7 @@ function receiveSaved(): void {
 /** Copy one admitted participant's saved input into a lexical local row. */
 function participantDraft(person: typeof props.participants[number]) {
     // An absent explicit assignment retains the existing factor-one default.
-    // Wire precision does not add trailing zeroes to this clean native-like form;
+    // Wire precision does not add trailing zeroes to this clean form;
     // live lexical input is retained separately until this editor releases it.
     const assignment = props.pool.assignments?.find(row => row.registrationId === person.id);
     return {...person, selected: props.pool.assignAll || !!assignment,

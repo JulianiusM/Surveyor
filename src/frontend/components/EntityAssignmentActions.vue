@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import ActionButton from './ActionButton.vue';
 
-// Features supply their native membership/capacity projection and optional
+// Features supply their membership/capacity projection and optional
 // Everyone label. No driver/participant identity or command token is retained.
 defineProps<{assigned: boolean; full: boolean; disabled: boolean; pending?: boolean; everyone?: string;
     assignLabel: string; removeLabel: string; fullLabel: string}>();

@@ -4,14 +4,17 @@ documentation-metadata
 audience: users; developers; operators
 owner: project maintainers
 status: current
-last-verified: 2026-09-06
+last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: non-blocking documentation policy and optional report/test routing; D12 product summary, clean-clone development start, current scripts, test layers, CI branches, release entry points, and repository map; operator execution remains tracked in D04V; D14 help validation and focused command surface
-source-anchors: package.json; package-lock.json; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/oidc.ts; migrationDataSource.ts; scripts/runMigration.ts; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts
+verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
+source-anchors: package.json; package-lock.json; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/oidc.ts; migrationDataSource.ts; scripts/runMigration.ts; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tsconfig.test.json; playwright.frontend.config.ts; playwright.integration.config.ts
 next-review: repository-command-or-help-tooling-change
 -->
 
-Surveyor is a server-rendered collaboration application for recurring-date surveys, events, activity schedules, packing lists, rides, and event cost sharing. It is written in TypeScript and runs as an Express application backed by MariaDB.
+Surveyor is a collaboration application for recurring-date surveys, events, activity schedules, packing lists, rides,
+and event cost sharing. TypeScript, Vue and Express provide request-local server rendering and browser interaction;
+MariaDB stores application records and sessions. Existing controllers own shared business behavior and database
+services own persistence.
 
 ## Features
 
@@ -26,7 +29,7 @@ Surveyor is a server-rendered collaboration application for recurring-date surve
 
 | Goal | Start here |
 |---|---|
-| Use Surveyor | [In-app user guides](docs/user-guide/README.md) |
+| Use Surveyor | [In-app user guides](docs/user-guide/en/README.md) |
 | Develop or review the application | [Development Guide](docs/DEVELOPMENT.md) |
 | Understand the design | [Architecture](docs/ARCHITECTURE.md) |
 | Run tests | [Testing Guide](docs/TESTING_GUIDE.md) |
@@ -66,7 +69,7 @@ Create a database and a dedicated account with schema privileges. Adapt the host
 ```sql
 CREATE DATABASE surveyor_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'surveyor_dev'@'127.0.0.1' IDENTIFIED BY 'replace-this-password';
-GRANT ALL PRIVILEGES ON surveyor_dev.* TO 'surveyor_dev'@'127.0.0.1';
+GRANT ALL PRIVILEGES ON `surveyor\_dev`.* TO 'surveyor_dev'@'127.0.0.1';
 FLUSH PRIVILEGES;
 ```
 
@@ -121,7 +124,9 @@ Do not run schema synchronization or destructive TypeORM commands against a prod
 npm run server
 ```
 
-This performs a full build, starts the TypeScript server under Nodemon, and starts the client-side esbuild watcher. Confirm startup with:
+This performs a full build, starts the TypeScript server under Nodemon with Express-hosted Vite middleware/HMR,
+and starts serialized API/catalog generation. Confirm startup with:
+
 
 ```bash
 curl http://localhost:3000/healthz
@@ -137,17 +142,20 @@ With local login enabled, register an account, open the activation message deliv
 
 | Command | Purpose |
 |---|---|
-| `npm run server` | Build once, then run the server and browser-code watchers together. |
+| `npm run server` | Build once, then run Express/Vite HMR and authored-input generation together. |
 | `npm run server:dev` | Run only the server watcher; existing generated and built assets must already be present. |
-| `npm run server:client` | Run only the browser-code watcher. |
-| `npm run build` | Generate the TypeORM index, compile server and browser TypeScript, compile Sass, and copy views/assets into `dist/`. |
+| `npm run server:frontend` | Watch authored API contracts, locale catalogs and the permission registry; publish readiness after ordered generation. |
+| `npm run build` | Clean `dist/`, generate shared inputs, compile server and Vue client/SSR output, compile print CSS, and copy print views/shared assets. |
 | `npm run run` | Start the compiled application from `dist/server.js`. |
-| `npm run generate` | Regenerate `src/modules/database/__index__.ts`. |
+| `npm run generate` | Regenerate the TypeORM index and shared API/localization consumers without connecting to a database. |
+| `npm run typecheck:frontend` | Check the Vue client and SSR TypeScript scopes. |
+| `npm run typecheck:tests` | Check the Vue-aware test import graph. |
 | `npm run typeorm:migrate` | Run pending migrations through Surveyor's settings-aware wrapper. |
 | `npm run docs:check` | Produce an optional advisory report on documentation; never fail application delivery. |
-| `npm run test:quick` | Run database-free unit and frontend Vitest suites. |
+| `npm run test:quick` | Select the configured database-free Vitest project: unit/client checks and scoped Express/Vite server integration. |
 | `npm test` | Run all Vitest suites, including MariaDB integration tests. |
-| `npm run test:all` | Run Vitest, build the application, and run the Playwright suite. |
+| `npm run test:frontend:browser` | Build and run isolated real-browser client checks; no system database is supplied by this runner. |
+| `npm run test:all` | Run Vitest, build, isolated client-browser checks and built-application E2E. |
 
 The [Development Guide](docs/DEVELOPMENT.md) contains database safety, generated-file behavior, change recipes, and troubleshooting. The [Testing Guide](docs/TESTING_GUIDE.md) contains the exact environment and runner contracts.
 
@@ -163,12 +171,15 @@ src/modules/database/entities/        TypeORM entities
 src/modules/database/services/        database and transaction functions
 src/modules/database/subscribers/     TypeORM subscribers
 src/migrations/                       TypeORM migrations
-src/public/js/                        browser TypeScript
-src/public/style/                     Sass sources
-src/views/                            Pug templates
+src/frontend/                         Vue app, components, composables and feature views
+contracts/api/v1/                     authored wire schemas
+src/locales/                          shared browser/server catalogs
+src/types/                            shared declaration contracts (.d.ts)
+src/public/style/                     standalone print stylesheet
+src/views/                             standalone Activity/Event print templates
 tests/unit/                            isolated production logic
-tests/frontend/                        browser-helper behavior under Vitest
-tests/integration/                     MariaDB-backed production-service workflows
+tests/frontend/                        client helpers/mounted Vue and isolated browser checks
+tests/integration/                     database-backed workflows and genuine isolated server-component integration
 tests/e2e/                             Playwright critical flows
 docs/user-guide/                       canonical in-app help
 docs/                                  maintainer and operator documentation
@@ -176,9 +187,11 @@ docs/                                  maintainer and operator documentation
 
 ## Test and release automation
 
-Vitest runs the unit, frontend, and integration suites configured in `vitest.config.mts`. Playwright runs the focused browser/API flows configured in `playwright.config.ts` and manages the built server through `npm run e2e:init`.
+Vitest runs the unit, client and integration suites configured in `vitest.config.mts`. The isolated client-browser
+runner uses built assets through `playwright.frontend.config.ts`. Built-application E2E uses `playwright.config.ts`
+and owns the prepared database and compiled server through `npm run e2e:init`; it never reuses an arbitrary server.
 
-The CI workflow currently runs for manual dispatch, reusable workflow calls, and pushes or pull requests on `master`, `dev`, and `ts-migration`. It uses Node.js 24.15.0 and MariaDB 10.11, installs dependencies, runs application Vitest tests with coverage, builds the application, and then runs Chromium Playwright checks.
+The CI workflow currently runs for manual dispatch, reusable workflow calls, and pushes or pull requests on `master`, `dev`, and `ts-migration`. It uses Node.js 24.15.0 and MariaDB 10.11, installs dependencies, runs application Vitest tests with coverage, builds the application, and then runs the separate Chromium client and system checks.
 
 The manual release workflow invokes that CI workflow first. After a successful run, it updates the requested version, tags the selected ref, builds the application, and publishes a production archive containing `dist/`, `docs/`, `fonts/`, `package-lock.json`, and a production-only package manifest. Database migrations are deliberately not executed by the release archive.
 

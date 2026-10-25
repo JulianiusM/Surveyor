@@ -3,12 +3,11 @@ import type {Dialog, Locator, Page, Response, Route, TestInfo} from '@playwright
 import {writeFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {createE2EActivityPlan, createE2EDriversList, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
-import {closeModalForE2E, createResourceViaForm, expectUsableFrontendLayout, loginForE2E, openModalForE2E,
-    projectCreationPermissionDisclosure, readControlContracts, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
+import {createResourceViaForm, expectUsableFrontendLayout, loginForE2E,
+    projectCreationPermissionDisclosure, readControlContracts, readVisiblePresentation, updateEntityMetadataForE2E} from '../keywords/e2eCoreKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
-import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
+import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
 import type {components} from '../../src/types/api/v1';
-import type {ParticipantRow} from '../../src/types/EventTypes';
 import {createTranslator} from '../../src/modules/localization/translator';
 import type {Locale} from '../../src/types/LocalizationTypes';
 
@@ -23,7 +22,7 @@ type DietaryRead = {
  * routes. The browser comparisons then read the same records in both frontends. */
 async function organizerFixture(page: Page, children = false, dateWording = false) {
     const event = await createFrontendEventFixture(page.request);
-    const attendance = await page.request.post(`/api/event/${event.id}/register`, {data: {
+    const attendance = await page.request.put(`/api/v1/events/${event.id}/registration`, {headers: await frontendEventHeaders(page.request), data: {
         arrivalDate: '2030-06-01', departureDate: '2030-06-04', dietary: ['MEAT', 'ALLERGIES', 'COMMENT'],
         allergyNotes: 'Peanuts; Lactose', dietComment: 'No tomatoes',
     }});
@@ -31,10 +30,9 @@ async function organizerFixture(page: Page, children = false, dateWording = fals
     if (dateWording) {
         // Only the matched presentation cases need a real nonempty deadline.
         // Save it after attendance through the existing native metadata owner.
-        const deadline = await page.request.post(`/api/event/${event.id}/update`, {data: {
+        await updateEntityMetadataForE2E(page.request, 'events', event.id, {
             bindingDeadline: '2030-05-31T12:34', deadlineTz: 'Europe/Berlin',
-        }});
-        expect(deadline.status()).toBe(200);
+        });
         const detail = await page.request.get(`/api/v1/events/${event.id}`, {
             headers: await frontendEventHeaders(page.request),
         });
@@ -115,9 +113,9 @@ for (const type of ['packing', 'activity', 'drivers'] as const) {
     test(`deletes an organizer ${type} child with JSON and client navigation to Overview`, async ({page}) => {
         const {event, children} = await organizerFixture(page, true);
         const child = children.find(value => value.path.startsWith(`/${type}/`))!;
-        await page.goto(`/frontend-pilot/event/${event.id}/admin?locale=en`, {waitUntil: 'domcontentloaded'});
-        await waitForPilotHydration(page);
-        await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'event-child-delete';});
+        await page.goto(`/event/${event.id}/admin?locale=en`, {waitUntil: 'domcontentloaded'});
+        await waitForFrontendHydration(page);
+        await page.evaluate(() => {document.documentElement.dataset.frontendDocument = 'event-child-delete';});
         const groupIndex = ['packing', 'activity', 'drivers'].indexOf(type);
         await page.locator('.dashboard-accordion-item > .accordion-header > button').nth(groupIndex).click();
         const row = page.locator('.dashboard-list .list-group-item').filter({has: page.getByRole('link', {name: child.title, exact: true})});
@@ -139,8 +137,8 @@ for (const type of ['packing', 'activity', 'drivers'] as const) {
         page.once('dialog', confirmation => confirmation.accept());
         await row.getByRole('button', {name: 'Delete', exact: true}).click();
         expect((await deleted).status()).toBe(200);
-        await expect(page).toHaveURL(/\/frontend-pilot\/users\/dashboard$/u);
-        expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('event-child-delete');
+        await expect(page).toHaveURL(/\/users\/dashboard$/u);
+        expect(await page.evaluate(() => document.documentElement.dataset.frontendDocument)).toBe('event-child-delete');
         expect(documentRequests).toEqual([]);
         expect(deletes).toEqual([operation]);
         const remaining = await page.request.get(`/api/v1/events/${event.id}/things-to-do?view=admin`,
@@ -154,14 +152,14 @@ for (const type of ['packing', 'activity', 'drivers'] as const) {
 test('protects a new attendance draft after confirmed child deletion fails its first destination delivery', async ({page}) => {
     const {event, children} = await organizerFixture(page, true);
     const child = children.find(value => value.path.startsWith('/packing/'))!;
-    await page.goto(`/frontend-pilot/event/${event.id}/admin?locale=en`, {waitUntil: 'domcontentloaded'});
-    await waitForPilotHydration(page);
+    await page.goto(`/event/${event.id}/admin?locale=en`, {waitUntil: 'domcontentloaded'});
+    await waitForFrontendHydration(page);
     // Create real SPA history before opening any modal. Browser Forward remains
     // available above its overlay and reaches the same router draft guard.
     const help = page.locator('header a.nav-link').filter({hasText: /^Help$/u});
     const adminUrl = page.url();
     await help.click();
-    await expect(page).toHaveURL(/\/frontend-pilot\/help(?:\?|$)/u);
+    await expect(page).toHaveURL(/\/help(?:\?|$)/u);
     await page.goBack();
     await expect(page).toHaveURL(adminUrl);
     const origin = await page.evaluate(() => performance.timeOrigin);
@@ -236,7 +234,7 @@ test('protects a new attendance draft after confirmed child deletion fails its f
 
         permitDeparture = true;
         await page.goForward();
-        await expect(page).toHaveURL(/\/frontend-pilot\/help(?:\?|$)/u);
+        await expect(page).toHaveURL(/\/help(?:\?|$)/u);
         expect(questions).toHaveLength(2);
         expect(questions[1]).toBe(questions[0]);
         expect(deletes).toEqual([operation]);
@@ -277,11 +275,11 @@ async function metrics(surface: Locator) {
     });
 }
 
-/** Store each independent native/pilot picture and its raw browser evidence. */
+/** Store each independent native/frontend picture and its raw browser evidence. */
 async function capture(page: Page, info: TestInfo, name: string, surface: Locator, creation = false) {
     await surface.scrollIntoViewIfNeeded();
     await page.evaluate(() => document.fonts.ready);
-    if (name.startsWith('pilot-')) await expectUsableFrontendLayout(surface);
+    if (name.startsWith('frontend-')) await expectUsableFrontendLayout(surface);
     const result = await metrics(surface);
     const path = info.outputPath(`${name}.png`);
     await page.screenshot({path, animations: 'disabled', fullPage: true});
@@ -294,38 +292,14 @@ async function capture(page: Page, info: TestInfo, name: string, surface: Locato
     return {...result, text: projected.content.text};
 }
 
-/** Compare user-visible content, hierarchy and input constraints. Responsive
- * dimensions and dialog placement remain recorded, rather than prescribed. */
-function compare(native: Awaited<ReturnType<typeof metrics>>, pilot: Awaited<ReturnType<typeof metrics>>): void {
-    expect(pilot.headers).toEqual(native.headers);
-    expect(pilot.title).toBe(native.title);
-    expect(pilot.titleFont).toBe(native.titleFont);
-    expect(pilot.color).toBe(native.color);
-    expect(pilot.background).toBe(native.background);
-    expect(pilot.border).toBe(native.border);
-    expect(pilot.text).toBe(native.text);
-    expect(pilot.inputs.map(({width, ...state}) => state)).toEqual(native.inputs.map(({width, ...state}) => state));
-    expect(pilot.width).toBeGreaterThan(0);
-    expect(pilot.height).toBeGreaterThan(0);
-}
-
-/** Decode an ordinary observed roster response without another request or any
- * substitution. Normalize only protocol names/IDs, preserving both sequences. */
-async function dietaryRead(response: Response, pilot: boolean): Promise<DietaryRead> {
+/** Decode the ordinary observed roster response without another request or any
+ * substitution, preserving its participant and dietary choice sequences. */
+async function dietaryRead(response: Response): Promise<DietaryRead> {
     expect(response.status()).toBe(200);
-    if (pilot) {
-        const data = await response.json() as components['schemas']['EventParticipants'];
-        return {participants: data.participants.map(function participantChoices(row) {
-            return {id: row.id, choices: row.dietary.map(choice => choice.choice)};
-        }), totals: data.totals};
-    }
-
-    // The native response wraps its existing entity-shaped rows and ordered
-    // totals object. Object.entries retains that delivered property sequence.
-    const {data} = await response.json() as {data: {participants: ParticipantRow[]; totals: Record<string, number>}};
+    const data = await response.json() as components['schemas']['EventParticipants'];
     return {participants: data.participants.map(function participantChoices(row) {
-        return {id: String(row.id), choices: row.dietaryChoices.map(choice => choice.choice)};
-    }), totals: Object.entries(data.totals).map(([key, count]) => ({key, count}))};
+        return {id: row.id, choices: row.dietary.map(choice => choice.choice)};
+    }), totals: data.totals};
 }
 
 /** Measure just the dietary cells and derived totals of the actual roster.
@@ -426,36 +400,6 @@ function remainingRosterText(text: string, dietary: Awaited<ReturnType<typeof di
     return text;
 }
 
-/** Match complete badge contents/counts and painted hierarchy by choice. Each
- * renderer's independent flow checks protect readable order and non-overlap. */
-function compareDietary(native: Awaited<ReturnType<typeof dietaryMetrics>>, pilot: Awaited<ReturnType<typeof dietaryMetrics>>): void {
-    expect(pilot.rows.map(row => row.id)).toEqual(native.rows.map(row => row.id));
-    compareGroup(native.totals, pilot.totals);
-    for (const [index, row] of native.rows.entries()) compareGroup(row.group, pilot.rows[index]!.group);
-
-    /** Corresponding choice presentation must match without sorting either DOM. */
-    function compareGroup(original: typeof native.totals, current: typeof pilot.totals): void {
-        expect(current.badges).toHaveLength(original.badges.length);
-        for (const badge of original.badges) {
-            const matches = current.badges.filter(candidate => candidate.text === badge.text);
-            expect(matches).toHaveLength(1);
-            const match = matches[0]!;
-            expect(match.width).toBeGreaterThan(0);
-            expect(match.height).toBeGreaterThan(0);
-            expect(badgeAppearance(match.style)).toEqual(badgeAppearance(badge.style));
-            expect(match.labelStyle && badgeAppearance(match.labelStyle))
-                .toEqual(badge.labelStyle && badgeAppearance(badge.labelStyle));
-        }
-    }
-
-    /** Shared responsive wrapping may replace native nowrap. Actual flow above
-     * still protects ordering, readable bounds and non-overlap for both renderers. */
-    function badgeAppearance(style: typeof native.totals.badges[number]['style']) {
-        const {whiteSpace, ...appearance} = style;
-        return appearance;
-    }
-}
-
 /** Retain raw control geometry alongside the browser constraints and state.
  * Permission serialization has its own independent HTTP assertions. */
 async function formControls(surface: Locator) {
@@ -473,27 +417,19 @@ async function formControls(surface: Locator) {
     return {...measured, controls: measured.controls.map((control, index) => ({...control, contract: contracts[index]}))};
 }
 
-/** Internal names and responsive sizes are diagnostics, while browser input
- * constraints, disclosure values and checkbox state are functional contracts. */
-function compareFormControls(native: Awaited<ReturnType<typeof formControls>>, pilot: typeof native): void {
-    expect(pilot.timezone).toBe(native.timezone);
-    expect(pilot.controls.map(({name, width, height, ...state}) => state))
-        .toEqual(native.controls.map(({name, width, height, ...state}) => state));
-}
-
 for (const width of [1280, 390]) {
-    test(`compares native Event creation and settings forms at ${width}px`, async ({page}, info) => {
+    test(`keeps Event creation and settings forms usable at ${width}px`, async ({page}, info) => {
         test.setTimeout(120_000);
         await page.setViewportSize({width, height: 900});
         const errors: string[] = [];
         page.on('pageerror', error => errors.push(error.message));
         await loginForE2E(page.request, createE2ELogin());
         const evidence: Record<string, unknown> = {};
-        for (const pilot of [false, true]) {
-            const prefix = pilot ? 'pilot' : 'native';
-            await page.goto(`${pilot ? '/frontend-pilot' : ''}/event/create?locale=en`, {waitUntil: 'domcontentloaded'});
-            if (pilot) {
-                await waitForPilotHydration(page);
+        {
+            const prefix = 'frontend';
+            await page.goto(`${''}/event/create?locale=en`, {waitUntil: 'domcontentloaded'});
+            {
+                await waitForFrontendHydration(page);
                 const permissions = page.locator('[data-creation-permissions] .accordion-button');
                 await expect(permissions).toHaveAttribute('aria-expanded', 'false');
                 await permissions.click();
@@ -504,20 +440,15 @@ for (const width of [1280, 390]) {
             evidence[`${prefix}-creation-controls`] = await formControls(form);
             expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
         }
-        compare(evidence['native-creation'] as Awaited<ReturnType<typeof metrics>>, evidence['pilot-creation'] as Awaited<ReturnType<typeof metrics>>);
-        compareFormControls(evidence['native-creation-controls'] as Awaited<ReturnType<typeof formControls>>,
-            evidence['pilot-creation-controls'] as Awaited<ReturnType<typeof formControls>>);
 
         const event = await createFrontendEventFixture(page.request);
-        for (const pilot of [false, true]) {
-            const prefix = pilot ? 'pilot' : 'native';
-            await page.goto(`${pilot ? '/frontend-pilot' : ''}/event/${event.id}?locale=en`, {waitUntil: 'domcontentloaded'});
-            if (pilot) await waitForPilotHydration(page);
-            const nativeModal = page.locator('#entityPropertiesModal');
+        {
+            const prefix = 'frontend';
+            await page.goto(`${''}/event/${event.id}?locale=en`, {waitUntil: 'domcontentloaded'});
+            await waitForFrontendHydration(page);
             const opener = page.getByRole('button', {name: 'Entity settings', exact: true});
-            if (pilot) await opener.click();
-            else await openModalForE2E(nativeModal, opener);
-            const dialog = pilot ? page.getByRole('dialog') : nativeModal.locator('.modal-content');
+            await opener.click();
+            const dialog = page.getByRole('dialog');
             await expect(dialog.getByRole('tab', {name: 'General', exact: true})).toBeVisible();
             await expect(dialog.locator('[name="title"]')).toBeVisible();
             evidence[`${prefix}-settings-general`] = await capture(page, info, `${prefix}-settings-general`, dialog);
@@ -540,24 +471,17 @@ for (const width of [1280, 390]) {
             await expect(dialog.locator('.perm-matrix input[type="checkbox"]').first()).toBeVisible();
             evidence[`${prefix}-settings-access`] = await capture(page, info, `${prefix}-settings-access`, dialog);
             evidence[`${prefix}-access-controls`] = await formControls(dialog.getByRole('tabpanel', {name: 'Access', exact: true}));
-            if (pilot) await dialog.getByRole('button', {name: 'Close', exact: true}).last().click();
-            else await closeModalForE2E(nativeModal);
+            await dialog.getByRole('button', {name: 'Close', exact: true}).last().click();
         }
-        for (const surface of ['settings-general', 'settings-expanded', 'settings-image', 'settings-access']) {
-            compare(evidence[`native-${surface}`] as Awaited<ReturnType<typeof metrics>>, evidence[`pilot-${surface}`] as Awaited<ReturnType<typeof metrics>>);
-        }
-        for (const family of ['settings', 'access']) compareFormControls(
-            evidence[`native-${family}-controls`] as Awaited<ReturnType<typeof formControls>>,
-            evidence[`pilot-${family}-controls`] as Awaited<ReturnType<typeof formControls>>);
-        await writeFile(info.outputPath('native-pilot-event-forms.json'), JSON.stringify(evidence, null, 2));
+        await writeFile(info.outputPath('event-forms.json'), JSON.stringify(evidence, null, 2));
         expect(errors).toEqual([]);
     });
 }
 
 test('organizer dates, link revocation and participant PDF use the integrated application', async ({page}) => {
     const {event} = await organizerFixture(page);
-    await page.goto(`/frontend-pilot/event/${event.id}/admin?locale=en`, {waitUntil: 'domcontentloaded'});
-    await waitForPilotHydration(page);
+    await page.goto(`/event/${event.id}/admin?locale=en`, {waitUntil: 'domcontentloaded'});
+    await waitForFrontendHydration(page);
     const roster = page.locator('.event-participants');
     await roster.locator('.accordion-button').click();
     await expect(roster.locator('tbody tr')).toHaveCount(1);
@@ -592,7 +516,7 @@ test('organizer dates, link revocation and participant PDF use the integrated ap
 });
 
 for (const width of [1280, 390]) {
-    test(`compares native organizer dialogs, roster and shared child cards at ${width}px`, async ({page}, info) => {
+    test(`keeps organizer dialogs, roster and shared child cards usable at ${width}px`, async ({page}, info) => {
         test.setTimeout(120_000);
         await page.setViewportSize({width, height: 900});
         const {event, children} = await organizerFixture(page, true, true);
@@ -618,7 +542,7 @@ for (const width of [1280, 390]) {
         const person = participants.participants[0]!;
         const registrationLink = registrationLinks.items[0]!;
         const german = await germanEventWording(page, detail, person, registrationLink);
-        await info.attach('pilot-de-date-wording-source', {body: JSON.stringify({detail, person, registrationLink, german}, null, 2),
+        await info.attach('frontend-de-date-wording-source', {body: JSON.stringify({detail, person, registrationLink, german}, null, 2),
             contentType: 'application/json'});
         const eventWrites: string[] = [];
         const documentRequests: string[] = [];
@@ -630,11 +554,11 @@ for (const width of [1280, 390]) {
             if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documentRequests.push(request.url());
         });
 
-        for (const pilot of [false, true]) {
-            const prefix = pilot ? 'pilot' : 'native';
+        {
+            const prefix = 'frontend';
             // Observe the ordinary read before navigation: native loads its
             // roster immediately, while Vue admits the region independently.
-            const participantsPath = `/api/${pilot ? 'v1/events' : 'event'}/${event.id}/participants`;
+            const participantsPath = `/api/v1/events/${event.id}/participants`;
             function isParticipantsRead(response: Response): boolean {
                 return response.request().method() === 'GET' && new URL(response.url()).pathname === participantsPath;
             }
@@ -649,9 +573,9 @@ for (const width of [1280, 390]) {
                         && (!path.endsWith('/things-to-do') || url.searchParams.get('view') === 'admin');
                 }));
             }
-            const initialPageSections = pilot ? observePageSections() : [];
-            await page.goto(`${pilot ? '/frontend-pilot' : ''}/event/${event.id}/admin?locale=en`, {waitUntil: 'domcontentloaded'});
-            if (pilot) await waitForPilotHydration(page);
+            const initialPageSections = observePageSections();
+            await page.goto(`${''}/event/${event.id}/admin?locale=en`, {waitUntil: 'domcontentloaded'});
+            await waitForFrontendHydration(page);
             const roster = page.locator('.event-participants');
             let response = await participantsResponse;
             expect(await response.finished()).toBeNull();
@@ -665,11 +589,9 @@ for (const width of [1280, 390]) {
             // Root administration must retain its visible settings action;
             // region-only captures would miss that page responsibility.
             evidence[`${prefix}-settings-button`] = await metrics(page.getByRole('button', {name: 'Entity settings', exact: true}));
-            if (pilot) {
-                const native = evidence['native-settings-button']!;
-                const current = evidence['pilot-settings-button']!;
-                compare(native, current);
-                expect(current.color).toBe(native.color);
+            {
+                const current = evidence['frontend-settings-button']!;
+                expect(current.text).toContain('Entity settings');
                 const refreshed = page.waitForResponse(response => response.request().method() === 'GET'
                     && new URL(response.url()).pathname === `/api/v1/events/${event.id}`
                     && new URL(response.url()).searchParams.get('view') === 'admin');
@@ -678,10 +600,10 @@ for (const width of [1280, 390]) {
                 const refreshedParticipants = page.waitForResponse(isParticipantsRead);
                 const refreshedPageSections = observePageSections();
                 const beforeRefreshNavigation = documentRequests.length;
-                await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'event-page-refresh';});
+                await page.evaluate(() => {document.documentElement.dataset.frontendDocument = 'event-page-refresh';});
                 // Finance has its own independently scoped Refresh. This action
                 // belongs to the Event page and its complete projection family.
-                await page.locator('main > section.card > .card-header .pilot-page-heading-actions')
+                await page.locator('main > section.card > .card-header .frontend-page-heading-actions')
                     .getByRole('button', {name: 'Refresh', exact: true}).click();
                 expect((await refreshed).status()).toBe(200);
                 response = await refreshedParticipants;
@@ -691,14 +613,14 @@ for (const width of [1280, 390]) {
                     expect(result.status()).toBe(200);
                     expect(await result.finished()).toBeNull();
                 }
-                expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('event-page-refresh');
+                expect(await page.evaluate(() => document.documentElement.dataset.frontendDocument)).toBe('event-page-refresh');
                 expect(documentRequests).toHaveLength(beforeRefreshNavigation);
                 expect(eventWrites).toEqual([]);
             }
 
             await roster.locator('.accordion-button').click();
             await expect(roster.locator('tbody .fw-semibold')).toHaveCount(1);
-            const read = await dietaryRead(response, pilot);
+            const read = await dietaryRead(response);
             // Wait for this exact delivered choice order before the one-shot
             // geometry read; a previously mounted row can already have its count.
             const rows = roster.locator('tbody > tr[data-id], tbody > tr[data-registration-id]');
@@ -710,47 +632,31 @@ for (const width of [1280, 390]) {
             await info.attach(`${prefix}-dietary-sequences`, {path: dietaryPath, contentType: 'application/json'});
             assertDietaryRead(read, dietary[prefix]!);
             evidence[`${prefix}-roster`] = await capture(page, info, `${prefix}-roster`, roster);
-            if (pilot) {
-                // T1 permits only independently delivered dietary positions to
-                // differ. All other visible roster text and controls stay exact.
-                const native = evidence['native-roster']!;
-                const current = evidence['pilot-roster']!;
-                compare({...native, text: remainingRosterText(native.text, dietary.native!)},
-                    {...current, text: remainingRosterText(current.text, dietary.pilot!)});
-                compareDietary(dietary.native!, dietary.pilot!);
-            }
 
-            const nativeNotes = roster.locator('.modal').filter({has: page.locator('.js-allergy-list')});
-            if (pilot) await roster.getByRole('button', {name: 'Allergy / Comment Details', exact: true}).click();
-            else await openModalForE2E(nativeNotes, roster.locator('.js-show-allergy-summary'));
-            const notes = pilot ? page.getByRole('dialog') : nativeNotes.locator('.modal-content');
+            await roster.getByRole('button', {name: 'Allergy / Comment Details', exact: true}).click();
+            const notes = page.getByRole('dialog');
             evidence[`${prefix}-notes`] = await capture(page, info, `${prefix}-notes`, notes);
-            if (pilot) compare(evidence['native-notes']!, evidence['pilot-notes']!);
-            if (pilot) await notes.getByRole('button', {name: 'Close', exact: true}).click();
-            else await closeModalForE2E(nativeNotes);
+            await expect(notes).toContainText('Peanuts');
+            await expect(notes).toContainText('No tomatoes');
+            await notes.getByRole('button', {name: 'Close', exact: true}).click();
 
-            const nativeDates = roster.locator('.js-date-modal');
-            if (pilot) await roster.getByRole('button', {name: 'Edit dates', exact: true}).click();
-            else await openModalForE2E(nativeDates, roster.locator('.btn-edit-dates'));
-            const dates = pilot ? page.getByRole('dialog') : nativeDates.locator('.modal-content');
+            await roster.getByRole('button', {name: 'Edit dates', exact: true}).click();
+            const dates = page.getByRole('dialog');
             evidence[`${prefix}-dates`] = await capture(page, info, `${prefix}-dates`, dates);
-            if (pilot) compare(evidence['native-dates']!, evidence['pilot-dates']!);
-            if (pilot) await dates.getByRole('button', {name: 'Close', exact: true}).click();
-            else await closeModalForE2E(nativeDates);
+            await expect(dates.locator('[name="arrivalDate"]')).toHaveValue(person.arrivalDate!);
+            await expect(dates.locator('[name="departureDate"]')).toHaveValue(person.departureDate!);
+            await dates.getByRole('button', {name: 'Close', exact: true}).click();
 
             const links = page.locator('.reg-links');
             await links.locator('.accordion-button').click();
             await expect(links.locator('tbody code')).toHaveCount(1);
-            const nativeCreate = links.locator('.modal');
-            if (pilot) await links.getByRole('button', {name: 'Create link', exact: true}).click();
-            else await openModalForE2E(nativeCreate, links.getByRole('button', {name: /Create link$/u}));
-            const create = pilot ? page.getByRole('dialog') : nativeCreate.locator('.modal-content');
+            await links.getByRole('button', {name: 'Create link', exact: true}).click();
+            const create = page.getByRole('dialog');
             evidence[`${prefix}-create-link`] = await capture(page, info, `${prefix}-create-link`, create);
-            if (pilot) compare(evidence['native-create-link']!, evidence['pilot-create-link']!);
-            if (pilot) await create.getByRole('button', {name: 'Close', exact: true}).click();
-            else await closeModalForE2E(nativeCreate);
+            await expect(create.getByRole('button', {name: 'Create', exact: true})).toBeEnabled();
+            await create.getByRole('button', {name: 'Close', exact: true}).click();
 
-            if (pilot) {
+            {
                 // Translate the already-mounted admin consumers with a genuine
                 // filter draft and stable row/token nodes, without an Event write.
                 const filter = roster.locator('.js-filter');
@@ -759,7 +665,7 @@ for (const width of [1280, 390]) {
                 const linkRow = links.locator(`[data-link-id="${registrationLink.id}"]`);
                 const tokenNode = await linkRow.locator('code').elementHandle();
                 const beforeNavigation = documentRequests.length;
-                await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'event-admin-locale';});
+                await page.evaluate(() => {document.documentElement.dataset.frontendDocument = 'event-admin-locale';});
                 await selectOrganizerLocale(page, 'en', 'de');
                 const summary = page.locator('main dl').first();
                 await expect(summary.locator('dd').first().locator('span')).toHaveText(german.dates);
@@ -773,12 +679,12 @@ for (const width of [1280, 390]) {
                 await expect(filter).toHaveValue(person.name);
                 expect(await filter.evaluate((node, original) => node === original, filterNode)).toBe(true);
                 expect(await linkRow.locator('code').evaluate((node, original) => node === original, tokenNode)).toBe(true);
-                evidence['pilot-de-summary'] = await capture(page, info, 'pilot-de-summary', summary);
-                evidence['pilot-de-roster'] = await capture(page, info, 'pilot-de-roster', roster);
-                evidence['pilot-de-links'] = await capture(page, info, 'pilot-de-links', links);
+                evidence['frontend-de-summary'] = await capture(page, info, 'frontend-de-summary', summary);
+                evidence['frontend-de-roster'] = await capture(page, info, 'frontend-de-roster', roster);
+                evidence['frontend-de-links'] = await capture(page, info, 'frontend-de-links', links);
                 await selectOrganizerLocale(page, 'de', 'en');
                 await expect(filter).toHaveValue(person.name);
-                expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('event-admin-locale');
+                expect(await page.evaluate(() => document.documentElement.dataset.frontendDocument)).toBe('event-admin-locale');
                 expect(documentRequests).toHaveLength(beforeNavigation);
                 expect(eventWrites).toEqual([]);
                 await filter.clear();
@@ -791,33 +697,30 @@ for (const width of [1280, 390]) {
             const drivers = page.getByRole('button', {name: /Event drivers lists/u});
             await drivers.click();
             const driver = children.find(child => child.path.startsWith('/drivers/'))!;
-            const driverPath = `${pilot ? '/frontend-pilot' : ''}${driver.path}`;
+            const driverPath = `${''}${driver.path}`;
             const driverLink = page.locator(`a[href="${driverPath}"]`);
             await expect(driverLink).toBeVisible();
             await expect(driverLink).toContainText(driver.title);
             await expect(page.locator(`a[href="${driverPath}/duplicate"]`)).toBeVisible();
 
-            await page.goto(`${pilot ? '/frontend-pilot' : ''}/event/${event.id}?locale=en`, {waitUntil: 'domcontentloaded'});
-            if (pilot) await waitForPilotHydration(page);
+            await page.goto(`${''}/event/${event.id}?locale=en`, {waitUntil: 'domcontentloaded'});
+            await waitForFrontendHydration(page);
             const registered = page.locator('#registrationForm').locator('xpath=ancestor::*[contains(concat(" ",normalize-space(@class)," ")," card ")][1]');
             await expect(registered).toContainText('Your registration');
             evidence[`${prefix}-registered`] = await capture(page, info, `${prefix}-registered`, registered);
-            if (pilot) {
-                compare(evidence['native-registered']!, evidence['pilot-registered']!);
-            }
             const things = page.locator('.entity-overview').filter({has: page.getByRole('button', {name: /Things to do/u})});
             await expect(things.locator('article, .card.js-item')).toHaveCount(3);
             evidence[`${prefix}-things`] = await capture(page, info, `${prefix}-things`, things);
-            if (pilot) compare(evidence['native-things']!, evidence['pilot-things']!);
+            for (const child of children) await expect(things).toContainText(child.title);
             await expect(things).not.toContainText('Only my overview');
-            if (pilot) {
+            {
                 // The saved attendance text translates independently of the
                 // user's dirty date control and retains that exact DOM node.
                 const departure = registered.locator('[name="departureDate"]');
                 await departure.fill('2030-06-03');
                 const departureNode = await departure.elementHandle();
                 const beforeNavigation = documentRequests.length;
-                await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'event-attendance-locale';});
+                await page.evaluate(() => {document.documentElement.dataset.frontendDocument = 'event-attendance-locale';});
                 await selectOrganizerLocale(page, 'en', 'de');
                 await expect(registered.locator('#arrival')).toHaveText(german.attendance[0]!);
                 await expect(registered.locator('#departure')).toHaveText(german.attendance[1]!);
@@ -839,7 +742,7 @@ for (const width of [1280, 390]) {
                         return response.request().method() === 'GET' && url.pathname === path
                             && (view === null || url.searchParams.get('view') === view);
                     }));
-                await page.locator('main > section.card > .card-header .pilot-page-heading-actions')
+                await page.locator('main > section.card > .card-header .frontend-page-heading-actions')
                     .getByRole('button', {name: createTranslator('de').t('common.refresh'), exact: true}).click();
                 for (const pending of refreshReads) {
                     const result = await pending;
@@ -850,8 +753,8 @@ for (const width of [1280, 390]) {
                 await expect(thingsFilter).toHaveValue('Event');
                 expect(await departure.evaluate((node, original) => node === original, departureNode)).toBe(true);
                 expect(await thingsFilter.evaluate((node, original) => node === original, thingsFilterNode)).toBe(true);
-                evidence['pilot-de-registered'] = await capture(page, info, 'pilot-de-registered', registered);
-                expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('event-attendance-locale');
+                evidence['frontend-de-registered'] = await capture(page, info, 'frontend-de-registered', registered);
+                expect(await page.evaluate(() => document.documentElement.dataset.frontendDocument)).toBe('event-attendance-locale');
                 expect(documentRequests).toHaveLength(beforeNavigation);
                 expect(eventWrites).toEqual([]);
                 await departureNode?.dispose();
@@ -859,7 +762,7 @@ for (const width of [1280, 390]) {
             }
             expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
         }
-        await writeFile(info.outputPath('native-pilot-organizer-metrics.json'), JSON.stringify(evidence, null, 2));
+        await writeFile(info.outputPath('organizer-metrics.json'), JSON.stringify(evidence, null, 2));
         expect(errors).toEqual([]);
     });
 }

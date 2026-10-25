@@ -210,7 +210,7 @@ function calculateIndividualCosts(pool: EventInvoicePool, billableRegistrations:
             effectiveWeight: Math.round(weights.reduce((sum, participant) => sum + participant.weight * participant.factor, 0) * 10000) / 10000};
     } catch (error) {
         // Expected allocator failures carry a finite catalog identity. Preserve
-        // native wording while transport validates that cause independently;
+        // wording while transport validates that cause independently;
         // unrelated exceptions can never publish their message as API detail.
         throw new APIError(error instanceof Error ? error.message : invoiceText('cannotCalculateInvoiceShares'), {}, 400,
             {cause: error instanceof Error && typeof error.cause === 'string' && error.cause.startsWith('FINANCE_')

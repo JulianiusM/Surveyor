@@ -1,15 +1,15 @@
 import type {components} from '../../../types/api/v1';
 import type {ActivityManualRecommendation, ActivityRecommendationDraftRow, ActivityRecommendationRelationship,
     ActivityRecommendationRow} from '../../../types/FrontendActivityRecommendationTypes';
-import type {PilotPlainMessageKey} from '../../../types/FrontendPilotUiTypes';
+import type {FrontendPlainMessageKey} from '../../../types/FrontendUiTypes';
 
 type Workspace = components['schemas']['ActivityRecommendations'];
 type Row = ActivityRecommendationRow;
 type Input = components['schemas']['ActivityRecommendationReview']['recommendations'][number];
 
-/** Expected local selection failures retain catalog-owned native feedback. */
+/** Expected local selection failures retain catalog-owned feedback. */
 export class RecommendationDraftError extends Error {
-    constructor(readonly messageKey: PilotPlainMessageKey) { super(messageKey); }
+    constructor(readonly messageKey: FrontendPlainMessageKey) { super(messageKey); }
 }
 
 /** The same complete serializer feeds preview and apply. Rejected manual rows
@@ -141,7 +141,7 @@ export function manualRecommendationRows(workspace: Workspace, rows: ActivityRec
     const target = workspace.slots.find(slot => slot.id === input.targetSlotId);
     const participant = workspace.participantOptions.find(person => person.profileId === input.profileId);
     if (!target || !participant) throw new RecommendationDraftError('activity.recommendations.selectParticipant');
-    // Match the native duplicate guard before constructing any new draft row.
+    // Match the duplicate guard before constructing any new draft row.
     if (hasPlacement(target.id, input.profileId)) throw new RecommendationDraftError('activity.recommendations.duplicate');
     const result: Row[] = [makeRow(target, input.profileId, participant.label, participant.nameIsFallback)];
     if (input.operation === 'ASSIGN') return result;
@@ -165,7 +165,7 @@ export function manualRecommendationRows(workspace: Workspace, rows: ActivityRec
     result.push(second);
     return result;
 
-    /** Both proposed and committed placements participate in the native duplicate guard. */
+    /** Both proposed and committed placements participate in the duplicate guard. */
     function hasPlacement(itemId: string, profileId: string): boolean {
         // Labels and operation kinds cannot make a duplicate placement eligible.
         return rows.some(row => row.value.item.id === itemId && row.value.profile?.id === profileId)
@@ -179,7 +179,7 @@ export function manualRecommendationRows(workspace: Workspace, rows: ActivityRec
 }
 
 /** Attach warnings only to the identical operation, including its move source.
- * A rejected row does not carry actionable warnings in the native review. */
+ * A rejected row does not carry actionable warnings in the review. */
 export function recommendationWarnings(row: Row, warnings: Workspace['warnings']) {
     if (row.status === 'REJECTED') return [];
     return warnings.find(entry => entry.recommendation.itemId === row.item.id && entry.recommendation.profileId === row.profile?.id

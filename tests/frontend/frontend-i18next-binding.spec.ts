@@ -3,8 +3,8 @@ import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {defineComponent, h, nextTick, ref} from 'vue';
 import {renderToString} from 'vue/server-renderer';
-import {createPilotApp} from '../../src/frontend/app/createApp';
-import {usePilot} from '../../src/frontend/app/context';
+import {createFrontendApp} from '../../src/frontend/app/createApp';
+import {useFrontend} from '../../src/frontend/app/context';
 import {usePackingApi} from '../../src/frontend/features/packing/api';
 import {useOverviewApi} from '../../src/frontend/features/overview/api';
 import {useHelpApi} from '../../src/frontend/features/help/api';
@@ -12,17 +12,17 @@ import StatusNotice from '../../src/frontend/components/StatusNotice.vue';
 import {ApiFailure} from '../../src/frontend/app/transport';
 import {validateProblem} from '../../.generated/api/v1/browser/validateProblem.mjs';
 import type {components} from '../../src/types/api/v1';
-import type {PilotContext} from '../../src/types/FrontendPilotUiTypes';
+import type {FrontendContext} from '../../src/types/FrontendUiTypes';
 
 const session: components['schemas']['SessionView'] = {kind: 'anonymous', deployment: {buildId: 'fixture', apiCompatibility}, context: 'binding-context',
     csrfToken: 'binding-csrf', locale: 'en', activeProfile: null, profiles: [], loginUrl: '/users/login',
     logoutUrl: null,
     shell: {version: 'fixture', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy',
         localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'}};
-const path = '/frontend-pilot/binding-fixture';
+const path = '/binding-fixture';
 const Fixture = defineComponent({
     setup() {
-        const {messages} = usePilot();
+        const {messages} = useFrontend();
         const draft = ref('');
         // This must be a complete known Problem: an invalid envelope deliberately
         // keeps its safe text rather than gaining a catalog/message identity.
@@ -44,16 +44,16 @@ afterEach(() => { vi.restoreAllMocks(); document.body.innerHTML = ''; });
 
 describe('typed i18next-vue binding', () => {
     it('reuses feature API owners across component bindings while isolating server requests', async () => {
-        const bindings: PilotContext[] = [];
+        const bindings: FrontendContext[] = [];
         const Probe = defineComponent({
             setup() {
-                bindings.push(usePilot());
+                bindings.push(useFrontend());
                 return () => h('span', 'Feature owner probe');
             },
         });
         const OwnerFixture = defineComponent({render: () => h('section', [h(Probe), h(Probe)])});
-        const first = createPilotApp({session}, false);
-        const second = createPilotApp({session}, false);
+        const first = createFrontendApp({session}, false);
+        const second = createFrontendApp({session}, false);
         try {
             for (const application of [first, second]) {
                 application.router.addRoute({path, component: OwnerFixture});
@@ -78,7 +78,7 @@ describe('typed i18next-vue binding', () => {
         const account: components['schemas']['SessionView'] = {...session, kind: 'account', profiles,
             activeProfile: profiles[0]!, logoutUrl: '/users/logout'};
         const bootstrap = {session: account, initialUrl: path};
-        const server = createPilotApp(bootstrap, false);
+        const server = createFrontendApp(bootstrap, false);
         server.router.addRoute({path, component: Fixture});
         await server.router.push(path);
         const html = await renderToString(server.app);
@@ -87,7 +87,7 @@ describe('typed i18next-vue binding', () => {
         window.history.replaceState({}, '', path);
         const warnings = vi.spyOn(console, 'warn');
         const errors = vi.spyOn(console, 'error');
-        const browser = createPilotApp(bootstrap, true);
+        const browser = createFrontendApp(bootstrap, true);
         browser.router.addRoute({path, component: Fixture});
         try {
             await browser.router.push(path);
@@ -101,8 +101,8 @@ describe('typed i18next-vue binding', () => {
             expect(submit).not.toBeNull();
             expect(submit.form?.getAttribute('method')).toBeNull();
             expect(submit.form?.getAttribute('action')).toBeNull();
-            expect(document.querySelector('a[href="/frontend-pilot/users/profile/manage"]')).not.toBeNull();
-            expect(document.querySelector('#pilot-profile')).toBeNull();
+            expect(document.querySelector('a[href="/users/profile/manage"]')).not.toBeNull();
+            expect(document.querySelector('#frontend-profile')).toBeNull();
             const input = document.getElementById('binding-draft') as HTMLInputElement;
             input.value = 'My unfinished edit';
             input.dispatchEvent(new Event('input', {bubbles: true}));
@@ -129,14 +129,14 @@ describe('typed i18next-vue binding', () => {
             expect(warnings.mock.calls.flat().join(' ')).not.toContain('Hydration');
             expect(errors.mock.calls.flat().join(' ')).not.toContain('Hydration');
         } finally { browser.app.unmount(); browser.context.start()(); }
-        const nextServer = createPilotApp(bootstrap, false);
+        const nextServer = createFrontendApp(bootstrap, false);
         expect(nextServer.context.messages.value.t('common.save')).toBe('Save');
         nextServer.context.start()();
     });
 
     it('keeps simultaneous server languages and the generated parameter boundary isolated', async () => {
-        const english = createPilotApp({session}, false);
-        const german = createPilotApp({session: {...session, locale: 'de'}}, false);
+        const english = createFrontendApp({session}, false);
+        const german = createFrontendApp({session: {...session, locale: 'de'}}, false);
         english.router.addRoute({path, component: Fixture});
         german.router.addRoute({path, component: Fixture});
         try {

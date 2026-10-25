@@ -54,7 +54,7 @@ schemas:
         properties:
           showCapacityEdit:
             type: boolean
-            description: Original native capacity-control visibility; command authorization is independently editCapacity.
+            description: Capacity-control visibility; command authorization is independently editCapacity.
           editTitle:
             type: boolean
           editDescription:
@@ -293,8 +293,8 @@ schemas:
           - "null"
         maxLength: 65535
       maxAssignees:
-        description: Existing native inline edits carry a numeric value, the number control's raw string draft, or null. The existing signed
-          nullable integer column retains native rounding and rejects invalid/overflow values. New-item creation has its separate positive
+        description: Inline edits carry a numeric value, the number control's raw string draft, or null. The signed
+          nullable integer column retains established rounding and rejects invalid/overflow values. New-item creation has its separate positive
           integer policy.
         anyOf:
           - type: number
@@ -408,7 +408,7 @@ schemas:
         anyOf:
           - $ref: ./common.yaml#/schemas/EventPickerOption
           - type: "null"
-    description: Native Drivers duplication copies root metadata and audience defaults, without offered rides, assignments, image,
+    description: Drivers duplication copies root metadata and audience defaults, without offered rides, assignments, image,
       administrators, archive state or source event membership.
   DriversEventOption:
     $ref: ./common.yaml#/schemas/EventPickerOption
@@ -421,7 +421,7 @@ paths:
       x-surveyor-command:
         retryPolicy: read
         precondition: none
-      summary: Read the native account-only creation admission and public form context
+      summary: Read account-only creation admission and public form context
       security: []
       parameters:
         - $ref: ./openapi.yaml#/components/parameters/Context
@@ -433,7 +433,7 @@ paths:
             maxLength: 2048
         - name: eventId
           in: query
-          description: Optional contextual selection; the native selection owner omits rejected targets.
+          description: Optional contextual selection; the controller omits rejected targets.
           schema:
             type: string
       responses:
@@ -451,7 +451,7 @@ paths:
       x-surveyor-command:
         retryPolicy: read
         precondition: none
-      summary: Read native detail or guest-entry admission without disclosing protected list data
+      summary: Read detail or guest-entry admission without disclosing protected list data
       security: []
       parameters:
         - $ref: ./openapi.yaml#/components/parameters/Context
@@ -659,7 +659,7 @@ paths:
       x-surveyor-command:
         retryPolicy: read
         precondition: none
-      summary: Read only the independently granted native description field
+      summary: Read only the independently granted description field
       parameters:
         - $ref: ./openapi.yaml#/components/parameters/Context
         - $ref: ./openapi.yaml#/components/parameters/Locale
@@ -685,7 +685,7 @@ paths:
       x-surveyor-command:
         retryPolicy: reconcile-only
         precondition: metadata
-      summary: Update only the independently granted native description field
+      summary: Update only the independently granted description field
       parameters:
         - $ref: ./openapi.yaml#/components/parameters/Context
         - $ref: ./openapi.yaml#/components/parameters/Locale

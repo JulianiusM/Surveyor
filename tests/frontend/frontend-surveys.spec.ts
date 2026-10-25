@@ -7,7 +7,7 @@ import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import type {components} from '../../src/types/api/v1';
-import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
+import {createFrontendContext, observeInitialDocument, frontendContextKey} from '../../src/frontend/app/context';
 import {surveyKeys} from '../../src/frontend/app/queryKeys';
 import SurveyPage from '../../src/frontend/features/surveys/SurveyPage.vue';
 import SurveyCreatePage from '../../src/frontend/features/surveys/SurveyCreatePage.vue';
@@ -47,22 +47,22 @@ function json(value: unknown, status = 200): Response {
 /** Mount production components, query owners and generated transport. Only
  * HTTP delivery is replaced; the real database/API boundary has its own suite. */
 async function mounted(component: Component, handler: (request: Request) => Promise<Response>,
-    path = `/frontend-pilot/survey/${surveyId}`) {
+    path = `/survey/${surveyId}`) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
-    const context = createPilotContext({session}, true, request);
+    const context = createFrontendContext({session}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/frontend-pilot/survey/create', component},
-        {path: '/frontend-pilot/survey/:surveyId/duplicate', component},
-        {path: '/frontend-pilot/survey/:surveyId', component: path.endsWith('/duplicate') || path.endsWith('/create')
+        {path: '/survey/create', component},
+        {path: '/survey/:surveyId/duplicate', component},
+        {path: '/survey/:surveyId', component: path.endsWith('/duplicate') || path.endsWith('/create')
             ? defineComponent({template: '<p>Created survey</p>'}) : component},
-        {path: '/frontend-pilot', component: defineComponent({template: '<p>Overview</p>'})},
+        {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
     ]});
     await router.push(path);
     const stopInitial = observeInitialDocument(context, router);
     const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[pilotContextKey as symbol]: context},
+        provide: {[frontendContextKey as symbol]: context},
     }});
     await flushPromises();
     cleanups.push(async () => {root.unmount(); stopInitial(); await context.queryClient.cancelQueries(); context.queryClient.clear();});
@@ -188,9 +188,9 @@ describe('Survey production frontend consumers', () => {
         expect(wrapper.text()).toContain('Your change was saved, but the refreshed data could not be loaded.');
         const confirmation = vi.fn(() => false);
         vi.stubGlobal('confirm', confirmation);
-        await router.push('/frontend-pilot');
+        await router.push('/');
         await flushPromises();
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot');
+        expect(router.currentRoute.value.path).toBe('/');
         expect(confirmation).not.toHaveBeenCalled();
         expect(request.mock.calls.filter(([value]) => (value as Request).method === 'PUT')).toHaveLength(1);
     });
@@ -217,7 +217,7 @@ describe('Survey production frontend consumers', () => {
             if (request.method === 'GET') return json({entry: {kind: 'render'}, context: {}});
             submitted = JSON.parse(String((await request.formData()).get('data')));
             return json({id: copyId}, 201);
-        }, '/frontend-pilot/survey/create');
+        }, '/survey/create');
         expect(wrapper.findAll('#combinationTable tr')).toHaveLength(1);
         expect(wrapper.text()).not.toMatch(/Group Permissions|Administrators|Linked event/u);
         await wrapper.get('#title').setValue('Recurring survey');
@@ -231,7 +231,7 @@ describe('Survey production frontend consumers', () => {
         expect(submitted).toEqual({title: 'Recurring survey', description: 'Choose one day', combinations: [
             {weekday: 'MON', nthWeek: '1'}, {weekday: 'FRI', nthWeek: 'LAST'},
         ]});
-        expect(router.currentRoute.value.path).toBe(`/frontend-pilot/survey/${copyId}`);
+        expect(router.currentRoute.value.path).toBe(`/survey/${copyId}`);
     });
 
     it('keeps identical recurrence rows independent when one row is removed', async () => {
@@ -240,7 +240,7 @@ describe('Survey production frontend consumers', () => {
             if (request.method === 'GET') return json({entry: {kind: 'render'}, context: {}});
             submitted = JSON.parse(String((await request.formData()).get('data')));
             return json({id: copyId}, 201);
-        }, '/frontend-pilot/survey/create');
+        }, '/survey/create');
         await wrapper.get('#title').setValue('Independent recurring rows');
         await wrapper.get('#addCombinationBtn').trigger('click');
         const rows = wrapper.findAll('#combinationTable tr');
@@ -269,21 +269,21 @@ describe('Survey production frontend consumers', () => {
             if (request.method === 'GET') return json({entry: {kind: 'render'}, context: {}});
             submitted = JSON.parse(String((await request.formData()).get('data')));
             return json({id: copyId}, 201);
-        }, '/frontend-pilot/survey/create');
+        }, '/survey/create');
         await wrapper.get('#title').setValue('Keep my survey');
         await wrapper.get('#description').setValue('Keep my entered instructions');
         expect(wrapper.get<HTMLButtonElement>('.remove-combination-btn').element.disabled).toBe(true);
         await wrapper.get('.remove-combination-btn').trigger('click');
         expect(wrapper.get<HTMLInputElement>('#title').element.value).toBe('Keep my survey');
         expect(wrapper.get<HTMLTextAreaElement>('#description').element.value).toBe('Keep my entered instructions');
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/survey/create');
+        expect(router.currentRoute.value.path).toBe('/survey/create');
         expect(wrapper.findAll('#combinationTable tr')).toHaveLength(1);
         await wrapper.get('#surveyForm').trigger('submit');
         await flushPromises();
         expect(request.mock.calls.filter(([value]) => (value as Request).method === 'POST')).toHaveLength(1);
         expect(submitted).toEqual({title: 'Keep my survey', description: 'Keep my entered instructions',
             combinations: [{weekday: 'MON', nthWeek: '1'}]});
-        expect(router.currentRoute.value.path).toBe(`/frontend-pilot/survey/${copyId}`);
+        expect(router.currentRoute.value.path).toBe(`/survey/${copyId}`);
     });
 
     it('explains a duplicate existing combination through shared information feedback without writing', async () => {
@@ -322,7 +322,7 @@ describe('Survey production frontend consumers', () => {
 
     it.each(['title', 'duplicate'] as const)('explains %s creation validation and preserves the complete editable draft', async failure => {
         const {wrapper, request, context} = await mounted(SurveyCreatePage, async () => json({entry: {kind: 'render'}, context: {}}),
-            '/frontend-pilot/survey/create');
+            '/survey/create');
         await wrapper.get('#title').setValue(failure === 'title' ? '   ' : 'Keep my survey');
         await wrapper.get('#description').setValue('Keep my instructions');
         if (failure === 'duplicate') await wrapper.get('#addCombinationBtn').trigger('click');
@@ -340,7 +340,7 @@ describe('Survey production frontend consumers', () => {
 
     it('rejects a programmatic empty combination submission with an actionable typed error before delivery', async () => {
         const request = vi.fn<typeof fetch>();
-        const context = createPilotContext({session}, true, request);
+        const context = createFrontendContext({session}, true, request);
         cleanups.push(async () => {context.queryClient.clear(); context.updates.dispose();});
         const result = useSurveysApi(context).createSurvey({title: 'Survey', description: '', combinations: []}, null, context.capture());
         await expect(result).rejects.toBeInstanceOf(InvalidInputError);
@@ -352,7 +352,7 @@ describe('Survey production frontend consumers', () => {
         const {wrapper, request, context} = await mounted(SurveyCreatePage, async request => {
             if (request.method === 'GET') return json({entry: {kind: 'render'}, context: {}});
             throw new TypeError('Survey creation reply lost');
-        }, '/frontend-pilot/survey/create');
+        }, '/survey/create');
         await wrapper.get('#title').setValue('Unconfirmed survey');
         const chooser = wrapper.get<HTMLInputElement>('#headerImg').element;
         const transfer = new DataTransfer();
@@ -383,7 +383,7 @@ describe('Survey production frontend consumers', () => {
             }
             submitted = JSON.parse(String((await request.formData()).get('data')));
             return json({id: copyId}, 201);
-        }, `/frontend-pilot/survey/${surveyId}/duplicate`);
+        }, `/survey/${surveyId}/duplicate`);
 
         // Every displayed field starts from the admitted copy. Ballots and the
         // original image never enter this new creation draft or chooser.

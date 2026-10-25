@@ -3,10 +3,10 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import type {components} from '../../src/types/api/v1';
 import {createE2ELogin} from '../factories/e2eCoreFactory';
-import {closeModalForE2E, expectUsableFrontendLayout, loginForE2E, openModalForE2E,
-    readControlContracts} from '../keywords/e2eCoreKeywords';
+import {addEntityAdministratorForE2E, expectUsableFrontendLayout, loginForE2E,
+    readControlContracts, updateEntityAdministratorForE2E} from '../keywords/e2eCoreKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
-import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
+import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
 import {PERM} from '../../src/modules/lib/permissions';
 import {getGuestRegistrationNags} from '../../src/modules/lib/guestRegistrationNags';
 import {createTranslator} from '../../src/modules/localization/translator';
@@ -91,37 +91,6 @@ async function measureEventRegistration(surface: Locator) {
     return {...measured, controls: measured.controls.map((control, index) => ({...control, state: contracts[index]}))};
 }
 
-/** Protect visible information, painted hierarchy and successful-control meaning.
- * Raw geometry remains evidence; responsive layout and internal names may differ. */
-function compareEventRegistration(native: Awaited<ReturnType<typeof measureEventRegistration>>,
-                                  migrated: Awaited<ReturnType<typeof measureEventRegistration>>): void {
-    expect(migrated.text).toBe(native.text);
-    expect(migrated.style).toEqual(native.style);
-
-    // Compare ordered labels/icons as well as controls: matching field rectangles
-    // alone cannot detect missing helper text, the wrong icon or changed wording.
-    expect(migrated.labels).toHaveLength(native.labels.length);
-    for (let index = 0; index < native.labels.length; index++) {
-        const expected = native.labels[index]!;
-        const actual = migrated.labels[index]!;
-        expect(actual.text).toBe(expected.text);
-        expect(actual.style).toEqual(expected.style);
-    }
-    expect(migrated.icons).toHaveLength(native.icons.length);
-    for (let index = 0; index < native.icons.length; index++) {
-        const expected = native.icons[index]!;
-        const actual = migrated.icons[index]!;
-        expect(actual.style).toEqual(expected.style);
-    }
-    expect(migrated.controls).toHaveLength(native.controls.length);
-    for (let index = 0; index < native.controls.length; index++) {
-        const expected = native.controls[index]!;
-        const actual = migrated.controls[index]!;
-        expect(actual.state).toEqual(expected.state);
-        expect(actual.style).toEqual(expected.style);
-    }
-}
-
 /** Ordinary dietary words must remain readable as a unit at phone width.
  * Browser ranges inspect the painted text rather than assuming a grid layout. */
 async function expectReadableDietaryChoices(surface: Locator): Promise<void> {
@@ -160,9 +129,9 @@ async function expectReadableDietaryChoices(surface: Locator): Promise<void> {
 test('creates and duplicates an Event through multipart SPA commands with native field, image and timezone meaning', async ({page}) => {
     await loginForE2E(page.request, createE2ELogin());
     const title = `P2 SPA creation ${randomUUID().slice(0, 8)}`;
-    await page.goto('/frontend-pilot/event/create?locale=en', {waitUntil: 'domcontentloaded'});
-    await waitForPilotHydration(page);
-    await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'event-create';});
+    await page.goto('/event/create?locale=en', {waitUntil: 'domcontentloaded'});
+    await waitForFrontendHydration(page);
+    await page.evaluate(() => {document.documentElement.dataset.frontendDocument = 'event-create';});
     const documentRequests: string[] = [];
     page.on('request', request => {
         if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documentRequests.push(request.url());
@@ -179,7 +148,7 @@ test('creates and duplicates an Event through multipart SPA commands with native
         && new URL(response.url()).pathname === '/api/v1/events');
     await page.getByRole('button', {name: 'Create event', exact: true}).click();
     expect((await posted).status()).toBe(201);
-    await expect(page).toHaveURL(/\/frontend-pilot\/event\/[a-f0-9-]+$/u);
+    await expect(page).toHaveURL(/\/event\/[a-f0-9-]+$/u);
     await expect(page.getByRole('heading', {name: title, exact: true})).toBeVisible();
     await expect(page).toHaveTitle(`${title} | Event`);
     const id = new URL(page.url()).pathname.split('/').pop()!;
@@ -195,7 +164,7 @@ test('creates and duplicates an Event through multipart SPA commands with native
     // Establish actual attendance through the existing native operation before
     // copying. Both the empty destination and unchanged source must be proved;
     // a zero-count assertion against an empty source would be vacuous.
-    expect((await page.request.post(`/api/event/${id}/register`, {data: {
+    expect((await page.request.put(`/api/v1/events/${id}/registration`, {headers: await frontendEventHeaders(page.request), data: {
         arrivalDate: detail.startDate, departureDate: detail.endDate, dietary: ['MEAT'],
     }})).status()).toBe(200);
     const sourceAttendance = await (await page.request.get(`/api/v1/events/${id}`, {
@@ -205,11 +174,15 @@ test('creates and duplicates an Event through multipart SPA commands with native
     expect(sourceAttendance.registration).toMatchObject({arrivalDate: detail.startDate,
         departureDate: detail.endDate, dietary: ['MEAT']});
 
-    // Independently read the existing native view instead of asserting only the
-    // new projection that created the record.
-    const native = await page.request.get(`/event/${id}`);
-    expect(native.status()).toBe(200);
-    expect(await native.text()).toContain(title);
+    // A separate document independently reads the persisted creation after its
+    // initial skeleton. Keep the original creation/duplication document intact
+    // so the final navigation assertions still exercise both SPA commands.
+    const persisted = await page.context().newPage();
+    try {
+        expect((await persisted.goto(`/event/${id}?locale=en`))?.status()).toBe(200);
+        await waitForFrontendHydration(persisted);
+        await expect(persisted.getByRole('heading', {name: title, exact: true})).toBeVisible();
+    } finally { await persisted.close(); }
 
     // Native duplication copies the form values, including its empty rendered
     // datetime-local deadline, while leaving the source image and attendance out.
@@ -218,7 +191,7 @@ test('creates and duplicates an Event through multipart SPA commands with native
     await expect(settings).toBeVisible();
     await settings.getByRole('tab', {name: 'Actions', exact: true}).click();
     await settings.getByRole('link', {name: 'Duplicate', exact: true}).click();
-    await expect(page).toHaveURL(`/frontend-pilot/event/${id}/duplicate`);
+    await expect(page).toHaveURL(`/event/${id}/duplicate`);
     await expect(page.locator('input[name="title"]')).toHaveValue(title);
     await expect(page.locator('input[name="bindingDeadline"]')).toHaveValue('');
     await page.locator('input[name="title"]').fill(`${title} copy`);
@@ -226,7 +199,7 @@ test('creates and duplicates an Event through multipart SPA commands with native
         && new URL(response.url()).pathname === '/api/v1/events');
     await page.getByRole('button', {name: 'Create event', exact: true}).click();
     expect((await duplicated).status()).toBe(201);
-    await expect(page).toHaveURL(/\/frontend-pilot\/event\/[a-f0-9-]+$/u);
+    await expect(page).toHaveURL(/\/event\/[a-f0-9-]+$/u);
     const copyId = new URL(page.url()).pathname.split('/').pop()!;
     expect(copyId).not.toBe(id);
     await expect(page).toHaveTitle(`${title} copy | Event`);
@@ -238,14 +211,14 @@ test('creates and duplicates an Event through multipart SPA commands with native
     })).json() as components['schemas']['EventView'];
     expect(retainedSource.registrationCount).toBe(1);
     expect(retainedSource.registration).toEqual(sourceAttendance.registration);
-    expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('event-create');
+    expect(await page.evaluate(() => document.documentElement.dataset.frontendDocument)).toBe('event-create');
     expect(documentRequests).toEqual([]);
 });
 
 test('updates one registration through the shared native persistence', async ({page}) => {
     const event = await createFrontendEventFixture(page.request);
-    await page.goto(`/frontend-pilot/event/${event.id}?locale=en`, {waitUntil: 'domcontentloaded'});
-    await waitForPilotHydration(page);
+    await page.goto(`/event/${event.id}?locale=en`, {waitUntil: 'domcontentloaded'});
+    await waitForFrontendHydration(page);
     await page.locator('#arrivalDate').fill('2030-06-01');
     await page.locator('#departureDate').fill('2030-06-04');
     await page.locator('#diet-meat').check();
@@ -274,8 +247,8 @@ test('carries a late-registration token through guest entry and spends it only o
         const created = await owner.post(`/api/v1/events/${event.id}/links`, {headers: await frontendEventHeaders(owner), data: {maxUses: 1}});
         expect(created.status()).toBe(200);
         const link = await created.json() as components['schemas']['EventCreatedRegistrationLink'];
-        await page.goto(`/frontend-pilot/event/${event.id}?regToken=${encodeURIComponent(link.token)}&locale=en`, {waitUntil: 'domcontentloaded'});
-        await waitForPilotHydration(page);
+        await page.goto(`/event/${event.id}?regToken=${encodeURIComponent(link.token)}&locale=en`, {waitUntil: 'domcontentloaded'});
+        await waitForFrontendHydration(page);
         await page.locator('#guest-name').fill(`P2 guest ${randomUUID().slice(0, 8)}`);
         // Event entry retains its configured native confirmation before identity
         // creation; accepting it must still leave this registration token unused.
@@ -285,7 +258,7 @@ test('carries a late-registration token through guest entry and spends it only o
             await dialog.accept();
         });
         await Promise.all([confirmation, page.getByRole('button', {name: 'Continue as guest', exact: true}).click()]);
-        await expect(page).toHaveURL(new RegExp(`/frontend-pilot/event/${event.id}\\?regToken=`));
+        await expect(page).toHaveURL(new RegExp(`/event/${event.id}\\?regToken=`));
         await expect(page.locator('#arrivalDate')).toBeVisible();
         const before = await (await owner.get(`/api/v1/events/${event.id}/links`, {headers: await frontendEventHeaders(owner)})).json() as components['schemas']['EventRegistrationLinks'];
         expect(before.items[0]?.status).toBe('active');
@@ -313,21 +286,20 @@ test('carries a late-registration token through guest entry and spends it only o
     }
 });
 
-test('preserves native and versioned own-profile cancellation no-ops and deadline rejection', async ({request, playwright, baseURL}) => {
+test('preserves own-profile cancellation no-ops and deadline rejection', async ({request, playwright, baseURL}) => {
     const event = await createFrontendEventFixture(request);
     const actor = await playwright.request.newContext({baseURL});
     try {
         await enterIndependentEventGuest(actor, request, event.id);
         const proof = await frontendEventHeaders(actor);
-        const nativeCancel = `/api/event/${event.id}/register/delete`;
         const registration = `/api/v1/events/${event.id}/registration`;
         // The nonowner has no attendance or cancellation-specific grant. Both
         // transports retain the native scoped no-op, including a repeated write.
-        expect((await actor.post(nativeCancel)).status()).toBe(200);
+        expect((await actor.delete(registration, {headers: proof})).status()).toBe(200);
         expect((await actor.delete(registration, {headers: proof})).status()).toBe(200);
         const input = {arrivalDate: '2030-06-01', departureDate: '2030-06-04', dietary: ['VEGAN']};
         expect((await actor.put(registration, {headers: proof, data: input})).status()).toBe(200);
-        expect((await actor.post(nativeCancel)).status()).toBe(200);
+        expect((await actor.delete(registration, {headers: proof})).status()).toBe(200);
         expect((await actor.delete(registration, {headers: proof})).status()).toBe(200);
         const cancelled = await (await actor.get(`/api/v1/events/${event.id}`, {headers: proof})).json() as components['schemas']['EventView'];
         expect(cancelled).toMatchObject({registration: null, registrationCount: 0});
@@ -340,7 +312,6 @@ test('preserves native and versioned own-profile cancellation no-ops and deadlin
                 bindingDeadline: '2000-01-01T00:00:00', deadlineTz: 'UTC', allowRegCancelationAfterDeadline: false,
             },
         })).status()).toBe(200);
-        expect((await actor.post(nativeCancel)).status()).toBe(403);
         const rejected = await actor.delete(registration, {headers: proof});
         expect(rejected.status()).toBe(403);
         expect(await rejected.json()).toMatchObject({code: 'EVENT_CANCELLATION_CLOSED'});
@@ -352,13 +323,13 @@ test('preserves native and versioned own-profile cancellation no-ops and deadlin
     }
 });
 
-test('keeps native and versioned Event grants independent and requires both participant-export bits', async ({request, playwright, baseURL}) => {
+test('keeps Event method grants independent and requires both participant-export bits', async ({request, playwright, baseURL}) => {
     const event = await createFrontendEventFixture(request);
     const actor = await playwright.request.newContext({baseURL});
     try {
         const profileId = await enterIndependentEventGuest(actor, request, event.id);
         const proof = await frontendEventHeaders(actor);
-        expect((await request.post(`/api/event/${event.id}/admins`, {data: {profileId, mask: 0}})).status()).toBe(200);
+        await addEntityAdministratorForE2E(request, 'events', event.id, profileId, 0);
         for (const variant of [
             {mask: PERM.ACCESS_ADMIN, admin: true, roster: false, manage: false, exports: false},
             {mask: PERM.ACCESS_PARTICIPANTS, admin: false, roster: true, manage: false, exports: false},
@@ -366,7 +337,7 @@ test('keeps native and versioned Event grants independent and requires both part
             {mask: PERM.DATA_EXPORT, admin: false, roster: false, manage: false, exports: false},
             {mask: PERM.DATA_EXPORT | PERM.ACCESS_PARTICIPANTS, admin: false, roster: true, manage: false, exports: true},
         ]) {
-            expect((await request.patch(`/api/event/${event.id}/admins/${profileId}`, {data: {mask: variant.mask}})).status()).toBe(200);
+            await updateEntityAdministratorForE2E(request, 'events', event.id, profileId, variant.mask);
             // Read independent capabilities and exercise both real route families;
             // entering the admin page cannot stand in for roster/manager authority.
             const view = await (await actor.get(`/api/v1/events/${event.id}`, {headers: proof})).json() as components['schemas']['EventView'];
@@ -379,11 +350,11 @@ test('keeps native and versioned Event grants independent and requires both part
                 // The admitted denial names a real localized message rather than
                 // degrading to a generic failure in either document or Vue entry.
                 expect(entry.entry).toEqual({kind: 'denied', status: 403, messageKey: 'api:errors.FORBIDDEN'});
-                const deniedDocument = await actor.get(`/frontend-pilot/event/${event.id}/admin?locale=en`);
+                const deniedDocument = await actor.get(`/event/${event.id}/admin?locale=en`);
                 expect(deniedDocument.status()).toBe(403);
                 expect(await deniedDocument.text()).toContain(createTranslator('en').t('api:errors.FORBIDDEN'));
             }
-            for (const prefix of ['/api/event', '/api/v1/events']) {
+            for (const prefix of ['/api/v1/events']) {
                 expect((await actor.get(`${prefix}/${event.id}/participants`, {headers: proof})).status()).toBe(variant.roster ? 200 : 403);
                 expect((await actor.get(`${prefix}/${event.id}/links`, {headers: proof})).status()).toBe(variant.manage ? 200 : 403);
             }
@@ -402,9 +373,7 @@ test('opens the native participant PDF from shared Event settings without granti
     page.on('pageerror', error => errors.push(error.message));
     try {
         const profileId = await enterIndependentEventGuest(actor.request, request, event.id);
-        expect((await request.post(`/api/event/${event.id}/admins`, {data: {
-            profileId, mask: PERM.DATA_EXPORT | PERM.ACCESS_PARTICIPANTS,
-        }})).status()).toBe(200);
+        await addEntityAdministratorForE2E(request, 'events', event.id, profileId, PERM.DATA_EXPORT | PERM.ACCESS_PARTICIPANTS);
         const proof = await frontendEventHeaders(actor.request);
         const view = await (await actor.request.get(`/api/v1/events/${event.id}`, {headers: proof})).json() as components['schemas']['EventView'];
         expect(view.capabilities).toMatchObject({admin: false, settings: true, exportParticipants: true});
@@ -412,17 +381,15 @@ test('opens the native participant PDF from shared Event settings without granti
 
         // Exercise the same independently authorized settings action in each
         // running frontend. This actor has no general administration capability.
-        for (const pilot of [false, true]) {
-            await page.goto(`${pilot ? '/frontend-pilot' : ''}/event/${event.id}?locale=en`, {waitUntil: 'domcontentloaded'});
-            if (pilot) await waitForPilotHydration(page);
+        {
+            await page.goto(`/event/${event.id}?locale=en`, {waitUntil: 'domcontentloaded'});
+            await waitForFrontendHydration(page);
             const origin = await page.evaluate(() => performance.timeOrigin);
-            const nativeModal = page.locator('#entityPropertiesModal');
             const opener = page.getByRole('button', {name: 'Entity settings', exact: true});
-            if (pilot) await opener.click();
-            else await openModalForE2E(nativeModal, opener);
-            const dialog = pilot ? page.getByRole('dialog') : nativeModal;
+            await opener.click();
+            const dialog = page.getByRole('dialog');
             const exportLink = dialog.getByRole('link', {
-                name: pilot ? 'Participants (PDF)' : 'Export participants', exact: true,
+                name: 'Participants (PDF)', exact: true,
             });
             await expect(exportLink).toBeVisible();
             await expect(exportLink).toHaveAttribute('href', `/event/${event.id}/export/participants`);
@@ -440,17 +407,14 @@ test('opens the native participant PDF from shared Event settings without granti
             expect(document.headers()['content-type']).toContain('application/pdf');
             expect(await page.evaluate(() => performance.timeOrigin)).toBe(origin);
             for (const opened of actor.pages()) if (opened !== page) await opened.close();
-            if (pilot) await dialog.locator('.modal-header .btn-close').click();
-            else await closeModalForE2E(nativeModal);
+            await dialog.locator('.modal-header .btn-close').click();
         }
 
         // Removing either export bit must remove the action and its admission,
         // while preserving roster access and denying the protected PDF route.
-        expect((await request.patch(`/api/event/${event.id}/admins/${profileId}`, {
-            data: {mask: PERM.ACCESS_PARTICIPANTS},
-        })).status()).toBe(200);
+        await updateEntityAdministratorForE2E(request, 'events', event.id, profileId, PERM.ACCESS_PARTICIPANTS);
         await page.reload({waitUntil: 'domcontentloaded'});
-        await waitForPilotHydration(page);
+        await waitForFrontendHydration(page);
         await expect(page.getByRole('button', {name: 'Entity settings', exact: true})).toHaveCount(0);
         expect((await actor.request.get(`/event/${event.id}/export/participants`)).status()).toBe(403);
         expect((await actor.request.get(`/event/${event.id}/admin`)).status()).toBe(403);
@@ -460,7 +424,8 @@ test('opens the native participant PDF from shared Event settings without granti
     }
 });
 
-test('binds Event settings to shared image, metadata, archive, automation and deletion operations', async ({request}) => {
+test('binds Event settings to shared image, metadata, archive, automation and deletion operations', async ({page}) => {
+    const request = page.request;
     const event = await createFrontendEventFixture(request);
     const proof = await frontendEventHeaders(request);
     const settings = await (await request.get(`/api/v1/events/${event.id}/settings`, {headers: proof})).json() as components['schemas']['EventSettings'];
@@ -478,7 +443,9 @@ test('binds Event settings to shared image, metadata, archive, automation and de
     const metadata = await (await request.get(`/api/v1/events/${event.id}/metadata`, {headers: proof})).json() as components['schemas']['EventMetadata'];
     const changed = await request.patch(`/api/v1/events/${event.id}/metadata`, {headers: {...proof, 'If-Match': metadata.editToken}, data: {location: 'Changed campsite'}});
     expect(changed.status()).toBe(200);
-    expect(await (await request.get(`/event/${event.id}`)).text()).toContain('Changed campsite');
+    expect((await page.goto(`/event/${event.id}?locale=en`))?.status()).toBe(200);
+    await waitForFrontendHydration(page);
+    await expect(page.locator('main')).toContainText('Changed campsite');
     expect((await request.post(`/api/v1/events/${event.id}/archive`, {headers: proof})).status()).toBe(200);
     const archived = await (await request.get(`/api/v1/events/${event.id}`, {headers: proof})).json() as components['schemas']['EventView'];
     expect(archived.archive.direct).toBe(true);
@@ -493,22 +460,13 @@ test('binds Event settings to shared image, metadata, archive, automation and de
 });
 
 for (const width of [1280, 390]) {
-    test(`compares native and migrated Event registration at ${width}px`, async ({page}, testInfo) => {
+    test(`keeps Event registration readable and refreshes its saved draft at ${width}px`, async ({page}, testInfo) => {
         await page.setViewportSize({width, height: 900});
         const event = await createFrontendEventFixture(page.request);
         const errors: string[] = [];
         page.on('pageerror', error => errors.push(error.message));
-        await page.goto(`/event/${event.id}`, {waitUntil: 'domcontentloaded'});
-        await expect(page.locator('#arrivalDate')).toBeVisible();
-        const nativeCard = page.locator('#registrationForm')
-            .locator('xpath=ancestor::*[contains(concat(" ",normalize-space(@class)," ")," card ")][1]');
-        await expect(nativeCard).toContainText('Register for this event');
-        await page.evaluate(() => document.fonts.ready);
-        const native = await measureEventRegistration(nativeCard);
-        await page.screenshot({path: testInfo.outputPath('native-event.png'), fullPage: true});
-
-        await page.goto(`/frontend-pilot/event/${event.id}?locale=en`, {waitUntil: 'domcontentloaded'});
-        await waitForPilotHydration(page);
+        await page.goto(`/event/${event.id}?locale=en`, {waitUntil: 'domcontentloaded'});
+        await waitForFrontendHydration(page);
         await expect(page.locator('#arrivalDate')).toBeEnabled();
         const migratedCard = page.locator('#registrationForm')
             .locator('xpath=ancestor::*[contains(concat(" ",normalize-space(@class)," ")," card ")][1]');
@@ -516,11 +474,14 @@ for (const width of [1280, 390]) {
         await page.evaluate(() => document.fonts.ready);
         const migrated = await measureEventRegistration(migratedCard);
         await expectUsableFrontendLayout(migratedCard);
-        await page.screenshot({path: testInfo.outputPath('pilot-event.png'), fullPage: true});
-        await testInfo.attach('native-pilot-registration-metrics', {
-            body: JSON.stringify({native, migrated}, null, 2), contentType: 'application/json',
+        await page.screenshot({path: testInfo.outputPath('frontend-event.png'), fullPage: true});
+        await testInfo.attach('registration-metrics', {
+            body: JSON.stringify(migrated, null, 2), contentType: 'application/json',
         });
-        compareEventRegistration(native, migrated);
+        await expect(migratedCard.locator('#arrivalDate')).toHaveAttribute('type', 'date');
+        await expect(migratedCard.locator('#departureDate')).toHaveAttribute('type', 'date');
+        await expect(migratedCard.getByRole('button', {name: 'Save registration', exact: true})).toBeEnabled();
+        await expect(migratedCard.getByRole('checkbox', {name: 'Vegetarian', exact: true})).toBeEnabled();
         if (width === 390) await expectReadableDietaryChoices(migratedCard);
         const documentOrigin = await page.evaluate(() => performance.timeOrigin);
         const arrival = await page.locator('#arrivalDate').inputValue();
@@ -528,7 +489,7 @@ for (const width of [1280, 390]) {
             && new URL(response.url()).pathname === `/api/v1/events/${event.id}`);
         // The Event's root Refresh owns this detail read. Personal Finance can
         // expose another independently scoped control with the same label.
-        await page.locator('main > section.card > .card-header .pilot-page-heading-actions')
+        await page.locator('main > section.card > .card-header .frontend-page-heading-actions')
             .getByRole('button', {name: 'Refresh', exact: true}).click();
         expect((await refreshed).status()).toBe(200);
         await expect(page.locator('#arrivalDate')).toHaveValue(arrival);

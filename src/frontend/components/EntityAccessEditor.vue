@@ -3,10 +3,10 @@ import {computed, onBeforeUnmount, ref, watch} from 'vue';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../types/api/v1';
 import type {MessageKey} from '../../types/LocalizationTypes';
-import type {PilotMetadataSnapshot} from '../../types/FrontendPilotUiTypes';
+import type {FrontendMetadataSnapshot} from '../../types/FrontendUiTypes';
 import type {EntityAccessEditorProps} from '../../types/FrontendEntityAccessTypes';
 import {permissionLabel as translatedPermissionLabel} from '../../modules/localization/permissionLabels';
-import {useActionState, usePilot, refreshInterval} from '../app/context';
+import {useActionState, useFrontend, refreshInterval} from '../app/context';
 import {isReadDenial} from '../app/transport';
 import {retireQueryFamily, useQueryAdmission} from '../app/queryCache';
 import {useDebouncedValue} from '../composables/debounced';
@@ -20,9 +20,9 @@ import PermissionFields from './permissions/PermissionFields.vue';
 import AppAccordionButton from './AppAccordionButton.vue';
 
 // Inject feature operations and the complete-dialog command owner. Access drafts,
-// discovery and native presentation are shared; server owners still decide grants.
+// discovery and presentation are shared; server owners still decide grants.
 const props = defineProps<EntityAccessEditorProps>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const command = props.command;
 const api = props.operations;
@@ -34,7 +34,7 @@ const controlsPending = computed(() => props.controlsPending);
 const pendingAction = ref<{kind: 'defaults' | 'add' | 'save' | 'remove'; id?: string} | null>(null);
 type Settings = EntityAccessEditorProps['settings'];
 type Defaults = components['schemas']['PermissionDefaults'];
-type DefaultsSnapshot = PilotMetadataSnapshot<Defaults>;
+type DefaultsSnapshot = FrontendMetadataSnapshot<Defaults>;
 const accessPanel = ref('defaults');
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
 let active = true;
@@ -54,8 +54,8 @@ const defaults = ref<MetadataDraft<Defaults, DefaultsSnapshot> | null>(null);
 const admins = ref<Record<string, {original: number; value: number; token: string; name: string;
     isGuest: boolean; regrantReviewed?: boolean; confirmed?: number}>>({});
 const accessTabs = computed(() => [
-    {key: 'defaults', label: messages.value.t('packing.groupPermissions'), id: 'pilot-access-defaults-tab', controls: 'pilot-access-defaults'},
-    {key: 'admins', label: messages.value.t('packing.administrators'), id: 'pilot-access-admins-tab', controls: 'pilot-access-admins'},
+    {key: 'defaults', label: messages.value.t('packing.groupPermissions'), id: 'frontend-access-defaults-tab', controls: 'frontend-access-defaults'},
+    {key: 'admins', label: messages.value.t('packing.administrators'), id: 'frontend-access-admins-tab', controls: 'frontend-access-admins'},
 ]);
 const dirtyDefaults = computed(() => !!defaults.value?.dirty);
 const defaultsPatch = computed<components['schemas']['PermissionDefaultsPatch']>(() => defaults.value?.patch ?? {});
@@ -102,7 +102,7 @@ function defaultsSnapshot(values: Defaults): DefaultsSnapshot {
     return {values, editableFields: ['participant', 'guest', 'authenticated', 'public']};
 }
 
-/** Audience controls retain their native independent review: untouched remote masks
+/** Audience controls retain their independent review: untouched remote masks
  * appear immediately, and an overlapping local mask keeps its original/token. The
  * shared draft owner supplies sparse PATCH, equality and confirmation mechanics. */
 function receiveDefaults(value: Settings): void {
@@ -171,7 +171,7 @@ function adminRemoved(id: string): boolean {
     return !data.value?.access?.admins.some(admin => admin.profileId === id);
 }
 
-/** Count the saved grant, rather than its unsaved checkbox draft, for the native badge. */
+/** Count the saved grant, rather than its unsaved checkbox draft, for the badge. */
 function adminPermissionCount(mask: number): number {
     let count = 0;
     for (const permission of data.value?.access?.permissions ?? []) {
@@ -240,7 +240,7 @@ function cancelAddAdmin(): void {
 
 function reviewDefaults(): void {
     if (controlsPending.value || !defaults.value || !data.value?.access) return;
-    // Native permission Review retains every entered mask as one explicit choice.
+    // Permission Review retains every entered mask as one explicit choice.
     // Metadata's per-field Mine/Current controls remain a separate presentation.
     const draft = defaults.value;
     draft.offerReview(defaultsSnapshot(data.value.access.defaults), data.value.settingsToken);
@@ -254,7 +254,7 @@ async function saveDefaults(): Promise<void> {
     if (!defaults.value || blocked.value || defaultsConflict.value) return;
     if (!Object.keys(defaultsPatch.value).length) {
         // Sparse conditional commands preserve the no-empty-PATCH boundary.
-        // A pristine save retains native permission feedback and renews its receipt.
+        // A pristine save retains permission feedback and renews its receipt.
         command.setNotice('permissions.updated');
         return;
     }
@@ -397,7 +397,7 @@ async function addAdmin(): Promise<void> {
     if (result) cancelAddAdmin();
 }
 
-/** Preserve the native two-letter avatar derived from the admitted display name. */
+/** Preserve the two-letter avatar derived from the admitted display name. */
 function initials(name: string): string {
     // Normalize word separators, then use the first two initials for the compact badge.
     return name
@@ -443,16 +443,16 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
 <template>
             <section
                 v-if="data.access && defaults"
-                id="pilot-settings-access"
+                id="frontend-settings-access"
                 role="tabpanel"
-                aria-labelledby="pilot-settings-tab-access"
+                aria-labelledby="frontend-settings-tab-access"
             >
                 <AppTabList v-model="accessPanel" :tabs="accessTabs" :disabled="controlsPending" class="gap-1 mb-3" />
                 <form
                     v-show="accessPanel === 'defaults'"
-                    id="pilot-access-defaults"
+                    id="frontend-access-defaults"
                     role="tabpanel"
-                    aria-labelledby="pilot-access-defaults-tab"
+                    aria-labelledby="frontend-access-defaults-tab"
                     data-entity-section="permissions"
                     @submit.prevent="saveDefaults"
                 >
@@ -465,7 +465,7 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                     />
                     <StatusNotice v-if="defaultsConflict" kind="warning"
                         ><p>{{ messages.t('draft.readConflict') }}</p>
-                        <div class="pilot-conflict-values">
+                        <div class="frontend-conflict-values">
                             <dl>
                                 <dt>{{ messages.t('draft.original') }}</dt>
                                 <dd>{{ defaults.baseline.values }}</dd>
@@ -485,7 +485,7 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                             }}</ActionButton>
                         </template></StatusNotice
                     >
-                    <div class="pilot-action-row justify-content-end border-top border-secondary pt-3">
+                    <div class="frontend-action-row justify-content-end border-top border-secondary pt-3">
                         <ActionButton
                             type="submit"
                             :pending="pendingAction?.kind === 'defaults' && command.pending.value" :show-spinner="false"
@@ -496,9 +496,9 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                 </form>
                 <div
                     v-show="accessPanel === 'admins'"
-                    id="pilot-access-admins"
+                    id="frontend-access-admins"
                     role="tabpanel"
-                    aria-labelledby="pilot-access-admins-tab"
+                    aria-labelledby="frontend-access-admins-tab"
                     class="admin-matrix text-bg-dark"
                 >
                     <div class="d-flex align-items-center justify-content-between mb-2">
@@ -568,8 +568,8 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                                         </template></StatusNotice
                                     >
                                     <!-- PermissionFields retains the last group's mb-3 inside its fieldset;
-                                         avoid adding a second gap before the native Save/Remove row. -->
-                                    <div class="pilot-action-row justify-content-between">
+                                         avoid adding a second gap before the Save/Remove row. -->
+                                    <div class="frontend-action-row justify-content-between">
                                         <ActionButton
                                             class="btn-sm"
                                             variant="outline-danger"
@@ -601,7 +601,7 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                         data-entity-section="administrator-add"
                         @submit.prevent="addAdmin"
                     >
-                        <!-- Match the native inline form's title and field-group spacing. -->
+                        <!-- Match the inline form's title and field-group spacing. -->
                         <div class="mb-2">
                             <h5 class="modal-title">{{ messages.t('packing.addAdministrator') }}</h5>
                         </div>
@@ -659,7 +659,7 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                                 </option>
                             </select>
                         </div>
-                        <div class="pilot-action-row justify-content-end">
+                        <div class="frontend-action-row justify-content-end">
                             <ActionButton
                                 variant="outline-secondary"
                                 :disabled="blocked"

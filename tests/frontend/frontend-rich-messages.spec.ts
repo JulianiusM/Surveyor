@@ -6,7 +6,7 @@ import {createSSRApp, h} from 'vue';
 import {renderToString} from 'vue/server-renderer';
 import I18NextVue from 'i18next-vue';
 import type {components} from '../../src/types/api/v1';
-import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
+import {createFrontendContext, frontendContextKey} from '../../src/frontend/app/context';
 import RichMessage from '../../src/frontend/components/RichMessage.vue';
 import RichMessageHint from '../fixtures/RichMessageHint.vue';
 
@@ -19,10 +19,10 @@ afterEach(() => { for (const release of releases.splice(0)) release(); });
 
 /** Use the real catalog, request-local context and selected Vue binding. */
 function mounted() {
-    const context = createPilotContext({session}, false);
+    const context = createFrontendContext({session}, false);
     const wrapper = mount(RichMessage, {props: {message: 'activity.progressComplete', parameters: {assigned: 0, required: 2}},
         slots: {done: () => [h('strong', 'Complete')]}, global: {plugins: [[I18NextVue, {i18next: context.i18next}]],
-            provide: {[pilotContextKey as symbol]: context}}});
+            provide: {[frontendContextKey as symbol]: context}}});
     releases.push(() => { wrapper.unmount(); context.queryClient.clear(); });
     return {wrapper, context};
 }
@@ -41,10 +41,10 @@ describe('declared authored-node translations', () => {
 
     it('keeps slot content literal even when user text resembles placeholders or HTML', () => {
         const text = '{done}<img src=x onerror=alert(1)>';
-        const context = createPilotContext({session}, false);
+        const context = createFrontendContext({session}, false);
         const wrapper = mount(RichMessage, {props: {message: 'activity.recommendations.scheduleHint', parameters: {}},
             slots: {add: () => [h('span', {class: 'badge'}, text)]}, global: {plugins: [[I18NextVue, {i18next: context.i18next}]],
-                provide: {[pilotContextKey as symbol]: context}}});
+                provide: {[frontendContextKey as symbol]: context}}});
         releases.push(() => { wrapper.unmount(); context.queryClient.clear(); });
         expect(wrapper.get('.badge').text()).toBe(text);
         expect(wrapper.find('img').exists()).toBe(false);
@@ -53,10 +53,10 @@ describe('declared authored-node translations', () => {
 
     it('lets each catalog place the same authored node without shared SSR locale state', async () => {
         const outputs = await Promise.all(['en', 'de'].map(async locale => {
-            const context = createPilotContext({session: {...session, locale}}, false);
+            const context = createFrontendContext({session: {...session, locale}}, false);
             const app = createSSRApp(RichMessageHint);
             app.use(I18NextVue, {i18next: context.i18next});
-            app.provide(pilotContextKey, context);
+            app.provide(frontendContextKey, context);
             try { return await renderToString(app); } finally { context.queryClient.clear(); }
         }));
         // Vue's fragment comments carry hydration boundaries, not visible text.

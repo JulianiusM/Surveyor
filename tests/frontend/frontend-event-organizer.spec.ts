@@ -5,7 +5,7 @@ import {defineComponent, ref, type Component} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
-import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
+import {createFrontendContext, frontendContextKey} from '../../src/frontend/app/context';
 import App from '../../src/frontend/app/App.vue';
 import {useDraftProtection} from '../../src/frontend/composables/command';
 import {createFrontendEventSession, createFrontendEventView, frontendEventId as eventId} from '../factories/frontendEventFactory';
@@ -33,7 +33,7 @@ const roster: components['schemas']['EventParticipants'] = {participants: [parti
 const link: components['schemas']['EventRegistrationLink'] = {id: linkId, token: 'real-row-token',
     createdAt: '2026-10-16T00:00:00Z', expiresAt: null, revokedAt: null, used: false, profileId: null, status: 'active'};
 const card: components['schemas']['OverviewCard'] = {id: childId, type: 'activity', title: 'Shared shifts',
-    description: 'An archived plan', url: `/frontend-pilot/activity/${childId}`, headerUrl: null, headerVersion: null,
+    description: 'An archived plan', url: `/activity/${childId}`, headerUrl: null, headerVersion: null,
     eventContext: null, visibility: 'hidden', overviewHidden: true, archived: true, inheritedArchived: false,
     capabilities: {archive: false, restore: true, duplicate: false, remove: false}, children: null,
     automation: {paused: true, canManage: true}};
@@ -86,10 +86,10 @@ describe('Event organizer workflows', () => {
         // A single admitted panel keeps its accessible label without drawing
         // redundant tab navigation; the shared dialog owns that presentation.
         expect(surface.findAll('[role="tab"]')).toHaveLength(0);
-        expect(surface.get('#pilot-settings-tab-actions').text()).toBe('Actions');
+        expect(surface.get('#frontend-settings-tab-actions').text()).toBe('Actions');
         const panels = surface.findAll('[role="tabpanel"]');
         expect(panels).toHaveLength(1);
-        expect(panels[0]!.attributes('aria-labelledby')).toBe('pilot-settings-tab-actions');
+        expect(panels[0]!.attributes('aria-labelledby')).toBe('frontend-settings-tab-actions');
         expect(panels[0]!.isVisible()).toBe(true);
         if (exportAllowed) {
             const link = surface.get(`[href="${destination}"]`);
@@ -125,7 +125,7 @@ describe('Event organizer workflows', () => {
         const cachedOverview = [overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main'}),
             overviewKeys.region(session.context, 'de', {collection: 'participant', region: 'hidden'})];
         for (const key of cachedOverview) context.queryClient.setQueryData(key, {items: [owned]});
-        router.addRoute({path: '/frontend-pilot/users/dashboard', component: defineComponent({template: '<p>Overview</p>'})});
+        router.addRoute({path: '/users/dashboard', component: defineComponent({template: '<p>Overview</p>'})});
         router.onError(() => {});
         await wrapper.findAll('.accordion-button')[1]!.trigger('click');
         await wrapper.get('[data-test="sibling-draft"]').setValue('Retain this draft');
@@ -141,28 +141,28 @@ describe('Event organizer workflows', () => {
         expect(wrapper.get<HTMLInputElement>('[data-test="sibling-draft"]').element.value).toBe('Retain this draft');
 
         confirmation.mockReset().mockReturnValue(true);
-        const stopFailure = router.beforeResolve(to => {if (to.path === '/frontend-pilot/users/dashboard') throw new Error('Destination chunk unavailable');});
+        const stopFailure = router.beforeResolve(to => {if (to.path === '/users/dashboard') throw new Error('Destination chunk unavailable');});
         await button(wrapper, 'Delete').trigger('click'); await flushPromises();
         expect(finishDelete).toBeTypeOf('function');
         expect(button(wrapper, 'Delete').attributes('disabled')).toBeDefined();
         finishDelete!(); await flushPromises();
         for (const key of cachedOverview) expect(context.queryClient.getQueryState(key)?.isInvalidated).toBe(true);
         expect(request.mock.calls.filter(([input]) => (input as Request).method === 'GET')).toHaveLength(1);
-        expect(wrapper.get('[data-pilot-notices] .alert-warning').text()).toContain(context.messages.value.t('state.deliveryFailed'));
+        expect(wrapper.get('[data-frontend-notices] .alert-warning').text()).toContain(context.messages.value.t('state.deliveryFailed'));
         expect(wrapper.find('.alert-success').exists()).toBe(false);
-        expect(router.currentRoute.value.path).toBe(`/frontend-pilot/event/${eventId}`);
+        expect(router.currentRoute.value.path).toBe(`/event/${eventId}`);
         stopFailure();
         // The first delivery attempt used the original approval. Retry must
         // reconsider even that earlier sibling draft through its current guard.
         confirmation.mockClear().mockReturnValue(false);
         await button(wrapper, 'Try again').trigger('click'); await flushPromises();
         expect(confirmation).toHaveBeenCalledWith('Discard changes?');
-        expect(router.currentRoute.value.path).toBe(`/frontend-pilot/event/${eventId}`);
+        expect(router.currentRoute.value.path).toBe(`/event/${eventId}`);
         expect(wrapper.get<HTMLInputElement>('[data-test="sibling-draft"]').element.value).toBe('Retain this draft');
         expect(button(wrapper, 'Delete').attributes('disabled')).toBeDefined();
         confirmation.mockReturnValue(true);
         await button(wrapper, 'Try again').trigger('click'); await flushPromises();
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/dashboard');
+        expect(router.currentRoute.value.path).toBe('/users/dashboard');
         expect(confirmation).toHaveBeenCalledTimes(2);
         expect(request.mock.calls.filter(([input]) => (input as Request).method === 'DELETE')).toHaveLength(1);
         expect(request.mock.calls.filter(([input]) => (input as Request).method === 'GET')).toHaveLength(1);
@@ -195,22 +195,22 @@ describe('Event organizer workflows', () => {
                 pools: [], invoices: [], shares: []});
             return json(event);
         });
-        const context = createPilotContext({session}, true, request);
+        const context = createFrontendContext({session}, true, request);
         context.hydrated.value = true;
         context.visible.value = true;
         const placeholder = defineComponent({template: '<p>Destination</p>'});
         const router = createRouter({history: createMemoryHistory(), routes: [
-            {path: '/frontend-pilot/event/:eventId/admin', component: EventPage},
-            {path: '/frontend-pilot/users/dashboard', component: placeholder},
-            {path: '/frontend-pilot/help', component: placeholder},
+            {path: '/event/:eventId/admin', component: EventPage},
+            {path: '/users/dashboard', component: placeholder},
+            {path: '/help', component: placeholder},
             {path: '/:pathMatch(.*)*', component: placeholder},
         ]});
-        const origin = `/frontend-pilot/event/${eventId}/admin`;
-        await router.push('/frontend-pilot/help');
+        const origin = `/event/${eventId}/admin`;
+        await router.push('/help');
         await router.push(origin);
         const wrapper = mount(App, {attachTo: document.body, global: {
             plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-            provide: {[pilotContextKey as symbol]: context},
+            provide: {[frontendContextKey as symbol]: context},
         }});
         let releaseInvalidation: (() => void) | undefined;
         cleanups.push(async function disposeOrganizerJourney(): Promise<void> {
@@ -233,7 +233,7 @@ describe('Event organizer workflows', () => {
         }
         router.onError(() => {});
         router.beforeResolve(function rejectOverview(to): void {
-            if (to.path === '/frontend-pilot/users/dashboard') throw new Error('Controlled Overview delivery failure');
+            if (to.path === '/users/dashboard') throw new Error('Controlled Overview delivery failure');
         });
         const confirmation = vi.mocked(window.confirm);
         await wrapper.findAll('.dashboard-accordion-button')[1]!.trigger('click');
@@ -248,10 +248,10 @@ describe('Event organizer workflows', () => {
         // The first delivery is still pending only in the held variant. A real
         // failed delivery replaces its own success with one common warning.
         if (heldInvalidation) {
-            expect(wrapper.get('[data-pilot-notices] .alert-success').text()).toContain(context.messages.value.t('event.organizer.activityDeleted'));
-            expect(wrapper.find('[data-pilot-notices] .alert-warning').exists()).toBe(false);
+            expect(wrapper.get('[data-frontend-notices] .alert-success').text()).toContain(context.messages.value.t('event.organizer.activityDeleted'));
+            expect(wrapper.find('[data-frontend-notices] .alert-warning').exists()).toBe(false);
         } else {
-            expect(wrapper.get('[data-pilot-notices] .alert-warning').text()).toContain(context.messages.value.t('state.deliveryFailed'));
+            expect(wrapper.get('[data-frontend-notices] .alert-warning').text()).toContain(context.messages.value.t('state.deliveryFailed'));
             expect(wrapper.find('.alert-success').exists()).toBe(false);
         }
 
@@ -280,7 +280,7 @@ describe('Event organizer workflows', () => {
         await wrapper.get('.event-participants .accordion-button').trigger('click');
         await button(wrapper.get('.event-participants'), 'Edit dates').trigger('click');
         await flushPromises();
-        const departure = surface.get<HTMLInputElement>('.pilot-dialog input[name="departureDate"]');
+        const departure = surface.get<HTMLInputElement>('.frontend-dialog input[name="departureDate"]');
         expect(departure.element.disabled).toBe(false);
         await departure.setValue('2027-06-02');
         confirmation.mockClear().mockReturnValue(false);
@@ -296,7 +296,7 @@ describe('Event organizer workflows', () => {
         // route departure; the confirmed deletion never becomes repeatable.
         confirmation.mockClear().mockReturnValue(true);
         router.back();
-        await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/frontend-pilot/help'));
+        await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/help'));
         expect(confirmation).toHaveBeenCalledOnce();
         expect(departure.element.isConnected).toBe(false);
         expect(request.mock.calls.filter(([input]) => (input as Request).method === 'DELETE')).toHaveLength(1);
@@ -533,10 +533,10 @@ describe('Event organizer workflows', () => {
         expect(writes).toEqual([{path: `/api/v1/events/${eventId}/registrations/17`, body: {arrivalDate: '2027-06-02', departureDate: '2027-06-03'}}]);
         expect(dialog.props('open')).toBe(false);
         expect(wrapper.text()).toContain('Attendance dates updated');
-        const notices = document.querySelectorAll<HTMLElement>('.pilot-notification.alert-success');
+        const notices = document.querySelectorAll<HTMLElement>('.frontend-notification.alert-success');
         expect(notices).toHaveLength(1);
         expect(notices[0]!.closest('[role="dialog"]')).toBeNull();
-        expect(notices[0]!.querySelector('.pilot-notice-actions')).toBeNull();
+        expect(notices[0]!.querySelector('.frontend-notice-actions')).toBeNull();
     });
 
     it('retains a readable date draft but disables its command when the management grant is revoked', async () => {
@@ -603,7 +603,7 @@ describe('Event organizer workflows', () => {
         await wrapper.get('.accordion-button').trigger('click');
         await button(wrapper, 'Copy').trigger('click');
         await flushPromises();
-        expect(copied.mock.calls[0]).toEqual([`${location.origin}/frontend-pilot/event/${eventId}?regToken=real-row-token`]);
+        expect(copied.mock.calls[0]).toEqual([`${location.origin}/event/${eventId}?regToken=real-row-token`]);
         await button(wrapper, 'Create link').trigger('click');
         await flushPromises();
         const input = document.querySelector<HTMLInputElement>('[role="dialog"] input[type="number"]')!;
@@ -615,10 +615,10 @@ describe('Event organizer workflows', () => {
         expect(writes).toEqual([{maxUses: 3}]);
         expect(copied).toHaveBeenCalledOnce();
         expect(document.querySelector('[role="dialog"]')).toBeNull();
-        const notices = document.querySelectorAll<HTMLElement>('.pilot-notification.alert-success');
+        const notices = document.querySelectorAll<HTMLElement>('.frontend-notification.alert-success');
         expect(notices).toHaveLength(1);
         expect(notices[0]!.textContent).toContain('Link created.');
-        expect(notices[0]!.querySelector('.pilot-notice-actions')).toBeNull();
+        expect(notices[0]!.querySelector('.frontend-notice-actions')).toBeNull();
     });
 
     it('does not replay an unknown link creation during explicit list recovery', async () => {
@@ -670,7 +670,7 @@ describe('Event organizer workflows', () => {
             return json({items: [card]});
         });
         vi.mocked(window.confirm).mockReturnValue(true);
-        expect(wrapper.get('article .card-body').attributes('href')).toBe(`/frontend-pilot/activity/${childId}`);
+        expect(wrapper.get('article .card-body').attributes('href')).toBe(`/activity/${childId}`);
         expect(wrapper.text()).not.toContain('Only my overview');
         expect(wrapper.text()).not.toContain('Hidden for me');
         expect(wrapper.text()).toContain('Shared shifts');

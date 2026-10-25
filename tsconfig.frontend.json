@@ -12,6 +12,6 @@
     "experimentalDecorators": false,
     "emitDecoratorMetadata": false
   },
-  "include": ["src/frontend/**/*.ts", "src/frontend/**/*.vue", "src/types/FrontendPilotTypes.d.ts"],
+  "include": ["src/frontend/**/*.ts", "src/frontend/**/*.vue", "src/types/FrontendTypes.d.ts"],
   "exclude": ["node_modules", "dist", "src/frontend/app/entry-server.ts"]
 }

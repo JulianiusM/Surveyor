@@ -21,7 +21,7 @@ import settings from '../../../modules/settings';
 const router = Router();
 const uploadHeader = prepareFileUploader(settings.value.headerImgDir).single('image');
 
-/** Existing basic operations keep their native transaction/order guarantees.
+/** Existing basic operations keep their existing transaction/order guarantees.
  * Prepare their invariant receipt before invoking the business owner; delivery
  * performs no mutable-session admission, projection read or automatic replay. */
 async function sendActivityMutation(req: Request, res: Response, operation: ActivitySimpleMutationOperation,
@@ -417,7 +417,7 @@ router.get('/:planId/recommendations', asyncHandler(async function getActivityRe
 
 router.post('/:planId/recommendations/entry', asyncHandler(async function enterActivityRecommendations(req, res) {
     const actor = await requireApiContext(req, res);
-    // Deliberate native-equivalent workspace entry retains maintenance and possible enqueue.
+    // Deliberate existing-equivalent workspace entry retains maintenance and possible enqueue.
     validateOperationRequest(req, 'enterActivityRecommendations');
     sendValidatedJson(req, res, 'enterActivityRecommendations', 200,
         await activityApi.readActivityRecommendations(String(req.params.planId), actor, true));
@@ -456,18 +456,18 @@ router.get('/:planId/recommendations/auto/:jobId', asyncHandler(async function g
 }));
 
 /** Existing Activity owners report stale warning reviews, full slots and other
- * domain conflicts as native APIError(409). Adapt that trusted class/status at
- * this feature boundary; never expose native prose/data or reinterpret an
+ * domain conflicts as existing APIError(409). Adapt that trusted class/status at
+ * this feature boundary; never expose existing prose/data or reinterpret an
  * arbitrary status-shaped exception. Existing declared Problems keep their code. */
 const activityConflict: ErrorRequestHandler = function activityConflict(error, _req, res, next) {
-    // Only the existing queue's trusted cause supplies the native bounded retry advice.
+    // Only the existing queue's trusted cause supplies the existing bounded retry advice.
     if (error instanceof APIError && error.cause instanceof RecommendationQueueFullError) {
         res.set('Retry-After', '5');
         next(new ApiProblem('RECOMMENDATION_QUEUE_FULL'));
         return;
     }
     // Shared controller causes identify the actual failed requirement. Preserve
-    // that declared status/message before the legacy generic conflict fallback.
+    // that declared status/message before the generic conflict fallback.
     const declared = declaredApiProblem(error);
     if (declared) {
         next(declared);

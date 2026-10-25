@@ -27,13 +27,13 @@ export function activityDateLabel(day: string, locale: string): string {
     return formatCivilDate(day, locale) ?? new Date(day + 'T00:00:00Z').toLocaleDateString(locale);
 }
 
-/** Native review labels describe only an admitted slot and its civil timebox. */
+/** Review labels describe only an admitted slot and its civil timebox. */
 export function activitySlotLabel(slot: Pick<components['schemas']['ActivitySlotView'], 'title' | 'day' | 'startTime' | 'endTime'>, t: Translator): string {
     const time = slot.startTime || slot.endTime ? ` (${slot.startTime?.slice(0, 5) || '–'}-${slot.endTime?.slice(0, 5) || '–'})` : '';
     return t('activity.describeSlot', {title: slot.title, date: slot.day, time});
 }
 
-/** Copy native warning phrasing without importing its frontend implementation.
+/** Present complete localized warning messages from their admitted facts.
  * Foreign details come only from the redacted server receipt; local lookup never
  * performs discovery or reconstructs a hidden sibling plan from its identifier. */
 export function activityWarningLabel(warning: components['schemas']['ActivityWarning'], slots: components['schemas']['ActivitySlotView'][], t: Translator): string {
@@ -43,7 +43,7 @@ export function activityWarningLabel(warning: components['schemas']['ActivityWar
         over_capacity: 'activity.fullHint'} as const;
     if (warning.type !== 'overlap') return t(keys[warning.type] ?? 'activity.warningUnknown');
 
-    // The native modal keeps all conflicts in one escaped sentence. Retain its
+    // The dialog keeps all conflicts in one escaped sentence. Retain its
     // commas and parenthesized timeboxes so wrapping and emphasis stay equivalent.
     const conflicts: string[] = [];
     for (const detail of warning.overlapDetails ?? []) {

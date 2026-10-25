@@ -1,26 +1,33 @@
-/*
- * Copyright 2026 Julian Malovanij
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Router} from 'express';
+import {asyncHandler} from '../modules/lib/asyncHandler';
+import {renderFrontend} from '../modules/frontendRenderer';
+import {createTranslator, isPlainMessageKey} from '../modules/localization/translator';
+import {ENTITIES} from '../modules/lib/util';
+import type {FrontendLandingQuickCreate} from '../types/FrontendTypes';
+import {bootstrap} from './frontend';
 
-import express, {Request, Response} from 'express';
+const router = Router();
 
-const router = express.Router();
+/** The public landing page selects one quick-create shortcut per document. */
+router.get('/', asyncHandler(async function renderLandingFrontend(req, res) {
+    const state = await bootstrap(req);
+    // Existing landing selects one uniform quick-create shortcut per document.
+    // Send that choice with SSR so hydration cannot choose a different href.
+    const choices = Object.values(ENTITIES) as FrontendLandingQuickCreate[];
+    state.landing = {quickCreate: choices[Math.floor(Math.random() * choices.length)]};
+    await renderFrontend(res, req.originalUrl, state);
+}));
 
-/* GET home page. */
-router.get('/', function (req: Request, res: Response) {
-    res.render('index');
-});
+/** Message content comes only from admitted feedback, never request-supplied text. */
+router.get('/message', asyncHandler(async function renderMessageFrontend(req, res) {
+    const state = await bootstrap(req);
+    const notice = state.pageNotice;
+    const messageKey = notice && isPlainMessageKey(notice.messageKey) ? notice.messageKey : 'common.infoTitle';
+    state.commonPage = {kind: 'message', severity: notice?.kind ?? 'info', messageKey,
+        message: createTranslator(state.session.locale).t(messageKey)};
+    // This is a complete message, rather than a duplicate transient shell alert.
+    state.pageNotice = undefined;
+    await renderFrontend(res, req.originalUrl, state);
+}));
 
 export default router;

@@ -99,7 +99,7 @@ describe('versioned packing projections and metadata preconditions', () => {
 
         // This versioned projection supplies the migrated Event destination;
         // the shared native owner still decides whether parent navigation is admitted.
-        expect((await readPackingList(id, sessionFor(owner))).data.currentEventUrl).toBe(`/frontend-pilot/event/${eventId}`);
+        expect((await readPackingList(id, sessionFor(owner))).data.currentEventUrl).toBe(`/event/${eventId}`);
         const childOnly = await readPackingList(id, guestSession);
         expect(childOnly.data).toMatchObject({currentEventId: eventId, currentEventUrl: null});
         // Assignment-management metadata exposure remains distinct from page-navigation authority.
@@ -107,7 +107,7 @@ describe('versioned packing projections and metadata preconditions', () => {
         expect((await readPackingList(id, guestSession)).data.currentEventUrl).toBeNull();
         await adminService.updateAdminPerms('event', eventId, guest.profile.id, PERM.ACCESS_VIEW);
         const parentView = await readPackingList(id, guestSession);
-        expect(parentView.data.currentEventUrl).toBe(`/frontend-pilot/event/${eventId}`);
+        expect(parentView.data.currentEventUrl).toBe(`/event/${eventId}`);
         expect(parentView.etag).not.toBe(childOnly.etag);
         await adminService.removeAdmin('event', eventId, guest.profile.id);
         expect((await readPackingList(id, guestSession)).data.currentEventUrl).toBeNull();

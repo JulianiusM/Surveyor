@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type {WeekDay, WeekInMonth} from '../../../types/SurveyTypes';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {weekdayMessages} from './presentation';
 
 // Creation rows and the collaborative add form share the same recurring choices.
@@ -8,7 +8,7 @@ import {weekdayMessages} from './presentation';
 // dates, requests authority or persists an answer.
 defineProps<{weekday: WeekDay; nthWeek: WeekInMonth; prefix: string; disabled?: boolean; creation?: boolean}>();
 const emit = defineEmits<{'update:weekday': [value: WeekDay]; 'update:nthWeek': [value: WeekInMonth]}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const weekdays: WeekDay[] = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const weeks: WeekInMonth[] = ['1', '2', '3', '4', 'LAST'];
 </script>

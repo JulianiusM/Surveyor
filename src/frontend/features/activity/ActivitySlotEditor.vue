@@ -2,7 +2,7 @@
 import {computed, nextTick, reactive, ref} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {ActivitySlotDraft} from '../../../types/FrontendActivityTypes';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {usePendingFocus} from '../../composables/pendingFocus';
 import {useActivityApi} from './api';
@@ -17,20 +17,20 @@ import StatusNotice from '../../components/StatusNotice.vue';
 const props = defineProps<{planId: string; day: string; slot?: components['schemas']['ActivitySlotView'];
     allRoles: components['schemas']['ActivityRole'][]; roleCreationAdmission: boolean; disabled?: boolean; refresh(): Promise<void>}>();
 const emit = defineEmits<{close: []}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useActivityApi(context);
 const draft = reactive<ActivitySlotDraft>({id: props.slot?.id ?? '', day: props.day, title: props.slot?.title ?? '',
     description: props.slot?.description ?? '', startTime: props.slot?.startTime?.slice(0, 5) ?? '',
     endTime: props.slot?.endTime?.slice(0, 5) ?? '', maxAssignees: String(props.slot?.maxAssignees ?? 1), roles: props.slot?.roles.map(role => role.id) ?? []});
 const baseline = JSON.stringify(draft);
-// Native edit metadata describes the opening timebox; changing controls does
+// Edit metadata describes the opening timebox; changing controls does
 // not rewrite this context label. New-slot metadata initially contains only day.
 const openingTimeRange = props.slot ? [draft.startTime, draft.endTime].filter(Boolean).join(' – ') : '';
 const token = ref(props.slot?.editToken ?? '');
 const search = ref('');
 // Role creation and slot Save use the same command owner. Only the control that
-// initiated that operation owns pending focus; suggestion styling stays native.
+// initiated that operation owns pending focus; suggestions retain their field styling.
 const creatingRole = ref(false);
 const roleInput = ref<HTMLInputElement | null>(null);
 const capabilities = computed(() => props.slot?.capabilities ?? {editTitle: !draft.id, editDescription: !draft.id,
@@ -46,7 +46,7 @@ const initialFocus = computed(() => capabilities.value.editTitle ? '#slotEditorT
 const conflict = computed(() => !!draft.id && (!props.slot || props.slot.editToken !== token.value));
 const command = useCommand(props.refresh, false, {dirty: () => JSON.stringify(draft) !== baseline, unknownMessage: 'draft.leaveUnknown'});
 const blocked = computed(() => props.disabled || command.action.disabled.value || permissionLost.value);
-// This native search has a separate Enter-to-create operation and deliberately
+// This search has a separate Enter-to-create operation and deliberately
 // sits outside FormField's label/control layout. Register its explicit node with
 // the same focus owner without changing suggestions, key handling or draft data.
 usePendingFocus({element: roleInput, pending: creatingRole, isAvailable: isRoleInputAvailable});
@@ -70,7 +70,7 @@ function roleTitle(id: string): string {
 }
 
 /** Select the first suggestion or create a role only on a completed Enter.
- * Composition owns its native key handling and must not consume the model's
+ * Composition owns its key handling and must not consume the model's
  * unfinished search text through either existing role operation. */
 function selectRoleOnEnter(event: KeyboardEvent): Promise<void> | void {
     // Check before preventDefault: accepting an IME candidate is not a role action.
@@ -105,7 +105,7 @@ async function createRole(): Promise<void> {
     } finally { creatingRole.value = false; }
 }
 
-/** Submit only fields currently admitted to this editor. Each native operation
+/** Submit only fields currently admitted to this editor. Each operation
  * still owns validation, capacity and role relationships on the server. */
 async function save(): Promise<void> {
     if (blocked.value || conflict.value) return;
@@ -239,7 +239,7 @@ async function reviewUnknown(): Promise<void> {
                         @keydown.esc.stop.prevent="search = ''"
                     />
                 </div>
-                <!-- Native suggestions remain clickable through blur and close only
+                <!-- Suggestions remain clickable through blur and close only
                 after an explicit selection, cleared search or editor dismissal. -->
                 <div v-if="search.trim()" id="slotEditorRoleSuggestions" class="list-group mt-1">
                     <ActionButton

@@ -3,11 +3,11 @@ import {computed, onBeforeUnmount, ref, watch} from 'vue';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../types/api/v1';
 import type {EntityHeaderLabels, EntityLifecycleLabels} from '../../types/FrontendEntitySettingsTypes';
-import type {PilotRequestScope} from '../../types/FrontendPilotUiTypes';
+import type {FrontendRequestScope} from '../../types/FrontendUiTypes';
 import type {EntitySettingsDialogProps, EntitySettingsProjection} from '../../types/FrontendEntityDialogTypes';
 import type {EntityAccessOperations} from '../../types/FrontendEntityAccessTypes';
 import {createEntityLifecycle, useEntityRemoval} from '../composables/entityLifecycle';
-import {useActionState, usePilot, refreshInterval} from '../app/context';
+import {useActionState, useFrontend, refreshInterval} from '../app/context';
 import {isReadDenial} from '../app/transport';
 import {useCommand} from '../composables/command';
 import {useReadRetry, useReadRetryAt} from '../composables/feedback';
@@ -29,11 +29,11 @@ import EntityAccessEditor from './EntityAccessEditor.vue';
 // grants fields or commands; each metadata response supplies its own authority/token.
 const props = defineProps<EntitySettingsDialogProps>();
 const emit = defineEmits<{close: []; saved: []; accessLost: []}>();
-const context = usePilot();
+const context = useFrontend();
 const api = props.operations;
 const {messages} = context;
 // Shared panels receive catalog wording and admitted presentation. This dialog and
-// its section editors own drafts, tokens and commands for migrated root features;
+// its section editors own drafts, tokens and commands for root features;
 // each feature injects its operations and retains its deliberate field exceptions.
 const headerLabels = computed<EntityHeaderLabels>(() => ({
     title: messages.value.t('packing.headerImage'), choose: messages.value.t('packing.chooseImage'),
@@ -174,7 +174,7 @@ const panels = computed(() => {
     ].filter((candidate) => candidate.enabled);
 });
 const panelTabs = computed(() => panels.value.map(tab => ({...tab, label: messages.value.t(tab.label),
-    id: 'pilot-settings-tab-' + tab.key, controls: 'pilot-settings-' + tab.key})));
+    id: 'frontend-settings-tab-' + tab.key, controls: 'frontend-settings-' + tab.key})));
 const showGeneral = computed(() => panels.value.some(tab => tab.key === 'general') || (!data.value && showMetadata.value));
 
 watch(
@@ -244,7 +244,7 @@ const refreshingSettings = ref(false);
 // blocks mutations but keeps recovery and deliberate departure acknowledgement reachable.
 const busy = computed(() => refreshingSettings.value || command.pending.value || command.recovering.value
     || fields.value?.pending || fields.value?.refreshing);
-// Native commands lock the entire modal, including its navigation and nested tabs.
+// Commands lock the entire modal, including its navigation and nested tabs.
 // Uncertainty alone keeps those tabs reachable so another panel cannot hide recovery.
 const controlsPending = computed(() => !!busy.value || !!destination.target.value);
 const awaitingAuthority = computed(() => awaitingSettingsAuthority() || !!fields.value?.awaitingAuthority);
@@ -330,7 +330,7 @@ async function upload(): Promise<void> {
     // write grant. Stale component callbacks need this current authority too.
     if (blocked.value || !data.value?.capabilities.editHeader || headerConflict.value) return;
 
-    // Native missing-file feedback happens before a request. The chosen file's
+    // Missing-file feedback happens before a request. The chosen file's
     // retained token must still exist; a later settings read cannot replace it.
     if (!image.value) {
         command.setError('metadata.chooseImage', 'transient');
@@ -377,7 +377,7 @@ async function removeImage(): Promise<void> {
  * comparison token. Relinking can revoke access and must preserve other editor drafts. */
 async function saveEvent(): Promise<void> {
     if (!event.value || blocked.value || eventConflict.value) return;
-    // The native unchanged-link branch precedes confirmation and cross-form
+    // The unchanged-link branch precedes confirmation and cross-form
     // discard decisions. A no-op explains itself without sending an empty write.
     if (event.value.value === event.value.original) {
         command.setInformation('metadata.eventUnchanged');
@@ -447,7 +447,7 @@ async function archive(restore: boolean): Promise<void> {
 }
 
 /** Automatic archival remains a separate shared lifecycle command. Resuming an
- * expired schedule requires the native warning before its next run can archive. */
+ * expired schedule requires the warning before its next run can archive. */
 async function automate(paused: boolean): Promise<void> {
     if (blocked.value || !api.automate || !data.value?.capabilities.manageAutomation || !props.automationLabels) return;
     // Settings and child cards share confirmation/dispatch/feedback, while this
@@ -481,7 +481,7 @@ async function remove(): Promise<void> {
     }
 }
 
-async function deleteResource(scope: PilotRequestScope): Promise<string> {
+async function deleteResource(scope: FrontendRequestScope): Promise<string> {
     await api.deleteResource(props.resourceId, scope);
     return props.resourceId;
 }
@@ -503,7 +503,7 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
             </div>
             <span
                 v-else-if="panels.length === 1"
-                :id="'pilot-settings-tab-' + panels[0]!.key"
+                :id="'frontend-settings-tab-' + panels[0]!.key"
                 class="visually-hidden"
                 >{{ messages.t(panels[0]!.label) }}</span
             ></template
@@ -524,9 +524,9 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
         <div
             v-if="showGeneral || image || retainedMetadata"
             v-show="showGeneral && panel === 'general'"
-            id="pilot-settings-general"
+            id="frontend-settings-general"
             :role="data ? 'tabpanel' : undefined"
-            :aria-labelledby="data ? 'pilot-settings-tab-general' : undefined"
+            :aria-labelledby="data ? 'frontend-settings-tab-general' : undefined"
         >
             <section v-if="showMetadata || retainedMetadata" v-show="showMetadata" class="mb-4">
                 <component :is="metadataComponent"
@@ -539,12 +539,12 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
                     @access-lost="emit('accessLost')"
                 />
             </section>
-            <!-- A user's chosen File retains its actual native chooser through
+            <!-- A user's chosen File retains its actual chooser through
                  narrow grant loss. Hidden/disabled controls carry no old server
                  authority; regrant restores this same visible FileList. -->
             <EntityHeaderEditor v-if="data?.capabilities.editHeader || image"
                 v-show="data?.capabilities.editHeader"
-                input-id="pilot-header-image" :labels="headerLabels" :selected-file="image"
+                input-id="frontend-header-image" :labels="headerLabels" :selected-file="image"
                 :has-image="!!data?.headerUrl" :expanded="!data?.editableFields.length"
                 :conflict="headerConflict" :disabled="!!blocked || !data?.capabilities.editHeader" :reading="settings.isFetching.value"
                 :upload-pending="pendingAction === 'upload' && command.pending.value"
@@ -556,10 +556,10 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
             <section
                 v-if="data.capabilities.linkEvent && event && api.eventPicker"
                 v-show="panel === 'event'"
-                id="pilot-settings-event"
+                id="frontend-settings-event"
                 class="mb-4"
                 role="tabpanel"
-                aria-labelledby="pilot-settings-tab-event"
+                aria-labelledby="frontend-settings-tab-event"
                 data-entity-section="event"
             >
                 <EntityEventEditor v-model="event.value" :original="event.original"
@@ -576,9 +576,9 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
                 :controls-pending="!!controlsPending" />
             <div
                 v-show="panel === 'actions'"
-                id="pilot-settings-actions"
+                id="frontend-settings-actions"
                 role="tabpanel"
-                aria-labelledby="pilot-settings-tab-actions"
+                aria-labelledby="frontend-settings-tab-actions"
             >
                 <EntityLifecycleActions :labels="lifecycleLabels" :direct="data.archive.direct"
                     :inherited="data.archive.inherited" :event-url="data.archive.eventUrl"

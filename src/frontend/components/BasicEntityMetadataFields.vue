@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {ref} from 'vue';
 import type {EntityMetadataSnapshot, EntityMetadataValues} from '../../types/FrontendEntityMetadataTypes';
-import type {PilotRead, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
-import {usePilot} from '../app/context';
+import type {FrontendRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
+import {useFrontend} from '../app/context';
 import {normalizeNullableMetadataText} from '../composables/metadataDraft';
 import {useMetadataEditorHandle} from '../composables/metadataEditor';
 import EntityMetadataEditor from './EntityMetadataEditor.vue';
@@ -14,11 +14,11 @@ import FormField from './FormField.vue';
 withDefaults(defineProps<{
     prefix: string; resourceId: string; resourceTitle?: string; queryKey: readonly unknown[];
     disabled?: boolean; busy?: boolean; active?: boolean;
-    read(id: string, scope: PilotRequestScope, signal?: AbortSignal, previous?: PilotRead<EntityMetadataSnapshot>): Promise<PilotRead<EntityMetadataSnapshot>>;
-    save(id: string, patch: EntityMetadataValues, token: string, scope: PilotRequestScope): Promise<PilotRead<EntityMetadataSnapshot>>;
+    read(id: string, scope: FrontendRequestScope, signal?: AbortSignal, previous?: FrontendRead<EntityMetadataSnapshot>): Promise<FrontendRead<EntityMetadataSnapshot>>;
+    save(id: string, patch: EntityMetadataValues, token: string, scope: FrontendRequestScope): Promise<FrontendRead<EntityMetadataSnapshot>>;
 }>(), {active: true});
 const emit = defineEmits<{close: []; saved: []; accessLost: []}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const editor = ref<InstanceType<typeof EntityMetadataEditor> | null>(null);
 const fieldPolicy = {description: normalizeNullableMetadataText};
 function fieldLabel(field: string): string { return messages.value.t(field === 'title' ? 'packing.title' : 'packing.description'); }

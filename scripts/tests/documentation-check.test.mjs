@@ -788,8 +788,8 @@ function helpFixture(t, extra = '') {
     t.after(() => fs.rmSync(root, {recursive: true, force: true}));
     write(root, 'scripts/check-help-documentation.mjs', fs.readFileSync(helpScript));
     write(root, 'scripts/check-documentation.mjs', fs.readFileSync(script));
-    write(root, 'docs/user-guide/README.md', `# Help\n${metadata}\n\n![Test diagram](assets/test.png)\n${extra}\n`);
-    write(root, 'docs/user-guide/assets/test.png', Buffer.from('89504e470d0a1a0a', 'hex'));
+    write(root, 'docs/user-guide/en/README.md', `# Help\n${metadata}\n\n![Test diagram](assets/test.png)\n${extra}\n`);
+    write(root, 'docs/user-guide/en/assets/test.png', Buffer.from('89504e470d0a1a0a', 'hex'));
     write(root, 'src/controller/helpController.ts', "'docs', 'user-guide'\nvalidateTrustedHelpMarkdown\nresolveHelpAssetPath\nrenderTrustedHelpMarkdown\n");
     write(root, '.github/workflows/release.yml', 'cp -R docs release/docs\ndiff -qr docs/user-guide release/docs/user-guide\n');
     return root;
@@ -848,7 +848,7 @@ test('missing help root is a structured finding with an advisory exit', t => {
 
 test('unreferenced help assets remain visible findings', t => {
     const root = helpFixture(t);
-    write(root, 'docs/user-guide/assets/unused.png', Buffer.from([1]));
+    write(root, 'docs/user-guide/en/assets/unused.png', Buffer.from([1]));
     const {result, report} = inspectHelp(root);
     assert.equal(result.status, 0);
     assert.ok(report.errors.some(error => error.message.includes('not referenced')));
@@ -856,25 +856,24 @@ test('unreferenced help assets remain visible findings', t => {
 
 test('help report scans each corpus and discloses whole-article English fallback without borrowing figures', t => {
     const root = helpFixture(t);
-    write(root, 'docs/user-guide/en/README.md', `# English Help\n${metadata}\n\n![English figure](assets/english.png)\n`);
+    write(root, 'docs/user-guide/en/README.md', `# English Help\n${metadata}\n\n![English figure](assets/test.png)\n`);
     write(root, 'docs/user-guide/en/TASK.md', `# English task\n${metadata}\n\nTake an item.\n`);
-    write(root, 'docs/user-guide/en/assets/english.png', Buffer.from([1]));
-    write(root, 'docs/user-guide/de/README.md', `# Hilfe\n${metadata}\n\n[Aufgabe](TASK.md)\n![Abbildung](assets/english.png)\n`);
+    write(root, 'docs/user-guide/de/README.md', `# Hilfe\n${metadata}\n\n[Aufgabe](TASK.md)\n![Abbildung](assets/test.png)\n`);
     const {result, report} = inspectHelp(root);
     assert.equal(result.status, 0);
     assert.equal(report.ok, true, JSON.stringify(report.errors));
-    assert.equal(report.markdownFiles, 4);
-    assert.deepEqual(report.corpora.map(corpus => corpus.directory), ['docs/user-guide', 'docs/user-guide/de', 'docs/user-guide/en']);
+    assert.equal(report.markdownFiles, 3);
+    assert.deepEqual(report.corpora.map(corpus => corpus.directory), ['docs/user-guide/de', 'docs/user-guide/en']);
     assert.ok(report.warnings.some(warning => warning.message.includes('TASK.md')));
-    assert.ok(report.warnings.some(warning => warning.message.includes('assets/english.png')));
+    assert.ok(report.warnings.some(warning => warning.message.includes('assets/test.png')));
     assert.ok(report.warnings.some(warning => warning.message.includes('complete article must fall back')));
-    assert.equal(report.referencedAssets['docs/user-guide/en/assets/english.png'], 1);
+    assert.equal(report.referencedAssets['docs/user-guide/en/assets/test.png'], 1);
 });
 
 test('localized article and figure queries cannot reference another language', t => {
     const root = helpFixture(t);
     write(root, 'docs/user-guide/en/README.md', `# Help\n${metadata}\n`);
-    write(root, 'docs/user-guide/de/README.md', `# Hilfe\n${metadata}\n\n[Weiter](README.md?locale=en)\n![Abbildung](assets/test.png?locale=de&locale=en)\n[Vollbild](/help/assets/test.png?locale=en)\n[Index](/help?locale=en)\n[Suche](/help?search=1&q=task&locale=en)\n[Pilot](/frontend-pilot/help?locale=en)\n`);
+    write(root, 'docs/user-guide/de/README.md', `# Hilfe\n${metadata}\n\n[Weiter](README.md?locale=en)\n![Abbildung](assets/test.png?locale=de&locale=en)\n[Vollbild](/help/assets/test.png?locale=en)\n[Index](/help?locale=en)\n[Suche](/help?search=1&q=task&locale=en)\n[Artikel](/help/packing_lists?locale=en)\n`);
     write(root, 'docs/user-guide/de/assets/test.png', Buffer.from([1]));
     const {result, report} = inspectHelp(root);
     assert.equal(result.status, 0);

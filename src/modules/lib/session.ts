@@ -23,7 +23,7 @@ import type {SessionLike} from '../../types/PermissionTypes';
 import {APIError} from './errors';
 
 /**
- * Configure native and transaction-bound session stores in one place. A manager
+ * Configure ordinary and transaction-bound session stores in one place. A manager
  * supplied by an existing DBAL transaction binds every store query/write to that
  * same connection; constructing a store does not perform cleanup or open a pool.
  */

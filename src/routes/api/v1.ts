@@ -27,8 +27,8 @@ router.put('/locale', asyncHandler(async function updateLocale(req, res) {
     const body = req.body as components['schemas']['LocaleUpdate'];
     const locale = localeManifest.find(candidate => candidate.locale === body.locale)?.locale;
     if (!locale) throw new ApiProblem('VALIDATION_FAILED');
-    // The opt-in pilot persists a browser preference only. Account/guest preference migration
-    // remains a later slice; avoid saving an old admitted session over a concurrent profile switch.
+    // Persist the browser preference without saving an old admitted session over
+    // a concurrent profile switch. Account/guest records remain untouched.
     res.cookie('surveyor_locale', locale, {httpOnly: true, sameSite: 'lax', secure: req.secure, path: '/', maxAge: 365 * 24 * 60 * 60 * 1000});
     req.headers['x-surveyor-locale'] = locale;
     sendValidatedJson(req, res, 'setLocale', 200, await sessionView(req));

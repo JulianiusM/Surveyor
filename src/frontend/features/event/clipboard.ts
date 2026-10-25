@@ -1,7 +1,7 @@
 import {onBeforeUnmount, reactive} from 'vue';
 
 /** Copy Event links and participant addresses through the same browser owner.
- * The fallback matches the native clipboard behavior without importing native code;
+ * A temporary textarea supports browsers without the clipboard API;
  * feature feedback stays with its own command/notice owner. */
 export async function copyEventText(value: string): Promise<void> {
     if (navigator.clipboard?.writeText) {
@@ -24,7 +24,7 @@ export async function copyEventText(value: string): Promise<void> {
     }
 }
 
-/** Share native per-button clipboard lifetime without adding a command/result owner.
+/** Share per-button clipboard lifetime without adding a command/result owner.
  * Clipboard rejection stays separate from registration/link writes and is not retried. */
 export function useEventClipboard() {
     const pending = reactive(new Set<string>());
@@ -33,13 +33,13 @@ export function useEventClipboard() {
     let generation = 0;
     onBeforeUnmount(retire);
 
-    /** A Copy invoker remains disabled through delivery and the native 300ms delay. */
+    /** A Copy invoker remains disabled through delivery and the 300ms delay. */
     async function copy(key: string, value: string): Promise<void> {
         if (!active || pending.has(key)) return;
         const admittedGeneration = generation;
         pending.add(key);
         try { await copyEventText(value); }
-        catch { /* Native Copy does not turn clipboard rejection into a business result. */ }
+        catch { /* Copy does not turn clipboard rejection into a business result. */ }
         finally {
             // A retired component needs no timer or retained invoker identity.
             if (active && generation === admittedGeneration) {

@@ -2,10 +2,10 @@ import {expect, test, type APIRequestContext, type Locator, type Page, type Resp
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createE2EActivityPlan, createE2EDriversList, createE2EEvent, createE2ELogin, createE2EPackingList, createE2ESurvey} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, expectMobileOverviewActionRows, expectUsableFrontendLayout, expectVisiblePresentation, loginForE2E,
-    projectNativeMobileOverviewActions, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
+import {createProfileForE2E, createResourceViaForm, expectMobileOverviewActionRows, expectUsableFrontendLayout, loginForE2E,
+    readVisiblePresentation, selectProfileForE2E} from '../keywords/e2eCoreKeywords';
 import {frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
-import {createBrowserReadGate, waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
+import {createBrowserReadGate, waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
 import type {components} from '../../src/types/api/v1';
 
 /** Give this journey a bounded, private collection without deleting another
@@ -13,14 +13,14 @@ import type {components} from '../../src/types/api/v1';
 async function mixedOverview(request: APIRequestContext) {
     await loginForE2E(request, createE2ELogin());
     const name = `P10 ${randomUUID().slice(0, 8)}`;
-    expect((await request.post('/users/profile/create', {form: {name}, maxRedirects: 0})).status()).toBe(302);
+    await createProfileForE2E(request, name);
     const session = await (await request.get('/api/v1/session')).json() as components['schemas']['SessionView'];
     const profile = session.profiles.find(candidate => candidate.name === name)!;
     expect(profile).toBeDefined();
-    expect((await request.get('/users/profile/change/' + profile.id, {maxRedirects: 0})).status()).toBe(302);
+    await selectProfileForE2E(request, profile.id);
 
-    // These native forms prepare the same persisted data for both comparators;
-    // the journey itself then uses genuine mounted Vue navigation and commands.
+    // Generated commands prepare persisted data; the journey then uses genuine
+    // mounted navigation and commands against the same integrated application.
     const factories = [createE2EEvent, createE2EPackingList, createE2EDriversList, createE2ESurvey, createE2EActivityPlan];
     const resources = [];
     for (const factory of factories) {
@@ -88,6 +88,7 @@ async function holdOverviewRead(page: Page, collection = 'participant', defaultO
     const delivered = createBrowserReadGate();
     const pattern = '**/api/v1/overview?*';
     let started = false;
+    let failure: unknown;
     await page.route(pattern, holdResponse);
 
     async function holdResponse(route: Route): Promise<void> {
@@ -98,18 +99,25 @@ async function holdOverviewRead(page: Page, collection = 'participant', defaultO
             return;
         }
         started = true;
-        const response = await route.fetch();
-        expect(response.status()).toBe(200);
-        received.release();
-        await released.promise;
-        try { await route.fulfill({response}); }
-        finally { delivered.release(); }
+        try {
+            const response = await route.fetch();
+            expect(response.status()).toBe(200);
+            received.release();
+            await released.promise;
+            await route.fulfill({response});
+        } catch (error) {
+            // Surface the actual failed read instead of stranding the fixture's
+            // receipt/teardown promises until the entire test times out.
+            failure = error;
+            received.release();
+        } finally { delivered.release(); }
     }
 
-    return {received: received.promise, async finish(): Promise<void> {
+    return {received: received.promise.then(() => {if (failure) throw failure;}), async finish(): Promise<void> {
         released.release();
         if (started) await delivered.promise;
         await page.unroute(pattern, holdResponse);
+        if (failure) throw failure;
     }};
 }
 
@@ -118,12 +126,8 @@ for (const width of [1280, 390]) {
         test.setTimeout(120_000);
         await page.setViewportSize({width, height: 900});
         const fixture = await mixedOverview(page.request);
-        await page.goto('/users/dashboard', {waitUntil: 'domcontentloaded'});
-        const nativeRegion = page.locator('#sec-own-parts-main');
-        const native = await captureCards(page, info, 'native', nativeRegion, fixture.resources);
-
-        await page.goto('/frontend-pilot/users/dashboard?locale=en', {waitUntil: 'domcontentloaded'});
-        await waitForPilotHydration(page);
+        await page.goto('/users/dashboard?locale=en', {waitUntil: 'domcontentloaded'});
+        await waitForFrontendHydration(page);
         const owner = page.locator('[data-collection="owner"][data-region="main"]');
         await expect(owner.locator('.js-item')).toHaveCount(5);
         await expect(owner).toContainText('6 matching entities');
@@ -131,15 +135,23 @@ for (const width of [1280, 390]) {
         const emptyParticipation = page.locator('[data-collection="participant"][data-region="main"]');
         await expect(emptyParticipation).toContainText('You are not participating anywhere');
         await expect(emptyParticipation.getByRole('searchbox')).toHaveCount(0);
-        const refreshEmpty = emptyParticipation.getByRole('button', {name: 'Refresh', exact: true});
+        // Main-region Refresh lives beside its collection accordion toggle,
+        // outside the content section that owns the empty-membership message.
+        const participationHeading = page.getByRole('heading', {level: 2})
+            .filter({has: page.locator('button[aria-controls="overview-participant"]')});
+        const refreshEmpty = participationHeading.getByRole('button', {name: 'Refresh', exact: true});
+        // A rendered projection can precede its mount-time revalidation. Arm the
+        // response gate only after the real control is ready, otherwise that
+        // initial read can be held while click waits for the same read to finish.
+        await expect(refreshEmpty).toBeEnabled();
         const heldEmpty = await holdOverviewRead(page);
         let refreshScroll = 0;
         try {
-            await refreshEmpty.click();
-            await heldEmpty.received;
+            await test.step('Start an explicit participation Refresh', () => refreshEmpty.click());
+            await test.step('Receive the genuine held participation response', () => heldEmpty.received);
             await expect(refreshEmpty).toBeDisabled();
             refreshScroll = await page.evaluate(() => window.scrollY);
-        } finally { await heldEmpty.finish(); }
+        } finally { await test.step('Deliver the held participation response', () => heldEmpty.finish()); }
         await expect(refreshEmpty).toBeEnabled();
         await expect(refreshEmpty).toBeFocused();
         expect(await page.evaluate(() => window.scrollY)).toBe(refreshScroll);
@@ -149,16 +161,19 @@ for (const width of [1280, 390]) {
         const heldMoved = await holdOverviewRead(page);
         const search = owner.getByRole('searchbox');
         try {
-            await refreshEmpty.click();
-            await heldMoved.received;
+            await test.step('Start the Refresh with intentional focus movement', () => refreshEmpty.click());
+            await test.step('Receive the held response before moving focus', () => heldMoved.received);
             await search.click();
-        } finally { await heldMoved.finish(); }
+        } finally { await test.step('Deliver the response after focus movement', () => heldMoved.finish()); }
         await expect(refreshEmpty).toBeEnabled();
         await expect(search).toBeFocused();
         const migrated = await captureCards(page, info, 'vue', owner, fixture.resources);
         for (const [index, presentation] of migrated.entries()) {
-            const expected = width === 390 ? projectNativeMobileOverviewActions(native[index]!) : native[index]!;
-            expectVisiblePresentation(expected, presentation);
+            // Persisted entity identity and available actions remain direct
+            // assertions after retirement of the live native comparator.
+            expect(presentation.content.text).toContain(fixture.resources[index]!.title);
+            expect(presentation.content.elements.some(element => element.text === 'Duplicate')).toBe(true);
+            expect(presentation.content.elements.some(element => element.text === 'Delete')).toBe(true);
             if (width === 390)
                 await expectMobileOverviewActionRows(owner.locator(`.js-item[data-id="${fixture.resources[index]!.id}"]`));
         }
@@ -175,22 +190,22 @@ for (const width of [1280, 390]) {
         for (const resource of fixture.resources) {
             const card = owner.locator(`[data-id="${resource.id}"]`);
             await card.locator('a.card-body').click();
-            await expect(page).toHaveURL('/frontend-pilot' + resource.path);
+            await expect(page).toHaveURL(resource.path);
             await expect(page.getByRole('heading', {name: resource.title, exact: true}).first()).toBeVisible();
             await page.getByRole('button', {name: 'Entity settings', exact: true}).click();
             const settings = page.getByRole('dialog');
             await expect(settings).toBeVisible();
             await settings.getByRole('button', {name: 'Close', exact: true}).first().click();
             if (resource.type === 'event') {
-                await page.locator(`main a[href="/frontend-pilot/event/${resource.id}/admin"]`).click();
-                await expect(page).toHaveURL(`/frontend-pilot/event/${resource.id}/admin`);
+                await page.locator(`main a[href="/event/${resource.id}/admin"]`).click();
+                await expect(page).toHaveURL(`/event/${resource.id}/admin`);
                 await expect(page).toHaveTitle(`Dashboard — ${resource.title}`);
                 await page.goBack();
             }
             await page.goBack();
             await expect(card).toBeVisible();
             await card.getByRole('link', {name: 'Duplicate', exact: true}).click();
-            await expect(page).toHaveURL('/frontend-pilot' + resource.path + '/duplicate');
+            await expect(page).toHaveURL(resource.path + '/duplicate');
             await expect(page.locator('main input[type="text"]').first()).toHaveValue(resource.title);
             await page.goBack();
             await expect(card).toBeVisible();
@@ -203,8 +218,8 @@ for (const width of [1280, 390]) {
 test('keeps parent grouping, personal placement, hidden-region history and counts independent across families', async ({page}) => {
     test.setTimeout(90_000);
     const {resources, event, child} = await mixedOverview(page.request);
-    await page.goto('/frontend-pilot/users/dashboard?locale=en', {waitUntil: 'domcontentloaded'});
-    await waitForPilotHydration(page);
+    await page.goto('/users/dashboard?locale=en', {waitUntil: 'domcontentloaded'});
+    await waitForFrontendHydration(page);
     const owner = page.locator('[data-collection="owner"][data-region="main"]');
     const participant = page.locator('[data-collection="participant"][data-region="main"]');
     const eventCard = owner.locator(`[data-id="${event.id}"]`);
@@ -249,11 +264,11 @@ test('keeps parent grouping, personal placement, hidden-region history and count
 test('blocks writes from a deleted warm Overview card until its genuine destination read arrives', async ({page}) => {
     const {resources} = await mixedOverview(page.request);
     const removed = resources.find(resource => resource.type === 'packing')!;
-    await page.goto('/frontend-pilot/users/dashboard?locale=en', {waitUntil: 'domcontentloaded'});
-    await waitForPilotHydration(page);
+    await page.goto('/users/dashboard?locale=en', {waitUntil: 'domcontentloaded'});
+    await waitForFrontendHydration(page);
     await page.locator('header').getByRole('button', {name: 'Overview', exact: true}).click();
     await page.locator('header').getByRole('link', {name: 'Your overview', exact: true}).click();
-    await expect(page).toHaveURL('/frontend-pilot/users/dashboard');
+    await expect(page).toHaveURL('/users/dashboard');
     const owner = page.locator('[data-collection="owner"][data-region="main"]');
     await expect(owner.locator('.js-item')).toHaveCount(5);
     await expect(owner).toHaveAttribute('aria-busy', 'false');
@@ -277,7 +292,7 @@ test('blocks writes from a deleted warm Overview card until its genuine destinat
         await owner.getByRole('button', {name: 'Delete', exact: true}).click();
         expect((await deleted).status()).toBe(200);
         await held.received;
-        await expect(page).toHaveURL('/frontend-pilot/users/dashboard');
+        await expect(page).toHaveURL('/users/dashboard');
 
         // The retained card is readable while its real saved projection is held.
         // Its native disabled control cannot submit a second destructive command.
@@ -288,7 +303,7 @@ test('blocks writes from a deleted warm Overview card until its genuine destinat
         await remove.evaluate(function attemptDisabledRemoval(control) {
             (control as HTMLButtonElement).click();
         });
-        await expect(stale.locator('a.card-body')).toHaveAttribute('href', '/frontend-pilot' + removed.path);
+        await expect(stale.locator('a.card-body')).toHaveAttribute('href', removed.path);
         await expect(owner.getByRole('searchbox')).toBeEnabled();
         expect(deletes).toEqual([removed.endpoint]);
     } finally { await held.finish(); }
@@ -305,13 +320,13 @@ test('blocks writes from a deleted warm Overview card until its genuine destinat
 test('reconciles confirmed root deletion at the same Overview URL and from a filtered visit into its warm default cache', async ({page}) => {
     test.setTimeout(90_000);
     const {resources, child} = await mixedOverview(page.request);
-    await page.goto('/frontend-pilot/users/dashboard?locale=en', {waitUntil: 'domcontentloaded'});
-    await waitForPilotHydration(page);
+    await page.goto('/users/dashboard?locale=en', {waitUntil: 'domcontentloaded'});
+    await waitForFrontendHydration(page);
     // Commit the exact default destination through existing SPA navigation. Its
     // admitted projection is also the warm return target for the second deletion.
     await page.locator('header').getByRole('button', {name: 'Overview', exact: true}).click();
     await page.locator('header').getByRole('link', {name: 'Your overview', exact: true}).click();
-    await expect(page).toHaveURL('/frontend-pilot/users/dashboard');
+    await expect(page).toHaveURL('/users/dashboard');
     const owner = page.locator('[data-collection="owner"][data-region="main"]');
     await expect(owner.locator('.js-item')).toHaveCount(5);
     await expect(owner).toContainText('6 matching entities');
@@ -350,7 +365,7 @@ test('reconciles confirmed root deletion at the same Overview URL and from a fil
         await card.getByRole('button', {name: 'Delete', exact: true}).click();
         expect((await deleted).status()).toBe(200);
         const projection = await (await reconciled).json() as components['schemas']['OverviewRegion'];
-        await expect(page).toHaveURL('/frontend-pilot/users/dashboard');
+        await expect(page).toHaveURL('/users/dashboard');
         await expect(owner.locator(`.js-item[data-id="${resource.id}"]`)).toHaveCount(0);
         await expect(owner.locator('.js-item')).toHaveCount(4 - index);
         await expect(owner).toContainText(`${5 - index} matching entities`);

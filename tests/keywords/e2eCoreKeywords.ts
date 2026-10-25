@@ -7,6 +7,10 @@ import {resolve} from 'node:path';
 import bcrypt from 'bcryptjs';
 import {DataSource, In} from 'typeorm';
 import {createE2EPasswordResetAccount} from '../factories/e2eCoreFactory';
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
+import type {components} from '../../src/types/api/v1';
+import {PERM} from '../../src/modules/lib/permissions';
+import {waitForFrontendHydration} from './frontendDynamicKeywords';
 
 export interface CreatedResource {
     title: string;
@@ -69,7 +73,7 @@ export async function dismissFrontendSuccessNotifications(page: Page): Promise<v
     // A modal can leave background notices painted but inaccessible. Select its
     // actual accessible Close controls, excluding errors and durable feedback.
     const closes = page.getByRole('button').and(page.locator(
-        '[data-pilot-notices] .pilot-notification.alert-success.alert-dismissible > button.btn-close'));
+        '[data-frontend-notices] .frontend-notification.alert-success.alert-dismissible > button.btn-close'));
     const initialCount = await closes.count();
     for (let remaining = initialCount; remaining > 0; remaining--) {
         // Normal dismissal changes the list; retain no positional locator from
@@ -85,7 +89,7 @@ export async function dismissFrontendSuccessNotifications(page: Page): Promise<v
  * Verify its accessible target and actual geometry before projecting only that
  * deliberate addition out of the unchanged native header comparison. */
 export async function expectEmbeddedFrontendRefresh(surface: Locator): Promise<void> {
-    const refresh = surface.locator('.pilot-page-heading-actions').getByRole('button', {name: 'Refresh', exact: true});
+    const refresh = surface.locator('.frontend-page-heading-actions').getByRole('button', {name: 'Refresh', exact: true});
     await expect(refresh).toHaveCount(1);
     await expect(refresh).toBeVisible();
     await expect(refresh).toBeEnabled();
@@ -95,8 +99,8 @@ export async function expectEmbeddedFrontendRefresh(surface: Locator): Promise<v
     const geometry = await refresh.evaluate(function inspectRefresh(control) {
         const header = control.closest('.card-header')!.getBoundingClientRect();
         const own = control.getBoundingClientRect();
-        const heading = control.closest('.pilot-page-heading')!.querySelector('h1')!.getBoundingClientRect();
-        const actions = [...control.closest('.pilot-page-heading-actions')!.querySelectorAll('a,button')]
+        const heading = control.closest('.frontend-page-heading')!.querySelector('h1')!.getBoundingClientRect();
+        const actions = [...control.closest('.frontend-page-heading-actions')!.querySelectorAll('a,button')]
             .filter(action => action !== control).map(action => action.getBoundingClientRect());
         // Header controls can wrap together on narrow screens. They must stay
         // inside the header and cannot paint over the title or another action.
@@ -136,7 +140,7 @@ export function projectNativeMobileOverviewActions(presentation: Awaited<ReturnT
 /** Check the actual phone layout before continuing the real card workflows.
  * Each ordinary action occupies its own complete row without covering another. */
 export async function expectMobileOverviewActionRows(card: Locator): Promise<void> {
-    const row = card.locator(':scope > .card-footer > .pilot-action-row');
+    const row = card.locator(':scope > .card-footer > .frontend-action-row');
     const rowBounds = (await row.boundingBox())!;
     expect(rowBounds.width).toBeGreaterThan(0);
     const actions = [row.getByRole('button', {name: /^Archival and visibility for /u}),
@@ -347,32 +351,6 @@ function inspectBrowserPresentation(roots: Element[], selection: {selectors: str
     }
 }
 
-/** Assert the same visible content, control values/constraints and visual identity.
- * Responsive wrapping, spacing and semantic DOM may improve under R4/R6. Exact
- * geometry remains in the artifacts for human inspection, never a design owner. */
-export function expectVisiblePresentation(native: Awaited<ReturnType<typeof readVisiblePresentation>>,
-    pilot: Awaited<ReturnType<typeof readVisiblePresentation>>): void {
-    expect(visibleMeaning(pilot)).toEqual(visibleMeaning(native));
-    for (const [index, rectangle] of pilot.geometry.entries()) {
-        expect(rectangle.width, `visible surface ${index} width`).toBeGreaterThan(0);
-        expect(rectangle.height, `visible surface ${index} height`).toBeGreaterThan(0);
-    }
-
-    /** Refresh is an explicitly required SPA addition. Check its real workflow
-     * separately; it must not force a native reload layout into the comparator. */
-    function visibleMeaning(presentation: typeof native) {
-        const elements = presentation.content.elements.filter(element => !element.refresh);
-        return {text: presentation.content.text,
-            style: visualIdentity(presentation.content.style),
-            elements: elements.map(element => ({text: element.text, style: visualIdentity(element.style), field: element.field}))};
-    }
-
-    function visualIdentity(style: typeof native.content.style) {
-        return {font: style.font, size: style.size, weight: style.weight, color: style.color,
-            background: style.background, textAlign: style.textAlign};
-    }
-}
-
 /** Inspect actual usability in the built application. Tables may scroll inside
  * their own region; ordinary headings/forms/actions must fit their container.
  * Hidden alternate controls are represented by their visible associated labels. */
@@ -416,49 +394,120 @@ export async function expectUsableFrontendLayout(surface: Locator): Promise<void
     expect(failures, 'Visible headings, labels and actions must remain reachable').toEqual([]);
 }
 
-/** Complete the native opening transition before assertions can lead to another modal command. */
-export async function openModalForE2E(modal: Locator, opener: Locator): Promise<void> {
-    // Visibility begins before Bootstrap accepts a hide command. Its public lifecycle event,
-    // rather than a fixed delay or private state, establishes when the dialog is ready to close.
-    await Promise.all([modal.evaluate(waitForModalTransition, 'shown.bs.modal' as const), opener.click()]);
-}
-
-/** Close an already opened native modal and wait until its lifecycle releases the next interaction. */
-export async function closeModalForE2E(modal: Locator): Promise<void> {
-    // Register before clicking: the next interaction must follow the completed transition,
-    // not merely a disappearing dialog whose backdrop or transition still owns the page.
-    await Promise.all([
-        modal.evaluate(waitForModalTransition, 'hidden.bs.modal' as const),
-        modal.locator('.modal-header .btn-close').click(),
-    ]);
-}
-
-/** Playwright executes this listener in the browser; it cannot reference test-process state. */
-function waitForModalTransition(element: HTMLElement, event: 'shown.bs.modal' | 'hidden.bs.modal'): Promise<void> {
-    return new Promise(function awaitTransition(resolve) {
-        element.addEventListener(event, function resolveCompleted() { resolve(); }, {once: true});
-    });
-}
-
-/** Review a frontend invoice gate before the existing action sends its original API payload. */
-export async function confirmInvoiceCommand(page: Page, opener: Locator): Promise<void> {
-    const review = page.locator('#invoiceCommandConfirmModal');
-    // Wait for browser binding after navigation; visible server markup alone is not an interactive review gate.
-    await expect(review).toHaveAttribute('data-initialized', 'true');
-    await opener.click();
-    await expect(review).toBeVisible();
-    // Send the original command only through its explicit acknowledgement and complete the modal transition.
-    await review.locator('[data-invoice-command-confirm]').click();
-    await expect(review).not.toBeVisible();
-}
-
 export async function loginForE2E(request: APIRequestContext, credentials: {username: string; password: string}): Promise<void> {
-    // Keep login at the HTTP boundary: it is faster and less brittle than driving the form UI,
-    // but still verifies the real Express login route, session cookie, and seeded E2E account.
-    // Retry only connection resets during session setup; HTTP errors and financial commands remain single attempts.
-    const response = await request.post('/users/login', {form: credentials, maxRedirects: 0, maxRetries: 2});
-    expect(response.status()).toBe(302);
-    expect(response.headers().location).toContain('/users/dashboard');
+    // Fixture setup uses the same protected JSON command as the production page.
+    // Reading session admission supplies its current CSRF/context pair; writes are
+    // single attempts, so an uncertain response never silently replays a command.
+    const response = await request.post('/api/v1/auth/login', {
+        headers: await commandHeadersForE2E(request),
+        data: {username: credentials.username, password: credentials.password},
+    });
+    expect(response.status(), await response.text()).toBe(200);
+}
+
+/** Obtain the actual admitted browser command headers for this actor context. */
+export async function commandHeadersForE2E(request: APIRequestContext): Promise<Record<string, string>> {
+    const response = await request.get('/api/v1/session');
+    expect(response.status()).toBe(200);
+    const session = await response.json() as components['schemas']['SessionView'];
+    return {Origin: new URL(response.url()).origin, 'X-Surveyor-Api-Compatibility': apiCompatibility,
+        'X-Surveyor-Locale': session.locale,
+        ...(session.context === null ? {} : {'X-Surveyor-Context': session.context, 'X-CSRF-Token': session.csrfToken!})};
+}
+
+/** Create an additional profile without changing this actor's selected profile. */
+export async function createProfileForE2E(request: APIRequestContext, name: string): Promise<void> {
+    const response = await request.post('/api/v1/profiles', {headers: await commandHeadersForE2E(request), data: {name}});
+    expect(response.status(), await response.text()).toBe(200);
+}
+
+/** Select a real owned profile through the protected identity transition. */
+export async function selectProfileForE2E(request: APIRequestContext, profileId: string): Promise<void> {
+    const response = await request.put('/api/v1/auth/profile', {headers: await commandHeadersForE2E(request), data: {profileId}});
+    expect(response.status(), await response.text()).toBe(200);
+}
+
+/** Establish a guest through its resource's actual scoped identity command. */
+export async function registerGuestForE2E(request: APIRequestContext, collection: string, id: string,
+    input: components['schemas']['GuestRegistrationInput']): Promise<void> {
+    const response = await request.post(`/api/v1/${collection}/${id}/guest`, {
+        headers: await commandHeadersForE2E(request), data: input,
+    });
+    expect(response.status(), await response.text()).toBe(200);
+}
+
+/** Read the current field-specific comparison before one fixture settings write.
+ * Callers exercise subsequent browser behavior against actual persisted records;
+ * no test-only HTTP route or unchecked database mutation supplies their state. */
+export async function updateEntityDefaultsForE2E(request: APIRequestContext, collection: string, id: string,
+    defaults: components['schemas']['PermissionDefaultsPatch']): Promise<void> {
+    const path = `/api/v1/${collection}/${id}/default-permissions`;
+    const baseline = await request.get(path, {headers: await commandHeadersForE2E(request)});
+    expect(baseline.status()).toBe(200);
+    const {editToken} = await baseline.json() as {editToken: string};
+    const response = await request.put(path, {headers: {...await commandHeadersForE2E(request), 'If-Match': editToken}, data: defaults});
+    expect(response.status(), await response.text()).toBe(200);
+}
+
+/** Convert named fixture checkbox grants to the authored bit-mask command. */
+export async function updateEntityDefaultKeysForE2E(request: APIRequestContext, collection: string, id: string,
+    defaults: Partial<Record<keyof components['schemas']['PermissionDefaults'], readonly string[]>>): Promise<void> {
+    const masks = Object.fromEntries(Object.entries(defaults).map(([audience, keys]) => [audience,
+        keys.reduce((mask, key) => mask | PERM[key as keyof typeof PERM], 0)]));
+    await updateEntityDefaultsForE2E(request, collection, id, masks);
+}
+
+/** Link one fixture using its currently admitted parent/settings comparison. */
+export async function updateEntityEventForE2E(request: APIRequestContext, collection: string, id: string,
+    data: {eventId: string | null; expectedEventId: string | null}): Promise<void> {
+    const response = await request.put(`/api/v1/${collection}/${id}/event`, {
+        headers: await entitySettingsHeadersForE2E(request, collection, id), data,
+    });
+    expect(response.status(), await response.text()).toBe(200);
+}
+
+/** Admit a setting change from its current production comparison token. */
+export async function entitySettingsHeadersForE2E(request: APIRequestContext, collection: string, id: string): Promise<Record<string, string>> {
+    const response = await request.get(`/api/v1/${collection}/${id}/settings`, {headers: await commandHeadersForE2E(request)});
+    expect(response.status()).toBe(200);
+    const {settingsToken} = await response.json() as {settingsToken: string};
+    return {...await commandHeadersForE2E(request), 'If-Match': settingsToken};
+}
+
+/** Change saved metadata through its current admitted baseline. This represents
+ * another actual client for stale-draft tests, without bypassing the API's
+ * conditional write or the shared controller's validation. */
+export async function updateEntityMetadataForE2E(request: APIRequestContext, collection: string, id: string,
+    data: Record<string, unknown>): Promise<void> {
+    const path = `/api/v1/${collection}/${id}/metadata`;
+    const baseline = await request.get(path, {headers: await commandHeadersForE2E(request)});
+    expect(baseline.status()).toBe(200);
+    // Packing's metadata comparison is its HTTP representation ETag; the other
+    // metadata projections carry their authored editToken in the body.
+    const editToken = collection === 'packing-lists' ? baseline.headers().etag : (await baseline.json()).editToken;
+    expect(editToken).toBeTruthy();
+    const response = await request.patch(path, {headers: {...await commandHeadersForE2E(request), 'If-Match': editToken}, data});
+    expect(response.status(), await response.text()).toBe(200);
+}
+
+/** Add an explicit grant through the admitted settings command. */
+export async function addEntityAdministratorForE2E(request: APIRequestContext, collection: string, id: string,
+    profileId: string, mask: number): Promise<void> {
+    const response = await request.post(`/api/v1/${collection}/${id}/admins`, {
+        headers: await entitySettingsHeadersForE2E(request, collection, id), data: {profileId, mask},
+    });
+    expect(response.status(), await response.text()).toBe(200);
+}
+
+/** Change an existing explicit grant using that administrator's current token. */
+export async function updateEntityAdministratorForE2E(request: APIRequestContext, collection: string, id: string,
+    profileId: string, mask: number): Promise<void> {
+    const path = `/api/v1/${collection}/${id}/admins/${profileId}`;
+    const baseline = await request.get(path + '/edit-baseline', {headers: await commandHeadersForE2E(request)});
+    expect(baseline.status()).toBe(200);
+    const {editToken} = await baseline.json();
+    const response = await request.patch(path, {headers: {...await commandHeadersForE2E(request), 'If-Match': editToken}, data: {mask}});
+    expect(response.status(), await response.text()).toBe(200);
 }
 
 /**
@@ -655,19 +704,62 @@ async function withBuiltE2EDatabase<Result>(
 }
 
 export async function createResourceViaForm(request: APIRequestContext, testCase: E2ECreateCase<E2ECreateForm>): Promise<CreatedResource> {
-    // Posting the same form fields the pages submit keeps setup stable without depending on
-    // generated client-side table widgets for every workflow smoke check.
-    const form = Object.fromEntries(Object.entries(testCase.form)) as {[key: string]: string | number | boolean};
-    const response = await request.post(testCase.createPath, {form, maxRedirects: 0});
-    expect(response.status()).toBe(302);
-
-    const location = response.headers().location;
-    expect(location, `${testCase.title} should redirect to its detail page`).toBeTruthy();
-    const path = new URL(location!, 'http://localhost').pathname;
-    const id = path.split('/').filter(Boolean).at(-1);
-    expect(id, `${testCase.title} redirect should include a resource id`).toBeTruthy();
-
-    return {title: testCase.title, path, id: id!};
+    // Historical fixture factories describe user inputs. Serialize them through
+    // the current production command, including its actual permission catalog,
+    // instead of keeping retired document POST adapters alive for test setup.
+    const form = testCase.form as unknown as Record<string, unknown>;
+    const url = new URL(testCase.createPath, 'http://fixture.test');
+    const family = url.pathname.split('/')[1]!;
+    const collections: Record<string, string> = {packing: 'packing-lists', drivers: 'drivers-lists',
+        activity: 'activity-plans', survey: 'surveys', event: 'events'};
+    const collection = collections[family];
+    if (!collection) throw new Error(`Unsupported fixture family: ${family}`);
+    const fields: Record<string, unknown> = {title: form.title, description: form.description ?? ''};
+    if (family === 'survey') {
+        fields.combinations = Object.keys(form).filter(key => /^combinations\[\d+\]\[weekday\]$/u.test(key))
+            .map(key => ({weekday: form[key], nthWeek: form[key.replace('[weekday]', '[week]')]}));
+    } else {
+        const contextResponse = await request.get(`/api/v1/${collection}/create-context`, {
+            headers: await commandHeadersForE2E(request),
+        });
+        expect(contextResponse.status(), await contextResponse.text()).toBe(200);
+        const context = await contextResponse.json() as components['schemas']['PackingCreateContext'];
+        const defaults = {...context.defaults};
+        for (const audience of Object.keys(defaults) as Array<keyof typeof defaults>) {
+            const keys = Object.keys(form).filter(key => key.startsWith(`defaultPerms[${audience}][`));
+            if (keys.length) defaults[audience] = keys.reduce((mask, key) => {
+                const permission = context.permissions.find(candidate => candidate.key === form[key]);
+                if (!permission) throw new Error(`Unknown fixture permission: ${String(form[key])}`);
+                return mask | permission.bit;
+            }, 0);
+        }
+        fields.defaultPermissions = defaults;
+        if (family !== 'event') fields.eventId = form.eventId || form.event_id || url.searchParams.get('eventId') || null;
+        if (family === 'packing') fields.items = JSON.parse(String(form.items));
+        if (family === 'activity') {
+            // Historical fixtures group slots by civil day and call order `pos`.
+            // The authored command carries a flat, closed slot shape instead.
+            const groups = JSON.parse(String(form.slots)) as Record<string, Array<Record<string, unknown>>>;
+            const slots = Object.entries(groups).flatMap(([day, entries]) => entries.map((slot, index) => ({
+                id: slot.id ?? randomUUID(), day: slot.day ?? day, position: slot.pos ?? index,
+                title: slot.title, description: slot.description ?? '', startTime: slot.startTime ?? null,
+                endTime: slot.endTime ?? null, maxAssignees: slot.maxAssignees ?? 1,
+            })));
+            Object.assign(fields, {startDate: form.startDate, endDate: form.endDate, slots});
+        }
+        if (family === 'event') {
+            for (const key of ['startDate', 'endDate', 'location', 'bindingDeadline', 'deadlineTz', 'maxParticipants'])
+                if (form[key] !== undefined) fields[key] = form[key];
+            for (const key of ['requireDietaryInfo', 'allowDietComment', 'allowRegDateUpdatesAfterDeadline',
+                'allowRegCancelationAfterDeadline', 'allowRegDietUpdateAfterDeadline']) fields[key] = form[key] === 'on' || form[key] === true;
+        }
+    }
+    const response = await request.post(`/api/v1/${collection}`, {headers: await commandHeadersForE2E(request),
+        multipart: {data: JSON.stringify(fields)}});
+    expect(response.status(), await response.text()).toBe(201);
+    const {id} = await response.json() as {id: string};
+    expect(id, `${testCase.title} should have a persisted resource id`).toBeTruthy();
+    return {title: testCase.title, path: `/${family}/${id}`, id};
 }
 
 export async function expectPageContains(responsePromise: Promise<APIResponse>, expectedText: string): Promise<string> {
@@ -686,8 +778,11 @@ export async function expectPageContainsAll(responsePromise: Promise<APIResponse
     return body;
 }
 
-export async function expectCreatedResourceLoaded(request: APIRequestContext, resource: CreatedResource, expectedTexts: string[]): Promise<string> {
-    // A useful E2E canary must prove that the redirected entity actually loaded, not only
-    // that a generic page responded. These assertions verify the persisted entity fields.
-    return await expectPageContainsAll(request.get(resource.path), expectedTexts, resource.title);
+export async function expectCreatedResourceLoaded(page: Page, resource: CreatedResource, expectedTexts: string[]): Promise<void> {
+    // The canonical document initially carries a loading skeleton. A useful
+    // system canary proves that the integrated client loaded persisted fields.
+    const response = await page.goto(resource.path + '?locale=en');
+    expect(response?.status(), `${resource.title} should load successfully`).toBe(200);
+    await waitForFrontendHydration(page);
+    for (const expected of expectedTexts) await expect(page.locator('main')).toContainText(expected);
 }

@@ -6,7 +6,7 @@ import {defineComponent} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
-import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
+import {createFrontendContext, observeInitialDocument, frontendContextKey} from '../../src/frontend/app/context';
 import ProfileAdministrationPage from '../../src/frontend/features/identity/ProfileAdministrationPage.vue';
 import App from '../../src/frontend/app/App.vue';
 import {identityAdministrationKeys} from '../../src/frontend/app/queryKeys';
@@ -56,21 +56,21 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
         return new URL(received.url).pathname === '/api/v1/profiles/entry'
             ? Promise.resolve(json(entry, 200, received.headers.get('X-Surveyor-Context') ?? initialSession.context)) : handler(received);
     });
-    const context = createPilotContext({session: initialSession}, true, request);
+    const context = createFrontendContext({session: initialSession}, true, request);
     context.hydrated.value = true;
     context.visible.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/frontend-pilot/users/profile', component: ProfileAdministrationPage, meta: {profileMode: 'edit'}},
-        {path: '/frontend-pilot/users/profile/manage', component: ProfileAdministrationPage, meta: {profileMode: 'manage'}},
-        {path: '/frontend-pilot/users/profile/create', component: ProfileAdministrationPage, meta: {profileMode: 'create'}},
-        {path: '/frontend-pilot/users/dashboard', component: defineComponent({template: '<p>Overview destination</p>'})},
-        {path: '/frontend-pilot/users/login', component: defineComponent({template: '<p>Account login destination</p>'})},
+        {path: '/users/profile', component: ProfileAdministrationPage, meta: {profileMode: 'edit'}},
+        {path: '/users/profile/manage', component: ProfileAdministrationPage, meta: {profileMode: 'manage'}},
+        {path: '/users/profile/create', component: ProfileAdministrationPage, meta: {profileMode: 'create'}},
+        {path: '/users/dashboard', component: defineComponent({template: '<p>Overview destination</p>'})},
+        {path: '/users/login', component: defineComponent({template: '<p>Account login destination</p>'})},
     ]});
     const stopDocument = observeInitialDocument(context, router);
     await router.push(path);
     const wrapper = mount(withShell ? App : defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[pilotContextKey as symbol]: context},
+        provide: {[frontendContextKey as symbol]: context},
     }});
     cleanups.push(async function disposeFixture() {
         context.epoch.value++;
@@ -86,7 +86,7 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
 describe('profile administration consumers', () => {
     it.each(['edit', 'manage'] as const)('refreshes healthy profile %s data while retaining an unsaved name', async mode => {
         let current = {...profile};
-        const path = mode === 'edit' ? '/frontend-pilot/users/profile' : '/frontend-pilot/users/profile/manage';
+        const path = mode === 'edit' ? '/users/profile' : '/users/profile/manage';
         const {wrapper, request} = await mounted(path, async () => json(mode === 'edit'
             ? current : {profiles: [current], activeProfileId: profileId}));
         const field = mode === 'edit' ? wrapper.get<HTMLInputElement>('#name') : null;
@@ -110,7 +110,7 @@ describe('profile administration consumers', () => {
         let currentSession = {...session};
         let body: unknown;
         let writes = 0;
-        const {wrapper, context, request} = await mounted('/frontend-pilot/users/profile', async function serveProfile(input) {
+        const {wrapper, context, request} = await mounted('/users/profile', async function serveProfile(input) {
             if (input.method === 'PATCH') {
                 writes++;
                 body = await input.json();
@@ -141,7 +141,7 @@ describe('profile administration consumers', () => {
 
     it('preserves dirty text, checkbox, focus and node through locale changes and changed profile reads', async () => {
         let current = {...profile};
-        const {wrapper, context} = await mounted('/frontend-pilot/users/profile', async function serveProfileRefresh(input) {
+        const {wrapper, context} = await mounted('/users/profile', async function serveProfileRefresh(input) {
             return new URL(input.url).pathname === '/api/v1/locale' ? json({...session, locale: 'de'}) : json(current);
         });
         const input = wrapper.get<HTMLInputElement>('#name').element;
@@ -178,7 +178,7 @@ describe('profile administration consumers', () => {
         let failSession = true;
         const roster = {profiles: [profile, {id: otherId, name: 'Created profile', isDefault: false}], activeProfileId: profileId};
         const refreshed = {...session, profiles: roster.profiles.map(owned => ({id: owned.id, name: owned.name}))};
-        const {wrapper, context, router} = await mounted('/frontend-pilot/users/profile/create', async function serveConfirmedCreation(input) {
+        const {wrapper, context, router} = await mounted('/users/profile/create', async function serveConfirmedCreation(input) {
             if (input.method === 'POST') { writes++; return json({changed: true}); }
             if (new URL(input.url).pathname === '/api/v1/session') {
                 if (failSession) throw new TypeError('Display read interrupted');
@@ -190,17 +190,17 @@ describe('profile administration consumers', () => {
         await wrapper.get('main form').trigger('submit');
         await flushPromises();
         expect(writes).toBe(1);
-        expect(wrapper.get('[data-pilot-notices] .alert-warning').text()).toContain(context.messages.value.t('state.deliveryFailed'));
+        expect(wrapper.get('[data-frontend-notices] .alert-warning').text()).toContain(context.messages.value.t('state.deliveryFailed'));
         expect(wrapper.find('.alert-success').exists()).toBe(false);
         expect(wrapper.text()).not.toContain(context.messages.value.t('state.unknownOutcome'));
         expect(context.readsReady.value).toBe(false);
         expect(wrapper.find('main button[type="submit"]').exists()).toBe(false);
-        const retry = wrapper.get('[data-pilot-notices] .alert-warning button');
+        const retry = wrapper.get('[data-frontend-notices] .alert-warning button');
         expect(retry.attributes('disabled')).toBeUndefined();
         failSession = false;
         await retry.trigger('click');
         await flushPromises();
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/profile/manage');
+        expect(router.currentRoute.value.path).toBe('/users/profile/manage');
         expect(wrapper.text()).toContain('Created profile');
         expect(writes).toBe(1);
     });
@@ -208,7 +208,7 @@ describe('profile administration consumers', () => {
     it('retires a confirmed display continuation when fresh session data selects another actor', async () => {
         let writes = 0;
         const changed = {...session, context: 'later-profile-administration-context-1234567890'};
-        const {wrapper, context, router} = await mounted('/frontend-pilot/users/profile/create', async function serveRetiredActor(input) {
+        const {wrapper, context, router} = await mounted('/users/profile/create', async function serveRetiredActor(input) {
             if (input.method === 'POST') { writes++; return json({changed: true}); }
             return new URL(input.url).pathname === '/api/v1/session' ? json(changed, 200, changed.context)
                 : json({profiles: [profile], activeProfileId: profileId}, 200, input.headers.get('X-Surveyor-Context') ?? session.context);
@@ -217,7 +217,7 @@ describe('profile administration consumers', () => {
         await wrapper.get('form').trigger('submit');
         await flushPromises();
         expect(context.session.value!.context).toBe(changed.context);
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/profile/create');
+        expect(router.currentRoute.value.path).toBe('/users/profile/create');
         expect(wrapper.get<HTMLInputElement>('#name').element.value).toBe('');
         expect(wrapper.text()).not.toContain(context.messages.value.t('state.saved'));
         expect(writes).toBe(1);
@@ -229,7 +229,7 @@ describe('profile administration consumers', () => {
         let writes = 0;
         let reads = 0;
         let unavailable = true;
-        const {wrapper, context, router} = await mounted('/frontend-pilot/users/profile/create', async function serveDeliveryCooldown(input) {
+        const {wrapper, context, router} = await mounted('/users/profile/create', async function serveDeliveryCooldown(input) {
             if (input.method === 'POST') { writes++; return json({changed: true}); }
             if (new URL(input.url).pathname === '/api/v1/session') {
                 reads++;
@@ -243,7 +243,7 @@ describe('profile administration consumers', () => {
         await wrapper.get('#name').setValue('Confirmed profile');
         await wrapper.get('main form').trigger('submit');
         await flushPromises();
-        const retry = wrapper.get('[data-pilot-notices] .alert-warning button');
+        const retry = wrapper.get('[data-frontend-notices] .alert-warning button');
         expect(retry.attributes('disabled')).toBeDefined();
         await retry.trigger('click');
         expect(reads).toBe(1);
@@ -253,7 +253,7 @@ describe('profile administration consumers', () => {
         unavailable = false;
         await retry.trigger('click');
         await flushPromises();
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/profile/manage');
+        expect(router.currentRoute.value.path).toBe('/users/profile/manage');
         expect(reads).toBe(2);
         expect(writes).toBe(1);
     });
@@ -267,7 +267,7 @@ describe('profile administration consumers', () => {
         let current = {...profile};
         const updated = {...session, activeProfile: {id: profileId, name: 'After confirmed save'},
             profiles: [{id: profileId, name: 'After confirmed save'}]};
-        const {wrapper, context} = await mounted('/frontend-pilot/users/profile', async function serveBootstrapRace(input) {
+        const {wrapper, context} = await mounted('/users/profile', async function serveBootstrapRace(input) {
             if (input.method === 'PATCH') return write;
             if (new URL(input.url).pathname === '/api/v1/session') {
                 sessionReads++;
@@ -296,7 +296,7 @@ describe('profile administration consumers', () => {
         let unknown = false;
         let writes = 0;
         const roster = {profiles: [profile], activeProfileId: profileId};
-        const {wrapper, context} = await mounted('/frontend-pilot/users/profile/create', async function serveCreation(input) {
+        const {wrapper, context} = await mounted('/users/profile/create', async function serveCreation(input) {
             if (input.method === 'POST') {
                 writes++;
                 if (unknown) throw new TypeError('Fixture lost the command response');
@@ -326,7 +326,7 @@ describe('profile administration consumers', () => {
         const other = {id: otherId, name: 'Another profile', isDefault: false};
         let currentSession = {...session};
         let payload: unknown;
-        const {wrapper, context, router} = await mounted('/frontend-pilot/users/profile/manage', async function serveSwitch(input) {
+        const {wrapper, context, router} = await mounted('/users/profile/manage', async function serveSwitch(input) {
             if (input.method === 'PUT') {
                 payload = await input.json();
                 currentSession = {...session, context: 'switched-profile-context-1234567890',
@@ -343,12 +343,12 @@ describe('profile administration consumers', () => {
         expect(payload).toEqual({profileId: otherId});
         expect(context.session.value?.activeProfile?.id).toBe(otherId);
         expect(context.queryClient.getQueryData(['private-old-profile'])).toBeUndefined();
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/dashboard');
+        expect(router.currentRoute.value.path).toBe('/users/dashboard');
     });
 
     it('retires private form fields and cached projections after a validated denial', async () => {
         let denied = false;
-        const {wrapper, context} = await mounted('/frontend-pilot/users/profile', async () => denied ? rejected(403) : json(profile));
+        const {wrapper, context} = await mounted('/users/profile', async () => denied ? rejected(403) : json(profile));
         await wrapper.get('#name').setValue('Private unfinished name');
         denied = true;
         await context.queryClient.refetchQueries({queryKey: identityAdministrationKeys.current(session.context)});
@@ -359,18 +359,18 @@ describe('profile administration consumers', () => {
     });
 
     it('starts a blank creation visit after accepted departure while canceled reuse preserves the edited profile', async () => {
-        const {wrapper, router} = await mounted('/frontend-pilot/users/profile', async function serveReusedProfile(input) {
+        const {wrapper, router} = await mounted('/users/profile', async function serveReusedProfile(input) {
             return json(new URL(input.url).pathname.endsWith('/current') ? profile
                 : {profiles: [profile], activeProfileId: profileId});
         });
         await wrapper.get('#name').setValue('Unfinished old profile');
         const confirm = vi.fn(() => false);
         vi.stubGlobal('confirm', confirm);
-        await router.push('/frontend-pilot/users/profile/create');
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/profile');
+        await router.push('/users/profile/create');
+        expect(router.currentRoute.value.path).toBe('/users/profile');
         expect(wrapper.get<HTMLInputElement>('#name').element.value).toBe('Unfinished old profile');
         confirm.mockReturnValue(true);
-        await router.push('/frontend-pilot/users/profile/create');
+        await router.push('/users/profile/create');
         await flushPromises();
         expect(wrapper.get<HTMLInputElement>('#name').element.value).toBe('');
         expect(wrapper.find('#isDefault').exists()).toBe(false);
@@ -379,13 +379,13 @@ describe('profile administration consumers', () => {
 
     it('follows account-only admission without requesting a private roster or retiring a valid guest', async () => {
         const guest = {...session, kind: 'guest' as const, context: 'guest-profile-administration-context-1234567890', profiles: []};
-        const target = '/frontend-pilot/users/profile/manage';
-        const destination = '/frontend-pilot/users/login?next=' + encodeURIComponent(target);
+        const target = '/users/profile/manage';
+        const destination = '/users/login?next=' + encodeURIComponent(target);
         const handler = vi.fn(async () => { throw new Error('Private roster must not be requested'); });
         const {context, router, request} = await mounted(target, handler,
             {kind: 'redirect', url: destination, notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, guest);
         await flushPromises();
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');
+        expect(router.currentRoute.value.path).toBe('/users/login');
         expect(router.currentRoute.value.query.next).toBe(target);
         expect(context.session.value?.kind).toBe('guest');
         expect(context.ready.value).toBe(true);

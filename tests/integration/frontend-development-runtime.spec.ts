@@ -5,8 +5,8 @@ import http from 'node:http';
 import path from 'node:path';
 import os from 'node:os';
 import {frontendDevelopmentMiddleware, frontendDevelopmentServer, initializeFrontendDevelopment} from '../../src/modules/frontendDevelopment';
-import {renderFrontendPilot} from '../../src/modules/frontendPilotRenderer';
-import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
+import {renderFrontend} from '../../src/modules/frontendRenderer';
+import type {FrontendBootstrap} from '../../src/types/FrontendTypes';
 
 afterEach(() => { vi.unstubAllEnvs(); });
 
@@ -30,24 +30,24 @@ describe('Express-integrated frontend development', () => {
         vi.stubEnv('SURVEYOR_FRONTEND_DEV', '1');
         const app = express();
         app.use(frontendDevelopmentMiddleware);
-        const bootstrap: FrontendPilotBootstrap = {session: {kind: 'anonymous', context: 'dev-context',
+        const bootstrap: FrontendBootstrap = {session: {kind: 'anonymous', context: 'dev-context',
             csrfToken: 'dev-csrf', locale: 'en', activeProfile: null, profiles: [], loginUrl: '/users/login',
             logoutUrl: null, deployment: {buildId: 'dev-fixture', apiCompatibility},
             shell: {version: 'fixture', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy',
                 localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'}},
-            help: {locale: 'en', title: 'Development guide', content: '<h2 id="task">A synthetic task</h2><img src="/frontend-pilot/help/assets/diagram.png?locale=en" alt="A task diagram">',
+            help: {locale: 'en', title: 'Development guide', content: '<h2 id="task">A synthetic task</h2><img src="/help/assets/diagram.png?locale=en" alt="A task diagram">',
                 currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: [{id: 'task', title: 'A synthetic task', level: 2}]}};
-        app.get('/frontend-pilot/help', (req, res, next) => {
-            void renderFrontendPilot(res, req.originalUrl, bootstrap).catch(next);
+        app.get('/help', (req, res, next) => {
+            void renderFrontend(res, req.originalUrl, bootstrap).catch(next);
         });
-        app.get('/frontend-pilot/packing/create', (req, res, next) => {
+        app.get('/packing/create', (req, res, next) => {
             const locale = req.query.locale === 'de' ? 'de' : 'en';
-            void renderFrontendPilot(res, req.originalUrl, {session: {...bootstrap.session, locale},
+            void renderFrontend(res, req.originalUrl, {session: {...bootstrap.session, locale},
                 packingCreateContext: {defaults: {public: 0, guest: 0, authenticated: 0, participant: 0}, permissions: [], presets: []},
             }).catch(next);
         });
-        app.get('/frontend-pilot/users/login', (req, res, next) => {
-            void renderFrontendPilot(res, req.originalUrl, {session: bootstrap.session}).catch(next);
+        app.get('/users/login', (req, res, next) => {
+            void renderFrontend(res, req.originalUrl, {session: bootstrap.session}).catch(next);
         });
         app.get('/app/fallthrough-fixture', (req, res) => {
             res.json({url: req.url, originalUrl: req.originalUrl});
@@ -70,7 +70,7 @@ describe('Express-integrated frontend development', () => {
         if (!address || typeof address === 'string') throw new Error('The development listener has no port');
         const origin = `http://127.0.0.1:${address.port}`;
         try {
-            const page = await fetch(`${origin}/frontend-pilot/help`);
+            const page = await fetch(`${origin}/help`);
             expect(page.status).toBe(200);
             const html = await page.text();
             expect(html).toContain('A synthetic task');
@@ -83,7 +83,7 @@ describe('Express-integrated frontend development', () => {
             const entry = await fetch(new URL(entryUrl!, origin));
             expect(entry.status).toBe(200);
             expect(entry.headers.get('content-type')).toContain('javascript');
-            expect(await entry.text()).toContain('createPilotApp');
+            expect(await entry.text()).toContain('createFrontendApp');
             const styles = [...html.matchAll(/<link\b[^>]*\bhref="([^"]+)"/gu)].map(match => match[1]);
             // Fetch the actual composition link through Express/Vite. It styles
             // the SSR document before entry execution; a JS-only style import
@@ -101,52 +101,52 @@ describe('Express-integrated frontend development', () => {
             expect(compiledStyle).toContain('.tz-picker');
             expect(compiledStyle).toContain('.help-content');
             expect(compiledStyle).toContain('.help-toc');
-            expect(compiledStyle).toContain('.pilot-app');
+            expect(compiledStyle).toContain('.frontend-app');
             expect(compiledStyle.indexOf('.accordion-dark')).toBeLessThan(compiledStyle.indexOf('.tz-picker'));
             expect(compiledStyle.indexOf('.tz-picker')).toBeLessThan(compiledStyle.indexOf('.help-content'));
-            expect(compiledStyle.indexOf('.help-content')).toBeLessThan(compiledStyle.indexOf('.pilot-app'));
+            expect(compiledStyle.indexOf('.help-content')).toBeLessThan(compiledStyle.indexOf('.frontend-app'));
             const bootstrapLayer = styles.find(source => source.includes('bootstrap@5.3.3/dist/css/bootstrap.min.css'));
             expect(bootstrapLayer).toBeDefined();
             expect(html.indexOf(bootstrapLayer!)).toBeLessThan(html.indexOf(sourceStyles[0]!));
             expect(html).not.toContain('href="/style/');
             expect(html).toContain('href="/img/favicon-32x32.png"');
             expect(html).toContain('src="/img/logo.png"');
-            expect(html).toContain('src="/frontend-pilot/help/assets/diagram.png?locale=en"');
-            expect(html).toContain('href="/frontend-pilot');
+            expect(html).toContain('src="/help/assets/diagram.png?locale=en"');
+            expect(html).toContain('href="/');
             expect(html).not.toContain('/app/app/');
-            expect(html).not.toMatch(/(?:src|href)="\/app\/(?:style|img|help|frontend-pilot)\//u);
+            expect(html).not.toMatch(/(?:src|href)="\/app\/(?:style|img|help|frontend)\//u);
             expect(html).not.toContain('file:///');
-            expect(html).toContain('id="surveyor-pilot-javascript-required"');
-            expect(html).not.toContain('data-pilot-initial-loading');
+            expect(html).toContain('id="surveyor-frontend-javascript-required"');
+            expect(html).not.toContain('data-frontend-initial-loading');
             // SSR and hydration share one notice beneath the shell header. The
             // renderer monitor controls visibility without replacing that markup;
             // local Help and the source entry survive Vite's transform unchanged.
             for (const locale of ['en', 'de']) {
-                const packing = await fetch(`${origin}/frontend-pilot/packing/create?locale=${locale}`);
+                const packing = await fetch(`${origin}/packing/create?locale=${locale}`);
                 expect(packing.status).toBe(200);
                 const packingHtml = await packing.text();
                 expect(packingHtml).toContain(locale === 'de'
                     ? 'Interaktive Funktionen dieser Website benötigen JavaScript.' : 'Interactive features on this site require JavaScript.');
-                expect(packingHtml).toContain(`<a class="btn btn-outline-light" href="/frontend-pilot/help?locale=${locale}">`);
-                const rootAt = packingHtml.indexOf('<div id="surveyor-pilot">');
+                expect(packingHtml).toContain(`<a class="btn btn-outline-light" href="/help?locale=${locale}">`);
+                const rootAt = packingHtml.indexOf('<div id="surveyor-frontend">');
                 const headerEndAt = packingHtml.indexOf('</header>', rootAt);
-                const noticeAt = packingHtml.indexOf('id="surveyor-pilot-javascript-required"');
-                const mainAt = packingHtml.indexOf('<main id="pilot-main"');
+                const noticeAt = packingHtml.indexOf('id="surveyor-frontend-javascript-required"');
+                const mainAt = packingHtml.indexOf('<main id="frontend-main"');
                 expect(rootAt).toBeGreaterThanOrEqual(0);
                 expect(headerEndAt).toBeGreaterThan(rootAt);
                 expect(noticeAt).toBeGreaterThan(headerEndAt);
                 expect(noticeAt).toBeLessThan(mainAt);
-                expect(packingHtml.match(/id="surveyor-pilot-javascript-required"/gu)).toHaveLength(1);
-                expect(packingHtml).toContain('data-pilot-initial-loading');
+                expect(packingHtml.match(/id="surveyor-frontend-javascript-required"/gu)).toHaveLength(1);
+                expect(packingHtml).toContain('data-frontend-initial-loading');
                 expect(packingHtml).not.toContain('id="create-title"');
                 expect(packingHtml).not.toContain('/app/app/');
                 expect(packingHtml).toContain(entryUrl);
             }
-            const identityHtml = await (await fetch(`${origin}/frontend-pilot/users/login`)).text();
-            expect(identityHtml).toContain('id="surveyor-pilot-javascript-required"');
+            const identityHtml = await (await fetch(`${origin}/users/login`)).text();
+            expect(identityHtml).toContain('id="surveyor-frontend-javascript-required"');
             expect(identityHtml).toContain('Interactive features on this site require JavaScript.');
-            expect(identityHtml).toContain('data-pilot-initial-loading');
-            expect(identityHtml).not.toContain('action="/frontend-pilot/users/login"');
+            expect(identityHtml).toContain('data-frontend-initial-loading');
+            expect(identityHtml).not.toContain('action="/users/login"');
             expect(identityHtml).not.toContain('id="username"');
             const component = await fetch(`${origin}/app/src/frontend/features/help/HelpPage.vue`);
             expect(component.status).toBe(200);

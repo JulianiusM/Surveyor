@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-09-05
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: feature-specific-static-behavior
-source-anchors: src/views/surveyor/survey-vote.pug; src/routes/survey.ts; src/controller/surveyController.ts; src/middleware/guestFlowFactory.ts; src/modules/database/services/SurveyService.ts; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; docs/backlog/documentation-remediation.yml
+source-anchors: src/controller/surveyController.ts; src/modules/database/services/SurveyService.ts; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; docs/backlog/documentation-remediation.yml; src/frontend/; src/routes/api/v1/
 next-review: D09
 -->
 
@@ -28,12 +28,12 @@ submit the action; the normal survey entry flow first directs that visitor throu
 
 The feature-specific implementation is internally consistent:
 
-- `src/views/surveyor/survey-vote.pug` renders **Add new combination** unconditionally on the voting page. It is not
+- `survey-vote.pug` (the retired native owner) renders **Add new combination** unconditionally on the voting page. It is not
   wrapped in an owner, administrator, or permission check.
-- `src/routes/survey.ts` registers `POST /survey/:id/add-combination` without `requireOwner`, `requirePermission`, or a
+- `survey.ts` (the retired native owner) registers `POST /survey/:id/add-combination` without `requireOwner`, `requirePermission`, or a
   survey-specific administrative guard.
-- Requests to that route first pass through the shared survey access safe zone in
-  `src/middleware/guestFlowFactory.ts`. That access gate admits a profile that may participate in the survey and sends a
+- Requests to that original route first passed through the shared survey access safe zone in
+  `guestFlowFactory.ts` (the retired native router factory). That access gate admitted a profile that could participate in the survey and sent a
   visitor without a profile through the guest-entry flow.
 - `src/controller/surveyController.ts` validates the submitted weekday and week-of-month values, then adds the
   combination. It does not perform an owner or administrator check.
@@ -76,3 +76,9 @@ add direct owner, account-holder, guest, and anonymous-request coverage without 
 Restricting combination creation in the future would be a product behavior change, not a documentation correction. Such
 a change would require an explicit survey-specific authorization decision, implementation and test changes, and a
 coordinated update to D09 and D14.
+
+## P11 evidence reconciliation (2026-10-25)
+
+The explicitly requested cutover retires the native template/route owners identified in the original implementation
+evidence. Their source remains in Git history. The decision itself is unchanged; current component and versioned
+adapter consumers reuse the same controller/domain policy. Source anchors above identify retained owners.

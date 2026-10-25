@@ -1,7 +1,7 @@
 import type {components, paths} from '../../types/api/v1';
 import type {ApiOperationId} from '../../types/ApiTransportTypes';
-import type {PilotRead, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
-import {PilotTransport, ObsoleteRequestError, UnconfirmedResponseError} from './transport';
+import type {FrontendRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
+import {FrontendTransport, ObsoleteRequestError, UnconfirmedResponseError} from './transport';
 import {validateSessionView} from '../../../.generated/api/v1/browser/validateSessionView.mjs';
 import {validatePasswordResetCheck} from '../../../.generated/api/v1/browser/validatePasswordResetCheck.mjs';
 import {validateIdentityResult} from '../../../.generated/api/v1/browser/validateIdentityResult.mjs';
@@ -14,7 +14,7 @@ type Session = components['schemas']['SessionView'];
 type IdentityEvidence = {session: Pick<Session, 'context'>} | {resultingContext: Session['context']};
 
 /** Session and identity commands are needed by the shell; product feature operations stay with their routes. */
-export class PilotApi extends PilotTransport {
+export class FrontendApi extends FrontendTransport {
     /** Bootstrap reads the current server identity without establishing a session.
      * Its shared deadline is application-local; no conditional private snapshot or
      * previously captured actor is supplied to this identity admission request. */
@@ -27,7 +27,7 @@ export class PilotApi extends PilotTransport {
         return this.allowedRead('session', undefined, readSession, signal);
     }
 
-    async setLocale(locale: string, scope: PilotRequestScope): Promise<Session> {
+    async setLocale(locale: string, scope: FrontendRequestScope): Promise<Session> {
         return this.read("setLocale", await this.client.PUT('/locale', {
             body: {locale}, params: {header: this.headers(scope)}, cache: 'no-store',
         }), validateSessionView, scope).data;
@@ -36,7 +36,7 @@ export class PilotApi extends PilotTransport {
     /** Check this token without consuming it or replaying password submission.
      * Cancellation, captured actor validation and the token-specific read deadline
      * remain with the transport; only validated admission reaches the reset form. */
-    async checkPasswordReset(token: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['PasswordResetCheck']> {
+    async checkPasswordReset(token: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['PasswordResetCheck']> {
         const transport = this;
         async function readResetAdmission(): Promise<components['schemas']['PasswordResetCheck']> {
             const response = await transport.client.GET('/auth/reset-password', {
@@ -50,13 +50,13 @@ export class PilotApi extends PilotTransport {
     /** Validate a cookie-changing command from its still-current original actor.
      * Its response legitimately carries a new context; bind that header to the
      * returned session, leaving authoritative new-actor bootstrap to the context owner. */
-    identity(operationId: ApiOperationId, result: {data?: unknown; error?: unknown; response: Response}, scope: PilotRequestScope) {
+    identity(operationId: ApiOperationId, result: {data?: unknown; error?: unknown; response: Response}, scope: FrontendRequestScope) {
         return this.readIdentity(operationId, result, validateIdentityResult, scope);
     }
 
     /** Legacy workflow completion supplies a scalar actor receipt, not a fallible
      * postcommit SessionView. The same confirmation boundary admits either shape. */
-    workflow(operationId: ApiOperationId, result: {data?: unknown; error?: unknown; response: Response}, scope: PilotRequestScope) {
+    workflow(operationId: ApiOperationId, result: {data?: unknown; error?: unknown; response: Response}, scope: FrontendRequestScope) {
         return this.readIdentity(operationId, result, validateProfileWorkflowCompletion, scope);
     }
 
@@ -64,7 +64,7 @@ export class PilotApi extends PilotTransport {
      * Only the existing authoritative session read can open the resulting identity. */
     private readIdentity<T extends IdentityEvidence>(operationId: ApiOperationId,
         result: {data?: unknown; error?: unknown; response: Response},
-        validate: (value: unknown) => value is T, scope: PilotRequestScope): T {
+        validate: (value: unknown) => value is T, scope: FrontendRequestScope): T {
         if (!this.isCurrent(scope)) throw new ObsoleteRequestError();
 
         // Intentionally omit the old scope from ordinary response validation:
@@ -79,43 +79,43 @@ export class PilotApi extends PilotTransport {
         return value;
     }
 
-    async login(input: components['schemas']['LoginInput'], scope: PilotRequestScope) {
+    async login(input: components['schemas']['LoginInput'], scope: FrontendRequestScope) {
         return this.identity("loginIdentity", await this.client.POST('/auth/login', {params: {header: this.headers(scope)}, body: input, cache: 'no-store'}), scope);
     }
 
-    async logout(scope: PilotRequestScope) {
+    async logout(scope: FrontendRequestScope) {
         return this.identity("logoutIdentity", await this.client.POST('/auth/logout', {params: {header: this.headers(scope)}, cache: 'no-store'}), scope);
     }
 
-    async guestLogin(input: components['schemas']['GuestLoginInput'], scope: PilotRequestScope) {
+    async guestLogin(input: components['schemas']['GuestLoginInput'], scope: FrontendRequestScope) {
         return this.identity("loginGuestIdentity", await this.client.POST('/auth/guest-login', {params: {header: this.headers(scope)}, body: input, cache: 'no-store'}), scope);
     }
 
-    async switchProfile(profileId: string, scope: PilotRequestScope) {
+    async switchProfile(profileId: string, scope: FrontendRequestScope) {
         return this.identity("switchIdentityProfile", await this.client.PUT('/auth/profile', {params: {header: this.headers(scope)}, body: {profileId}, cache: 'no-store'}), scope);
     }
 
-    async register(input: components['schemas']['RegistrationInput'], scope: PilotRequestScope) {
+    async register(input: components['schemas']['RegistrationInput'], scope: FrontendRequestScope) {
         return this.read("registerAccount", await this.client.POST('/auth/register', {params: {header: this.headers(scope)}, body: input, cache: 'no-store'}), validateRegistrationResult, scope).data;
     }
 
-    async forgotPassword(input: components['schemas']['UsernameInput'], scope: PilotRequestScope) {
+    async forgotPassword(input: components['schemas']['UsernameInput'], scope: FrontendRequestScope) {
         return this.read("requestPasswordReset", await this.client.POST('/auth/forgot-password', {params: {header: this.headers(scope)}, body: input, cache: 'no-store'}), validateMutationResult, scope).data;
     }
 
-    async resetPassword(input: components['schemas']['ResetInput'], scope: PilotRequestScope) {
+    async resetPassword(input: components['schemas']['ResetInput'], scope: FrontendRequestScope) {
         return this.read("resetAccountPassword", await this.client.POST('/auth/reset-password', {params: {header: this.headers(scope)}, body: input, cache: 'no-store'}), validateMutationResult, scope).data;
     }
 
-    async activate(input: components['schemas']['TokenInput'], scope: PilotRequestScope) {
+    async activate(input: components['schemas']['TokenInput'], scope: FrontendRequestScope) {
         return this.read("activateIdentity", await this.client.POST('/auth/activate', {params: {header: this.headers(scope)}, body: input, cache: 'no-store'}), validateMutationResult, scope).data;
     }
 
-    async recoverGuest(input: components['schemas']['EmailInput'], scope: PilotRequestScope) {
+    async recoverGuest(input: components['schemas']['EmailInput'], scope: FrontendRequestScope) {
         return this.read("recoverGuestIdentity", await this.client.POST('/auth/guest-recovery', {params: {header: this.headers(scope)}, body: input, cache: 'no-store'}), validateMutationResult, scope).data;
     }
 
-    async guestEmailExists(input: components['schemas']['EmailInput'], scope: PilotRequestScope) {
+    async guestEmailExists(input: components['schemas']['EmailInput'], scope: FrontendRequestScope) {
         return this.read("findGuestEmail", await this.client.POST('/auth/guest-email-exists', {params: {header: this.headers(scope)}, body: input, cache: 'no-store'}), validateGuestEmailExists, scope).data;
     }
 }

@@ -89,7 +89,7 @@ export class ExpectedError extends Error {
     data: object;
     severity: Severity;
     status: number;
-    /** Optional localization identity; the existing literal message remains the native contract. */
+    /** Optional localization identity; the existing literal message remains the contract. */
     readonly messageKey?: MessageKey;
 
     /**

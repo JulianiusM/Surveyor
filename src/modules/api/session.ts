@@ -184,7 +184,7 @@ export function projectSessionView(actor: ApiActor, csrfToken: string | null, lo
 
 /**
  * Capture the current provider-logout adapter's own completed evidence. Its
- * reply must not reload a later tab's identity. Other pilot transitions prepare
+ * reply must not reload a later tab's identity. Other identity transitions prepare
  * this same projection before their locked completion commits.
  */
 export function committedSessionView(req: Request): components['schemas']['SessionView'] {

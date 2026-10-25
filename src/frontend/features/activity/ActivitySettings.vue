@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed} from 'vue';
 import type {EntityAutomationLabels} from '../../../types/FrontendEntityDialogTypes';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {activityKeys} from '../../app/queryKeys';
 import {useActivityApi} from './api';
 import ActivityMetadataFields from './ActivityMetadataFields.vue';
@@ -12,7 +12,7 @@ import EntitySettingsDialog from '../../components/EntitySettingsDialog.vue';
 // their existing draft/command responsibilities without a second settings store.
 const props = defineProps<{planId: string; planTitle?: string; metadataAvailable?: boolean}>();
 const emit = defineEmits<{close: []; saved: []; accessLost: []}>();
-const context = usePilot();
+const context = useFrontend();
 const api = useActivityApi(context);
 const key = computed(() => activityKeys.settings(context.session.value?.context, props.planId));
 const profiles = computed(() => activityKeys.profilesFamily(context.session.value?.context, props.planId));
@@ -41,7 +41,7 @@ const operations = {settings: api.settings.bind(api), profiles: api.profiles.bin
         :settings-key="key"
         :profile-key="profileKey"
         :profile-family="profiles"
-        :duplicate-to="'/frontend-pilot/activity/' + planId + '/duplicate'"
+        :duplicate-to="'/activity/' + planId + '/duplicate'"
         deleted-key="activity.deleted"
         :automation-labels="automationLabels"
         :event-extra-hint="context.messages.value.t('activity.eventLinkHint')"

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {ref} from 'vue';
 import type {components} from '../../../types/api/v1';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import PermissionFields from './PermissionFields.vue';
 const props = defineProps<{
     modelValue: components['schemas']['PermissionDefaults'];
@@ -13,7 +13,7 @@ const props = defineProps<{
     hydrationDraft?: boolean;
 }>();
 const emit = defineEmits<{'update:modelValue': [value: components['schemas']['PermissionDefaults']]}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const audiences = ['participant', 'guest', 'authenticated', 'public'] as const;
 const audience = ref<(typeof audiences)[number]>('participant');
 function update(mask: number): void {

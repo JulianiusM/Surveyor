@@ -67,7 +67,7 @@ function inspectHelpFile(corpusRoot, relativePath) {
 function resolveCorpusFile(corpus, relativePath, authoredFile) {
     const selected = inspectHelpFile(corpus.root, relativePath);
     if (selected.present) return selected.filePath;
-    if (!corpus.locale || corpus.locale === 'en') return null;
+    if (corpus.locale === 'en') return null;
     const english = inspectHelpFile(path.join(helpRoot, 'en'), relativePath);
     if (english.filePath) {
         addWarning(authoredFile, `Localized ${relativePath} is absent; navigation may open its complete reviewed English article`);
@@ -78,9 +78,8 @@ function resolveCorpusFile(corpus, relativePath, authoredFile) {
 /** Collect each actual locale directory under the canonical tree. No translated
  * corpus, visual-label registry or retired alias is treated as another Help root. */
 function helpCorpora() {
-    const corpora = [{root: helpRoot, locale: null}];
+    const corpora = [];
     for (const entry of fs.readdirSync(helpRoot, {withFileTypes: true})) {
-        if (entry.name === 'assets' || entry.isFile()) continue;
         let canonicalLocale;
         try { canonicalLocale = Intl.getCanonicalLocales(entry.name)[0]; }
         catch { canonicalLocale = null; }
@@ -89,6 +88,9 @@ function helpCorpora() {
             continue;
         }
         corpora.push({root: path.join(helpRoot, entry.name), locale: entry.name});
+    }
+    if (!corpora.some(corpus => corpus.locale === 'en')) {
+        addError(path.join(helpRoot, 'en'), 'The reviewed English Help corpus is missing');
     }
     return corpora;
 }
@@ -208,7 +210,7 @@ function validateHelpFile(filePath, corpus) {
                 && /(?:^|\/)assets\//u.test(targetWithoutSuffix)) {
                 // Full-size links obey the same closed asset path as images.
                 // Detect traversal before checking existence in another corpus.
-                const assetReference = targetWithoutSuffix.replace(/^\/(?:frontend-pilot\/)?help\//u, '');
+                const assetReference = targetWithoutSuffix.replace(/^\/help\//u, '');
                 validateAssetReference(filePath, assetReference, corpus);
             }
             continue;
@@ -226,13 +228,12 @@ function validateHelpFile(filePath, corpus) {
 }
 
 /** Local article/figure URLs cannot select another language through a query string.
- * External web links keep their ordinary query semantics and native Help is unchanged. */
+ * External web links keep their ordinary query semantics. */
 function validateReferenceLocale(filePath, target, corpus) {
     if (!corpus.locale) return true;
     const base = target.split(/[?#]/u, 1)[0].replaceAll('\\', '/');
     const localHelp = base.toLowerCase().endsWith('.md') || base.startsWith('assets/')
-        || base === '/help' || base.startsWith('/help/')
-        || base === '/frontend-pilot/help' || base.startsWith('/frontend-pilot/help/');
+        || base === '/help' || base.startsWith('/help/');
     if (!localHelp || /^[a-z][a-z0-9+.-]*:/iu.test(base)) return true;
 
     // Check every occurrence: a second locale parameter must not smuggle in an
@@ -351,7 +352,7 @@ function validateSourceBoundary() {
         addError(controllerPath, 'Help controller is missing');
     }
 
-    // This report checks reviewed native/localized content and packaging, not executable path
+    // This report checks reviewed localized content and packaging, not executable path
     // selection. Searching for a particular path expression would reject equivalent
     // composition and could accept an unsafe unused string. Synthetic application
     // tests independently exercise fixed roots, traversal and content rejection.
@@ -359,7 +360,7 @@ function validateSourceBoundary() {
     const releasePath = path.join(repositoryRoot, '.github', 'workflows', 'release.yml');
     const release = fs.readFileSync(releasePath, 'utf8');
     // Publication declarations share their existing generic owner. This report
-    // still independently requires the exact native/runtime Help byte comparison;
+    // still independently requires the exact runtime Help byte comparison;
     // recognizing a command never certifies that its execution copied the bytes.
     if (!declaresDocumentationPublication(repositoryRoot, release)) {
         addError(releasePath, 'Release packaging does not declare maintained documentation copying');

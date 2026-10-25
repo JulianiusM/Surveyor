@@ -1,11 +1,11 @@
 import {toValue, watchEffect, type MaybeRefOrGetter} from 'vue';
-import {usePilot} from '../app/context';
+import {useFrontend} from '../app/context';
 
 /** One title owner serves both the SSR document and subsequent SPA/locale transitions.
- * Complete native document titles retain their existing order/branding explicitly;
+ * Complete document titles retain their existing order/branding explicitly;
  * ordinary feature callers keep the application-name suffix by default. */
 export function usePageTitle(title: MaybeRefOrGetter<string | undefined>, complete = false): void {
-    const context = usePilot();
+    const context = useFrontend();
     watchEffect(() => {
         // A route wrapper may own only an admission error. Undefined leaves the
         // mounted feature in charge of its ordinary page title.

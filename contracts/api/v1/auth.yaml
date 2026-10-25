@@ -1,6 +1,6 @@
 # Identity transitions deliberately return their new captured context. All commands require
 # the prior context and CSRF token; account controllers retain credential and ownership checks.
-# Native password forms and controllers have no maximum length. Preserve their accepted
+# Password forms and controllers have no maximum length. Preserve their accepted
 # input rather than introducing a credential limit through the generated transport schema.
 # Registration/reset minima explicitly count native DOM/JavaScript UTF-16 units. Standard
 # JSON Schema string lengths elsewhere retain their existing Unicode code-point semantics.
@@ -113,7 +113,7 @@ schemas:
         type: "string"
         format: "email"
   GuestEmailLookupInput:
-    description: Guest registration's lookup retains its native email field bound; standalone recovery has no maximum.
+    description: Guest registration's lookup retains its email field bound; standalone recovery has no maximum.
     allOf:
       - "$ref": "#/schemas/EmailInput"
       - type: "object"

@@ -4,8 +4,7 @@ import {createHash} from 'node:crypto';
 import type {components} from '../../types/api/v1';
 import {apiContract} from './contracts';
 
-/** Change this family only for incompatible wire semantics, independently of asset fingerprints.
- * The pilot is unreleased, so its corrected v1 stays in place rather than introducing v2. */
+/** Change this family only for incompatible wire semantics, independently of asset fingerprints. */
 export const apiCompatibility = apiContract.apiCompatibility;
 
 let installed: components['schemas']['DeploymentView'] | undefined;
@@ -21,7 +20,7 @@ export function deploymentView(): components['schemas']['DeploymentView'] {
     return installed;
 }
 
-/** Optional for native forms; every new SPA command declares the compatibility it was built for. */
+/** Validate a supplied compatibility family; callers decide whether the header is required. */
 export function compatibleApiClient(value: string | undefined): boolean {
     return value === undefined || value === apiCompatibility;
 }

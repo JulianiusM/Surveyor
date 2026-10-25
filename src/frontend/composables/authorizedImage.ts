@@ -1,6 +1,6 @@
 import {computed, onBeforeUnmount, ref, watch, type Ref} from 'vue';
-import type {PilotAuthorizedImage, PilotImageRead} from '../../types/FrontendPilotUiTypes';
-import {canRetryRead, refreshInterval, usePilot} from '../app/context';
+import type {FrontendAuthorizedImage, FrontendImageRead} from '../../types/FrontendUiTypes';
+import {canRetryRead, refreshInterval, useFrontend} from '../app/context';
 import {isTerminalReadFailure} from '../app/transport';
 
 /** Bind a feature-owned binary read to the same captured actor as its JSON projection.
@@ -9,8 +9,8 @@ import {isTerminalReadFailure} from '../app/transport';
  * Only a missing image retries. A healthy version keeps its existing browser URL
  * through JSON polling, manual refresh and language changes. */
 export function useAuthorizedImage(id: Ref<string>, version: Ref<string | null | undefined>,
-                                   read: PilotImageRead, enabled?: Ref<boolean>): PilotAuthorizedImage {
-    const context = usePilot();
+                                   read: FrontendImageRead, enabled?: Ref<boolean>): FrontendAuthorizedImage {
+    const context = useFrontend();
     const source = ref<string | null>(null);
     // A collapsed region can remain mounted. Its feature supplies disclosure,
     // while the shared context remains the single browser-visibility owner.

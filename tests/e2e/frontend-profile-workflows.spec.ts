@@ -1,11 +1,11 @@
 import {test, expect, type Browser, type Page} from '@playwright/test';
 import {writeFile} from 'node:fs/promises';
-import {expectEmbeddedFrontendRefresh, expectUsableFrontendLayout, expectVisiblePresentation, loginForE2E, readProfileWorkflowFixtureForE2E,
+import {expectEmbeddedFrontendRefresh, expectUsableFrontendLayout, loginForE2E, readProfileWorkflowFixtureForE2E,
     readVisiblePresentation, withProfileWorkflowFixtureForE2E} from '../keywords/e2eCoreKeywords';
-import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
+import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
 import {createTranslator} from '../../src/modules/localization/translator';
 
-/** Snapshot real browser geometry while retaining ordinary native/pilot page rendering. */
+/** Snapshot the real built workflow geometry for recorded visual review. */
 function workflowPresentation() {
     function bounds(selector: string) {
         const element = document.querySelector(selector);
@@ -44,48 +44,20 @@ async function readWorkflowHeadingPaint(page: Page) {
     });
 }
 
-/** Project only the uniquely asserted h1 paint to its measured header paint.
- * Every other raw style, field, label, warning and geometry stays comparable. */
-function workflowHeaderPresentation(snapshot: Awaited<ReturnType<typeof readVisiblePresentation>>,
-    heading: Awaited<ReturnType<typeof readWorkflowHeadingPaint>>) {
-    const first = snapshot.content.elements[0];
-    expect(snapshot.content.elements.filter(element => element.text === heading.text)).toHaveLength(1);
-    expect(first?.text).toBe(heading.text);
-    expect(first?.style.background).toBe(heading.ownBackground);
-    return {...snapshot, content: {...snapshot.content, elements: snapshot.content.elements.map((element, index) =>
-        index === 0 ? {...element, style: {...element.style, background: heading.headerBackground}} : element)}};
-}
-
-/** Apply only R2's approved deactivation warning to the comparison value.
- * Raw native/pilot snapshots retain their original text and every measured style,
- * field and rectangle; all other workflow content stays directly comparable. */
-function workflowWarningPresentation(snapshot: Awaited<ReturnType<typeof readVisiblePresentation>>,
-    nativeWarning: string, approvedWarning: string) {
-    // The actual sole lead was read before leaving the native page. Require one
-    // complete paragraph match in aggregate text and the selected element.
-    expect(nativeWarning).not.toBe('');
-    expect(snapshot.content.text.split(nativeWarning)).toHaveLength(2);
-    expect(snapshot.content.elements.filter(element => element.text === nativeWarning)).toHaveLength(1);
-    return {...snapshot, content: {...snapshot.content,
-        text: snapshot.content.text.replace(nativeWarning, approvedWarning),
-        elements: snapshot.content.elements.map(element => element.text === nativeWarning
-            ? {...element, text: approvedWarning} : element)}};
-}
-
 /** Translate the same confirmed notice through the real locale command. Reading
  * another language must neither replace its DOM receipt nor replay the completed
  * transfer/deactivation/deletion operation. Timer boundaries have mounted coverage. */
 async function expectTranslatedCompletion(page: Page, english: string, german: string, commandPath: string): Promise<void> {
-    const notice = page.locator('[data-pilot-notices] .alert-success').filter({hasText: english});
+    const notice = page.locator('[data-frontend-notices] .alert-success').filter({hasText: english});
     await expect(notice).toHaveText(english);
     await notice.evaluate(element => { element.dataset.e2eCompletion = 'confirmed'; });
     const repeatedCommands: string[] = [];
     page.on('request', recordRepeatedCommand);
     try {
-        await page.locator('#pilot-locale').selectOption('de');
+        await page.locator('#frontend-locale').selectOption('de');
         const retained = page.locator('[data-e2e-completion="confirmed"]');
         await expect(retained).toHaveText(german);
-        await page.locator('#pilot-locale').selectOption('en');
+        await page.locator('#frontend-locale').selectOption('en');
         await expect(retained).toHaveText(english);
         expect(repeatedCommands).toEqual([]);
     } finally { page.off('request', recordRepeatedCommand); }
@@ -111,35 +83,31 @@ async function migrationTokenForWorkflow(browser: Browser, baseURL: string | und
     try {
         const source = await sourceContext.newPage();
         expect((await source.request.get(loginPath, {maxRedirects: 0})).status()).toBe(302);
-        await source.goto('/frontend-pilot/users/profile/migrate/request?locale=en');
-        await waitForPilotHydration(source);
+        await source.goto('/users/profile/migrate/request?locale=en');
+        await waitForFrontendHydration(source);
         const token = (await source.locator('main h3').textContent())!.trim();
         expect(token).not.toBe('');
         return token;
     } finally { await sourceContext.close(); }
 }
 
-/** Reach native preview by its document POST and pilot preview by its generated read-only JSON operation.
- * Transfer uses its generated command; neither renderer receives manufactured HTML or intercepted results. */
-async function previewOnPage(page: Page, pilot: boolean, token: string): Promise<void> {
-    await page.goto(`${pilot ? '/frontend-pilot' : ''}/users/profile/migrate/show${pilot ? '?locale=en' : ''}`);
-    if (pilot) await waitForPilotHydration(page);
+/** Reach the private preview through its generated read operation and real controls. */
+async function previewOnPage(page: Page, token: string): Promise<void> {
+    await page.goto('/users/profile/migrate/show?locale=en');
+    await waitForFrontendHydration(page);
     await page.locator('#token').fill(token);
-    // Unchanged native icons contribute a glyph prefix to accessible names.
-    // Match the precise action suffix in both renderers without omitting its label.
-    await page.getByRole('button', {name: /Show migration profile$/u}).click();
-    if (pilot) await waitForPilotHydration(page);
-    const execute = page.getByRole('button', {name: /Permanently migrate profile$/u});
+    await page.getByRole('button', {name: 'Show migration profile', exact: true}).click();
+    const execute = page.getByRole('button', {name: 'Permanently migrate profile', exact: true});
     await expect(execute).toBeVisible();
     await expect(execute).toBeEnabled();
-    if (pilot) await expect(page).toHaveURL(/#migration-preview$/u);
+    await expect(page).toHaveURL(/#migration-preview$/u);
 }
 
 test('transfers only after preview, then deactivates through JSON while retaining the same document', async function transferThroughBuiltPage({page, browser, baseURL}) {
     await withProfileWorkflowFixtureForE2E(async function exerciseTransfer(fixture) {
         const token = await migrationTokenForWorkflow(browser, baseURL, fixture.guest.loginPath);
         await loginForE2E(page.request, fixture.account);
-        await previewOnPage(page, true, token);
+        await previewOnPage(page, token);
         await expect(page.locator('main')).toContainText(fixture.guest.username);
         expect(new URL(page.url()).searchParams.has('token')).toBe(false);
 
@@ -154,7 +122,7 @@ test('transfers only after preview, then deactivates through JSON while retainin
             && new URL(result.url()).pathname === '/api/v1/profiles/migration/execute');
         await page.getByRole('button', {name: 'Permanently migrate profile', exact: true}).click();
         expect((await response).status()).toBe(200);
-        await expect(page).toHaveURL(/\/frontend-pilot\/users\/profile\/manage(?:\?[^#]*)?$/u);
+        await expect(page).toHaveURL(/\/users\/profile\/manage(?:\?[^#]*)?$/u);
         expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
         await expectTranslatedCompletion(page, 'Migration successful. Previous guest account permanently deleted!',
             'Profil erfolgreich übertragen. Das vorherige Gastkonto wurde dauerhaft gelöscht!', '/api/v1/profiles/migration/execute');
@@ -173,7 +141,7 @@ test('transfers only after preview, then deactivates through JSON while retainin
         // Both the previous editor and this confirmation use #name. Lazy SPA
         // delivery can retain the old editor, so its visible input cannot prove
         // that the destructive destination owns the field we are about to fill.
-        await expect(page).toHaveURL(/\/frontend-pilot\/users\/profile\/delete(?:\?[^#]*)?$/u);
+        await expect(page).toHaveURL(/\/users\/profile\/delete(?:\?[^#]*)?$/u);
         await expect(page.getByRole('heading', {name: 'Deactivate your profile?', exact: true})).toBeVisible();
         await expect(page.locator('#name')).toBeVisible();
         await page.locator('#name').fill('Incorrect confirmation');
@@ -190,7 +158,7 @@ test('transfers only after preview, then deactivates through JSON while retainin
             && new URL(result.url()).pathname === '/api/v1/profiles/current/deactivate');
         await page.getByRole('button', {name: 'Permanently deactivate profile', exact: true}).click();
         expect((await deactivated).status()).toBe(200);
-        await expect(page).toHaveURL(/\/frontend-pilot\/users\/profile\/manage(?:\?[^#]*)?$/u);
+        await expect(page).toHaveURL(/\/users\/profile\/manage(?:\?[^#]*)?$/u);
         await expectTranslatedCompletion(page, 'Profile successfully deactivated.', 'Profil erfolgreich deaktiviert.',
             '/api/v1/profiles/current/deactivate');
         const after = await readProfileWorkflowFixtureForE2E(fixture);
@@ -202,43 +170,36 @@ test('transfers only after preview, then deactivates through JSON while retainin
     });
 });
 
-test('returns from preview with native entry state without automatically repeating its POST', async function restoresEntryOnBack({page, browser, baseURL}) {
+test('returns from preview with retained entry state without automatically repeating its POST', async function restoresEntryOnBack({page, browser, baseURL}) {
     await withProfileWorkflowFixtureForE2E(async function exerciseBack(fixture) {
         const token = await migrationTokenForWorkflow(browser, baseURL, fixture.guest.loginPath);
         await loginForE2E(page.request, fixture.account);
-        // Browser history restoration is the oracle, including the unchanged
-        // native document's actual field value under this browser configuration.
-        await previewOnPage(page, false, token);
-        await page.goBack();
-        await page.evaluate(waitForWorkflowFonts);
-        const nativeValue = await page.locator('#token').inputValue();
-        const nativeEnabled = await page.getByRole('button', {name: /Show migration profile$/u}).isEnabled();
         const submitted: string[] = [];
         page.on('request', function observeSubmission(request) {
             if (request.method() === 'POST') submitted.push(new URL(request.url()).pathname);
         });
-        await previewOnPage(page, true, token);
+        await previewOnPage(page, token);
         expect(submitted).toEqual(['/api/v1/profiles/migration/preview']);
         await page.goBack();
-        await waitForPilotHydration(page);
+        await waitForFrontendHydration(page);
 
-        // The pilot marker changes this mounted visit only. Back and Forward must
-        // retain its native field/result behavior without another preview request
+        // The marker changes this mounted visit only. Back and Forward must
+        // retain its entered token and result without another preview request
         // or execution. A later reload cannot reconstruct that private local result.
-        await expect(page.locator('#token')).toHaveValue(nativeValue);
-        expect(await page.getByRole('button', {name: 'Show migration profile', exact: true}).isEnabled()).toBe(nativeEnabled);
+        await expect(page.locator('#token')).toHaveValue(token);
+        await expect(page.getByRole('button', {name: 'Show migration profile', exact: true})).toBeEnabled();
         expect(submitted).toEqual(['/api/v1/profiles/migration/preview']);
         await page.goForward();
         await expect(page.getByRole('button', {name: 'Permanently migrate profile', exact: true})).toBeVisible();
         expect(submitted).toEqual(['/api/v1/profiles/migration/preview']);
         await page.goBack();
-        await expect(page.locator('#token')).toHaveValue(nativeValue);
+        await expect(page.locator('#token')).toHaveValue(token);
         await page.locator('#token').fill(token);
         await page.getByRole('button', {name: 'Show migration profile', exact: true}).click();
         await expect(page.getByRole('button', {name: 'Permanently migrate profile', exact: true})).toBeVisible();
         expect(submitted).toEqual(['/api/v1/profiles/migration/preview', '/api/v1/profiles/migration/preview']);
         await page.reload();
-        await waitForPilotHydration(page);
+        await waitForFrontendHydration(page);
         await expect(page.locator('#token')).toHaveValue('');
         await expect(page.getByRole('button', {name: 'Permanently migrate profile', exact: true})).toHaveCount(0);
         expect(submitted).toEqual(['/api/v1/profiles/migration/preview', '/api/v1/profiles/migration/preview']);
@@ -253,8 +214,8 @@ for (const kind of ['account', 'guest'] as const) {
         await withProfileWorkflowFixtureForE2E(async function exerciseDeletion(fixture) {
             if (kind === 'account') await loginForE2E(page.request, fixture.account);
             else expect((await page.request.get(fixture.guest.loginPath, {maxRedirects: 0})).status()).toBe(302);
-            await page.goto('/frontend-pilot/users/account/delete?locale=en');
-            await waitForPilotHydration(page);
+            await page.goto('/users/account/delete?locale=en');
+            await waitForFrontendHydration(page);
             await expect(page.locator('#username')).toHaveValue('');
             await page.locator('#username').fill('Incorrect confirmation');
             const originalDocument = await page.evaluate(() => performance.timeOrigin);
@@ -265,7 +226,7 @@ for (const kind of ['account', 'guest'] as const) {
             expect((await rejected).status()).toBe(400);
             expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
             expect(documentNavigations).toEqual([]);
-            await waitForPilotHydration(page);
+            await waitForFrontendHydration(page);
             await expect(page.locator('#username')).toHaveValue('Incorrect confirmation');
             const unchanged = await readProfileWorkflowFixtureForE2E(fixture);
             expect(kind === 'account' ? unchanged.accountCount : unchanged.guestCount).toBe(1);
@@ -277,7 +238,7 @@ for (const kind of ['account', 'guest'] as const) {
                 && new URL(response.url()).pathname === '/api/v1/account');
             await page.getByRole('button', {name: 'Permanently delete account', exact: true}).click();
             expect((await completed).status()).toBe(200);
-            await expect(page).toHaveURL(/\/frontend-pilot(?:\?|$)/u);
+            await expect(page).toHaveURL(/\/(?:\?[^#]*)?$/u);
             await expectTranslatedCompletion(page, 'Account successfully deleted', 'Konto erfolgreich gelöscht', '/api/v1/account');
             expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
             expect(documentNavigations).toEqual([]);
@@ -292,8 +253,8 @@ for (const kind of ['account', 'guest'] as const) {
 test('enters profile workflows through Router and issues a token once without history replay', async function usesWarmWorkflowCommands({page}) {
     await withProfileWorkflowFixtureForE2E(async function exerciseWarmToken(fixture) {
         await loginForE2E(page.request, fixture.account);
-        await page.goto('/frontend-pilot/users/profile?locale=en');
-        await waitForPilotHydration(page);
+        await page.goto('/users/profile?locale=en');
+        await waitForFrontendHydration(page);
         const originalDocument = await page.evaluate(() => performance.timeOrigin);
         const documentNavigations = observeDocumentNavigations(page);
         const issued: string[] = [];
@@ -336,83 +297,76 @@ const presentations = [
 
 for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) {
     for (const presentation of presentations) {
-        test(`${presentation.name} document retains native presentation with approved copy at ${viewport.width}px`, async function compareNativePresentation({page, browser, baseURL}, testInfo) {
-            await withProfileWorkflowFixtureForE2E(async function compareDocuments(fixture) {
+        test(`${presentation.name} document retains fields, warnings and controls at ${viewport.width}px`, async function inspectPresentation({page, browser, baseURL}, testInfo) {
+            await withProfileWorkflowFixtureForE2E(async function inspectWorkflow(fixture) {
                 await page.setViewportSize(viewport);
                 const browserErrors: string[] = [];
                 page.on('pageerror', error => browserErrors.push(error.message));
                 await loginForE2E(page.request, fixture.account);
-                // Consume setup's native login flash before taking either comparator.
-                await page.request.get('/users/profile');
-                let token: string | undefined;
-                if (presentation.name === 'preview') {
-                    token = await migrationTokenForWorkflow(browser, baseURL, fixture.guest.loginPath);
-                }
-
-                // Both renderers use identical actors, the existing preview check,
-                // viewport and built assets. Native document POST and pilot JSON
-                // preview are exercised through their actual browser controls.
-                if (token) await previewOnPage(page, false, token);
-                else await page.goto(presentation.path);
-                await page.evaluate(waitForWorkflowFonts);
-                await page.mouse.move(0, 0);
-                // Bootstrap animates a reused button's variant. Capture both
-                // renderers after finite transitions finish, rather than comparing
-                // an arbitrary intermediate color with native's fresh document.
-                await page.screenshot({path: testInfo.outputPath('native-workflow.png'), fullPage: true, animations: 'disabled'});
-                const native = await page.evaluate(workflowPresentation);
-                const nativeCard = await readVisiblePresentation(page.locator('main > .card'),
-                    ['h1', 'h2', 'h3', 'h4', 'p', 'label', 'input', 'button', 'a', 'hr'], presentation.name === 'token');
-                const nativeWarning = presentation.name === 'deactivate' ? page.locator('main > .card p.lead') : undefined;
-                if (nativeWarning) await expect(nativeWarning).toHaveCount(1);
-                const nativeWarningText = nativeWarning ? (await nativeWarning.innerText()).replace(/\s+/gu, ' ').trim() : undefined;
-                const nativeHeadingPaint = await readWorkflowHeadingPaint(page);
-                const nativeFooter = await readVisiblePresentation(page.locator('footer'), ['a']);
-                const nativeFooterLinks = await page.locator('footer a').evaluateAll(links => links.map(link => link.getAttribute('href')));
-                const nativeHeading = await page.locator('main h1').innerText();
-                if (token) await previewOnPage(page, true, token);
+                const session = await (await page.request.get('/api/v1/session')).json();
+                const token = presentation.name === 'preview'
+                    ? await migrationTokenForWorkflow(browser, baseURL, fixture.guest.loginPath) : undefined;
+                if (token) await previewOnPage(page, token);
                 else {
-                    await page.goto('/frontend-pilot' + presentation.path + '?locale=en');
-                    await waitForPilotHydration(page);
+                    await page.goto(presentation.path + '?locale=en');
+                    await waitForFrontendHydration(page);
                 }
                 await page.evaluate(waitForWorkflowFonts);
                 await page.mouse.move(0, 0);
-                await page.screenshot({path: testInfo.outputPath('pilot-workflow.png'), fullPage: true, animations: 'disabled'});
-                const pilot = await page.evaluate(workflowPresentation);
-                const pilotCard = await readVisiblePresentation(page.locator('main > .card'),
+                await page.screenshot({path: testInfo.outputPath('workflow.png'), fullPage: true, animations: 'disabled'});
+                const geometry = await page.evaluate(workflowPresentation);
+                const card = await readVisiblePresentation(page.locator('main > .card'),
                     ['h1', 'h2', 'h3', 'h4', 'p', 'label', 'input', 'button', 'a', 'hr'], presentation.name === 'token');
-                // R2 deliberately corrects only Vue's deactivation consequences.
-                // Assert its exact catalog warning before projecting that sole native paragraph.
-                let comparedNativeCard = nativeCard;
-                if (presentation.name === 'deactivate') {
-                    const approvedWarning = createTranslator('en').t('profile.deactivateIntro');
-                    const pilotWarning = page.locator('main > .card p.lead');
-                    await expect(pilotWarning).toHaveCount(1);
-                    await expect(pilotWarning).toHaveText(approvedWarning);
-                    comparedNativeCard = workflowWarningPresentation(nativeCard, nativeWarningText!, approvedWarning);
-                }
-                const pilotHeadingPaint = await readWorkflowHeadingPaint(page);
-                const pilotFooter = await readVisiblePresentation(page.locator('footer'), ['a']);
-                expect(nativeHeadingPaint.ownBackground).toBe(nativeHeadingPaint.headerBackground);
-                expect(pilotHeadingPaint.headerBackground).toBe(nativeHeadingPaint.headerBackground);
-                expect(pilotHeadingPaint.ownBackground).toBe('rgba(0, 0, 0, 0)');
+                const headingPaint = await readWorkflowHeadingPaint(page);
+                const footer = await readVisiblePresentation(page.locator('footer'), ['a']);
+                const translator = createTranslator('en');
+                const heading = presentation.name === 'token' ? 'profile.tokenHeading'
+                    : presentation.name === 'deactivate' ? 'profile.deactivateHeading'
+                        : presentation.name === 'delete-account' ? 'profile.deleteAccountHeading' : 'profile.transferHeading';
+                await expect(page.locator('main h1')).toHaveText(translator.t(heading));
+                expect(headingPaint.headerBackground).not.toBe('rgba(0, 0, 0, 0)');
+                expect(headingPaint.ownBackground).toBe('rgba(0, 0, 0, 0)');
                 await expectEmbeddedFrontendRefresh(page.locator('main > .card > .card-header'));
-                expectVisiblePresentation(workflowHeaderPresentation(comparedNativeCard, nativeHeadingPaint),
-                    workflowHeaderPresentation(pilotCard, pilotHeadingPaint));
-                expectVisiblePresentation(nativeFooter, pilotFooter);
-                expect(await page.locator('footer a').evaluateAll(links => links.map(link => link.getAttribute('href')))).toEqual(nativeFooterLinks);
-                expect(await page.locator('main h1').innerText()).toBe(nativeHeading);
+                // Pin every deliberate workflow's actual content and field contract;
+                // immutable native screenshots remain the historical visual reference.
+                if (presentation.name === 'token') {
+                    await expect(page.locator('main')).toContainText(translator.t('profile.tokenOwnerWarning'));
+                    await expect(page.locator('main')).toContainText(translator.t('profile.tokenPrivacyWarning'));
+                    await expect(page.locator('main h3')).not.toHaveText('');
+                    await expect(page.locator('main input')).toHaveCount(0);
+                } else if (presentation.name === 'preview') {
+                    await expect(page.locator('main')).toContainText(translator.t('profile.previewOwnerWarning'));
+                    await expect(page.locator('main')).toContainText(fixture.guest.username);
+                    await expect(page.locator('main')).toContainText(fixture.guest.profileId);
+                    await expect(page.locator('#token')).toHaveValue(token!);
+                    await expect(page.locator('#token')).toBeHidden();
+                    await expect(page.getByRole('button', {name: translator.t('profile.executeMigration'), exact: true})).toBeEnabled();
+                } else {
+                    const field = presentation.name === 'entry' ? 'token' : presentation.name === 'deactivate' ? 'name' : 'username';
+                    const intro = presentation.name === 'entry' ? 'profile.transferIntro'
+                        : presentation.name === 'deactivate' ? 'profile.deactivateIntro' : 'profile.deleteAccountIntro';
+                    await expect(page.locator('main > .card p.lead')).toHaveText(translator.t(intro));
+                    await expect(page.locator('#' + field)).toBeVisible();
+                    await expect(page.locator('#' + field)).toHaveValue('');
+                    await expect(page.locator('#' + field)).toHaveAttribute('required', '');
+                    await expect(page.locator('main button[type="submit"]')).toBeEnabled();
+                }
+                expect(await page.locator('footer a').evaluateAll(links => links.map(link => link.getAttribute('href')))).toEqual([
+                    'https://github.com/JulianiusM/Surveyor', 'https://www.apache.org/licenses/LICENSE-2.0',
+                    session.shell.imprintUrl, session.shell.privacyPolicyUrl,
+                ]);
                 expect(browserErrors).toEqual([]);
-                expect(pilot.scrollWidth).toBeLessThanOrEqual(Math.max(viewport.width, native.scrollWidth));
-                expect(pilot.submitColors).toEqual(native.submitColors);
+                expect(geometry.scrollWidth).toBeLessThanOrEqual(viewport.width);
                 await expect(page.locator('footer')).toBeVisible();
                 await expectUsableFrontendLayout(page.locator('main > .card'));
                 await expectUsableFrontendLayout(page.locator('footer'));
                 for (const control of ['heading', 'field', 'submit', 'token'] as const) {
-                    expect(!!pilot[control], control).toBe(!!native[control]);
-                    if (pilot[control]) {
-                        expect(pilot[control]!.width, control).toBeGreaterThan(0);
-                        expect(pilot[control]!.height, control).toBeGreaterThan(0);
+                    const expected = control === 'heading' || (control === 'token' ? presentation.name === 'token'
+                        : control === 'field' ? !['token', 'preview'].includes(presentation.name) : presentation.name !== 'token');
+                    expect(!!geometry[control], control).toBe(expected);
+                    if (geometry[control]) {
+                        expect(geometry[control]!.width, control).toBeGreaterThan(0);
+                        expect(geometry[control]!.height, control).toBeGreaterThan(0);
                     }
                 }
                 // Refresh re-admits current authority through reads. It must not
@@ -432,9 +386,9 @@ for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) 
                 expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
                 expect(writes).toEqual([]);
                 const evidence = testInfo.outputPath('presentation.json');
-                await writeFile(evidence, JSON.stringify({scenario: presentation.name, viewport, native, pilot,
-                    nativeCard, pilotCard, nativeHeadingPaint, pilotHeadingPaint, nativeFooter, pilotFooter, browserErrors}, null, 2));
-                await testInfo.attach('native-pilot-presentation', {path: evidence, contentType: 'application/json'});
+                await writeFile(evidence, JSON.stringify({scenario: presentation.name, viewport, geometry,
+                    card, headingPaint, footer, browserErrors}, null, 2));
+                await testInfo.attach('workflow-presentation', {path: evidence, contentType: 'application/json'});
             });
         });
     }

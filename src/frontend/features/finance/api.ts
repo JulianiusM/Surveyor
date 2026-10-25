@@ -1,7 +1,7 @@
 import type {components} from '../../../types/api/v1';
-import type {PilotContext, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
-import type {PilotInputField} from '../../../types/FrontendFeedbackTypes';
-import type {PilotApi} from '../../app/api';
+import type {FrontendContext, FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import type {FrontendInputField} from '../../../types/FrontendFeedbackTypes';
+import type {FrontendApi} from '../../app/api';
 import {createMultipartForm, generatedInputError} from '../../app/transport';
 import {validateFinanceView} from '../../../../.generated/api/v1/browser/validateFinanceView.mjs';
 import {validateFinanceBreakdown} from '../../../../.generated/api/v1/browser/validateFinanceBreakdown.mjs';
@@ -28,11 +28,11 @@ import {validateFinanceSettlementInput} from '../../../../.generated/api/v1/brow
 /** Finance selects authored operations; shared transport owns actor admission,
  * generated delivery checks and progress without automatic command replay. */
 export class FinanceApi {
-    constructor(private transport: PilotApi) {}
+    constructor(private transport: FrontendApi) {}
 
     /** Read a fresh saved-input preview. Each dialog owns its captured revision;
      * this read never commits shares or reuses a cached financial review. */
-    async preview(eventId: string, poolId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['FinancePreview']> {
+    async preview(eventId: string, poolId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['FinancePreview']> {
         const transport = this.transport;
         async function readPreview() {
             const result = await transport.client.GET('/events/{eventId}/finance/pools/{poolId}/preview', {
@@ -47,7 +47,7 @@ export class FinanceApi {
 
     /** Apply exactly the reviewed revision through the existing calculation
      * owner. An uncertain response must be inspected, never replayed. */
-    async calculate(eventId: string, poolId: string, input: components['schemas']['FinanceCalculationInput'], recalculate: boolean, scope: PilotRequestScope) {
+    async calculate(eventId: string, poolId: string, input: components['schemas']['FinanceCalculationInput'], recalculate: boolean, scope: FrontendRequestScope) {
         if (!validateFinanceCalculationInput(input)) throw generatedInputError(validateFinanceCalculationInput.errors, financeInputField);
         const options = {params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store' as const};
         // Explicit generated operations preserve the distinct close/recalculate
@@ -60,7 +60,7 @@ export class FinanceApi {
 
     /** Restore the last calculated local inputs without reversing saved shares,
      * transfers, attendance or invoice changes. */
-    async rollback(eventId: string, poolId: string, scope: PilotRequestScope) {
+    async rollback(eventId: string, poolId: string, scope: FrontendRequestScope) {
         return this.transport.read('rollbackEventFinancePool', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/rollback', {
             params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, cache: 'no-store',
         }), validateFinanceRollbackResult, scope).data;
@@ -68,7 +68,7 @@ export class FinanceApi {
 
     /** Deliberately request existing saved settlement emails once. The result
      * counts eligible recipients and does not promise external delivery. */
-    async notify(eventId: string, poolId: string, scope: PilotRequestScope) {
+    async notify(eventId: string, poolId: string, scope: FrontendRequestScope) {
         return this.transport.read('notifyEventFinancePool', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/notify', {
             params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, cache: 'no-store',
         }), validateFinanceNotificationResult, scope).data;
@@ -76,7 +76,7 @@ export class FinanceApi {
 
     /** Record or reverse the captured saved share's complete settlement. The
      * existing owner validates its sign and identity without a new protocol. */
-    async settlement(eventId: string, poolId: string, shareId: string, input: components['schemas']['FinanceSettlementInput'], scope: PilotRequestScope) {
+    async settlement(eventId: string, poolId: string, shareId: string, input: components['schemas']['FinanceSettlementInput'], scope: FrontendRequestScope) {
         if (!validateFinanceSettlementInput(input)) throw generatedInputError(validateFinanceSettlementInput.errors, financeInputField);
         return this.transport.read('settleEventFinanceShare', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/shares/{shareId}/settlement', {
             params: {path: {eventId, poolId, shareId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
@@ -84,7 +84,7 @@ export class FinanceApi {
     }
 
     /** Create once through the generated contract; callers reconcile by reading rather than replaying uncertain writes. */
-    async createPool(eventId: string, input: components['schemas']['FinancePoolCreateInput'], scope: PilotRequestScope) {
+    async createPool(eventId: string, input: components['schemas']['FinancePoolCreateInput'], scope: FrontendRequestScope) {
         if (!validateFinancePoolCreateInput(input)) throw generatedInputError(validateFinancePoolCreateInput.errors, financeInputField);
         return this.transport.read('createEventFinancePool', await this.transport.client.POST('/events/{eventId}/finance/pools', {
             params: {path: {eventId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
@@ -92,7 +92,7 @@ export class FinanceApi {
     }
 
     /** Save only editable pool settings through their shared backend owner. */
-    async settings(eventId: string, poolId: string, input: components['schemas']['FinancePoolSettingsInput'], scope: PilotRequestScope) {
+    async settings(eventId: string, poolId: string, input: components['schemas']['FinancePoolSettingsInput'], scope: FrontendRequestScope) {
         if (!validateFinancePoolSettingsInput(input)) throw generatedInputError(validateFinancePoolSettingsInput.errors, financeInputField);
         return this.transport.read('updateEventFinanceSettings', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/settings', {
             params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
@@ -100,7 +100,7 @@ export class FinanceApi {
     }
 
     /** Submission access retains its own revision and never calculates saved shares. */
-    async submissionState(eventId: string, poolId: string, input: components['schemas']['FinanceSubmissionStateInput'], scope: PilotRequestScope) {
+    async submissionState(eventId: string, poolId: string, input: components['schemas']['FinanceSubmissionStateInput'], scope: FrontendRequestScope) {
         if (!validateFinanceSubmissionStateInput(input)) throw generatedInputError(validateFinanceSubmissionStateInput.errors, financeInputField);
         return this.transport.read('changeEventFinanceSubmissionState', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/submission-state', {
             params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
@@ -109,7 +109,7 @@ export class FinanceApi {
 
     /** Record an organizer expense, preserving the distinction between absent optional proof and an uploaded file. */
     async record(eventId: string, poolId: string, input: components['schemas']['FinanceOrganizerInvoiceInput'], proof: File | null,
-        scope: PilotRequestScope, progress: (loaded: number, total: number | null, complete?: boolean) => void) {
+        scope: FrontendRequestScope, progress: (loaded: number, total: number | null, complete?: boolean) => void) {
         if (!validateFinanceOrganizerInvoiceInput(input)) throw generatedInputError(validateFinanceOrganizerInvoiceInput.errors, financeInputField);
         // Share serialization with participant invoices and image consumers;
         // this operation alone decides that its proof is optional.
@@ -119,7 +119,7 @@ export class FinanceApi {
     }
 
     /** Accept submitted evidence with optional separate organizer corrections. */
-    async approve(eventId: string, poolId: string, invoiceId: string, input: components['schemas']['FinanceAcceptanceInput'], scope: PilotRequestScope) {
+    async approve(eventId: string, poolId: string, invoiceId: string, input: components['schemas']['FinanceAcceptanceInput'], scope: FrontendRequestScope) {
         if (!validateFinanceAcceptanceInput(input)) {
             throw generatedInputError(validateFinanceAcceptanceInput.errors, financeAcceptanceField);
         }
@@ -129,7 +129,7 @@ export class FinanceApi {
     }
 
     /** Reject an unreviewed invoice without deleting its history or retained proof. */
-    async decline(eventId: string, poolId: string, invoiceId: string, input: components['schemas']['FinanceDeclineInput'], scope: PilotRequestScope) {
+    async decline(eventId: string, poolId: string, invoiceId: string, input: components['schemas']['FinanceDeclineInput'], scope: FrontendRequestScope) {
         if (!validateFinanceDeclineInput(input)) throw generatedInputError(validateFinanceDeclineInput.errors, financeInputField);
         return this.transport.read('declineEventFinanceInvoice', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/decline', {
             params: {path: {eventId, poolId, invoiceId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
@@ -137,14 +137,14 @@ export class FinanceApi {
     }
 
     /** Organizer invoice closure uses its independent method grant, without changing payer settlement. */
-    async organizerClose(eventId: string, poolId: string, invoiceId: string, scope: PilotRequestScope) {
+    async organizerClose(eventId: string, poolId: string, invoiceId: string, scope: FrontendRequestScope) {
         return this.transport.read('closeEventOrganizerInvoice', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/organizer-close', {
             params: {path: {eventId, poolId, invoiceId}, header: this.transport.headers(scope)}, cache: 'no-store',
         }), validateFinanceMutationResult, scope).data;
     }
 
     /** Carry the captured confirmation and pool revision into the existing accepted-cost correction. */
-    async revise(eventId: string, poolId: string, invoiceId: string, input: components['schemas']['FinanceRevisionInput'], scope: PilotRequestScope) {
+    async revise(eventId: string, poolId: string, invoiceId: string, input: components['schemas']['FinanceRevisionInput'], scope: FrontendRequestScope) {
         if (!validateFinanceRevisionInput(input)) throw generatedInputError(validateFinanceRevisionInput.errors, financeInputField);
         return this.transport.read('reviseEventFinanceInvoice', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/revise', {
             params: {path: {eventId, poolId, invoiceId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
@@ -152,7 +152,7 @@ export class FinanceApi {
     }
 
     /** Remove an accepted cost from future calculation while retaining its original evidence. */
-    async rejectAccepted(eventId: string, poolId: string, invoiceId: string, input: components['schemas']['FinanceAcceptedRejectionInput'], scope: PilotRequestScope) {
+    async rejectAccepted(eventId: string, poolId: string, invoiceId: string, input: components['schemas']['FinanceAcceptedRejectionInput'], scope: FrontendRequestScope) {
         if (!validateFinanceAcceptedRejectionInput(input)) throw generatedInputError(validateFinanceAcceptedRejectionInput.errors, financeInputField);
         return this.transport.read('rejectAcceptedEventFinanceInvoice', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/reject-accepted', {
             params: {path: {eventId, poolId, invoiceId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
@@ -160,7 +160,7 @@ export class FinanceApi {
     }
 
     /** Save complete assignment inputs while the backend preserves its saved settlement snapshot. */
-    async assignments(eventId: string, poolId: string, input: components['schemas']['FinanceAssignmentsInput'], scope: PilotRequestScope) {
+    async assignments(eventId: string, poolId: string, input: components['schemas']['FinanceAssignmentsInput'], scope: FrontendRequestScope) {
         if (!validateFinanceAssignmentsInput(input)) throw generatedInputError(validateFinanceAssignmentsInput.errors, financeInputField);
         return this.transport.read('updateEventFinanceAssignments', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/assignments', {
             params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
@@ -168,7 +168,7 @@ export class FinanceApi {
     }
 
     /** Submit the explicit signed adjustment and redistribution choice as one validated operation. */
-    async addAdjustment(eventId: string, poolId: string, input: components['schemas']['FinanceAdjustmentInput'], scope: PilotRequestScope) {
+    async addAdjustment(eventId: string, poolId: string, input: components['schemas']['FinanceAdjustmentInput'], scope: FrontendRequestScope) {
         if (!validateFinanceAdjustmentInput(input)) throw generatedInputError(validateFinanceAdjustmentInput.errors, financeInputField);
         return this.transport.read('addEventFinanceAdjustment', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/adjustments', {
             params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
@@ -176,14 +176,14 @@ export class FinanceApi {
     }
 
     /** Remove one admitted adjustment through its existing idempotent backend operation. */
-    async removeAdjustment(eventId: string, poolId: string, surchargeId: string, scope: PilotRequestScope) {
+    async removeAdjustment(eventId: string, poolId: string, surchargeId: string, scope: FrontendRequestScope) {
         return this.transport.read('removeEventFinanceAdjustment', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/adjustments/{surchargeId}/remove', {
             params: {path: {eventId, poolId, surchargeId}, header: this.transport.headers(scope)}, cache: 'no-store',
         }), validateFinanceMutationResult, scope).data;
     }
 
     /** Select the distinct self-payer or organizer coverage operation without inferring authority in the shared chooser. */
-    async takeovers(eventId: string, poolId: string, input: components['schemas']['FinanceTakeoverInput'], organizer: boolean, scope: PilotRequestScope) {
+    async takeovers(eventId: string, poolId: string, input: components['schemas']['FinanceTakeoverInput'], organizer: boolean, scope: FrontendRequestScope) {
         if (!validateFinanceTakeoverInput(input)) throw generatedInputError(validateFinanceTakeoverInput.errors, financeInputField);
         // The generated paths remain explicit; the backend independently enforces the selected operation's method grant.
         const options = {params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store' as const};
@@ -195,7 +195,7 @@ export class FinanceApi {
     }
 
     /** Personal and organizer projections have distinct server grants and reads. */
-    async read(eventId: string, admin: boolean, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['FinanceView']> {
+    async read(eventId: string, admin: boolean, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['FinanceView']> {
         const transport = this.transport;
         async function readFinance() {
             const options = {params: {path: {eventId}, header: transport.headers(scope)}, signal, cache: 'no-store' as const};
@@ -208,7 +208,7 @@ export class FinanceApi {
     }
 
     /** One selected saved row is read lazily; no calculation/preview command runs. */
-    async breakdown(eventId: string, poolId: string, shareId: string, admin: boolean, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['FinanceBreakdown']> {
+    async breakdown(eventId: string, poolId: string, shareId: string, admin: boolean, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['FinanceBreakdown']> {
         const transport = this.transport;
         async function readBreakdown() {
             const result = await transport.client.GET('/events/{eventId}/finance/pools/{poolId}/shares/{shareId}', {
@@ -222,7 +222,7 @@ export class FinanceApi {
     /** Submit the exact chosen proof once, retaining progress separately from
      * confirmation. File and draft lifetime remain with the participant form. */
     async submit(eventId: string, poolId: string, input: components['schemas']['FinanceInvoiceInput'], proof: File,
-                 scope: PilotRequestScope, progress: (loaded: number, total: number | null, complete?: boolean) => void) {
+                 scope: FrontendRequestScope, progress: (loaded: number, total: number | null, complete?: boolean) => void) {
         if (!validateFinanceInvoiceInput(input)) throw generatedInputError(validateFinanceInvoiceInput.errors, financeInputField);
         // Required participant proof retains its generated validation and draft
         // lifetime while sharing the existing multipart serialization owner.
@@ -231,8 +231,8 @@ export class FinanceApi {
             form, validateFinanceMutationResult, scope, progress);
     }
 
-    /** A captured revision preserves the native participant retraction review. */
-    async retract(eventId: string, poolId: string, invoiceId: string, revision: number, scope: PilotRequestScope) {
+    /** A captured revision preserves the participant retraction review. */
+    async retract(eventId: string, poolId: string, invoiceId: string, revision: number, scope: FrontendRequestScope) {
         const input = {confirmed: true as const, expectedRevision: revision};
         if (!validateFinanceRetractionInput(input)) throw generatedInputError(validateFinanceRetractionInput.errors, financeInputField);
         return this.transport.read('retractEventInvoice', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/retract', {
@@ -241,7 +241,7 @@ export class FinanceApi {
     }
 
     /** Closing changes only invoice lifecycle; it never settles a payer balance. */
-    async close(eventId: string, poolId: string, invoiceId: string, scope: PilotRequestScope) {
+    async close(eventId: string, poolId: string, invoiceId: string, scope: FrontendRequestScope) {
         return this.transport.read('closeEventInvoice', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/close', {
             params: {path: {eventId, poolId, invoiceId}, header: this.transport.headers(scope)}, cache: 'no-store',
         }), validateFinanceMutationResult, scope).data;
@@ -250,9 +250,9 @@ export class FinanceApi {
 
 /** Finance forms keep their operation-specific fields and generated constraints.
  * Error presentation names the visible control without exposing captured revisions,
- * participant identifiers or arbitrary validator text; native decimal spelling and
+ * participant identifiers or arbitrary validator text; decimal spelling and
  * intentionally unbounded pool/participant descriptions remain unchanged. */
-function financeInputField(path: string): PilotInputField | undefined {
+function financeInputField(path: string): FrontendInputField | undefined {
     if (path === '/name') return {label: 'finance.poolName2'};
     if (path === '/amount') return {label: 'finance.amount'};
     if (path === '/correctedAmount') return {label: 'finance.amount'};
@@ -274,15 +274,15 @@ function financeInputField(path: string): PilotInputField | undefined {
 
 /** Initial acceptance names optional corrections explicitly; the later revision
  * form instead presents the amount and description as its editable source input. */
-function financeAcceptanceField(path: string): PilotInputField | undefined {
+function financeAcceptanceField(path: string): FrontendInputField | undefined {
     if (path === '/correctedAmount') return {label: 'finance.correctedAmount2'};
     if (path === '/correctedDescription') return {label: 'finance.correctedDescription2'};
     return financeInputField(path);
 }
 
-const instances = new WeakMap<PilotContext['api'], FinanceApi>();
+const instances = new WeakMap<FrontendContext['api'], FinanceApi>();
 /** Keep operation selection attached to the existing application transport. */
-export function useFinanceApi(context: PilotContext): FinanceApi {
+export function useFinanceApi(context: FrontendContext): FinanceApi {
     let api = instances.get(context.api);
     if (!api) { api = new FinanceApi(context.api); instances.set(context.api, api); }
     return api;

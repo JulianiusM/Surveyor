@@ -7,7 +7,7 @@ import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import type {components} from '../../src/types/api/v1';
-import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
+import {createFrontendContext, observeInitialDocument, frontendContextKey} from '../../src/frontend/app/context';
 import {driversKeys} from '../../src/frontend/app/queryKeys';
 import DriversPage from '../../src/frontend/features/drivers/DriversPage.vue';
 import DriversCreatePage from '../../src/frontend/features/drivers/DriversCreatePage.vue';
@@ -53,22 +53,22 @@ function json(value: unknown, status = 200): Response {
 /** Exercise real mounted feature controls, generated contracts and shared owners.
  * Only HTTP delivery is substituted; persistence is covered by Drivers integration. */
 async function mounted(component: Component, handler: (request: Request) => Promise<Response>,
-    path = `/frontend-pilot/drivers/${listId}`) {
+    path = `/drivers/${listId}`) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
-    const context = createPilotContext({session}, true, request);
+    const context = createFrontendContext({session}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/frontend-pilot/drivers/create', component},
-        {path: '/frontend-pilot/drivers/:listId/duplicate', component},
-        {path: '/frontend-pilot/drivers/:listId', component: path.endsWith('/duplicate') || path.endsWith('/create')
+        {path: '/drivers/create', component},
+        {path: '/drivers/:listId/duplicate', component},
+        {path: '/drivers/:listId', component: path.endsWith('/duplicate') || path.endsWith('/create')
             ? defineComponent({template: '<p>Created</p>'}) : component},
-        {path: '/frontend-pilot', component: defineComponent({template: '<p>Overview</p>'})},
+        {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
     ]});
     await router.push(path);
     const stopInitial = observeInitialDocument(context, router);
     const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[pilotContextKey as symbol]: context},
+        provide: {[frontendContextKey as symbol]: context},
     }});
     await flushPromises();
     cleanups.push(async () => {root.unmount(); stopInitial(); await context.queryClient.cancelQueries(); context.queryClient.clear();});
@@ -91,7 +91,7 @@ describe('Drivers production frontend consumers', () => {
         await wrapper.get('form').trigger('submit');
         await flushPromises();
         expect(wrapper.get('.alert-danger').text()).toBe(message);
-        expect(wrapper.get('.alert-danger').classes()).toContain('pilot-notification');
+        expect(wrapper.get('.alert-danger').classes()).toContain('frontend-notification');
         expect(wrapper.get<HTMLInputElement>(control).element).toBe(retained);
         expect(retained.value).toBe(value);
         expect(wrapper.get<HTMLInputElement>('#quick-title').element.value).toBe(session.activeProfile!.name);
@@ -109,13 +109,13 @@ describe('Drivers production frontend consumers', () => {
         vi.spyOn(target.element, 'getBoundingClientRect').mockReturnValue({top: 100, height: 60} as DOMRect);
         await moving.trigger('dragstart');
         await target.trigger('dragover', {clientY: edge === 'before' ? 110 : 150});
-        expect(moving.classes()).toContain('pilot-reorder-dragging');
-        expect(target.classes()).toContain('pilot-reorder-' + edge);
+        expect(moving.classes()).toContain('frontend-reorder-dragging');
+        expect(target.classes()).toContain('frontend-reorder-' + edge);
         expect(writes).toEqual([]);
         await target.trigger('drop');
         await flushPromises();
         expect(writes).toEqual([{itemIds: [secondId, itemId]}]);
-        expect(wrapper.find('.pilot-reorder-before, .pilot-reorder-after, .pilot-reorder-dragging').exists()).toBe(false);
+        expect(wrapper.find('.frontend-reorder-before, .frontend-reorder-after, .frontend-reorder-dragging').exists()).toBe(false);
         await target.trigger('drop');
         expect(writes).toHaveLength(1);
     });
@@ -126,18 +126,18 @@ describe('Drivers production frontend consumers', () => {
         const target = wrapper.get('[data-item-id="' + itemId + '"]');
         await moving.trigger('dragstart');
         await target.trigger('dragover', {clientY: 0});
-        expect(target.classes()).toContain('pilot-reorder-before');
+        expect(target.classes()).toContain('frontend-reorder-before');
         await target.trigger('dragleave');
-        expect(target.classes()).not.toContain('pilot-reorder-before');
+        expect(target.classes()).not.toContain('frontend-reorder-before');
         await target.trigger('dragover', {clientY: 0});
         await moving.trigger('dragend');
-        expect(target.classes()).not.toContain('pilot-reorder-before');
+        expect(target.classes()).not.toContain('frontend-reorder-before');
         await moving.trigger('dragstart');
         await target.trigger('dragover', {clientY: 0});
         context.queryClient.setQueryData(driversKeys.detail(session.context, listId),
             {data: {...list, capabilities: {...list.capabilities, reorder: false}}, etag: '"revoked"'});
         await flushPromises();
-        expect(wrapper.find('.pilot-reorder-before, .pilot-reorder-after, .pilot-reorder-dragging').exists()).toBe(false);
+        expect(wrapper.find('.frontend-reorder-before, .frontend-reorder-after, .frontend-reorder-dragging').exists()).toBe(false);
         await target.trigger('drop');
         expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
     });
@@ -208,7 +208,7 @@ describe('Drivers production frontend consumers', () => {
             const form = await request.formData();
             submitted = JSON.parse(String(form.get('data')));
             return json({id: secondId}, 201);
-        }, `/frontend-pilot/drivers/${listId}/duplicate`);
+        }, `/drivers/${listId}/duplicate`);
         expect(wrapper.findComponent(EntityListCreation).exists()).toBe(true);
         expect(wrapper.get<HTMLInputElement>('#create-title').element.value).toBe('Copied journeys');
         expect(wrapper.findAll('tbody tr')).toHaveLength(0);
@@ -230,7 +230,7 @@ describe('Drivers production frontend consumers', () => {
         await flushPromises();
         expect(submitted).toEqual({title: 'Copied journeys', description: 'Copied description', eventId: null,
             defaultPermissions: {...defaults, guest: 1}});
-        expect(router.currentRoute.value.path).toBe(`/frontend-pilot/drivers/${secondId}`);
+        expect(router.currentRoute.value.path).toBe(`/drivers/${secondId}`);
     });
 
     it('supplies the offering profile and native raw Quick Add values without Packing controls', async () => {
@@ -309,7 +309,7 @@ describe('Drivers production frontend consumers', () => {
         {control: '#create-title', value: 'x'.repeat(256), message: 'Title: Use no more than 255 characters.'},
         {control: '#create-description', value: 'x'.repeat(65536), message: 'Description: Use no more than 65535 characters.'},
     ])('explains a pasted Drivers creation error in $control before uploading its retained image', async ({control, value, message}) => {
-        const {wrapper, request, context} = await mounted(DriversCreatePage, creationRead, '/frontend-pilot/drivers/create');
+        const {wrapper, request, context} = await mounted(DriversCreatePage, creationRead, '/drivers/create');
         await wrapper.get('#create-title').setValue('Weekend journeys');
         await wrapper.get(control).setValue(value);
         const chooser = wrapper.get<HTMLInputElement>('#create-header').element;
@@ -319,7 +319,7 @@ describe('Drivers production frontend consumers', () => {
         await flushPromises();
         const feedback = wrapper.get('.alert-danger');
         expect(feedback.text()).toBe(message);
-        expect(feedback.classes()).toContain('pilot-notification');
+        expect(feedback.classes()).toContain('frontend-notification');
         expect(wrapper.get<HTMLInputElement>(control).element).toBe(retained);
         expect(retained.value).toBe(value);
         expect(chooser.files?.[0]).toBe(file);
@@ -335,7 +335,7 @@ describe('Drivers production frontend consumers', () => {
         const {wrapper, request, context} = await mounted(DriversCreatePage, async request => {
             if (request.method === 'POST') throw new Error('Creation reply lost');
             return creationRead(request);
-        }, '/frontend-pilot/drivers/create');
+        }, '/drivers/create');
         await wrapper.get('#create-title').setValue('Unconfirmed journeys');
         const chooser = wrapper.get<HTMLInputElement>('#create-header').element;
         const file = chooseImage(chooser);
@@ -351,17 +351,17 @@ describe('Drivers production frontend consumers', () => {
     });
 
     it('preserves a canceled duplicate draft and releases its FileList only after accepted warm navigation', async () => {
-        const start = `/frontend-pilot/drivers/${listId}/duplicate`;
+        const start = `/drivers/${listId}/duplicate`;
         const {wrapper, router, context} = await mounted(DriversCreatePage, creationRead, start);
         vi.stubGlobal('confirm', vi.fn(() => true));
-        await router.push(`/frontend-pilot/drivers/${secondId}/duplicate`); await flushPromises();
+        await router.push(`/drivers/${secondId}/duplicate`); await flushPromises();
         await router.push(start); await flushPromises();
         await wrapper.get('#create-title').setValue('Entered duplicate');
         const chooser = wrapper.get<HTMLInputElement>('#create-header').element;
         const file = chooseImage(chooser);
         const confirm = vi.fn(() => false);
         vi.stubGlobal('confirm', confirm);
-        await router.push(`/frontend-pilot/drivers/${secondId}/duplicate`); await flushPromises();
+        await router.push(`/drivers/${secondId}/duplicate`); await flushPromises();
         expect(router.currentRoute.value.fullPath).toBe(start);
         await context.queryClient.invalidateQueries({queryKey: driversKeys.duplicate(session.context, listId)}); await flushPromises();
         await router.push(start + '#create-header'); await flushPromises();
@@ -369,7 +369,7 @@ describe('Drivers production frontend consumers', () => {
         expect(wrapper.get<HTMLInputElement>('#create-title').element.value).toBe('Entered duplicate');
         expect(confirm).toHaveBeenCalledTimes(1);
         confirm.mockReturnValue(true);
-        await router.push(`/frontend-pilot/drivers/${secondId}/duplicate`); await flushPromises();
+        await router.push(`/drivers/${secondId}/duplicate`); await flushPromises();
         const nextChooser = wrapper.get<HTMLInputElement>('#create-header').element;
         expect(nextChooser).toBe(chooser);
         expect(nextChooser.files).toHaveLength(0);

@@ -2,9 +2,9 @@
 import {computed, reactive, ref, useId, watch} from 'vue';
 import {RouterLink} from 'vue-router';
 import type {components} from '../../../types/api/v1';
-import type {PilotOverviewCardInteraction} from '../../../types/FrontendPilotUiTypes';
-import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
-import {useActionState, usePilot} from '../../app/context';
+import type {FrontendOverviewCardInteraction} from '../../../types/FrontendUiTypes';
+import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import {useActionState, useFrontend} from '../../app/context';
 import {eventKeys} from '../../app/queryKeys';
 import {useCommand} from '../../composables/command';
 import {useConfirmedNavigation} from '../../composables/pageEntry';
@@ -25,7 +25,7 @@ import AppAccordionButton from '../../components/AppAccordionButton.vue';
 type Card = components['schemas']['OverviewCard'];
 type ChildType = 'packing' | 'activity' | 'drivers';
 const props = withDefaults(defineProps<{eventId: string; admin?: boolean; active?: boolean}>(), {active: true});
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useEventApi(context);
 const packingApi = usePackingApi(context);
@@ -87,24 +87,24 @@ function groupItems(type: ChildType): Card[] {
     // Counts include every admitted item of this child family before local search.
     return items.value.filter(card => card.type === type);
 }
-/** Native administration searches only child titles within each independent group. */
+/** Administration searches only child titles within each independent group. */
 function groupRows(type: ChildType): Card[] {
     // Keep a group's query separate from participant-card title/description search.
     return groupItems(type).filter(card => card.title.toLowerCase().includes(adminSearch[type].trim().toLowerCase()));
 }
 function createHref(type: ChildType): string {
-    return `/frontend-pilot/${type}/create?eventId=${encodeURIComponent(props.eventId)}`;
+    return `/${type}/create?eventId=${encodeURIComponent(props.eventId)}`;
 }
 function toggleGroup(type: ChildType): void {
     adminOpen.value = adminOpen.value === type ? null : type;
 }
 
-/** Shared cards retain their presentation owner. Migrated children receive SPA
+/** Shared cards retain their presentation owner. Children with client routes receive SPA
  * navigation and their own authorized image operation through explicit inputs. */
-function interaction(card: Card): PilotOverviewCardInteraction {
-    if (card.type === 'drivers') return {migrated: true, lifecycle: true, readHeader: driversApi.header.bind(driversApi)};
-    if (card.type === 'activity') return {migrated: true, lifecycle: true, readHeader: activityApi.header.bind(activityApi)};
-    return {migrated: card.type === 'packing', lifecycle: true,
+function interaction(card: Card): FrontendOverviewCardInteraction {
+    if (card.type === 'drivers') return {clientNavigation: true, lifecycle: true, readHeader: driversApi.header.bind(driversApi)};
+    if (card.type === 'activity') return {clientNavigation: true, lifecycle: true, readHeader: activityApi.header.bind(activityApi)};
+    return {clientNavigation: card.type === 'packing', lifecycle: true,
         ...(card.type === 'packing' ? {readHeader: packingApi.header.bind(packingApi)} : {})};
 }
 function retireLocalState(): void {
@@ -122,13 +122,13 @@ async function archive(card: Card, restore: boolean): Promise<void> {
     if (!available.isAvailable()) return;
     const lifecycle = createChildLifecycle(card);
     if (!lifecycle) return;
-    // The shared owner selects the native scheduled-restore warning from the
+    // The shared owner selects the scheduled-restore warning from the
     // current admitted projection; this host keeps only child/API ownership.
     await lifecycle.archive(card.id, restore, card.inheritedArchived, undefined, !!card.automation);
 }
 
 /** Pause/resume uses the controller-projected schedule capability. Only resuming
- * requires the native warning about an already elapsed automatic-archive date. */
+ * requires the warning about an already elapsed automatic-archive date. */
 async function automate(card: Card, paused: boolean): Promise<void> {
     if (!available.isAvailable() || !card.automation?.canManage) return;
     const lifecycle = createChildLifecycle(card);
@@ -150,10 +150,10 @@ function createChildLifecycle(card: Card) {
     const admin = !!props.admin;
     return createEntityLifecycle({archive: changeChildArchive, automate: changeChildAutomation}, command, messages);
 
-    function changeChildArchive(childId: string, restore: boolean, scope: PilotRequestScope) {
+    function changeChildArchive(childId: string, restore: boolean, scope: FrontendRequestScope) {
         return api.archiveChild(eventId, type!, childId, restore, scope, admin);
     }
-    function changeChildAutomation(childId: string, pauseSchedule: boolean, scope: PilotRequestScope) {
+    function changeChildAutomation(childId: string, pauseSchedule: boolean, scope: FrontendRequestScope) {
         return api.automateChild(eventId, type!, childId, pauseSchedule, scope, admin);
     }
 }
@@ -177,7 +177,7 @@ async function deleteChild(card: Card): Promise<void> {
         await removal.remove({operation: removeChild, confirmation: 'event.organizer.deleteChildConfirm', success});
     } finally { deletingChild.value = null; }
 
-    function removeChild(scope: PilotRequestScope) {
+    function removeChild(scope: FrontendRequestScope) {
         return api.deleteChild(eventId, type!, childId, scope, admin);
     }
 }
@@ -188,7 +188,7 @@ async function refresh(): Promise<void> {
 </script>
 
 <template>
-    <!-- The same admitted related projection has native participant cards or
+    <!-- The same admitted related projection has participant cards or
          organizer list groups. Local filtering never changes membership/authority. -->
     <section data-entity-section>
         <div>
@@ -214,7 +214,7 @@ async function refresh(): Promise<void> {
 
         <template v-if="section.data.value">
             <!-- Organizer groups keep independent title filters and their existing
-                 owner actions. Unmigrated detail links remain explicit boundaries. -->
+                 owner actions. Other detail links use document navigation. -->
             <div v-if="admin" class="row">
                 <div class="accordion accordion-dark">
                     <div v-for="group in groups" :key="group.type" class="accordion-item dashboard-accordion-item">
@@ -263,7 +263,7 @@ async function refresh(): Promise<void> {
                                     <div
                                         v-for="card in groupRows(group.type)"
                                         :key="card.id"
-                                        class="list-group-item list-group-item-action pilot-action-row justify-content-between"
+                                        class="list-group-item list-group-item-action frontend-action-row justify-content-between"
                                     >
                                         <component
                                             :is="RouterLink"
@@ -301,7 +301,7 @@ async function refresh(): Promise<void> {
                                         </div>
                                     </div>
                                 </div>
-                                <!-- The shared spacing input preserves native empty-card spacing. -->
+                                <!-- The shared spacing input preserves empty-card spacing. -->
                                 <StatusNotice v-else kind="info" no-margin>{{ messages.t(group.empty) }}</StatusNotice>
                             </div>
                         </div>

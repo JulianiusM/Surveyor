@@ -2,7 +2,7 @@
 import {computed, nextTick, reactive, ref, shallowRef, useId} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {FinanceAdjustmentRemovalReview} from '../../../types/FrontendFinanceReviewTypes';
-import {useActionState, usePilot} from '../../app/context';
+import {useActionState, useFrontend} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
 import {useFinanceDraft} from './drafts';
@@ -24,7 +24,7 @@ const props = defineProps<{
     refresh: () => Promise<void>;
 }>();
 const emit = defineEmits<{close: []}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages, locale} = context;
 const api = useFinanceApi(context);
 const id = useId();
@@ -92,7 +92,7 @@ function ownsRemovalReview(): boolean {
         && selected.poolId === props.pool.id && context.isCurrent(selected.scope);
 }
 
-/** Native confirmation starts on Cancel, within the existing dialog focus trap. */
+/** Confirmation starts on Cancel, within the existing dialog focus trap. */
 async function focusRemovalReview(): Promise<void> {
     await nextTick();
     // Waiting for the visible stage must not focus a later actor's dialog.

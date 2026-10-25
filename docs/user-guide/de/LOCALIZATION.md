@@ -7,7 +7,7 @@ status: current
 last-verified: 2026-10-12
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: Approved 2026-10-12 English Help fallback instructions; chosen interface language, visible notice and result markers; assets and heading anchors unchanged.
-source-anchors: src/frontend/components/AppHeader.vue; src/frontend/app/context.ts; src/routes/api/v1.ts; src/modules/localization/translator.ts; src/locales/en.json; src/locales/de.json
+source-anchors: src/frontend/components/AppHeader.vue; src/frontend/app/context.ts; src/routes/api/v1.ts; src/modules/localization/translator.ts; src/locales/en.json; src/locales/de.json; src/frontend/; src/locales/; src/controller/helpController.ts
 next-review: frontend-production-cutover
 production-reference: 2dfa257 native frontend documentation; reference only, not evidence of an installed production commit
 -->

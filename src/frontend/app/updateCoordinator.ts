@@ -1,6 +1,6 @@
 import {ref} from 'vue';
 import type {components} from '../../types/api/v1';
-import type {PilotUpdateCoordinator} from '../../types/FrontendPilotUiTypes';
+import type {FrontendUpdateCoordinator} from '../../types/FrontendUiTypes';
 
 /**
  * A folder replacement can retire a lazy chunk while this document is still open. Loaded compatible
@@ -9,7 +9,7 @@ import type {PilotUpdateCoordinator} from '../../types/FrontendPilotUiTypes';
  */
 export function createUpdateCoordinator(initial: components['schemas']['DeploymentView'], browser: boolean,
     mayReloadAutomatically: () => boolean,
-    reload: () => void = () => globalThis.location.reload()): PilotUpdateCoordinator {
+    reload: () => void = () => globalThis.location.reload()): FrontendUpdateCoordinator {
     const available = ref(false);
     const incompatible = ref(false);
     const guards = new Set<() => boolean>();

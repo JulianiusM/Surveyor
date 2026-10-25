@@ -4,14 +4,14 @@ documentation-metadata
 audience: maintainers; advanced activity-plan contributors
 owner: activity-plan maintainers
 status: current
-last-verified: 2026-10-03
+last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: event-wide commitment projection, priority fallback, snapshot/fingerprint guards, atomic confirmable overlap application, and persistent review warnings; D08 requirement precedence, stay-duration generation, live coverage, baseline calculation, recommendation eligibility, fairness, bounded repair, overfill, background jobs, review persistence, and application behavior verified
-source-anchors: src/types/ActivityTypes.d.ts; src/modules/database/services/ActivityService.ts; src/public/js/modules/activity/activity-assignments.ts; tests/unit/activity-linked-recommendations.spec.ts; tests/frontend/activity-recommendation-warnings.spec.ts; tests/integration/activity-plan-interlinking.spec.ts; tests/e2e/activity-plan-interlinking.spec.ts; src/modules/activity/requirements.ts; src/modules/activity/availability.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/autoAssignment.ts; src/modules/activity/recommendations.ts; src/modules/activity/recommendationJobs.ts; src/modules/database/services/ActivityRequirementService.ts; src/modules/database/services/ActivityRecommendationService.ts; src/controller/activityController.ts; src/routes/api/activity.ts; src/public/js/modules/activity/activity-requirements.ts; src/public/js/modules/activity/activity-recommendation-jobs.ts; src/public/js/modules/activity/activity-recommendations-schedule.ts; src/public/js/modules/activity/activity-recommendations-state.ts; src/public/js/modules/activity/activity-recommendations-logic.ts; src/public/js/modules/activity/activity-recommendations-ui.ts; src/views/activity/parts/assignments.pug; src/views/activity/parts/recommendations-schedule.pug; tests/unit/activity-requirements.spec.ts; tests/frontend/activity-requirement-coverage.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts
+verification-scope: P11 source-owner and Help-link reconciliation; existing domain behavior and decisions retained; no new execution claim
+source-anchors: src/types/ActivityTypes.d.ts; src/modules/database/services/ActivityService.ts; tests/unit/activity-linked-recommendations.spec.ts; tests/integration/activity-plan-interlinking.spec.ts; tests/e2e/frontend-activity-advanced.spec.ts; src/modules/activity/requirements.ts; src/modules/activity/availability.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/autoAssignment.ts; src/modules/activity/recommendations.ts; src/modules/activity/recommendationJobs.ts; src/modules/database/services/ActivityRequirementService.ts; src/modules/database/services/ActivityRecommendationService.ts; src/controller/activityController.ts; tests/unit/activity-requirements.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/frontend/features/activity/; src/routes/api/v1/activity.ts
 next-review: implementation-change,D14
 -->
 
-This is the canonical technical reference for advanced activity-plan requirements, coverage, and assignment recommendations. The in-app [Activity Plans guide](../../user-guide/ACTIVITY_PLANS.md) explains the organizer workflow and visible controls; this document owns the calculation and persistence semantics so they are not duplicated across user documentation.
+This is the canonical technical reference for advanced activity-plan requirements, coverage, and assignment recommendations. The in-app [Activity Plans guide](../../user-guide/en/ACTIVITY_PLANS.md) explains the organizer workflow and visible controls; this document owns the calculation and persistence semantics so they are not duplicated across user documentation.
 
 The advanced workflow applies only to an activity plan linked to an event. Requirement configuration is protected by **Manage Requirements**. Recommendation generation and review are protected separately by **Manage Assignments**.
 
@@ -337,7 +337,9 @@ The UI reports the actual applied and skipped counts across its reload. Cancelli
 
 Applied rows become hidden `APPLIED` history. After the binding deadline, a successful application immediately recalculates replaceable pending work against the new committed schedule. Before the deadline, no automatic post-apply regeneration occurs.
 
-When Required mode has a binding deadline in the past and no recommendation history exists, loading the review data can queue the initial generation automatically.
+When Required mode has a binding deadline in the past and no recommendation history exists, deliberate workspace
+entry or **Reload** can queue the initial generation. Explicit generation and application retain their existing
+maintenance effects. Snapshot GETs, background refresh and job-status reads never maintain proposals or queue work.
 
 ## Persistence rules
 
@@ -351,7 +353,8 @@ Recommendation persistence follows different rules:
 - Applied operations are retained as hidden audit history.
 - Manual rejected operations are removed.
 - Existing manual or reviewed operations are not silently reclassified as generated work.
-- A recommendation already fulfilled by an out-of-band assignment is marked Applied when review data is loaded.
+- Deliberate workspace entry or **Reload** marks a recommendation already fulfilled by an out-of-band assignment
+  Applied. Recovery snapshots and background reads leave stored status unchanged.
 - An obsolete pending reassignment is deleted. An obsolete approved reassignment is marked Rejected instead of being applied against changed source state.
 
 ## Known algorithmic limitations
@@ -396,8 +399,9 @@ A change to this subsystem should review all of the following together:
 - Requirement persistence: `src/modules/database/services/ActivityRequirementService.ts`
 - Recommendation persistence: `src/modules/database/services/ActivityRecommendationService.ts`
 - Controller orchestration: `src/controller/activityController.ts`
-- Browser requirement workflow: `src/public/js/modules/activity/activity-requirements.ts`
-- Browser recommendation workflow: `src/public/js/modules/activity/activity-recommendations-schedule.ts`
-- Requirement tests: `tests/unit/activity-requirements.spec.ts` and `tests/frontend/activity-requirement-coverage.spec.ts`
+- Browser requirement workflow: `src/frontend/features/activity/ActivityRequirements.vue`
+- Browser recommendation workflow: `src/frontend/features/activity/ActivityRecommendations.vue`
+
+- Requirement tests: `tests/unit/activity-requirements.spec.ts` and `tests/frontend/frontend-activity-requirements.spec.ts`
 - Allocator and job tests: `tests/unit/activity-auto-assignment.spec.ts` and `tests/unit/activity-recommendation-jobs.spec.ts`
 - End-to-end service/controller contracts: `tests/integration/activity-workflows.spec.ts`

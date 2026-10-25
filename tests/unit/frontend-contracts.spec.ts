@@ -205,7 +205,7 @@ describe('generated v1 contract boundaries', () => {
         const item = {title: 'Tent', maxAssignees: 1, requiredByAll: false, description: null};
         expect(server.validatePackingNewItem(item)).toBe(true);
         expect(server.validatePageEntryOutcome({kind: 'denied', status: 400, messageKey: 'packing.eventRegistrationRequired'})).toBe(true);
-        expect(server.validatePageEntryOutcome({kind: 'redirect', url: '/frontend-pilot/users/login', notice: null})).toBe(true);
+        expect(server.validatePageEntryOutcome({kind: 'redirect', url: '/users/login', notice: null})).toBe(true);
         expect(server.validatePageEntryOutcome({kind: 'render', url: '/unrequested'})).toBe(false);
     });
 

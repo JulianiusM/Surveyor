@@ -41,14 +41,14 @@ export interface InvoiceLedgerFixture {
 /** Wait for client event ownership before interacting with server-rendered SPA controls.
  * The completed-hydration marker establishes readiness only; callers still assert observable
  * behavior. Visible SSR content and enabled controls do not establish hydration readiness. */
-export async function waitForPilotHydration(page: Page): Promise<void> {
-    await page.waitForFunction(pilotMounted);
+export async function waitForFrontendHydration(page: Page): Promise<void> {
+    await page.waitForFunction(frontendMounted);
 }
 
 /** Playwright executes this callback in the browser, independently of the test process. */
-function pilotMounted(): boolean {
-    const container = document.getElementById('surveyor-pilot');
-    return container?.getAttribute('data-pilot-hydrated') === 'true';
+function frontendMounted(): boolean {
+    const container = document.getElementById('surveyor-frontend');
+    return container?.getAttribute('data-frontend-hydrated') === 'true';
 }
 
 /** Hold browser delivery until the test explicitly releases it. Callers keep

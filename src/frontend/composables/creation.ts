@@ -1,18 +1,18 @@
 import {computed, ref} from 'vue';
 import {useRoute} from 'vue-router';
-import type {PilotCreationCollector, PilotCreationOptions} from '../../types/FrontendCreationTypes';
+import type {FrontendCreationCollector, FrontendCreationOptions} from '../../types/FrontendCreationTypes';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
-import {useActionState, usePilot} from '../app/context';
+import {useActionState, useFrontend} from '../app/context';
 import {isReadDenial} from '../app/transport';
 import {useCommand} from './command';
 import {useReadRetry, useReadRetryAt} from './feedback';
 import {useConfirmedNavigation} from './pageEntry';
 
 /** Share deliberate creation delivery across admitted feature drafts. Field
- * initialization, native collection and selected bytes remain with each feature;
+ * initialization, collection and selected bytes remain with each feature;
  * this owner prevents replay and retains only a confirmed navigation receipt. */
-export function useCreationCommand<Result>(options: PilotCreationOptions<Result>) {
-    const context = usePilot();
+export function useCreationCommand<Result>(options: FrontendCreationOptions<Result>) {
+    const context = useFrontend();
     const route = useRoute();
     const destination = useConfirmedNavigation();
     const submitted = ref(false);
@@ -45,7 +45,7 @@ export function useCreationCommand<Result>(options: PilotCreationOptions<Result>
 
     function mayCreate(): boolean { return mayAdmitSubmission() && options.eligible(); }
 
-    /** Recheck native creation admission independently of duplicate/read access.
+    /** Recheck standalone creation admission independently of duplicate/read access.
      * Recovery reads preserve the draft and require a separate explicit submit. */
     async function admitSubmission(purpose: 'submission' | 'recovery'): Promise<boolean> {
         if (!context.mayRead()) return false;
@@ -62,7 +62,7 @@ export function useCreationCommand<Result>(options: PilotCreationOptions<Result>
             }
             submissionAdmittedAt.value = undefined;
 
-            // Submitting accepts the native login journey; a read-only Retry
+            // Submitting accepts the login journey; a read-only Retry
             // retains the ordinary whole-page draft departure decision.
             admittingSubmission.value = false;
             leavingAfterSubmission.value = purpose === 'submission';
@@ -95,7 +95,7 @@ export function useCreationCommand<Result>(options: PilotCreationOptions<Result>
 
     /** Collect after admission, send once, then transfer only the confirmed
      * destination. Failed lazy delivery cannot make Create available again. */
-    async function submit(collect: PilotCreationCollector<Result>): Promise<Result | undefined> {
+    async function submit(collect: FrontendCreationCollector<Result>): Promise<Result | undefined> {
         // Admission may redirect or wait for another actor. Collect the mounted
         // draft only after that check, using the current feature eligibility.
         if (!createAction.isAvailable()) return;

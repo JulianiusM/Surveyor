@@ -7,7 +7,7 @@ status: current
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: Creation and duplication permission instructions reconciled with the shared collapsed disclosure and exact localized labels; existing task guidance, anchors and image bytes retained. Source review only; no new full-article browser verification claimed.
-source-anchors: src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/packed.ts; src/locales/en.json; tests/frontend/frontend-pilot-editor.spec.ts; src/controller/packingController.ts; src/views/packing/packing-view.pug; docs/user-guide/en/assets/packing-shared-vs-local.png; src/frontend/features/packing/; src/frontend/components/EntitySettingsDialog.vue; src/locales/; src/frontend/components/permissions/CreationPermissions.vue
+source-anchors: src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/packed.ts; src/locales/en.json; tests/frontend/frontend-editor.spec.ts; src/controller/packingController.ts; docs/user-guide/en/assets/packing-shared-vs-local.png; src/frontend/features/packing/; src/frontend/components/EntitySettingsDialog.vue; src/locales/; src/frontend/components/permissions/CreationPermissions.vue; src/frontend/; src/controller/helpController.ts
 next-review: packing-visible-UI-or-behavior-change
 production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
 -->

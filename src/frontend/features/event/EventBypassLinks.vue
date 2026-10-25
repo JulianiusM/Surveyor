@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
-import {useActionState, usePilot} from '../../app/context';
+import {useActionState, useFrontend} from '../../app/context';
 import {eventKeys} from '../../app/queryKeys';
 import {useCommand} from '../../composables/command';
 import {useEventApi} from './api';
@@ -18,7 +18,7 @@ import AppAccordionButton from '../../components/AppAccordionButton.vue';
 
 type Link = components['schemas']['EventRegistrationLink'];
 const props = withDefaults(defineProps<{eventId: string; active?: boolean}>(), {active: true});
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useEventApi(context);
 const id = useId();
@@ -58,7 +58,7 @@ function closeCreate(): void { if (!command.pending.value && !command.recovering
 /** Build the opt-in Event URL from the actual server token. Reading or copying
  * it never consumes eligibility, and it remains separate from the explicit write. */
 function registrationUrl(token: string): string {
-    return `${location.origin}/frontend-pilot/event/${encodeURIComponent(props.eventId)}?regToken=${encodeURIComponent(token)}`;
+    return `${location.origin}/event/${encodeURIComponent(props.eventId)}?regToken=${encodeURIComponent(token)}`;
 }
 
 /** Explicit Copy uses the listed token without consuming or changing the link. */
@@ -66,13 +66,13 @@ async function copyLink(link: Link): Promise<void> {
     if (available.isAvailable() && link.status === 'active') await clipboard.copy(link.id, registrationUrl(link.token));
 }
 
-/** Create one native single-use registration link through the shared operation.
+/** Create one single-use registration link through the shared operation.
  * Unknown creation needs deliberate review; no read or clipboard failure replays it. */
 async function createLink(event: Event): Promise<void> {
     if (!available.isAvailable()) return;
     const form = event.target as HTMLFormElement;
     if (!form.reportValidity()) return;
-    // The local datetime control represents a browser-local instant, as native does.
+    // The local datetime control represents a browser-local instant.
     const input = {maxUses: Math.max(1, Number(uses.value || 1)),
         ...(expiry.value ? {expiresAt: new Date(expiry.value).toISOString()} : {})};
     const created = await command.run(scope => api.createLink(props.eventId, input, scope), true, true,
@@ -145,7 +145,7 @@ function statusClass(status: Link['status']): string {
                              access. The controller supplies every private token. -->
                         <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
                             <small class="text-secondary">{{ messages.t('event.organizer.linksHelp') }}</small>
-                            <div class="pilot-action-row">
+                            <div class="frontend-action-row">
                                 <ActionButton class="btn-sm" variant="outline-light" :state="available"
                                     @click="openCreate"><i class="bi bi-plus-circle me-1" aria-hidden="true"></i>{{ messages.t('event.organizer.createLink') }}</ActionButton>
                             </div>
@@ -215,7 +215,7 @@ function statusClass(status: Link['status']): string {
             </div>
             <form :id="`${id}-create-form`" @submit.prevent="createLink">
                 <div class="row g-3">
-                    <!-- Shared labels wrap the existing native directives; Uses
+                    <!-- Shared labels wrap the existing directives; Uses
                          retains number coercion and expiry retains its local draft. -->
                     <FormField :id="`${id}-uses`" class="col-md-6" :label="messages.t('event.organizer.uses')"
                         label-icon="bi-hash" label-class="" :required-marker="false"

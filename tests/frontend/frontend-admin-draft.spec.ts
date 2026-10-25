@@ -7,7 +7,7 @@ import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import PackingSettings from '../../src/frontend/features/packing/PackingSettings.vue';
-import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
+import {createFrontendContext, frontendContextKey} from '../../src/frontend/app/context';
 import {packingKeys} from '../../src/frontend/app/queryKeys';
 import type {components} from '../../src/types/api/v1';
 
@@ -49,16 +49,16 @@ async function mountSettings() {
             headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context},
         });
     });
-    const context = createPilotContext({session}, true, request);
+    const context = createFrontendContext({session}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/frontend-pilot/packing/:listId', component: PackingSettings, props: {listId}},
+        {path: '/packing/:listId', component: PackingSettings, props: {listId}},
     ]});
-    await router.push(`/frontend-pilot/packing/${listId}`);
+    await router.push(`/packing/${listId}`);
     await router.isReady();
     const wrapper = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[pilotContextKey as symbol]: context},
+        provide: {[frontendContextKey as symbol]: context},
         stubs: {AppDialog: defineComponent({template: '<section><slot name="navigation" /><slot /></section>'})},
     }});
     await flushPromises();

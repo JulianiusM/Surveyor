@@ -40,7 +40,7 @@ export async function createPackingList(listId: string, ownerId: string, title: 
 }
 
 /** Persist the root and initial items atomically. A supplied manager joins the
- * caller's parent/defaults transaction; native creation retains its own transaction.
+ * caller's parent/defaults transaction; standalone creation retains its own transaction.
  * Decoding, grant checks and item/default choices remain controller responsibilities. */
 export async function createPackingListTx(
     ownerId: string,
@@ -62,7 +62,7 @@ export async function createPackingListTx(
             title,
             description: desc,
             headerImg,
-            // This is a new row: omitting an absent native/API parent keeps the
+            // This is a new row: omitting an absent parent keeps the
             // original persisted NULL without inventing a nullable Event ID/relation.
             ...(eventId !== undefined && eventId !== null ? {event: {id: eventId}} : {}),
         });
@@ -159,7 +159,7 @@ export async function createPackingItem(listId: string, item: Partial<PackingIte
     await repo.save(entity);
 }
 
-/** Persist the native bulk collector's supported item fields and creator relation
+/** Persist the bulk collector's supported item fields and creator relation
  * in the supplied manager. Empty input is a no-op; validation, resource authority
  * and any transaction surrounding this batch belong to the calling controller. */
 export async function addPackingItems(listId: string, items: Partial<PackingItem>[], profileId: string, manager: EntityManager = AppDataSource.manager): Promise<void> {
@@ -185,7 +185,7 @@ export async function getPackingItemById(itemId: string, manager: EntityManager 
 
 /** Persist the supported sparse fields: undefined is omitted, while null, zero
  * and false remain authored values. Return update evidence without choosing a
- * native/versioned error; capacity changes never delete assignment records. */
+ * direct/versioned error; capacity changes never delete assignment records. */
 export async function updatePackingItem(itemId: string, fields: Partial<PackingItem>, manager: EntityManager = AppDataSource.manager) {
     const repo = manager.getRepository(PackingItem);
 
@@ -211,7 +211,7 @@ export async function deletePackingItem(itemId: string, manager: EntityManager =
     await manager.getRepository(PackingItem).delete(itemId);
 }
 
-/** Apply each supplied position only within the requested list. Native callers
+/** Apply each supplied position only within the requested list. Direct callers
  * retain their partial-order writes; v1 supplies a complete reviewed order and
  * its existing transaction rather than making this DBAL own order policy. */
 export async function reorderPackingItems(listId: string, orders: any[], manager: EntityManager = AppDataSource.manager): Promise<void> {
@@ -253,7 +253,7 @@ export async function getPackingAssignmentCounts(listId: string) {
 }
 
 /** Read the stored maximum position in the caller's transaction. The controller
- * decides the next position and preserves native Quick Add's separate behavior. */
+ * decides the next position and preserves Quick Add's separate behavior. */
 export async function getLastPackingItemNumber(listId: string, manager: EntityManager = AppDataSource.manager): Promise<number> {
     return (await manager.getRepository(PackingItem).maximum("pos", {entity: {id: listId},})) ?? 0;
 }
@@ -262,10 +262,10 @@ export async function getLastPackingItemNumber(listId: string, manager: EntityMa
  * Discover the immutable item-to-list relationship, then hold the owning list's
  * shared row lock before the item's exclusive row lock. Assignment insertion takes
  * a shared list FK lock too; acquiring it in this order prevents a cycle with v1's
- * root-before-item writers. A shared root permits native assignments on different
+ * root-before-item writers. A shared root permits direct assignments on different
  * items to proceed together, while v1 retains its exclusive root/order protection.
  *
- * Native unassignment and administrator removal keep their original unlocked
+ * Direct unassignment and administrator removal keep their original unlocked
  * DELETEs. Missing/deleted rows remain nullable for the controller's existing
  * missing-item, idempotency and capacity decisions; this DBAL does not own errors.
  */
@@ -299,7 +299,7 @@ export async function assignPackingItem(itemId: string, profileId: string, manag
 }
 
 /** Remove all stored memberships for this item/profile and return the affected
- * count. Native removal stays direct; locked v1 callers reuse their own manager. */
+ * count. Direct removal stays direct; locked v1 callers reuse their own manager. */
 export async function unassignPackingItem(itemId: string, profileId: string, manager: EntityManager = AppDataSource.manager) {
     const result = await manager.getRepository(PackingAssignment).delete({item: {id: itemId}, profile: {id: profileId}});
     return result.affected ?? 0;
@@ -388,7 +388,7 @@ export async function withPackingReadSnapshot<T>(id: string, read: (manager: Ent
 
 /**
  * Load ordered rows without exposing repositories to a projector. Versioned reorder
- * additionally locks the compared item values until its transaction commits; native
+ * additionally locks the compared item values until its transaction commits; direct
  * reorder keeps its original per-row writes and does not acquire a new root transaction.
  */
 export async function getPackingSnapshotItems(manager: EntityManager, listId: string, lockItems = false): Promise<PackingItem[]> {

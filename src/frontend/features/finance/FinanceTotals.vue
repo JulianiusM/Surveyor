@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import type {components} from '../../../types/api/v1';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {financeMoney} from './presentation';
 import FinanceCalculation from './FinanceCalculation.vue';
 
 // Only the organizer read supplies whole-pool aggregates. Personal readers never
 // receive this component's figures through their narrower finance projection.
 defineProps<{pool: components['schemas']['FinancePool']}>();
-const {messages, locale} = usePilot();
+const {messages, locale} = useFrontend();
 </script>
 
 <template>

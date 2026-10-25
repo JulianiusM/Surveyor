@@ -8,12 +8,12 @@ import type {InvoiceCatalog, InvoiceTextKey, InvoiceTextParameters, InvoiceTextF
 
 const invoiceCatalogs: Readonly<Record<string, InvoiceCatalog>> = {en: englishInvoiceCatalog};
 
-/** Identify an authored user-facing rejection without changing native prose,
+/** Identify an authored user-facing rejection without changing controller prose,
  * status or submitted data. Versioned transport independently validates this
  * stable cause against its generated finite Problem contract before exposing it. */
 export function invoiceRejectionCause(key: InvoiceRejectionKey, status: 400 | 409 = 400): string {
     // Stable identifiers follow the authored contract's camel-case conversion;
-    // the status suffix retains native reasons shared by distinct operations.
+    // the status suffix retains reasons shared by distinct operations.
     return `FINANCE_${key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase()}_${status}`;
 }
 

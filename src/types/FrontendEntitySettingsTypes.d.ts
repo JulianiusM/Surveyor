@@ -1,5 +1,5 @@
-import type {PilotEventPickerSelection, PilotEventPickerSource, PilotImageRead, PilotPlainMessageKey,
-    PilotRequestScope} from './FrontendPilotUiTypes';
+import type {FrontendEventPickerSelection, FrontendEventPickerSource, FrontendImageRead, FrontendPlainMessageKey,
+    FrontendRequestScope} from './FrontendUiTypes';
 
 /** One displayed entity header receives only its feature's admitted presentation.
  * The exact query key supplies successful read receipts; it grants no image or
@@ -10,7 +10,7 @@ export interface EntityHeaderProps {
     icon: string;
     imageVersion?: string | null;
     imageQueryKey: readonly unknown[];
-    readImage: PilotImageRead;
+    readImage: FrontendImageRead;
     imageEnabled?: boolean;
     parentUrl?: string | null;
     settingsAvailable?: boolean;
@@ -20,23 +20,23 @@ export interface EntityHeaderProps {
 /** The feature selects the existing lifecycle operations; this shared contract
  * has no endpoint, permission, draft, persistence or command-state ownership. */
 export interface EntityLifecycleOperations {
-    archive(id: string, restore: boolean, scope: PilotRequestScope): Promise<unknown>;
-    automate?: (id: string, paused: boolean, scope: PilotRequestScope) => Promise<unknown>;
+    archive(id: string, restore: boolean, scope: FrontendRequestScope): Promise<unknown>;
+    automate?: (id: string, paused: boolean, scope: FrontendRequestScope) => Promise<unknown>;
 }
 
 /** Permanent deletion shares whole-page departure consent and delivery recovery.
  * The feature supplies its captured operation and established catalog wording. */
 export interface EntityRemovalRequest {
-    operation(scope: PilotRequestScope): Promise<unknown>;
-    confirmation: PilotPlainMessageKey;
-    success: PilotPlainMessageKey;
+    operation(scope: FrontendRequestScope): Promise<unknown>;
+    confirmation: FrontendPlainMessageKey;
+    success: FrontendPlainMessageKey;
 }
 
 /** Callers may preserve feature-specific wording without copying action policy. */
 export interface EntityAutomationMessages {
-    confirmResume: PilotPlainMessageKey;
-    pausedSuccess: PilotPlainMessageKey;
-    resumedSuccess: PilotPlainMessageKey;
+    confirmResume: FrontendPlainMessageKey;
+    pausedSuccess: FrontendPlainMessageKey;
+    resumedSuccess: FrontendPlainMessageKey;
 }
 
 /** Feature-owned wording for the shared header editor; all values come from the catalog. */
@@ -69,8 +69,8 @@ export interface EntityHeaderEditorProps {
 export interface EntityEventEditorProps {
     modelValue: string | null;
     original: string | null;
-    current: PilotEventPickerSelection | null;
-    source: PilotEventPickerSource;
+    current: FrontendEventPickerSelection | null;
+    source: FrontendEventPickerSource;
     prefix: string;
     title: string;
     hint: string;

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import ActionButton from '../../components/ActionButton.vue';
 import FormField from '../../components/FormField.vue';
 import FinanceLedgerFooter from './FinanceLedgerFooter.vue';
@@ -13,7 +13,7 @@ type Group = components['schemas']['FinancePool']['coverageGroups'][number];
 const props = defineProps<{groups: Group[]; known: boolean; registrationId?: string | null; editable?: boolean; disabled?: boolean;
     needsRecalculation?: boolean}>();
 const emit = defineEmits<{edit: [payerId: string]}>();
-const {messages, locale} = usePilot();
+const {messages, locale} = useFrontend();
 const id = useId();
 const search = ref('');
 const size = ref(10);
@@ -51,7 +51,7 @@ function shownBeneficiaries(group: Group): Group['beneficiaries'] {
 function resetDisplay(): void { page.value = 0; expanded.value = new Set(); }
 
 /** Expand one payer without moving focus or changing another group's preview.
- * Reset its internal list scroll, matching the native explicit toggle. */
+ * Reset its internal list scroll, matching the explicit toggle. */
 function toggle(groupId: string, event: MouseEvent): void {
     const next = new Set(expanded.value);
     if (next.has(groupId)) next.delete(groupId); else next.add(groupId);
@@ -136,7 +136,7 @@ function toggle(groupId: string, event: MouseEvent): void {
                                 </div>
                                 <div
                                     v-if="matchingBeneficiaries(group).length > 6 || matchingBeneficiaries(group).length !== group.beneficiaries.length"
-                                    class="pilot-action-row mt-2"
+                                    class="frontend-action-row mt-2"
                                 >
                                     <small class="text-secondary" role="status">
                                         {{ messages.t(matchingBeneficiaries(group).length === group.beneficiaries.length ? 'finance.shownCoverageSummary' : 'finance.matchingCoverageSummary', {shown: shownBeneficiaries(group).length, count: matchingBeneficiaries(group).length}) }}

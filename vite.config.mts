@@ -5,7 +5,7 @@ import vue from '@vitejs/plugin-vue';
 
 const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 
-/** Each build owns its output directory; neither may clean legacy esbuild or server assets. */
+/** Client and SSR builds own separate output directories and preserve the server and print assets. */
 export default defineConfig(({isSsrBuild}) => ({
     plugins: [vue()],
     publicDir: false,

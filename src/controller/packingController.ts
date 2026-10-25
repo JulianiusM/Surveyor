@@ -70,12 +70,12 @@ import {archiveKey} from '../modules/archive/policy';
 // Template constant for create errors
 const CREATE_TEMPLATE = 'packing/packing-create';
 
-/** Decode the established native form before its creation hook runs. Keep its
+/** Decode the established form before its creation hook runs. Keep its
  * JSON item collector, Joi coercion and renderer diagnostics separate from v1's
  * generated request validation; both adapters later use the same creation owner. */
 function preprocessCreate(body: any): Omit<Partial<PackingList>, 'items' | 'eventId'> & { items: Partial<PackingItem>[]; eventId: string | null } {
-    // Native item controls submit one serialized collection. Decode it before
-    // coercion so malformed JSON retains the native form's contextual diagnostic.
+    // Form item controls submit one serialized collection. Decode it before
+    // coercion so malformed JSON retains the form's contextual diagnostic.
     let items;
     try {
         items = JSON.parse(body.items || '[]');
@@ -83,7 +83,7 @@ function preprocessCreate(body: any): Omit<Partial<PackingList>, 'items' | 'even
         throw new ValidationError(CREATE_TEMPLATE, 'Invalid items JSON', {body});
     }
 
-    // Preserve the native adapter's Joi coercion and combined field diagnostics;
+    // Preserve the direct adapter's Joi coercion and combined field diagnostics;
     // the versioned adapter validates its own machine values before shared creation.
     const itemSchema = Joi.object({
         title: Joi.string().required(),
@@ -114,7 +114,7 @@ function preprocessCreate(body: any): Omit<Partial<PackingList>, 'items' | 'even
     }
 
     // Normalize optional form blanks once at this adapter boundary. Persistence
-    // receives domain columns rather than the native event_id field name.
+    // receives domain columns rather than the form event_id field name.
     return {
         title: value.title,
         description: value.description || null,
@@ -124,16 +124,16 @@ function preprocessCreate(body: any): Omit<Partial<PackingList>, 'items' | 'even
 }
 
 /**
- * Both creation adapters reach this owner. Native decoding retains its original
+ * Both creation adapters reach this owner. Form decoding retains its original
  * coercion and ignored position spelling; v1 supplies validated machine values and
  * explicit positions. A supplied manager keeps rows inside v1's parent/defaults
- * transaction, while the native creation hook retains its established transaction.
+ * transaction, while the direct creation hook retains its established transaction.
  */
 async function createEntity(
     ownerId: string,
     listData: Omit<Partial<PackingList>, 'items' | 'eventId'> & { items: Partial<PackingItem>[]; eventId?: string | null },
     manager?: EntityManager,
-    transport: 'native' | 'versioned' = 'native',
+    transport: 'direct' | 'versioned' = 'direct',
 ) {
     // Fresh row identities and adapter-specific coercion stay in this controller;
     // the existing service persists the complete root/item set atomically.
@@ -142,10 +142,10 @@ async function createEntity(
         items.push({
             id: generateUniqueId(),
             title: item.title!,
-            description: transport === 'native' ? item.description || '' : item.description,
-            maxAssignees: transport === 'native' ? Number(item.maxAssignees) || 1 : item.maxAssignees,
+            description: transport === 'direct' ? item.description || '' : item.description,
+            maxAssignees: transport === 'direct' ? Number(item.maxAssignees) || 1 : item.maxAssignees,
             requiredByAll: Boolean(item.requiredByAll),
-            // The native position/pos mismatch is an inherited defect, preserved
+            // The position/pos mismatch is an inherited defect, preserved
             // as reference behavior. Fixing it requires a separate product decision.
             ...(transport === 'versioned' ? {pos: position} : {}),
         });
@@ -162,13 +162,13 @@ async function createEntity(
     );
 }
 
-/** Native creation initializes submitted audience grants after its existing row transaction. */
+/** Direct creation initializes submitted audience grants after its existing row transaction. */
 async function afterCreateItems(id: string, data: any) {
     await updateSettings(id, data._body);
 }
 
-/** Assemble native renderer data through its existing reads. Shared counters
- * consume the same row/assignee evidence as v1 without changing native query order
+/** Assemble shared presentation data through its existing reads. Shared counters
+ * consume the same row/assignee evidence as v1 without changing read order
  * or making this compatibility hook adopt the versioned snapshot protocol. */
 async function fetchForView(list: PackingList, req: Request) {
     const items = await packingService.getPackingItems(list.id);
@@ -187,9 +187,9 @@ async function fetchForView(list: PackingList, req: Request) {
 }
 
 /**
- * Native and v1 projections use one counter policy: Everyone rows do not contribute
+ * Direct and versioned projections use one counter policy: Everyone rows do not contribute
  * participants/open/empty, nullable capacity is not an open slot, and historical
- * assignees without a profile use their native visible-name identity fallback.
+ * assignees without a profile use their visible-name identity fallback.
  */
 function packingCounters(items: readonly (Pick<PackingItem, 'id' | 'requiredByAll' | 'maxAssignees'> & {assignedCount: number})[],
     assignees: ReadonlyMap<string, readonly {profileId?: string | null; name?: string}[]>) {
@@ -207,7 +207,7 @@ function packingCounters(items: readonly (Pick<PackingItem, 'id' | 'requiredByAl
     return {participants: participants.size, open, empty};
 }
 
-/** Native duplication copies item content through the existing form hook;
+/** Duplication copies item content through the existing form hook;
  * assignments and their identities remain attached to the original list. */
 async function fetchForDuplicate(list: PackingList, session: Request['session']) {
     return await packingService.getPackingItems(list.id);
@@ -223,23 +223,23 @@ async function deleteEntity(list: PackingList, session: SessionLike, manager?: E
 }
 
 // ---------- API ----------
-// Native browser enhancement compatibility adapter. Native page/unversioned
-// routes use these hooks; named versioned operations live below in this owner.
-/** Keep the native description collector and success text, while the shared
+// Direct controller entry points retain form-shaped input; named versioned
+// operations live below and reuse the same business operations.
+/** Keep the description collector and success text, while the shared
  * metadata owner checks the captured parent and persists the normalized field. */
 async function updateDescription(id: string, body: any, expectedEventId?: string | null) {
-    await savePackingMetadata(id, normalizeBasicProperties({description: body.description}), {kind: 'native', expectedEventId});
+    await savePackingMetadata(id, normalizeBasicProperties({description: body.description}), {kind: 'direct', expectedEventId});
     return 'Description updated';
 }
 
-/** Native order payloads retain their partial/non-dense per-row behavior.
+/** Direct order payloads retain their partial/non-dense per-row behavior.
  * Versioned callers validate their complete order first and supply their manager. */
 async function reorderItems(id: string, order: any, manager?: EntityManager) {
     await packingService.reorderPackingItems(id, order, manager);
     return 'Order saved';
 }
 
-/** Preserve native Quick Add's title check and numeric fallback. Its admitted
+/** Preserve Quick Add's title check and numeric fallback. Its admitted
  * profile becomes the item creator through the same owner used by v1 creation. */
 async function quickAddItem(list: PackingList, body: any, session: SessionLike) {
     const {title = '', description = '', maxAssignees = '1'} = body;
@@ -249,18 +249,18 @@ async function quickAddItem(list: PackingList, body: any, session: SessionLike) 
         title,
         description,
         maxAssignees: Number(maxAssignees) || 1,
-    }, session.profile!.id, 'native');
+    }, session.profile!.id, 'direct');
     return 'Item added';
 }
 
-/** The native description method forwards its raw draft and original errors;
+/** The description method forwards its raw draft and original errors;
  * sparse item persistence and vanished-row handling stay in the shared owner. */
 async function updateItemDescription(itemId: string, body: any) {
-    await applyPackingItemPatch(itemId, {description: body.description}, {kind: 'native', body});
+    await applyPackingItemPatch(itemId, {description: body.description}, {kind: 'direct', body});
     return 'Description updated';
 }
 
-/** Restrict the native attribute collector to its original three fields.
+/** Restrict the direct attribute collector to its original three fields.
  * Raw number-control strings reach the shared persistence boundary unchanged. */
 async function updateItemAttr(itemId: string, body: any) {
     const {field, value} = body;
@@ -268,21 +268,21 @@ async function updateItemAttr(itemId: string, body: any) {
 
     if (!allowed[field]) throw new APIError('Invalid field', body, 400);
 
-    await applyPackingItemPatch(itemId, {[field]: value}, {kind: 'native', body});
+    await applyPackingItemPatch(itemId, {[field]: value}, {kind: 'direct', body});
     return 'Item updated';
 }
 
-/** Everyone is a distinct native adapter: preserve the raw flag and its
+/** Everyone is a distinct direct adapter: preserve the raw flag and its
  * successful acknowledgement when the item has disappeared. */
 async function updateRequired(itemId: string, body: any) {
     const {flag} = body;
-    // This native action acknowledges a vanished row and forwards its raw flag.
+    // This direct action acknowledges a vanished row and forwards its raw flag.
     // The shared operation preserves that outcome through the adapter option.
-    await applyPackingItemPatch(itemId, {requiredByAll: flag}, {kind: 'native', body, acknowledgeMissing: true});
+    await applyPackingItemPatch(itemId, {requiredByAll: flag}, {kind: 'direct', body, acknowledgeMissing: true});
     return 'Requirement updated';
 }
 
-/** Native and v1 removal share the simple assignment deletion. V1 supplies
+/** Direct and versioned removal share the simple assignment deletion. V1 supplies
  * its transaction after authorizing the selected item and root relationship. */
 async function deleteAssignment(assignId: string, manager?: EntityManager) {
     await packingService.deletePackingAssignment(assignId, manager);
@@ -290,7 +290,7 @@ async function deleteAssignment(assignId: string, manager?: EntityManager) {
 }
 
 /** Route both audience collectors to the established permission-matrix owner.
- * Native input uses permission keys; only validated v1 commands opt into masks. */
+ * Form input uses permission keys; only validated v1 commands opt into masks. */
 async function updateSettings(id: string, body: any, manager?: EntityManager, inputFormat?: 'permissionKeys' | 'masks') {
     await saveDefaultPermsFromBody(ENTITIES.PACKING, id, body, {manager, inputFormat});
     return 'Settings saved';
@@ -303,34 +303,34 @@ async function deleteItem(itemId: string, manager?: EntityManager) {
     return 'Item deleted';
 }
 
-/** Native image replacement uses the shared file-swap policy and keeps its
+/** Image replacement uses the shared file-swap policy and keeps its
  * existing direct persistence callback and literal success response. */
 async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
     await performImageSwap(entity, packingService.updateHeaderImage, file);
     return 'Image updated';
 }
 
-/** Native removal is the same image-swap operation with no new upload. */
+/** Direct removal is the same image-swap operation with no new upload. */
 async function deleteHeaderImg(entity: EntityBase) {
     await performImageSwap(entity, packingService.updateHeaderImage);
     return 'Image deleted';
 }
 
-/** Bind the native assignment-flow factory to its body-shaped compatibility
+/** Bind the direct assignment operations to its body-shaped compatibility
  * adapters; versioned desired-membership commands use the shared owner directly. */
 function getAssignmentAccessMapping() {
     return {
-        assign: assignNativeItem,
+        assign: assignDirectItem,
         unassign: unassignItem,
     };
 }
 
-/** Decode only the established native body; membership policy remains in assignItem. */
-async function assignNativeItem(body: any, profileId: string): Promise<void> {
+/** Decode only the established form body; membership policy remains in assignItem. */
+async function assignDirectItem(body: any, profileId: string): Promise<void> {
     await assignItem(body.itemId, profileId);
 }
 
-/** Native assignment actions return no payload; v1 alone projects the DBAL deletion count. */
+/** Direct assignment actions return no payload; v1 alone projects the DBAL deletion count. */
 async function unassignItem(body: any, profileId: string): Promise<void> {
     await applyPackingMembership(body.itemId, profileId, false);
 }
@@ -343,18 +343,18 @@ async function unassignItem(body: any, profileId: string): Promise<void> {
 async function assignItem(itemId: string, profileId: string): Promise<void> {
     await packingService.withPackingAssignmentLock(itemId, profileId, async function assignLocked(manager, item, existing, count) {
         if (!item) throw new APIError('Packing item not found', {itemId}, 404);
-        await applyPackingMembership(itemId, profileId, true, {manager, item, existing, count}, 'native');
+        await applyPackingMembership(itemId, profileId, true, {manager, item, existing, count}, 'direct');
     });
 }
 
 /** Normalize all submitted fields before acquiring a lock; omitted fields remain unchanged. */
 async function updateProperties(entity: EntityBase, body: unknown) {
-    await savePackingMetadata(entity.id, normalizeBasicProperties(body), {kind: 'native', expectedEventId: entity.eventId ?? null});
+    await savePackingMetadata(entity.id, normalizeBasicProperties(body), {kind: 'direct', expectedEventId: entity.eventId ?? null});
     return 'Properties updated';
 }
 
 /**
- * Preserve the native capacity decision without versioned admission or error policy.
+ * Preserve the shared capacity decision without versioned admission or error policy.
  * The caller checks existing membership first; nullable historical capacity stays unrestricted.
  */
 export function hasPackingItemCapacity(item: PackingItem, count: number): boolean {
@@ -387,12 +387,12 @@ export default {
 }
 
 /**
- * One method policy drives native middleware, versioned command checks and action
- * capabilities. Preserve native asymmetries: attr accepts description through
+ * One method policy drives named controller checks and action
+ * capabilities. Preserve method differences: attr accepts description through
  * EDIT_META, its dedicated description action uses EDIT_DESC, and ITEM_EDIT_META
  * does not grant Everyone. Display-only title/capacity grants remain independent.
  * Cross-feature methods consume the existing administration controller's shared
- * declarations, also used by native factories and the shared relink operation.
+ * declarations, also used by direct callers and the shared relink operation.
  */
 const packingMethodPermissions: Record<PackingMethod, PermissionFieldRule> = {
     selfAssignment: {permission: 'ACCESS_VIEW'},
@@ -429,7 +429,7 @@ const itemFieldMethods: Record<keyof components['schemas']['PackingItemPatch'], 
     maxAssignees: 'editItemCapacity', requiredByAll: 'editItemRequired',
 };
 
-/** Resolve each submitted item field through the central native method rule,
+/** Resolve each submitted item field through the central shared method rule,
  * including the distinct description action and its allowed parent fallbacks. */
 function mayEditItemField(permissions: PermView, field: keyof components['schemas']['PackingItemPatch']): boolean {
     return mayPerformPackingMethod(permissions, itemFieldMethods[field]);
@@ -467,9 +467,9 @@ async function authorizeRead(manager: EntityManager, list: PackingList, session:
     return permissions;
 }
 
-/** Field grants and page admission are separate native contracts. Public grant-only
+/** Field grants and page admission are separate contracts. Public grant-only
  * methods need no fabricated session principal; operations with a profile contract
- * still require actorId explicitly before using the same current native grants. */
+ * still require actorId explicitly before using the same current method grants. */
 async function packingPermissions(manager: EntityManager, list: PackingList, session: SessionLike, caches?: PermEngineCaches): Promise<PermView> {
     comparisonActor(session);
     return evaluateSubject({kind: 'entity', entity: {
@@ -520,20 +520,20 @@ export async function readPackingList(id: string, session: SessionLike) {
         const caches: PermEngineCaches = {participant: new Map(), defaults: new Map(), userPerms: new Map()};
         const permissions = await authorizeRead(manager, list, session, caches);
 
-        // Child admission never implies permission to open its parent. Reuse the native URL
+        // Child admission never implies permission to open its parent. Reuse the authorized Event URL
         // policy, but evaluate the captured parent inside this projection's existing snapshot.
         let currentEventUrl: string | null = null;
         if (list.event) {
             const parentViews = await evaluateEntities([{
                 entityType: 'event', entityId: list.event.id, ownerId: list.event.ownerId, eventId: list.event.id,
             }], session, manager);
-            const nativeUrl = getAuthorizedEventUrl(list.event.id, parentViews.get(`event:${list.event.id}`)!);
+            const eventUrl = getAuthorizedEventUrl(list.event.id, parentViews.get(`event:${list.event.id}`)!);
             // Preserve the shared owner's admission and selected admin/detail path;
             // this versioned projection supplies the corresponding Vue destination.
-            currentEventUrl = nativeUrl?.replace(/^\/event(?=\/|$)/u, '/frontend-pilot/event') ?? null;
+            currentEventUrl = eventUrl?.replace(/^\/event(?=\/|$)/u, '/event') ?? null;
         }
 
-        // Group persisted assignments once before building rows and native counters.
+        // Group persisted assignments once before building rows and shared counters.
         const {items, assignments} = await packingService.getPackingSnapshotRows(manager, id);
         const assignmentsByItem = new Map<string, typeof assignments>();
         for (const assignment of assignments) {
@@ -601,7 +601,7 @@ export async function readPackingMetadata(id: string, session: SessionLike) {
     actorId(session);
 
     /** Evaluate independently editable root fields within the read snapshot;
-     * a noneditor must additionally satisfy the native full-page admission. */
+     * a noneditor must additionally satisfy the detail-page admission. */
     async function readSnapshot(manager: EntityManager, row: PackingList | null) {
         const list = requireList(row);
         const permissions = await packingPermissions(manager, list, session);
@@ -656,16 +656,16 @@ export async function readPackingItemOrderBaseline(id: string, session: SessionL
 }
 
 /**
- * Normalize the existing native trim/clear semantics independently of transport errors.
+ * Normalize the existing form trim/clear semantics independently of transport errors.
  * Versioned JSON applies trim/clear before its generated validator. The unchanged
- * native controller retains Joi's distinct optional-value and error semantics.
+ * shared controller retains Joi's distinct optional-value and error semantics.
  */
 export function normalizePackingMetadataPatch(body: unknown): unknown {
     let normalized = body;
     if (body && typeof body === 'object' && !Array.isArray(body)) {
         const fields = {...body} as Record<string, unknown>;
         // JSON cannot carry undefined. The v1 input therefore treats these values as omitted;
-        // the native adapter separately preserves its original optional own-key semantics.
+        // the direct adapter separately preserves its original optional own-key semantics.
         for (const [key, value] of Object.entries(fields)) if (value === undefined) delete fields[key];
         if (typeof fields.title === 'string') fields.title = fields.title.trim();
         if (fields.description === '') fields.description = null;
@@ -686,14 +686,14 @@ function assertLockedContext(context: LockedArchiveContext): void {
 /**
  * Receive one already normalized, generated-schema-validated command. The HTTP
  * adapter owns structural diagnostics; no second validator runs inside the operation.
- * Native Joi diagnostics remain in their compatibility decoder.
+ * Form Joi diagnostics remain in their compatibility decoder.
  */
 export async function patchPackingMetadata(id: string, patch: components['schemas']['PackingMetadataPatch'], ifMatch: string | undefined, session: SessionLike) {
     actorId(session);
     return savePackingMetadata(id, patch, {kind: 'versioned', ifMatch, session});
 }
 
-/** The native description method has its own EDIT_DESC grant, independent of
+/** The description method has its own EDIT_DESC grant, independent of
  * principal-only root properties. Its baseline discloses that field alone. */
 function descriptionBaseline(list: PackingList, session: SessionLike): components['schemas']['PackingDescriptionBaseline'] {
     const description = list.description ?? null;
@@ -720,12 +720,12 @@ export async function patchPackingDescription(id: string, patch: components['sch
 }
 
 /**
- * One metadata operation serves both adapters. Native routes already apply the shared
+ * One metadata operation serves both adapters. Direct entry points already apply the shared
  * property/method policy and retain their captured-parent check and root-only lock.
  * Versioned JSON adds current field grants, reviewed values and parent locks. Neither
  * adapter owns an independent property write or changes the other's wire contract.
  */
-async function savePackingMetadata(id: string, patch: BasicEntityPropertyPatch, context: {kind: 'native'; expectedEventId?: string | null}): Promise<void>;
+async function savePackingMetadata(id: string, patch: BasicEntityPropertyPatch, context: {kind: 'direct'; expectedEventId?: string | null}): Promise<void>;
 async function savePackingMetadata(
     id: string,
     patch: components['schemas']['PackingMetadataPatch'],
@@ -737,12 +737,12 @@ async function savePackingMetadata(
     context: {kind: 'description'; ifMatch?: string; session: SessionLike}
 ): Promise<components['schemas']['PackingDescriptionBaseline']>;
 async function savePackingMetadata(id: string, patch: BasicEntityPropertyPatch,
-    context: {kind: 'native'; expectedEventId?: string | null} | {kind: 'versioned' | 'description'; ifMatch?: string; session: SessionLike}): Promise<void | ReturnType<typeof metadataResult> | components['schemas']['PackingDescriptionBaseline']> {
+    context: {kind: 'direct'; expectedEventId?: string | null} | {kind: 'versioned' | 'description'; ifMatch?: string; session: SessionLike}): Promise<void | ReturnType<typeof metadataResult> | components['schemas']['PackingDescriptionBaseline']> {
     /** Interpret the caller's locked root once, then persist only its normalized
      * sparse command. Each adapter retains its own admission/diagnostic boundary. */
     async function persistMetadata(manager: EntityManager, row: PackingList | null) {
         let permissions: PermView | undefined;
-        if (context.kind === 'native') {
+        if (context.kind === 'direct') {
             assertEntityPropertyContext(row, context.expectedEventId);
         } else {
             const list = requireList(row);
@@ -762,14 +762,14 @@ async function savePackingMetadata(id: string, patch: BasicEntityPropertyPatch,
         }
 
         await packingService.updatePackingListProperties(id, patch, manager);
-        if (context.kind !== 'native') {
+        if (context.kind !== 'direct') {
             const saved = requireList(await packingService.getPackingSnapshotRoot(manager, id));
             if (context.kind === 'description') return descriptionBaseline(saved, context.session);
             return metadataResult(saved, permissions!, context.session);
         }
     }
 
-    if (context.kind === 'native') return packingService.withPackingListLock(id, persistMetadata);
+    if (context.kind === 'direct') return packingService.withPackingListLock(id, persistMetadata);
 
     /** The DBAL acquired parents before the root. Reject a changed relationship
      * before passing that same transaction into the shared metadata operation. */
@@ -806,15 +806,15 @@ export async function setPackingSelfAssignment(listId: string, itemId: string, a
 
 /**
  * Both assignment adapters apply the same membership/capacity decision under their
- * actual item lock. Native unassignment retains its original unlocked DELETE.
+ * actual item lock. Direct unassignment retains its original unlocked DELETE.
  * Existing membership is checked before capacity so a successful retry stays valid when full.
  * Historical nullable capacity remains unrestricted, and Everyone never changes this policy.
  */
 async function applyPackingMembership(itemId: string, profileId: string, assigned: boolean,
     snapshot?: {manager: EntityManager; item: PackingItem; existing: PackingAssignment | null; count: number},
-    transport: 'native' | 'versioned' = 'native'): Promise<number> {
+    transport: 'direct' | 'versioned' = 'direct'): Promise<number> {
     if (!assigned) {
-        // DELETE removes every historical duplicate membership. The native adapter
+        // DELETE removes every historical duplicate membership. The direct adapter
         // ignores the count; v1 projects the count from its current locked snapshot.
         const removed = await packingService.unassignPackingItem(itemId, profileId, snapshot?.manager);
         return (snapshot?.count ?? removed) - removed;
@@ -831,17 +831,17 @@ async function applyPackingMembership(itemId: string, profileId: string, assigne
 }
 
 /**
- * Native and v1 item adapters share sparse persistence and retain assignments when
- * reducing capacity. V1 compares its locked baseline; native sends the raw scalar and
+ * Direct and versioned item adapters share sparse persistence and retain assignments when
+ * reducing capacity. V1 compares its locked baseline; the direct operation sends the raw scalar and
  * preserves its original vanished-row diagnostic (Everyone acknowledges that case).
  */
 async function applyPackingItemPatch(itemId: string, fields: components['schemas']['PackingItemPatch'],
-    context: {kind: 'native'; body: any; acknowledgeMissing?: boolean} | {kind: 'versioned'; manager: EntityManager; item: PackingItem}): Promise<boolean> {
-    const changed = context.kind === 'native'
+    context: {kind: 'direct'; body: any; acknowledgeMissing?: boolean} | {kind: 'versioned'; manager: EntityManager; item: PackingItem}): Promise<boolean> {
+    const changed = context.kind === 'direct'
         || Object.entries(fields).some(([key, value]) => (context.item[key as keyof PackingItem] ?? null) !== value);
     if (changed) {
-        if (context.kind === 'native' && context.acknowledgeMissing) {
-            // Native Everyone forwards even an omitted/raw flag to its direct
+        if (context.kind === 'direct' && context.acknowledgeMissing) {
+            // Direct Everyone forwards even an omitted/raw flag to its direct
             // column update. Preserve that ORM write and automatic metadata;
             // the sparse updater intentionally skips an omitted business field.
             await packingService.togglePackingItemRequiredByAll(itemId, fields.requiredByAll!);
@@ -849,7 +849,7 @@ async function applyPackingItemPatch(itemId: string, fields: components['schemas
         }
         const saved = await packingService.updatePackingItem(itemId, packingItemPersistenceFields(fields),
             context.kind === 'versioned' ? context.manager : undefined);
-        if (!saved && context.kind === 'native' && !context.acknowledgeMissing) {
+        if (!saved && context.kind === 'direct' && !context.acknowledgeMissing) {
             throw new APIError('Unknown error while saving', context.body, 500);
         }
     }
@@ -857,9 +857,9 @@ async function applyPackingItemPatch(itemId: string, fields: components['schemas
 }
 
 /**
- * Retain the established native number-control transport at the persistence boundary.
+ * Retain the established number-control transport at the persistence boundary.
  * TypeORM's entity describes the integer after retrieval, while its parameterized update
- * also accepts the native raw numeric string. Passing that draft unchanged preserves
+ * also accepts the raw numeric string. Passing that draft unchanged preserves
  * MariaDB's half-away rounding, signed bounds and configured invalid-input handling; there is no
  * competing JavaScript converter or copied SQL range. The generated closed request
  * shape and locked field authorization have already constrained the supplied fields.
@@ -875,11 +875,11 @@ async function packingItemPermissions(manager: EntityManager, list: PackingList,
         parent: {entityType: 'packing', entityId: list.id, ownerId: list.ownerId, eventId: list.eventId}}, session, caches, manager);
 }
 
-/** Keep visible native controls separate from actual method authority. These
+/** Keep visible rendered controls separate from actual method authority. These
  * flags describe presentation; every command still evaluates current grants. */
 function itemCapabilities(permissions: PermView): components['schemas']['PackingItemView']['capabilities'] {
     return {
-        // The original native controls and attr POST deliberately have different
+        // The original rendered controls and the attribute operation deliberately have different
         // grants. Preserve that visible UI without implying command authority.
         showTitleEdit: permissions.allow('EDIT_TITLE', 'ITEM_EDIT'),
         showCapacityEdit: permissions.allow('EDIT_CAPACITY', 'ITEM_EDIT'),
@@ -893,7 +893,7 @@ function itemCapabilities(permissions: PermView): components['schemas']['Packing
 }
 
 /** Keep canonical persisted edit values in one owner for full-detail and minimal
- * baselines. Native numeric drafts remain confined to mutation input/persistence. */
+ * baselines. Numeric drafts remain confined to mutation input/persistence. */
 function itemEditValues(item: PackingItem): Required<components['schemas']['PackingItemEditBaseline']['values']> {
     return {
         title: item.title,
@@ -903,7 +903,7 @@ function itemEditValues(item: PackingItem): Required<components['schemas']['Pack
     };
 }
 
-/** Filtering follows actual command grants, including the native EDIT_META/EDIT_DESC
+/** Filtering follows actual command grants, including the shared EDIT_META/EDIT_DESC
  * asymmetry. Display-only title/capacity grants must not reveal an edit baseline. */
 function itemEditProjection(item: PackingItem, permissions: PermView):
     Pick<components['schemas']['PackingItemEditBaseline'], 'values' | 'editableFields'> {
@@ -958,7 +958,7 @@ function headerProjection(list: PackingList) {
     };
 }
 
-/** Preserve native setup admission, including independent owner deletion and
+/** Preserve settings admission, including independent owner deletion and
  * account-only duplication. Opening setup does not grant its private ACL matrix. */
 function mayOpenSettings(list: PackingList, permissions: PermView, session: SessionLike): boolean {
     // Screen admission follows its existing field/method owners without copying their grants.
@@ -993,14 +993,14 @@ export function requirePackingCreation(session: SessionLike): void {
 }
 
 /**
- * Project native account-only creation admission without requiring a profile at the API
+ * Project account-only creation admission without requiring a profile at the API
  * transport boundary. Public duplicate GET deliberately remains independently grantable;
  * its later submission asks this operation with the exact duplicate URL as returnTo.
  */
 export async function readPackingCreateEntry(session: SessionLike, returnTo?: unknown, eventId?: unknown): Promise<components['schemas']['PackingCreateEntry']> {
-    const target = safeFrontendReturn(returnTo ?? '/frontend-pilot/packing/create');
-    const entry = getAccountPageEntry(session, '/frontend-pilot/users/login', target);
-    // An initial URL is context, not a draft selection. Match the native form by
+    const target = safeFrontendReturn(returnTo ?? '/packing/create');
+    const entry = getAccountPageEntry(session, '/users/login', target);
+    // An initial URL is context, not a draft selection. Match the form by
     // omitting missing/forbidden events before the client captures its baseline.
     const selected = entry.kind === 'render' ? await readEventLinkSelection(eventId, session) : null;
     const selectedEvent = selected ? projectPackingEventOption(selected) : null;
@@ -1010,7 +1010,7 @@ export async function readPackingCreateEntry(session: SessionLike, returnTo?: un
         ...(eventId !== undefined ? {selectedEvent} : {})};
 }
 
-/** Project an already admitted native row without another query or additional disclosure. */
+/** Project an already admitted row without another query or additional disclosure. */
 export function projectPackingGuestEntry(list: Pick<PackingList, 'id' | 'title'>): components['schemas']['GuestEntry'] {
     return {id: list.id, title: list.title};
 }
@@ -1027,16 +1027,16 @@ export async function readPackingGuestEntry(id: string): Promise<components['sch
 
 /**
  * Read only the current root and shared page policy in one snapshot. Detail admission
- * discloses no protected rows; guest entry discloses exactly the native public title.
+ * discloses no protected rows; guest entry discloses exactly the public title.
  * Both initial HTML and client navigation consume this operation, while subsequent
  * projection/command operations independently authorize their own current snapshot.
  */
 export async function readPackingResourceEntry(id: string, view: 'detail' | 'guest', session: SessionLike): Promise<components['schemas']['PackingResourceEntry']> {
-    /** Translate the current native page-admission outcome into render, redirect
+    /** Translate the current document page-admission outcome into render, redirect
      * or denial. Only guest admission projects its intentionally public title. */
     async function readEntry(manager: EntityManager, list: PackingList | null): Promise<components['schemas']['PackingResourceEntry']> {
         if (!list) return {entry: {kind: 'denied', status: 404, messageKey: 'packing.notFound'}, guest: null};
-        const detailUrl = `/frontend-pilot/packing/${encodeURIComponent(list.id)}`;
+        const detailUrl = `/packing/${encodeURIComponent(list.id)}`;
         if (view === 'guest') {
             return session.profile ? {entry: {kind: 'redirect', url: detailUrl, notice: null}, guest: null}
                 : {entry: {kind: 'render'}, guest: projectPackingGuestEntry(list)};
@@ -1051,7 +1051,7 @@ export async function readPackingResourceEntry(id: string, view: 'detail' | 'gue
     return packingService.withPackingReadSnapshot(id, readEntry);
 }
 
-/** Public form definitions contain no resource data; native duplicate GET can use them without an account. */
+/** Public form definitions contain no resource data; duplicate GET can use them without an account. */
 export function packingFormContext(): components['schemas']['PackingCreateContext'] {
     return {defaults: completeDefaults(getInitialPerms('packing')), ...permissionDefinitions()};
 }
@@ -1074,7 +1074,7 @@ export async function createPackingList(
     /** The optional parent is already locked. Apply shared attachment admission
      * before committing the root, initial rows and authored defaults together. */
     async function createLocked(manager: EntityManager, event: Event | null) {
-        // Native submission and v1 use the event controller's same attachment
+        // Direct submission and versioned commands use the event controller's same attachment
         // policy. The v1 adapter supplies its already locked parent and manager.
         await authorizeEventLink(body.eventId, session, manager, event);
         const id = await createEntity(actorId(session), {...body, headerImg: file?.path}, manager, 'versioned');
@@ -1084,7 +1084,7 @@ export async function createPackingList(
     return packingService.withPackingCreationTransaction(body.eventId, createLocked);
 }
 
-/** Native duplicate GET depends only on DATA_DUPLICATE, independently of detail admission and creation POST. */
+/** Duplicate GET depends only on DATA_DUPLICATE, independently of detail admission and creation POST. */
 export async function readPackingDuplicate(id: string, session: SessionLike, eventId?: unknown): Promise<components['schemas']['PackingDuplicate']> {
     return packingService.withPackingReadSnapshot(id, async function readDuplicate(manager, row) {
         const list = requireList(row);
@@ -1093,7 +1093,7 @@ export async function readPackingDuplicate(id: string, session: SessionLike, eve
         }}, session, undefined, manager);
         if (!mayPerformPackingMethod(permissions, 'duplicate')) throw new ApiProblem('FORBIDDEN');
 
-        // Copy the native form surface only. Assignments, administrators, header,
+        // Copy the form surface only. Assignments, administrators, header,
         // archive state and event membership remain associated with the source.
         const items = await packingService.getPackingSnapshotItems(manager, id);
         const selected = await readEventLinkSelection(eventId, session);
@@ -1116,7 +1116,7 @@ export async function readPackingSettings(id: string, session: SessionLike): Pro
         const permissions = await packingPermissions(manager, list, session);
         if (!mayOpenSettings(list, permissions, session)) throw new ApiProblem('FORBIDDEN');
 
-        // Linking a parent does not grant access to its identifying fields. Keep the native
+        // Linking a parent does not grant access to its identifying fields. Keep the established
         // disclosure policy even when this profile may manage the packing list itself.
         let currentEvent: components['schemas']['PackingCurrentEvent'] | null = null;
         if (list.event) {
@@ -1127,11 +1127,11 @@ export async function readPackingSettings(id: string, session: SessionLike): Pro
                 title: parent.title ?? null,
                 startDate: parent.startDate ?? null,
                 endDate: parent.endDate ?? null,
-                url: parent.url?.replace(/^\/event(?=\/|$)/u, '/frontend-pilot/event') ?? null,
+                url: parent.url?.replace(/^\/event(?=\/|$)/u, '/event') ?? null,
             };
         }
 
-        // Native cards and v1 settings consume the same lifecycle presentation
+        // Overview cards and v1 settings consume the same lifecycle presentation
         // policy. Both its persisted state and permission inputs use this read's
         // existing snapshot, rather than introducing a second lifecycle authority.
         const reference = {type: 'packing' as const, id};
@@ -1167,7 +1167,7 @@ export async function readPackingSettings(id: string, session: SessionLike): Pro
                 linkEvent: mayPerformPackingMethod(permissions, 'changeEvent'),
                 managePermissions: mayPerformPackingMethod(permissions, 'managePermissions'),
                 duplicate: Boolean(session.auth?.user && mayPerformPackingMethod(permissions, 'duplicate')),
-                // Native deletion is profile-owned; guest owners have the same authority.
+                // Deletion is profile-owned; guest owners have the same authority.
                 remove: isOwner(session, list.ownerId),
                 manageArchive: archive.canManage,
                 archive: archive.canArchive,
@@ -1187,12 +1187,12 @@ export async function readPackingSettings(id: string, session: SessionLike): Pro
 }
 
 /**
- * Add one item through the common creator/persistence operation. Native Quick Add
+ * Add one item through the common creator/persistence operation. Direct Quick Add
  * retains its ignored position spelling (pos defaults to zero); the v1 adapter's
  * approved order uses the next stored position under its existing root transaction.
  */
 async function addPackingItem(id: string, fields: Partial<PackingItem>, profileId: string,
-    transport: 'native' | 'versioned', manager?: EntityManager): Promise<string> {
+    transport: 'direct' | 'versioned', manager?: EntityManager): Promise<string> {
     const itemId = generateUniqueId();
     const pos = transport === 'versioned' ? Math.max(0, await packingService.getLastPackingItemNumber(id, manager)) + 1 : undefined;
     await packingService.createPackingItem(id, {...fields, id: itemId, ...(pos !== undefined ? {pos} : {})}, profileId, manager);
@@ -1254,8 +1254,8 @@ export async function deletePackingItem(id: string, itemId: string, session: Ses
 }
 
 /** Review one complete stored order under the exclusive root/item locks.
- * That root lock coordinates creation/removal and native assignment consumers;
- * the native reorder adapter retains its independent partial-order contract. */
+ * That root lock coordinates creation/removal and direct assignment consumers;
+ * the direct reorder adapter retains its independent partial-order contract. */
 export async function reorderPackingItems(
     id: string,
     body: components['schemas']['PackingItemOrder'],
@@ -1270,7 +1270,7 @@ export async function reorderPackingItems(
         requireEditToken(token, orderEditToken(list, items, session));
 
         // Versioned ordering requires one complete reviewed row set. The API locks
-        // its compared values; native reorder retains its original partial/non-dense contract.
+        // its compared values; direct reorder retains its original partial/non-dense contract.
         const currentItemIds = new Set(items.map(item => item.id));
         if (body.itemIds.length !== items.length || new Set(body.itemIds).size !== items.length
             || body.itemIds.some(itemId => !currentItemIds.has(itemId))) throw new ApiProblem('RESOURCE_CONFLICT');
@@ -1405,24 +1405,24 @@ export async function setPackingAdmin(
     });
 }
 
-/** Authorize scoped administrator discovery before using the native secure
+/** Authorize scoped administrator discovery before using the secure
  * account search. Its projected options exclude guest credentials and raw emails;
- * the route shares the native per-IP limiter and admitted API context. */
+ * the route uses the shared per-IP limiter and admitted API context. */
 export async function searchPackingProfiles(id: string, query: string, session: SessionLike): Promise<components['schemas']['PackingProfileOptions']> {
     await packingService.withPackingReadSnapshot(id, async function requireManagement(manager, row) {
         if (!mayPerformPackingMethod(await packingPermissions(manager, requireList(row), session), 'managePermissions')) throw new ApiProblem('FORBIDDEN');
     });
-    // Reuse the native account-only secure search; no guest-token discovery or raw emails enter this DTO.
+    // Reuse the account-only secure search; no guest-token discovery or raw emails enter this DTO.
     return (await userService.searchUsersSecure(query)).map(profile => ({profileId: profile.id, name: profile.name, username: profile.username, isGuest: false}));
 }
 
-/** The native option omits absent descriptions; the JSON contract represents them
+/** The shared option omits absent descriptions; the JSON contract represents them
  * explicitly as null. Discovery and initial form admission share that projection. */
 function projectPackingEventOption(event: EventLinkOption): components['schemas']['PackingEventOption'] {
     return {...event, description: event.description ?? null};
 }
 
-/** Reuse native event-picker admission, filtering and selected-value rules.
+/** Reuse event-picker admission, filtering and selected-value rules.
  * Only the nullable-description spelling is adapted for the JSON contract. */
 export async function searchPackingEvents(query: unknown, session: SessionLike): Promise<components['schemas']['PackingEventOptions']> {
     const result = await getEventLinkOptions(query, session);
@@ -1465,7 +1465,7 @@ export async function changePackingEvent(
 /**
  * Adapt Packing's archive/restore command to the existing lifecycle controller, keeping
  * its locked authorization and persistence authoritative. The response acknowledges the
- * completed command as the native workflow does; parent changes and inherited archival
+ * completed command as the shared workflow does; parent changes and inherited archival
  * retain their separate recovery codes. This operation never performs hard deletion.
  */
 export async function setPackingArchived(id: string, archived: boolean, session: SessionLike): Promise<components['schemas']['MutationResult']> {
@@ -1502,7 +1502,7 @@ export async function setPackingHeader(
 
             // The receipt leaves this callback only after commit. The existing
             // image-swap owner can then remove the confirmed previous file, and
-            // retains its native cleanup of this upload when persistence fails.
+            // retains its file cleanup of this upload when persistence fails.
             return {previousImage: list.headerImg, changed: Boolean(file || list.headerImg)};
         });
     }

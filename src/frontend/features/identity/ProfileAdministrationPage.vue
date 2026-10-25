@@ -4,8 +4,8 @@ import {RouterLink, useRoute, useRouter} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {QueryFunctionContext} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
-import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
-import {useActionState, usePilot, refreshInterval} from '../../app/context';
+import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import {useActionState, useFrontend, refreshInterval} from '../../app/context';
 import {isReadDenial} from '../../app/transport';
 import {evictQueryFamilies, refetchFreshQuery, retireQueryFamily, useQueryAdmission} from '../../app/queryCache';
 import {useCommand} from '../../composables/command';
@@ -27,7 +27,7 @@ import PageHeading from '../../components/PageHeading.vue';
 
 type Profile = components['schemas']['ProfileSettings'];
 type Projection = Profile | components['schemas']['ProfileManagement'];
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const route = useRoute();
 const router = useRouter();
@@ -88,7 +88,7 @@ const title = computed(() => mode.value === 'edit'
     : messages.value.t(mode.value === 'manage' ? 'profile.manageTitle' : 'profile.createTitle'));
 const remoteChanged = computed(() => !!baseline.value && !!profile.value
     && (baseline.value.name !== profile.value.name || baseline.value.isDefault !== profile.value.isDefault));
-// Native browser titles differ from these visible form headings. The existing
+// Browser titles differ from these visible form headings. The existing
 // title owner still follows the admitted profile and reactive interface locale.
 usePageTitle(() => mode.value === 'edit'
     ? messages.value.t('profile.documentTitle', {name: profile.value?.name ?? context.session.value?.activeProfile?.name ?? ''})
@@ -99,12 +99,12 @@ watch(() => projection.error.value, retireDeniedProfile, {flush: 'sync'});
 watch([completion.target, completion.pending, projectionRetired], releaseConfirmedEditor);
 
 /** Wrap only the generated admission value required by the shared entry/navigation owner. */
-async function readEntry(scope: PilotRequestScope, signal: AbortSignal) {
+async function readEntry(scope: FrontendRequestScope, signal: AbortSignal) {
     return {entry: await api.entry(mode.value, route.fullPath, scope, signal)};
 }
 
 /** Admission denial removes all private administration snapshots for this actor, not the entry receipt. */
-async function retireEntryProjection(_entry: {readonly status: number}, scope: PilotRequestScope): Promise<void> {
+async function retireEntryProjection(_entry: {readonly status: number}, scope: FrontendRequestScope): Promise<void> {
     // Private queries may have been cached by another administration visit. Retire
     // them without canceling the read that owns this new admission decision.
     fields.name = '';
@@ -114,7 +114,7 @@ async function retireEntryProjection(_entry: {readonly status: number}, scope: P
         identityAdministrationKeys.profiles(scope.context)]);
 }
 
-/** Keep server-owned native denial wording separate from a recoverable admission read failure. */
+/** Keep server-owned denial wording separate from a recoverable admission read failure. */
 function entryFailureText(): string | undefined {
     const entry = pageAdmission.outcome.value;
     if (entry?.kind === 'denied') {
@@ -140,7 +140,7 @@ function readProjection({signal}: QueryFunctionContext): Promise<Projection> {
     return mode.value === 'edit' ? api.current(context.capture(), signal) : api.profiles(context.capture(), signal);
 }
 
-/** Native names have no new browser length policy. Default false is an explicit submitted value. */
+/** Names have no new browser length policy. Default false is an explicit submitted value. */
 function isDirty(): boolean {
     if (finished.value || mode.value === 'manage') return false;
     return mode.value === 'create' ? fields.name !== '' : !!baseline.value
@@ -216,7 +216,7 @@ async function submit(): Promise<void> {
     const result = await command.run(saveProfile, false, true);
     if (!result) return;
 
-    // Confirmation belongs to the unchanged native operation. Retire affected
+    // Confirmation belongs to the unchanged operation. Retire affected
     // reads while the common receipt retains session/navigation delivery; Retry
     // can then repeat only display reads and navigation, never this command.
     finished.value = true;
@@ -226,7 +226,7 @@ async function submit(): Promise<void> {
     projectionRetired.value = false;
     const retirement = evictQueryFamilies(context.queryClient,
         [identityAdministrationKeys.current(scope.context), identityAdministrationKeys.profiles(scope.context)]);
-    const delivery = completion.navigate(editing ? '/frontend-pilot/users/profile' : '/frontend-pilot/users/profile/manage',
+    const delivery = completion.navigate(editing ? '/users/profile' : '/users/profile/manage',
         scope, origin, {kind: 'success', messageKey: editing ? 'profile.profileUpdated' : 'profile.profileCreated'}, true);
     await retirement;
     if (!active || !context.isCurrent(scope)) return;
@@ -236,7 +236,7 @@ async function submit(): Promise<void> {
     await delivery;
 }
 
-function saveProfile(scope: PilotRequestScope): Promise<components['schemas']['MutationResult']> {
+function saveProfile(scope: FrontendRequestScope): Promise<components['schemas']['MutationResult']> {
     return mode.value === 'edit' ? api.update({name: fields.name, isDefault: fields.isDefault}, scope)
         : api.create(fields.name, scope);
 }
@@ -255,7 +255,7 @@ async function switchProfile(id: string): Promise<void> {
         {kind: 'redirect', url: frontendOverviewPath, notice: null}, origin, completion);
 }
 
-function changeProfile(scope: PilotRequestScope): Promise<components['schemas']['IdentityResult']> {
+function changeProfile(scope: FrontendRequestScope): Promise<components['schemas']['IdentityResult']> {
     return context.api.switchProfile(switchTarget, scope);
 }
 </script>
@@ -299,7 +299,7 @@ function changeProfile(scope: PilotRequestScope): Promise<components['schemas'][
             <template v-if="data">
                 <!-- The account roster is projected explicitly; each action adopts the existing switch command. -->
                 <ul v-if="mode === 'manage'" class="list-group">
-                    <li v-for="owned in profiles" :key="owned.id" class="list-group-item pilot-action-row justify-content-between align-items-start">
+                    <li v-for="owned in profiles" :key="owned.id" class="list-group-item frontend-action-row justify-content-between align-items-start">
                         <span class="ms-2 me-auto my-auto">{{ owned.name }}</span>
                         <ActionButton variant="primary" :disabled="blocked" :pending="command.pending.value && switchTarget === owned.id" @click="switchProfile(owned.id)">
                             <i class="bi bi-arrow-left-right me-1" aria-hidden="true"></i>{{ messages.t('profile.switchProfile') }}
@@ -332,21 +332,21 @@ function changeProfile(scope: PilotRequestScope): Promise<components['schemas'][
                             </ActionButton>
                         </div>
                         <div v-if="mode === 'create'" class="col-12 text-center mt-3">
-                            <RouterLink class="text-decoration-none" to="/frontend-pilot/users/profile/manage"><i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('profile.backHome') }}</RouterLink>
+                            <RouterLink class="text-decoration-none" to="/users/profile/manage"><i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('profile.backHome') }}</RouterLink>
                         </div>
                         <template v-else>
-                            <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-outline-primary" to="/frontend-pilot"><i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('profile.backHome') }}</RouterLink></div>
-                            <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-outline-warning" :to="{path: '/frontend-pilot/users/profile/migrate/request', state: {profileTokenRequest: true}}"><i class="bi bi-archive me-1" aria-hidden="true"></i>{{ messages.t('profile.showMigrationToken') }}</RouterLink></div>
-                            <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-outline-danger" to="/frontend-pilot/users/profile/delete"><i class="bi bi-trash me-1" aria-hidden="true"></i>{{ messages.t('profile.deleteProfile') }}</RouterLink></div>
+                            <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-outline-primary" to="/"><i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('profile.backHome') }}</RouterLink></div>
+                            <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-outline-warning" :to="{path: '/users/profile/migrate/request', state: {profileTokenRequest: true}}"><i class="bi bi-archive me-1" aria-hidden="true"></i>{{ messages.t('profile.showMigrationToken') }}</RouterLink></div>
+                            <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-outline-danger" to="/users/profile/delete"><i class="bi bi-trash me-1" aria-hidden="true"></i>{{ messages.t('profile.deleteProfile') }}</RouterLink></div>
                         </template>
                     </form>
                 </template>
-                <!-- Ordinary migrated entry stays in the SPA. RouterLink retains
+                <!-- Ordinary application entry stays in the SPA. RouterLink retains
                      real hrefs for modified clicks and new browser documents. -->
                 <div v-if="mode === 'manage'" class="mt-2 row justify-content-center">
-                    <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-primary" to="/frontend-pilot"><i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('profile.backHome') }}</RouterLink></div>
-                    <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-secondary" to="/frontend-pilot/users/profile/migrate/show"><i class="bi bi-archive me-1" aria-hidden="true"></i>{{ messages.t('profile.migrateToAccount') }}</RouterLink></div>
-                    <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-success" to="/frontend-pilot/users/profile/create"><i class="bi bi-plus-circle me-1" aria-hidden="true"></i>{{ messages.t('profile.createProfile') }}</RouterLink></div>
+                    <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-primary" to="/"><i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('profile.backHome') }}</RouterLink></div>
+                    <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-secondary" to="/users/profile/migrate/show"><i class="bi bi-archive me-1" aria-hidden="true"></i>{{ messages.t('profile.migrateToAccount') }}</RouterLink></div>
+                    <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-success" to="/users/profile/create"><i class="bi bi-plus-circle me-1" aria-hidden="true"></i>{{ messages.t('profile.createProfile') }}</RouterLink></div>
                 </div>
             </template>
         </div>

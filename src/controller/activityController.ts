@@ -124,8 +124,8 @@ async function loadRecommendationJobContext(planId: string): Promise<AutoAssignm
 // Template constant for create errors
 const CREATE_TEMPLATE = 'activity/activity-create';
 
-// The accepted native field grants/fallbacks have one controller-owned
-// declaration. Native writes and the new baseline/capability projections adopt it.
+// The accepted shared field grants/fallbacks have one controller-owned
+// declaration. Direct writes and the new baseline/capability projections adopt it.
 const activitySlotFieldPermissions: Record<keyof components['schemas']['ActivitySlotPatch'], PermissionFieldRule> = {
     startTime: {permission: 'EDIT_META', parent: ['ITEM_EDIT', 'ITEM_EDIT_META']},
     endTime: {permission: 'EDIT_META', parent: ['ITEM_EDIT', 'ITEM_EDIT_META']},
@@ -358,7 +358,7 @@ const afterCreateItems = async (id: string, data: any) => {
 
 /**
  * Assemble the shared saved schedule and participant analysis. Versioned callers
- * may request presentation provenance; native rendering and JSON keep their
+ * may request presentation provenance; standard projections keep their
  * established fields and English fallbacks without additional reads or effects.
  */
 
@@ -465,7 +465,7 @@ async function fetchForView(plan: ActivityPlan, req: Request, includeNameProvena
             return existing;
         }
 
-        // Preserve native wording while retaining its origin for the Vue DTO.
+        // Preserve controller wording while retaining its origin for the Vue DTO.
         const created: ParticipantStatusAccumulator = {
             participantKey,
             profileId: profileId ?? undefined,
@@ -527,7 +527,7 @@ async function fetchForView(plan: ActivityPlan, req: Request, includeNameProvena
                 participantKey: status.participantKey,
                 name: status.name,
                 // Only the new transport needs the origin of this presentation.
-                // Native rendering/JSON retain their exact established shape.
+                // Standard projections retain their exact established shape.
                 ...(includeNameProvenance ? {nameIsFallback: status.nameIsFallback} : {}),
                 count: status.assignedShifts,
                 assignedShifts: status.assignedShifts,
@@ -739,7 +739,7 @@ async function saveActivityProperties(planId: string, patch: ActivityPropertyPat
         const plan = await requireRecommendationContext(manager, planId);
         assertEntityPropertyContext(plan, expectedEventId);
         // The v1 adapter adds current field authority and its reviewed baseline inside
-        // this existing transaction. Native callers retain their established checks.
+        // this existing transaction. Direct callers retain their established checks.
         if (transport) {
             const permissions = await activityPermissions(plan, transport.session, manager);
             for (const field of Object.keys(patch) as Array<keyof ActivityPropertyPatch>) {
@@ -884,7 +884,7 @@ async function quickAddSlot(plan: ActivityPlan, body: any, session: SessionLike)
     }
     await activityService.withActivityTransaction(saveSlot);
 
-    // Preserve the native follow-up role write; diagnostics add no new transaction guarantee.
+    // Preserve the follow-up role write; diagnostics add no new transaction guarantee.
     if (normalizedRoles.length > 0) {
         await activityService.addActivitySlotRoles(slot.id!, normalizedRoles);
     }
@@ -903,7 +903,7 @@ async function updateSlotDescription(slotId: string, body: any, admit?: Activity
 async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle, admit?: ActivitySlotAdmission) {
     const {field, value} = body;
     if (field !== undefined && value !== undefined) body[field] = value;
-    // Preserve native rejection order and the existing bundle consumer while
+    // Preserve diagnostic order and the existing bundle consumer while
     // sharing each field's exact permission declaration with new projections.
     function allowed(field: keyof components['schemas']['ActivitySlotPatch']): boolean {
         const rule = activitySlotFieldPermissions[field];
@@ -958,7 +958,7 @@ async function updateSettings(id: string, body: any) {
 
 /** Analyze the existing saved requirements and return their shared presentation.
  * The versioned projection may retain missing-name origin for reactive client
- * localization; native callers keep the exact existing response shape. */
+ * localization; direct callers keep the exact existing response shape. */
 async function getRequirements(planId: string, includeNameProvenance = false) {
     // Reuse the admitted plan's existing configuration, participants and slots.
     const [plan, requirementConfig, assignments, slots, allRoles, slotRoles] = await Promise.all([
@@ -1148,7 +1148,7 @@ async function mergeRequirementOverrides(
 }
 
 /** Save one coherent requirements configuration under the existing plan lock.
- * Explicit versioned removal IDs supplement the native omission-retention rule;
+ * Explicit versioned removal IDs supplement the omission-retention rule;
  * permissions, current membership checks and persistence remain with their owners. */
 async function updateRequirements(planId: string, body: any, removedOverrideIds: readonly string[] = []) {
     const {roleRequirements, stayRequirements, overrides, ...planSettings} = preprocessRequirementUpdate(body);
@@ -1912,9 +1912,9 @@ async function authorizeSelfAssignment(
     }
 }
 
-/** Native workspace entry maintains saved proposals; the versioned recovery read
+/** Workspace entry maintains saved proposals; the versioned recovery read
  * explicitly disables those effects while sharing the same safe presentation inputs.
- * Optional name provenance belongs only to versioned presentation, not native JSON. */
+ * Optional name provenance belongs only to versioned presentation, not standard JSON. */
 async function getRecommendations(planId: string, session?: SessionLike, maintain = true, includeNameProvenance = false) {
     // Both entry and recovery use existing feature reads rather than a second domain model.
     const [plan, requirementConfig, initialRecommendations, slots, assignments, assignees] = await Promise.all([
@@ -1933,7 +1933,7 @@ async function getRecommendations(planId: string, session?: SessionLike, maintai
     const fulfilledIds: string[] = [];
     const obsoletePendingIds: string[] = [];
     const obsoleteApprovedIds: string[] = [];
-    // Only deliberate workspace entry performs native fulfilled/obsolete-row maintenance.
+    // Only deliberate workspace entry performs fulfilled/obsolete-row maintenance.
     if (maintain) {
         for (const recommendation of initialRecommendations) {
             if (!["PENDING", "APPROVED"].includes(recommendation.status)) continue;
@@ -2466,7 +2466,7 @@ async function getAutoRecommendationJob(planId: string, jobId: string) {
 
 /** Normalize selected role IDs and reject roles outside their activity plan. */
 async function validatePlanRoleIds(planId: string, roles: unknown, body: unknown): Promise<number[]> {
-    // Numeric conversion retains native form values; malformed IDs never reach a query.
+    // Numeric conversion retains form values; malformed IDs never reach a query.
     if (!Array.isArray(roles)) throw new APIError('Invalid roles', {body}, 400);
     const normalized = roles.map(Number);
     if (normalized.some((roleId) => !Number.isInteger(roleId) || roleId <= 0)) {
@@ -2539,7 +2539,7 @@ async function assignActivityAssignmentRole(itemId: string, profileId: string, r
         const [slot] = await activityService.getLockedActivitySlots(manager, [itemId]);
         if (!slot) throw new APIError('Activity slot not found', {itemId}, 404);
         // Versioned admission joins this operation's existing root/slot locks;
-        // native adapters omit it and retain their established route checks.
+        // callers that omit it remain responsible for admission.
         await admit?.(manager, plan, slot);
         const assignments = await activityService.getLockedPlanAssignments(manager, planId, itemId);
         const existing = assignments.find((assignment) => assignment.profile.id === profileId);
@@ -2816,7 +2816,7 @@ async function activityPermissions(plan: ActivityPlan, session: SessionLike, man
         ownerId: plan.ownerId, eventId: plan.eventId}}, session, undefined, manager);
 }
 
-/** Match the native item method's independent creator grant and parent fallback. */
+/** Match the item method's independent creator grant and parent fallback. */
 async function activityItemPermissions(plan: ActivityPlan, slot: ActivitySlot, session: SessionLike, manager?: EntityManager): Promise<PermView> {
     return evaluateSubject({kind: 'item', item: {entityType: 'activitySlot', entityId: slot.id,
         ownerId: slot.profileId, eventId: plan.eventId}, parent: {entityType: 'activity', entityId: plan.id,
@@ -2845,7 +2845,7 @@ async function requireActivitySlot(id: string, slotId: string, session: SessionL
     return {plan, slot, permissions: await activityItemPermissions(plan, slot, session)};
 }
 
-/** Build the native permission bundle only for calls which consume that owner. */
+/** Build the shared permission bundle only for calls which consume that owner. */
 async function activityPermissionBundle(plan: ActivityPlan, session: SessionLike): Promise<PermBundle> {
     const slots = await activityService.getActivitySlotsFlat(plan.id);
     return buildPermBundle({entityType: 'activity', entityId: plan.id, ownerId: plan.ownerId, eventId: plan.eventId},
@@ -2871,7 +2871,7 @@ function activityMetadataToken(plan: ActivityPlan, data: components['schemas']['
     return comparisonToken('activity-meta', plan.id, session, data.values);
 }
 
-/** Public creation definitions preserve the native audience matrix without disclosing an existing plan. */
+/** Public creation definitions preserve the audience matrix without disclosing an existing plan. */
 export function activityFormContext(): components['schemas']['ActivityCreateContext'] {
     return {defaults: completeDefaults(getInitialPerms('activity')), ...permissionDefinitions()};
 }
@@ -2883,10 +2883,10 @@ export function readActivityCreateContext(session: SessionLike): components['sch
     return activityFormContext();
 }
 
-/** Creation entry and event preselection use the same native account and event-picker owners. */
+/** Creation entry and event preselection use the same account and event-picker owners. */
 export async function readActivityCreateEntry(session: SessionLike, returnTo?: unknown, eventId?: unknown): Promise<components['schemas']['ActivityCreateEntry']> {
-    const target = safeFrontendReturn(returnTo ?? '/frontend-pilot/activity/create');
-    const entry = getAccountPageEntry(session, '/frontend-pilot/users/login', target);
+    const target = safeFrontendReturn(returnTo ?? '/activity/create');
+    const entry = getAccountPageEntry(session, '/users/login', target);
     // URL context does not create or persist a draft, identity, association or plan.
     const selected = entry.kind === 'render' ? await readEventLinkSelection(eventId, session) : null;
     return {entry, context: entry.kind === 'render' ? activityFormContext() : null,
@@ -2903,10 +2903,10 @@ export async function readActivityGuestEntry(id: string): Promise<components['sc
 export async function readActivityResourceEntry(id: string, view: 'detail' | 'guest', session: SessionLike): Promise<components['schemas']['ActivityResourceEntry']> {
     const plan = await activityService.getActivityPlanById(id);
     if (!plan) return {entry: {kind: 'denied', status: 404, messageKey: 'activity.notFound'}, guest: null};
-    const url = `/frontend-pilot/activity/${encodeURIComponent(id)}`;
+    const url = `/activity/${encodeURIComponent(id)}`;
     if (view === 'guest') return session.profile ? {entry: {kind: 'redirect', url, notice: null}, guest: null}
         : {entry: {kind: 'render'}, guest: {id, title: plan.title}};
-    // The native shared owner preserves standalone/linked registration differences.
+    // The shared owner preserves standalone/linked registration differences.
     const admission = await getEntityViewAdmission('activity', plan, session);
     if (admission === 'guest') return {entry: {kind: 'redirect', url: `${url}/guest`, notice: null}, guest: null};
     if (admission === 'event-registration-required') return {entry: {kind: 'denied', status: 400, messageKey: 'activity.eventRegistrationRequired'}, guest: null};
@@ -2919,14 +2919,14 @@ function activityHeaderProjection(plan: ActivityPlan) {
         headerVersion: getHeaderImageVersion(plan.headerImg)};
 }
 
-/** Existing native field methods define every slot capability; presentation never grants authority. */
+/** Shared field methods define every slot capability; presentation never grants authority. */
 function activitySlotCapabilities(permissions: PermView): components['schemas']['ActivitySlotView']['capabilities'] {
     function allowed(field: keyof components['schemas']['ActivitySlotPatch']): boolean {
         const rule = activitySlotFieldPermissions[field];
         return permissions.allow(rule.permission, rule.parent);
     }
     return {editTitle: allowed('title'), editDescription: allowed('description'), editMeta: allowed('startTime'),
-        // The native inline title/capacity guard intentionally differs from the
+        // The inline title/capacity guard intentionally differs from the
         // modal's meta fallback and the field-specific server authorization.
         inlineMetadataAdmission: permissions.allow('EDIT_META', 'ITEM_EDIT'),
         editCapacity: allowed('maxAssignees'), editRoles: allowed('roles'), manageAssignments: allowed('roles'),
@@ -2946,7 +2946,7 @@ function activitySlotValues(slot: ActivitySlot, roles: number[], permissions: Pe
 
 /** Project the approved Vue civil calendar through the same pure owner used by
  * creation. This versioned presentation adapter performs no reads or writes;
- * native rendering, domain calculations and printable output keep their owners. */
+ * shared presentation, domain calculations and printable output keep their owners. */
 export function projectActivityScheduleWeeks(startDate: string, endDate: string): components['schemas']['ActivityWeek'][] {
     return civilDateWeeks(startDate, endDate);
 }
@@ -2983,7 +2983,7 @@ export async function readActivityPlan(id: string, session: SessionLike) {
             assignees: visible ? assigned.map(assignment => ({assignmentId: String(assignment.id), name: assignment.name, roles: assignment.roles})) : [],
             capabilities: activitySlotCapabilities(itemPermissions), editToken: comparisonToken('activity-slot', slot.id, session, values)});
     }
-    // Participant privacy is enforced by this new boundary; the retained native
+    // Participant privacy is enforced by this new boundary; the shared
     // IMP-018 projection is neither serialized nor silently repaired here.
     const participants: components['schemas']['ActivityParticipant'][] = [];
     if (permissions.has('ACCESS_PARTICIPANTS')) {
@@ -3002,7 +3002,7 @@ export async function readActivityPlan(id: string, session: SessionLike) {
     let currentEventUrl: string | null = null;
     if (plan.event) {
         const views = await evaluateEntities([{entityType: 'event', entityId: plan.event.id, ownerId: plan.event.ownerId, eventId: plan.event.id}], session);
-        currentEventUrl = getAuthorizedEventUrl(plan.event.id, views.get(`event:${plan.event.id}`)!)?.replace(/^\/event(?=\/|$)/u, '/frontend-pilot/event') ?? null;
+        currentEventUrl = getAuthorizedEventUrl(plan.event.id, views.get(`event:${plan.event.id}`)!)?.replace(/^\/event(?=\/|$)/u, '/event') ?? null;
     }
     const metadata = activityMetadataProjection(plan, permissions);
     const data: components['schemas']['ActivityView'] = {
@@ -3024,7 +3024,7 @@ export async function readActivityPlan(id: string, session: SessionLike) {
             editDates: metadata.editableFields.includes('startDate') || metadata.editableFields.includes('endDate'),
             addSlot: permissions.has('ITEM_ADD'), reorderSlots: permissions.has('ITEM_EDIT'),
             manageSettings: Boolean(metadata.editableFields.length || permissions.any('MANAGE_PERMISSIONS', 'EDIT_META', 'DATA_DUPLICATE', 'DATA_EXPORT') || isOwner(session, plan.ownerId)),
-            // Native role creation has a separate browser EDIT_META admission;
+            // Role creation has a separate browser EDIT_META admission;
             // its unchanged server operation still requires MANAGE_ASSIGNMENTS.
             manageRequirements: permissions.has('MANAGE_REQUIREMENTS'), manageRecommendations: permissions.has('MANAGE_ASSIGNMENTS'),
             roleCreationAdmission: permissions.has('EDIT_META'), exportSchedule: permissions.has('DATA_EXPORT'),
@@ -3036,13 +3036,13 @@ export async function readActivityPlan(id: string, session: SessionLike) {
     return {data, etag: entityTag('activity-view', {profileId, data})};
 }
 
-/** Creation reuses existing validation, root/slot transaction and audience persistence in their native order. */
+/** Creation reuses existing validation, root/slot transaction and audience persistence in their established order. */
 export async function createActivityPlan(body: components['schemas']['ActivityCreateInput'], file: Express.Multer.File | undefined, session: SessionLike,
     prepare?: ActivityCommandPreparation<components['schemas']['ActivityCreated']>, persisted?: ActivityCreationCompletion): Promise<components['schemas']['ActivityCreated']> {
     readActivityCreateContext(session);
     checkNewImage(file);
     await authorizeEventLink(body.eventId, session);
-    // Adapt only wire names and grouping; native parsing still owns date/time checks.
+    // Adapt only wire names and grouping; form parsing still owns date/time checks.
     const grouped: Record<string, unknown[]> = {};
     for (const slot of body.slots) (grouped[slot.day] ??= []).push({...slot, pos: slot.position, position: undefined});
     const parsed = preprocessCreate({...body, slots: JSON.stringify(grouped), event_id: body.eventId ?? ''});
@@ -3062,7 +3062,7 @@ export async function readActivityDuplicate(id: string, session: SessionLike, ev
     const {plan} = await requireActivityMethod(id, 'DATA_DUPLICATE', session);
     const slots = Object.values(await fetchForDuplicate(plan, session as Request['session'])).flat();
     const selected = eventId !== undefined ? await readEventLinkSelection(eventId, session) : null;
-    // Match native form defaults without hiding signed capacities or blank titles;
+    // Match form defaults without hiding signed capacities or blank titles;
     // submitting the copied draft still uses the stricter creation contract.
     return {title: plan.title, description: plan.description ?? null, startDate: plan.startDate, endDate: plan.endDate,
         eventId: null, slots: slots.map(slot => ({id: generateUniqueId(), day: slot.day, position: slot.pos, title: slot.title,
@@ -3104,10 +3104,10 @@ export async function readActivitySettings(id: string, session: SessionLike): Pr
             admins: admins.map(admin => ({profileId: admin.profileId, name: admin.profile.name, isGuest: Boolean(admin.profile.guestId),
                 mask: admin.perms, editToken: comparisonToken('activity-admin', `${id}:${admin.profileId}`, session, {mask: admin.perms})}))};
     }
-    // Parent disclosure follows its independent native grant, not child management.
+    // Parent disclosure follows its independent method grant, not child management.
     const current = property.currentEvent;
     const currentEvent = current ? {id: current.id, title: current.title ?? null, startDate: current.startDate ?? null,
-        endDate: current.endDate ?? null, url: current.url?.replace(/^\/event(?=\/|$)/u, '/frontend-pilot/event') ?? null} : null;
+        endDate: current.endDate ?? null, url: current.url?.replace(/^\/event(?=\/|$)/u, '/event') ?? null} : null;
     return {id, title: plan.title, ...activityHeaderProjection(plan),
         editableFields: metadata.editableFields,
         settingsToken: comparisonToken('activity-settings', id, session, {eventId: plan.eventId ?? null, header: plan.headerImg ?? null,
@@ -3121,7 +3121,7 @@ export async function readActivitySettings(id: string, session: SessionLike): Pr
             hasAutomaticSchedule: archive.hasAutomaticSchedule, eventUrl: currentEvent?.url ?? null}, access};
 }
 
-/** Event discovery uses native picker admission and excludes credentials/private parent fields. */
+/** Event discovery uses event-picker admission and excludes credentials/private parent fields. */
 export async function searchActivityEvents(query: unknown, session: SessionLike): Promise<components['schemas']['ActivityEventOptions']> {
     const result = await getEventLinkOptions(query, session);
     return {items: result.items.map(event => ({...event, description: event.description ?? null})),
@@ -3162,7 +3162,7 @@ export async function readActivityDefaultsBaseline(id: string, session: SessionL
 /** Existing audience owner receives numeric masks; no copied permission collector or ACL rule is introduced. */
 export async function setActivityDefaults(id: string, defaults: components['schemas']['PermissionDefaultsPatch'], session: SessionLike, token?: string): Promise<void> {
     await requireActivityMethod(id, 'MANAGE_PERMISSIONS', session);
-    // Preserve the legacy owner and its write order; the new transport rejects
+    // Preserve the shared owner and its write order; the new transport rejects
     // an already-stale reviewed audience before invoking that unchanged write.
     const current = completeDefaults(await adminService.getDefaultPerms('activity', id));
     requireFieldComparison(token, comparisonToken('activity-settings', id, session, activityDefaultValues(current)), Object.keys(defaults).map(key => `default:${key}`));
@@ -3194,7 +3194,7 @@ export async function setActivityAdmin(id: string, profileId: string, mask: numb
     if (outcome === 'mask-required') throw new ApiProblem('VALIDATION_FAILED');
 }
 
-/** Secure profile discovery retains native account-only search and permission-management admission. */
+/** Secure profile discovery retains account-only search and permission-management admission. */
 export async function searchActivityProfiles(id: string, query: string, session: SessionLike): Promise<components['schemas']['ActivityProfileOptions']> {
     await requireActivityMethod(id, 'MANAGE_PERMISSIONS', session);
     return (await userService.searchUsersSecure(query)).map(profile => ({profileId: profile.id, name: profile.name, username: profile.username, isGuest: false}));
@@ -3259,14 +3259,14 @@ export async function readActivitySlotBaseline(id: string, slotId: string, sessi
         editToken: comparisonToken('activity-slot', slotId, session, values)};
 }
 
-/** Slot creation delegates range/time/role validation and saved ordering to native Quick Add. */
+/** Slot creation delegates range/time/role validation and saved ordering to Quick Add. */
 export async function createActivitySlot(id: string, body: components['schemas']['ActivityNewSlot'], session: SessionLike): Promise<void> {
     const {plan} = await requireActivityMethod(id, 'ITEM_ADD', session);
     activityActorId(session);
     await quickAddSlot(plan, {...body, date: body.day}, session);
 }
 
-/** Preserve sparse native slot writes and role relationship behavior, including the deferred IMP-016 defect. */
+/** Preserve sparse slot writes and role relationship behavior, including the deferred IMP-016 defect. */
 export async function patchActivitySlot(id: string, slotId: string, body: components['schemas']['ActivitySlotPatch'], session: SessionLike, token?: string): Promise<void> {
     const {plan, permissions} = await requireActivitySlot(id, slotId, session);
     const bundle = await activityPermissionBundle(plan, session);
@@ -3282,8 +3282,8 @@ export async function patchActivitySlot(id: string, slotId: string, body: compon
         }
         requireFieldComparison(token, comparisonToken('activity-slot', slotId, session, values), Object.keys(body));
     }
-    // The native attribute route requires its meta grant even for a mixed editor;
-    // description-only saves use their separate native method and fallback.
+    // The attribute operation requires its meta grant even for a mixed editor;
+    // description-only saves use their separate shared method and fallback.
     if (Object.keys(body).every(field => field === 'description')) {
         if (!permissions.allow('EDIT_DESC', ['ITEM_EDIT', 'ITEM_EDIT_DESC'])) throw new ApiProblem('FORBIDDEN');
         await updateSlotDescription(slotId, body, admitSlot);
@@ -3307,7 +3307,7 @@ export async function readActivityOrderBaseline(id: string, session: SessionLike
     return {order, editToken: comparisonToken('activity-order', id, session, {order})};
 }
 
-/** Native ordering persists only submitted positions and leaves saved assignments intact. */
+/** Direct ordering persists only submitted positions and leaves saved assignments intact. */
 export async function setActivityOrder(id: string, body: components['schemas']['ActivityOrderInput'], session: SessionLike, token?: string): Promise<void> {
     await requireActivityMethod(id, 'ITEM_EDIT', session);
     const current = await activityService.getActivitySlotsFlat(id);
@@ -3330,7 +3330,7 @@ export async function setActivityAssignment(id: string, slotId: string, body: co
     const {plan, permissions} = await requireActivityMethod(id, 'ACCESS_VIEW', session);
     const profileId = activityActorId(session);
     await requireActivitySlot(id, slotId, session);
-    // Match the native factory's binding-deadline admission for both joining and leaving.
+    // Match the shared binding-deadline admission for both joining and leaving.
     if (plan.bindingDeadline && plan.bindingDeadline.getTime() <= Date.now() && !permissions.has('MANAGE_ASSIGNMENTS')) throw new ApiProblem('FORBIDDEN');
     const operation = body.assigned ? 'assign' : 'unassign';
     await authorizeSelfAssignment(id, slotId, profileId, operation, body.role);
@@ -3347,7 +3347,7 @@ export async function setActivityAssignment(id: string, slotId: string, body: co
     else await unassignActivityAssignmentRole(slotId, profileId, body.role, admitAssignment);
 }
 
-/** Organizer removal uses the existing assignment owner and its native per-item grant. */
+/** Organizer removal uses the existing assignment owner and its per-item grant. */
 export async function removeActivityAssignment(id: string, assignmentId: string, session: SessionLike): Promise<void> {
     const assignment = await activityService.getActivitySlotAssignmentById(Number(assignmentId));
     if (!assignment || assignment.entityId !== id) throw new ApiProblem('NOT_FOUND');
@@ -3369,7 +3369,7 @@ export async function setActivityRoleAssignments(id: string, slotId: string, bod
     await updateRoleAssignments(slotId, body);
 }
 
-/** Shared text creation remains distinct from local schedule filters and requires the native management grant. */
+/** Shared text creation remains distinct from local schedule filters and requires the management grant. */
 export async function createActivityTextField(id: string, body: components['schemas']['ActivityTextFieldInput'], session: SessionLike): Promise<void> {
     await requireActivityMethod(id, 'MANAGE_REQUIREMENTS', session);
     await createTextField(id, body);
@@ -3378,7 +3378,7 @@ export async function createActivityTextField(id: string, body: components['sche
 /** Shared text writes retain ACCESS_VIEW for text and the additional MANAGE_REQUIREMENTS title grant. */
 export async function patchActivityTextField(id: string, fieldId: string, body: components['schemas']['ActivityTextFieldPatch'], session: SessionLike, token?: string): Promise<void> {
     const {plan} = await requireActivityMethod(id, 'ACCESS_VIEW', session);
-    // Text/title baselines are private to their existing method grants; legacy
+    // Text/title baselines are private to their existing method grants; shared
     // persistence remains the unchanged shared controller operation below.
     const field = await activityService.getActivityPlanTextFieldById(fieldId);
     if (!field || field.entityId !== id) throw new ApiProblem('NOT_FOUND');
@@ -3398,13 +3398,13 @@ export async function removeActivityTextField(id: string, fieldId: string, sessi
 /** Project private requirement inputs explicitly, retaining the shared pure engine's
  * saved analysis and calculation inputs without sending ORM relations or profile records. */
 export async function readActivityRequirements(id: string, session: SessionLike): Promise<components['schemas']['ActivityRequirements']> {
-    // Requirement management has its own native grant, separate from page admission.
+    // Requirement management has its own method grant, separate from page admission.
     await requireActivityMethod(id, 'MANAGE_REQUIREMENTS', session);
     const [data, allRoles] = await Promise.all([getRequirements(id, true), activityService.getAllRoles(id)]);
     const plan = data.plan;
 
     // Select scalars from each persistence result before it crosses the versioned
-    // boundary. Legacy numeric handles become strings here; the shared native
+    // boundary. Numeric database handles become strings here; the shared
     // controller, persistence and requirement engines keep their numeric contract.
     return {
         plan: {id: plan.id, assignmentMode: plan.assignmentMode, generalRequiredShifts: plan.generalRequiredShifts ?? null,
@@ -3447,7 +3447,7 @@ export async function saveActivityRequirements(id: string, input: components['sc
     await updateRequirements(id, settings, removedOverrideIds);
 }
 
-/** Recommendations display only their native slot labels, never full slot persistence records. */
+/** Recommendations display only their slot labels, never full slot persistence records. */
 function activityRecommendationSlot(slot: Pick<ActivitySlot, 'id' | 'title' | 'day' | 'startTime' | 'endTime'>): components['schemas']['ActivityRecommendationSlot'] {
     return {id: slot.id, title: slot.title, day: slot.day, startTime: slot.startTime ?? null, endTime: slot.endTime ?? null};
 }
@@ -3470,7 +3470,7 @@ function activityRecommendationWarnings(results: RecommendationWarningResult[]):
     }, warnings: result.warnings}));
 }
 
-/** Entry intentionally retains native maintenance/enqueue semantics. Recovery reads and
+/** Entry intentionally retains workspace maintenance/enqueue semantics. Recovery reads and
  * domain-job observation never call that mutation path, so periodic reads cannot start work. */
 export async function readActivityRecommendations(id: string, session: SessionLike, enter = false): Promise<components['schemas']['ActivityRecommendations']> {
     // Independently authorize the private recommendation workspace on every invocation.
@@ -3500,7 +3500,7 @@ export async function previewActivityRecommendations(id: string, input: componen
     return {warnings: activityRecommendationWarnings(result.warnings), overlapConfirmation: result.overlapConfirmation};
 }
 
-/** Apply the submitted batch once, preserving native skipped counts, reciprocal moves and
+/** Apply the submitted batch once, preserving skipped counts, reciprocal moves and
  * inherited postcommit regeneration behavior. No adapter refresh follows the command. */
 export async function applyActivityRecommendations(id: string, input: components['schemas']['ActivityRecommendationApplication'], session: SessionLike): Promise<components['schemas']['ActivityRecommendationApplyResult']> {
     // The existing controller rechecks the warning review before its transaction writes.

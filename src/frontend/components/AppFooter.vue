@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import {usePilot} from '../app/context';
-const {messages, session} = usePilot();
+import {useFrontend} from '../app/context';
+const {messages, session} = useFrontend();
 </script>
 
 <template>
     <footer class="bg-dark text-white text-center py-2 mt-auto">
         <small>
-            <!-- The icon's mx-1 owns its spacing, just as in the native footer. Keep
+            <!-- The icon's mx-1 owns its spacing. Keep
                  surrounding text adjacent and retain native nonbreaking bullet gaps. -->
             {{ messages.t('footer.poweredBy') }}<a class="text-white text-decoration-none" href="https://github.com/JulianiusM/Surveyor">
                 <i class="bi bi-github mx-1" aria-hidden="true"></i>{{ messages.t('footer.versionLabel', {version: session?.shell.version ?? ''}) }}

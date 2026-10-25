@@ -148,7 +148,7 @@ describe('versioned Survey production operations', () => {
         expect(await surveys.readSurveyDuplicate(id, actor(guest))).toMatchObject({
             title: creation().title, combinations: creation().combinations,
         });
-        expect(surveys.readSurveyCreateEntry(actor(guest), `/frontend-pilot/survey/${id}/duplicate`).entry)
+        expect(surveys.readSurveyCreateEntry(actor(guest), `/survey/${id}/duplicate`).entry)
             .toMatchObject({kind: 'redirect'});
         await expect(surveys.createSurvey(creation(), undefined, actor(guest))).rejects.toMatchObject({status: 403});
     });
@@ -169,7 +169,7 @@ describe('versioned Survey production operations', () => {
         expect(participating.items).toHaveLength(1);
         expect(owned).toMatchObject({parent: null, eventId: null, totalChildren: 0});
         expect(participating).toMatchObject({parent: null, eventId: null, totalChildren: 0});
-        const card = {id, type: 'survey', title, url: `/frontend-pilot/survey/${id}`,
+        const card = {id, type: 'survey', title, url: `/survey/${id}`,
             headerUrl: `/api/v1/surveys/${id}/header`, eventContext: null, children: null,
             archived: false, inheritedArchived: false};
         expect(owned.items[0]).toMatchObject({...card,

@@ -5,11 +5,11 @@ documentation-metadata
 audience: operators; site reliability engineers; database administrators; maintainers
 owner: application operators
 status: current
-last-verified: 2026-10-04
+last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: Native settings-aware upgrade, migration, storage and rollback procedures; documentation packaging remains advisory.
+verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
 source-anchors: src/modules/invoice/invoiceOperations.ts; src/modules/invoice/requests.ts; src/modules/database/entities/event/EventInvoice.ts; src/migrations/1789862400000-AddEntityArchival.ts; src/modules/entityArchival.ts; src/modules/database/services/EntityLifecycleService.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; scripts/runMigration.ts; migrationDataSource.ts; src/server.ts; src/modules/settings.ts; src/modules/invoice/retention.ts; docs/DATABASE.md; docs/OPERATIONS.md
-next-review: D04V
+next-review: release-or-rollback-compatibility-change
 -->
 
 Use this procedure for every production version change. It assumes the versioned layout and service controls in the
@@ -29,6 +29,11 @@ A deployable version consists of three matching parts:
 
 Do not mix the runtime bundle, migration workspace, or in-app guides from different versions. Keep the previous release
 and its pre-upgrade backup until the new version has passed validation and the rollback window has closed.
+
+The runtime bundle includes matching Express/server-rendering output, fingerprinted client assets, generated API
+contracts and language catalogs. Keep these together with the reviewed Help corpora and runtime dependencies.
+See the [release-content inventory](OPERATIONS.md#2-extract-and-verify-the-release) before activating the release.
+Production runs the existing Node service without a Vite development server or additional frontend asset service.
 
 ## Before scheduling the change
 
@@ -85,6 +90,10 @@ ln -s /var/lib/surveyor/uploads uploads
 
 Confirm the archive includes `dist/`, `docs/user-guide/`, `fonts/`, `package.json`, and `package-lock.json`. Do not replace
 `/opt/surveyor/current` yet.
+
+Verify the frontend renderer, client manifest/assets, generated contract validators and language resources listed in
+the [operations runbook](OPERATIONS.md#2-extract-and-verify-the-release). Do not assemble a release from selected files
+belonging to different builds or run generation inside the installed runtime directory.
 
 The release workflow does not create a sidecar checksum file. Obtain the expected digest from the approved release
 record or artifact-verification system, compare it independently, and record the verified value in the change record.
@@ -184,6 +193,14 @@ readlink -f /opt/surveyor/current
 Confirm that `uploads` in the new release points to `/var/lib/surveyor/uploads` and that the service account can read the
 release and write both persistent upload directories.
 
+Replace the compiled runtime and frontend artifacts together. The application detects the new build through normal
+session refresh: compatible open edits may finish, and eligible dynamic content pages can reload once when clean and
+idle. Creation, duplication, user-management, Help and static error/completion pages require deliberate recovery even
+when untouched. Draft/pending/unknown and loop guards remain. Missing chunks or incompatible commands preserve mounted
+drafts for deliberate recovery. Session/security revalidation and periodic content reads retain their existing
+contracts. No retained old-client asset directory is required.
+This browser recovery does not remove the maintenance window, schema checks or rollback boundaries above.
+
 ### 5. Start and validate
 
 For the invoice-pool updates, apply the factor/recalculation, settlement-credit/snapshot, share-rounding, and
@@ -212,8 +229,10 @@ and follows the pool's invoice-credit setting, while retaining the organizer's s
 
 The retraction migration adds RETRACTED to the invoice status enum while preserving existing status values. Validate
 that an owner can retract an unreviewed invoice and still see its history, and that confirmed corrections or rejections
-of Accepted/Closed costs preserve recorded payments and require recalculation when the pool is closed. Successful
-participant uploads now refresh the page to reopened invoice history; the next form starts blank with its pool retained.
+of Accepted/Closed costs preserve recorded payments and require recalculation when the pool is closed. Confirmed
+participant uploads clear completed fields while retaining an eligible pool and refresh admitted invoice history in
+the same document. Uncertain delivery requires explicit saved-history
+inspection without automatically submitting the upload again.
 
 ```bash
 systemctl start surveyor
@@ -235,6 +254,11 @@ Run the complete [post-start validation checklist](OPERATIONS.md#post-start-vali
 - Archived-entity discovery, authoritative restoration, and personal visibility.
 - Transactional email delivery.
 - Version display, legal links, database monitoring, disk capacity, and backup monitoring.
+
+On pages using the Vue frontend, fetch the emitted scripts/styles and exercise required controls after initialization.
+Check Help navigation/search and the selected language as well as successful server rendering. A rendered document or
+healthy server alone does not verify initialized controls; use the [full operations checklist](OPERATIONS.md#post-start-validation).
+Validate enabled identity-provider and SMTP workflows independently rather than infer them from frontend loading.
 
 Only then remove the maintenance response and reopen normal traffic.
 

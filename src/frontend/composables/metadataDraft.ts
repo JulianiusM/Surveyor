@@ -1,4 +1,4 @@
-import type {PilotMetadataField, PilotMetadataFieldPolicy, PilotMetadataSnapshot} from '../../types/FrontendPilotUiTypes';
+import type {FrontendMetadataField, FrontendMetadataFieldPolicy, FrontendMetadataSnapshot} from '../../types/FrontendUiTypes';
 
 /** Nullable text fields share empty-string comparison and sparse submission.
  * Features opt in for their own fields; other scalar values stay untouched. */
@@ -6,7 +6,7 @@ export function normalizeNullableMetadataText<T>(value: T): T | null {
     return value === '' ? null : value;
 }
 
-function copyMetadata<TValues extends object, TMetadata extends PilotMetadataSnapshot<TValues>>(data: TMetadata): TMetadata {
+function copyMetadata<TValues extends object, TMetadata extends FrontendMetadataSnapshot<TValues>>(data: TMetadata): TMetadata {
     // Query results may be Vue readonly proxies; copy the known wire containers without structuredClone.
     return {...data, values: {...data.values}, editableFields: [...data.editableFields]};
 }
@@ -16,15 +16,15 @@ function copyMetadata<TValues extends object, TMetadata extends PilotMetadataSna
  * be offered for review without advancing the baseline token behind an unsaved form. The caller owns
  * its wire projection and field semantics; this algorithm has no feature-specific field branches.
  */
-export class MetadataDraft<TValues extends object, TMetadata extends PilotMetadataSnapshot<TValues>> {
+export class MetadataDraft<TValues extends object, TMetadata extends FrontendMetadataSnapshot<TValues>> {
     baseline: TMetadata;
     values: TValues;
     etag: string;
     remote: {data: TMetadata; etag: string} | null = null;
-    choices: Partial<Record<PilotMetadataField<TValues>, 'mine' | 'current'>> = {};
+    choices: Partial<Record<FrontendMetadataField<TValues>, 'mine' | 'current'>> = {};
     awaitingAuthority = false;
 
-    constructor(data: TMetadata, etag: string, private readonly policy: PilotMetadataFieldPolicy<TValues> = {}) {
+    constructor(data: TMetadata, etag: string, private readonly policy: FrontendMetadataFieldPolicy<TValues> = {}) {
         this.baseline = copyMetadata<TValues, TMetadata>(data);
         this.values = {...data.values};
         this.etag = etag;
@@ -32,12 +32,12 @@ export class MetadataDraft<TValues extends object, TMetadata extends PilotMetada
 
     /** Comparison and submission share the caller's normalization. Missing values still
      * stay omitted; nullable text, booleans and numbers retain their feature-owned meaning. */
-    private normalized<TField extends PilotMetadataField<TValues>>(field: TField, value: TValues[TField]): TValues[TField] {
+    private normalized<TField extends FrontendMetadataField<TValues>>(field: TField, value: TValues[TField]): TValues[TField] {
         const normalize = this.policy[field];
         return normalize ? normalize(value) : value;
     }
 
-    private sameValue<TField extends PilotMetadataField<TValues>>(field: TField, left: TValues[TField], right: TValues[TField]): boolean {
+    private sameValue<TField extends FrontendMetadataField<TValues>>(field: TField, left: TValues[TField], right: TValues[TField]): boolean {
         return this.normalized(field, left) === this.normalized(field, right);
     }
 
@@ -64,9 +64,9 @@ export class MetadataDraft<TValues extends object, TMetadata extends PilotMetada
     /** Offer Mine/Current only for different local and remote edits to the same
      * original field. Equal normalized edits need no choice; lost write permission
      * is handled by overlappingChanges rather than inventing an editable field. */
-    get conflicts(): PilotMetadataField<TValues>[] {
+    get conflicts(): FrontendMetadataField<TValues>[] {
         if (!this.remote) return [];
-        const conflicts: PilotMetadataField<TValues>[] = [];
+        const conflicts: FrontendMetadataField<TValues>[] = [];
 
         // Choices belong only to fields the reviewed projection still permits.
         // Compare both edits with their common original, then exclude equal local
@@ -104,7 +104,7 @@ export class MetadataDraft<TValues extends object, TMetadata extends PilotMetada
     receive(data: TMetadata, etag: string): void {
         if (!this.dirty) this.accept(data, etag);
         else if (etag !== this.etag) {
-            const changed = Object.keys(this.patch) as PilotMetadataField<TValues>[];
+            const changed = Object.keys(this.patch) as FrontendMetadataField<TValues>[];
             const overlap = changed.some(field => !data.editableFields.includes(field)
                 || !this.sameValue(field, data.values[field], this.baseline.values[field]));
             if (overlap) this.offerReview(data, etag);

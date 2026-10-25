@@ -1,5 +1,5 @@
 import type {components} from './api/v1';
-import type {PilotRequestScope} from './FrontendPilotUiTypes';
+import type {FrontendRequestScope} from './FrontendUiTypes';
 
 /** Resource intent comes from the admitted router record, independently of the
  * equivalent case/trailing-slash spelling used for the current URL. */
@@ -18,6 +18,6 @@ export interface EntityEntryRetirement {
 export interface EntityEntryPageProps {
     queryKey: readonly unknown[];
     initial?: components['schemas']['PackingResourceEntry'];
-    read: (scope: PilotRequestScope, signal: AbortSignal) => Promise<components['schemas']['PackingResourceEntry']>;
-    deniedQueries: (entry: {readonly status: number}, scope: PilotRequestScope) => EntityEntryRetirement;
+    read: (scope: FrontendRequestScope, signal: AbortSignal) => Promise<components['schemas']['PackingResourceEntry']>;
+    deniedQueries: (entry: {readonly status: number}, scope: FrontendRequestScope) => EntityEntryRetirement;
 }

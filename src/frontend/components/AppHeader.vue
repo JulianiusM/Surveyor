@@ -2,16 +2,16 @@
 import {computed, onBeforeUnmount, ref, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
 import type {RouteLocationNormalized} from 'vue-router';
-import {useActionState, usePilot} from '../app/context';
+import {useActionState, useFrontend} from '../app/context';
 import {localeManifest} from '../../modules/localization/translator';
 import {frontendOverviewPath, safeFrontendReturn} from '../../modules/lib/frontendIdentity';
-import {pilotHelpUrl, resolveContextualHelpUrl} from '../../modules/lib/helpNavigation';
+import {frontendHelpUrl, resolveContextualHelpUrl} from '../../modules/lib/helpNavigation';
 import {completeIdentityEntry, useConfirmedNavigation} from '../composables/pageEntry';
 import {useCommand} from '../composables/command';
 import {useReadRetry} from '../composables/feedback';
 import {observePageNavigation} from '../composables/pageNavigation';
 import {usePendingFocus} from '../composables/pendingFocus';
-import type {PilotRequestScope} from '../../types/FrontendPilotUiTypes';
+import type {FrontendRequestScope} from '../../types/FrontendUiTypes';
 import type {Locale} from '../../types/LocalizationTypes';
 import AppNavigationDropdown from './AppNavigationDropdown.vue';
 import ActionButton from './ActionButton.vue';
@@ -21,7 +21,7 @@ import CommandFeedback from './CommandFeedback.vue';
 // All feature creation and identity destinations use the shared Vue router.
 // Their existing backend owners retain admission and business decisions.
 const emit = defineEmits<{localeError: []; localeRecovered: []}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages, session, locale, ready, hydrated} = context;
 const route = useRoute();
 const router = useRouter();
@@ -50,21 +50,20 @@ onBeforeUnmount(() => {
     removeUpdateGuard();
     navigation.dispose();
 });
-// Retain the native contextual target as the shared source for route activation and
-// enhanced delivery. The pilot URL adapter moves article paths into a doc query.
-const nativeHelpTarget = computed(() => resolveContextualHelpUrl(route.path));
-const helpRoute = computed(() => pilotHelpUrl(nativeHelpTarget.value, locale.value));
-// Native navigation highlights the first route-matching nav-link, contextual Help
-// on Packing and Drivers pages. Preserve its family precedence when a Help article
-// path also contains a feature name; Event has no corresponding native branch.
-const contextualHelpActive = computed(function nativeHelpActivation() {
-    const nativePath = route.path.toLowerCase().replace(/^\/frontend-pilot(?=\/|$)/u, '');
-    if (nativePath.includes('/survey')) return false;
-    if (nativePath.includes('/packing')) return nativeHelpTarget.value.includes('/packing');
-    return !nativePath.includes('/activity') && nativePath.includes('/drivers') && nativeHelpTarget.value.includes('/drivers');
+// One contextual target supplies route activation and locale-aware delivery.
+// The URL adapter moves article paths into a doc query.
+const contextualHelpTarget = computed(() => resolveContextualHelpUrl(route.path));
+const helpRoute = computed(() => frontendHelpUrl(contextualHelpTarget.value, locale.value));
+// Highlight contextual Help on Packing and Drivers pages. Feature precedence
+// also applies when an article path contains another feature's name.
+const contextualHelpActive = computed(function contextualHelpActivation() {
+    const currentPath = route.path.toLowerCase();
+    if (currentPath.includes('/survey')) return false;
+    if (currentPath.includes('/packing')) return contextualHelpTarget.value.includes('/packing');
+    return !currentPath.includes('/activity') && currentPath.includes('/drivers') && contextualHelpTarget.value.includes('/drivers');
 });
-// Native header links prefer an explicit return destination, otherwise their current page.
-// Apply the existing pilot return boundary before using either value in forms or navigation.
+// Header links prefer an explicit return destination, otherwise their current page.
+// Apply the return boundary before using either value in forms or navigation.
 const next = computed(() => safeFrontendReturn(typeof route.query.next === 'string' ? route.query.next : route.fullPath));
 const profileLabel = computed(() =>
     session.value?.kind === 'guest'
@@ -88,7 +87,7 @@ function synchronizeHelpLocale(): void {
     localeUrlNeedsSync = false;
     const current = router.currentRoute.value;
     if (!current.meta.helpPage || current.query.locale === locale.value) return;
-    // Help also supports native locale-bearing links. Normalize the settled help
+    // Help also supports locale-bearing links. Normalize the settled help
     // destination, preserving its article/search/fragment for a later reload.
     void router.replace({path: current.path, query: {...current.query, locale: locale.value}, hash: current.hash})
         .catch(() => { if (active) emit('localeError'); });
@@ -131,11 +130,11 @@ function noHeaderDraft(): boolean { return false; }
 /** Protect one logout request and its authoritative identity completion together.
  * The shared identity owner retains delivery across bootstrap failure; a confirmed
  * actor transition retires this old command scope without inviting another logout. */
-async function logoutIdentity(scope: PilotRequestScope) {
+async function logoutIdentity(scope: FrontendRequestScope) {
     const origin = route.fullPath;
     const destination = next.value;
     const result = await context.api.logout(scope);
-    // Native next takes precedence over the provider's fallback logout URL.
+    // Next takes precedence over the provider's fallback logout URL.
     // Retry completes only this destination after the new actor is admitted.
     await completeIdentityEntry(context, router, result,
         {kind: 'redirect', url: destination, notice: {kind: 'success', messageKey: 'auth.logoutDone'}}, origin, completion);
@@ -157,15 +156,15 @@ async function retryCompletion(): Promise<void> {
 </script>
 
 <template>
-    <header class="pilot-app-header">
+    <header class="frontend-app-header">
         <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
             <div class="container">
-                <RouterLink class="navbar-brand d-flex align-items-center" to="/frontend-pilot">
+                <RouterLink class="navbar-brand d-flex align-items-center" to="/">
                     <img :src="'/img/logo.png'" :alt="messages.t('app.title')" height="30" class="me-2" />
                     <span class="fw-semibold">{{ messages.t('app.title') }}</span>
                     <!-- Reserve a small header slot so lazy delivery never inserts
                          a false page skeleton or shifts the brand/navigation. -->
-                    <span class="pilot-navigation-indicator" aria-hidden="true">
+                    <span class="frontend-navigation-indicator" aria-hidden="true">
                         <span v-if="navigation.destination.value" class="spinner-border"></span>
                     </span>
                 </RouterLink>
@@ -174,17 +173,17 @@ async function retryCompletion(): Promise<void> {
                 <button v-if="hydrated"
                     class="navbar-toggler"
                     type="button"
-                    aria-controls="pilot-navbar-main"
+                    aria-controls="frontend-navbar-main"
                     :aria-expanded="expanded"
                     :aria-label="messages.t('app.toggleNavigation')"
                     @click="expanded = !expanded"
                 >
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div id="pilot-navbar-main" class="collapse navbar-collapse" :class="{show: expanded || !hydrated}">
+                <div id="frontend-navbar-main" class="collapse navbar-collapse" :class="{show: expanded || !hydrated}">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                         <li class="nav-item">
-                            <RouterLink class="nav-link" to="/frontend-pilot"
+                            <RouterLink class="nav-link" to="/"
                                 ><i class="bi bi-house-fill me-1" aria-hidden="true"></i
                                 >{{ messages.t('app.home') }}</RouterLink
                             >
@@ -194,19 +193,19 @@ async function retryCompletion(): Promise<void> {
                                 <h6 class="dropdown-header">{{ messages.t('app.planDecide') }}</h6>
                             </li>
                             <li>
-                                <RouterLink class="dropdown-item" to="/frontend-pilot/survey/create"
+                                <RouterLink class="dropdown-item" to="/survey/create"
                                     ><i class="bi bi-bar-chart-steps me-2" aria-hidden="true"></i
                                     >{{ messages.t('app.survey') }}</RouterLink
                                 >
                             </li>
                             <li>
-                                <RouterLink class="dropdown-item" to="/frontend-pilot/activity/create"
+                                <RouterLink class="dropdown-item" to="/activity/create"
                                     ><i class="bi bi-calendar2-check me-2" aria-hidden="true"></i
                                     >{{ messages.t('app.activity') }}</RouterLink
                                 >
                             </li>
                             <li>
-                                <RouterLink class="dropdown-item" to="/frontend-pilot/event/create"
+                                <RouterLink class="dropdown-item" to="/event/create"
                                     ><i class="bi bi-calendar2-event me-2" aria-hidden="true"></i
                                     >{{ messages.t('app.event') }}</RouterLink
                                 >
@@ -216,13 +215,13 @@ async function retryCompletion(): Promise<void> {
                                 <h6 class="dropdown-header">{{ messages.t('app.organizeShare') }}</h6>
                             </li>
                             <li>
-                                <RouterLink class="dropdown-item" to="/frontend-pilot/packing/create"
+                                <RouterLink class="dropdown-item" to="/packing/create"
                                     ><i class="bi bi-bag-plus me-2" aria-hidden="true"></i
                                     >{{ messages.t('app.packing') }}</RouterLink
                                 >
                             </li>
                             <li>
-                                <RouterLink class="dropdown-item" to="/frontend-pilot/drivers/create"
+                                <RouterLink class="dropdown-item" to="/drivers/create"
                                     ><i class="bi bi-car-front me-2" aria-hidden="true"></i
                                     >{{ messages.t('app.drivers') }}</RouterLink
                                 >
@@ -263,13 +262,13 @@ async function retryCompletion(): Promise<void> {
                                 >
                             </li>
                             <li>
-                                <RouterLink class="dropdown-item" to="/frontend-pilot/users/profile"
+                                <RouterLink class="dropdown-item" to="/users/profile"
                                     ><i class="bi bi-gear-fill me-1" aria-hidden="true"></i
                                     >{{ messages.t('app.profileSettings') }}</RouterLink
                                 >
                             </li>
                             <li v-if="session.kind === 'account'">
-                                <RouterLink class="dropdown-item" to="/frontend-pilot/users/profile/manage"
+                                <RouterLink class="dropdown-item" to="/users/profile/manage"
                                     ><i class="bi bi-person-lines-fill me-1" aria-hidden="true"></i
                                     >{{ messages.t('app.yourProfiles') }}</RouterLink
                                 >
@@ -289,7 +288,7 @@ async function retryCompletion(): Promise<void> {
                                 </form>
                             </li>
                             <li>
-                                <RouterLink class="dropdown-item text-danger" to="/frontend-pilot/users/account/delete"
+                                <RouterLink class="dropdown-item text-danger" to="/users/account/delete"
                                     ><i class="bi bi-trash me-1" aria-hidden="true"></i
                                     >{{ messages.t('app.deleteAccount') }}</RouterLink
                                 >
@@ -304,7 +303,7 @@ async function retryCompletion(): Promise<void> {
                             <li class="nav-item me-1">
                                 <RouterLink
                                     class="nav-link"
-                                    :to="{path: '/frontend-pilot/users/login', query: {next}}"
+                                    :to="{path: '/users/login', query: {next}}"
                                     ><i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i
                                     >{{ messages.t('app.login') }}</RouterLink
                                 >
@@ -312,20 +311,20 @@ async function retryCompletion(): Promise<void> {
                             <li class="nav-item">
                                 <RouterLink
                                     class="nav-link"
-                                    :to="{path: '/frontend-pilot/users/register', query: {next}}"
+                                    :to="{path: '/users/register', query: {next}}"
                                     ><i class="bi bi-person-plus me-1" aria-hidden="true"></i
                                     >{{ messages.t('app.register') }}</RouterLink
                                 >
                             </li>
                         </template>
                         <li class="nav-item d-flex align-items-center ms-lg-2">
-                            <label class="visually-hidden" for="pilot-locale">{{
+                            <label class="visually-hidden" for="frontend-locale">{{
                                 messages.t('app.locale')
                             }}</label>
                             <select
-                                id="pilot-locale"
+                                id="frontend-locale"
                                 ref="localeControl"
-                                class="form-select form-select-sm pilot-locale"
+                                class="form-select form-select-sm frontend-locale"
                                 :value="locale"
                                 :disabled="localeAction.disabled.value"
                                 @change="selectLocale"

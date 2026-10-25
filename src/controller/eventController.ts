@@ -74,10 +74,10 @@ import {WithRequired} from "../types/UtilTypes";
 // Template constant for create errors
 const CREATE_TEMPLATE = 'event/event-create';
 
-/** One declaration selects method grants for native middleware, v1 commands and
+/** One declaration selects method grants for permission middleware, v1 commands and
  * capabilities. This preserves the existing independent bits and the participant
  * export's combined requirement; profile/account/participant admission remains
- * with the native route or shared operation rather than being inferred here. */
+ * with the document route or shared operation rather than being inferred here. */
 const eventMethodPermissions: Record<EventMethod, readonly PermType[]> = {
     register: ['ACCESS_REGISTRATION'], admin: ['ACCESS_ADMIN'], participants: ['ACCESS_PARTICIPANTS'],
     manageRegistrations: ['MANAGE_REGISTRATIONS'], items: ['ACCESS_ITEMS'], manageAssignments: ['MANAGE_ASSIGNMENTS'],
@@ -86,7 +86,7 @@ const eventMethodPermissions: Record<EventMethod, readonly PermType[]> = {
     editHeader: [entityMethodPermission('editHeader')], duplicate: [entityMethodPermission('duplicate')],
 };
 
-/** Translate this owner's complete grant choice to the existing native middleware bitmask. */
+/** Translate this owner's complete grant choice to the existing permission middleware bitmask. */
 export function eventMethodPermission(method: EventMethod): number {
     return eventMethodPermissions[method].reduce((mask, key) => mask | PERM[key], 0);
 }
@@ -115,11 +115,11 @@ function validateCalendarDate(value: string, helpers: Joi.CustomHelpers): string
 }
 
 /** Identify only authored Event property rejections from the existing validator.
- * Native prose, submitted values and validation rules stay with their owner;
+ * Controller prose, submitted values and validation rules stay with their owner;
  * versioned adapters receive a finite reason for an already rejected request. */
 function eventPropertyRejectionCause(error: Joi.ValidationError): string | undefined {
-    // Generated structural validation precedes this shared native boundary, but
-    // calendar semantics, trim checks and native string lengths still apply here.
+    // Generated structural validation precedes this shared validation boundary, but
+    // calendar semantics, trim checks and string lengths still apply here.
     const detail = error.details[0];
     switch (detail?.path[0]) {
         case 'title': return 'EVENT_TITLE_INVALID';
@@ -169,7 +169,7 @@ export function projectEventLinkOption(event: Event): EventLinkOption {
  *
  * @param manager Transaction used for current permission evidence by a locked caller.
  * @param knownEvent That caller's selected, locked event row; null means the row
- * disappeared, while undefined retains the native lookup. The row belongs to eventId.
+ * disappeared, while undefined retains the ordinary lookup. The row belongs to eventId.
  */
 export async function authorizeEventLink(eventId: string | null | undefined, session: SessionLike,
                                          manager?: EntityManager, knownEvent?: Event | null): Promise<Event | null> {
@@ -178,7 +178,7 @@ export async function authorizeEventLink(eventId: string | null | undefined, ses
     const {error} = Joi.string().uuid().validate(eventId);
     if (error) throw new APIError('Invalid event.', {}, 400);
 
-    // Native callers keep their existing lookup. A controller operating under a
+    // Direct callers keep their existing lookup. A controller operating under a
     // DBAL-managed parent lock supplies that exact row and transaction instead;
     // both paths apply this same attachment policy without another permission owner.
     const event = knownEvent === undefined ? await eventService.getEventById(eventId) : knownEvent;
@@ -193,8 +193,8 @@ export async function authorizeEventLink(eventId: string | null | undefined, ses
 }
 
 /**
- * Resolve an optional initial selection without disclosing a rejected event. Native
- * forms and migrating features share this read projection; submitting an event still
+ * Resolve an optional initial selection without disclosing a rejected event. Direct calls
+ * forms and features share this read projection; submitting an event still
  * performs its own mandatory authorization. Operational failures must remain errors.
  */
 export async function readEventLinkSelection(input: unknown, session: SessionLike): Promise<EventLinkOption | null> {
@@ -321,13 +321,13 @@ async function createEntity(ownerId: string, eventData: WithRequired<Partial<Eve
     return await eventService.createEventTx(ownerId, eventData);
 }
 
-// Native and versioned creation both persist defaults after the Event commit.
+// Direct and versioned creation both persist defaults after the Event commit.
 async function afterCreateItems(id: string, data: any, inputFormat?: 'permissionKeys' | 'masks') {
     await saveDefaultPermsFromBody(ENTITIES.EVENT, id, data._body, {inputFormat});
 }
 
 /**
- * Adapt generated multipart values to the existing Event creation owners. Native
+ * Adapt generated multipart values to the existing Event creation owners. Direct calls
  * creation and defaults remain separate commits; entering those owners makes a
  * later failure uncertain, never proof that an Event or uploaded image is absent.
  */
@@ -336,16 +336,16 @@ export async function createEvent(body: components['schemas']['EventCreateInput'
     requireEventCreation(session);
     let parsed: ReturnType<typeof preprocessCreate>;
     try {
-        // JSON booleans and nullable controls select the same native form values.
-        // The native parser remains the single owner of cross-field validation.
-        const nativeBody = {...body, maxParticipants: body.maxParticipants ?? '',
+        // JSON booleans and nullable controls select the same form values.
+        // The form parser remains the single owner of cross-field validation.
+        const formBody = {...body, maxParticipants: body.maxParticipants ?? '',
             requireDietaryInfo: body.requireDietaryInfo ? 'on' : '', allowDietComment: body.allowDietComment ? 'on' : '',
             allowRegDateUpdatesAfterDeadline: body.allowRegDateUpdatesAfterDeadline ? 'on' : '',
             allowRegCancelationAfterDeadline: body.allowRegCancelationAfterDeadline ? 'on' : '',
             allowRegDietUpdateAfterDeadline: body.allowRegDietUpdateAfterDeadline ? 'on' : ''};
-        delete (nativeBody as Partial<typeof nativeBody>).defaultPermissions;
+        delete (formBody as Partial<typeof formBody>).defaultPermissions;
         checkNewImage(file);
-        parsed = preprocessCreate(nativeBody);
+        parsed = preprocessCreate(formBody);
     } catch (error) {
         // No creation has started. This upload cannot be referenced by an Event.
         if (file) removeImage(file.path);
@@ -437,8 +437,8 @@ async function deleteEntity(event: Event, _session: Request['session']) {
     return await (eventService as any).deleteEvent(event.id);
 }
 
-/** Validate and save current-profile attendance through the unchanged native lifecycle.
- * Stable causes let the versioned adapter localize known rejections while native
+/** Validate and save current-profile attendance through the shared attendance lifecycle.
+ * Stable causes let the versioned adapter localize known rejections while direct calls
  * callers retain their original literal messages, statuses and registration order. */
 async function registerAttendance(event: Event, body: any, req: {session: SessionLike; resource?: Record<string, unknown>}) {
     if (!event) throw new APIError('Event not found', body, 404);
@@ -543,7 +543,7 @@ function isDietaryEqual(reg: EventRegistration, dietary: DIETARY[], allergyNotes
     return ok && localDiets.size === 0 && allergyNotes === localAllergy && dietComment === localComment;
 }
 
-/** Keep the native dietary combinations and note requirements under one business owner. */
+/** Keep the dietary combinations and note requirements under one business owner. */
 function checkMeals(dietary: DIETARY[], allergyNotes: string, dietComment: string, body: any) {
     // A selected supplementary category needs its own note before meal-combination checks.
     if (dietary.includes("ALLERGIES") && !allergyNotes) {
@@ -592,7 +592,7 @@ async function cancelRegistration(event: Event, session: SessionLike) {
 /* ----------------------- API: Organizer edit ----------------------- */
 
 /** Normalize sparse Event properties under the existing field policy and locked current date/deadline context.
- * Native calls retain their service-managed transaction; a versioned caller can supply its existing
+ * Direct calls retain their service-managed transaction; a versioned caller can supply its existing
  * transaction so reviewed comparison and final result preparation share that lock. */
 async function updateEventSettings(event: Event, body: any, permData?: Pick<PermBundle, 'entity'>, manager?: EntityManager) {
     if (!event) throw new APIError('Event not found', {}, 404);
@@ -656,7 +656,7 @@ async function updateEventSettings(event: Event, body: any, permData?: Pick<Perm
         await eventService.updateEventProperties(event.id, patch, manager);
     }
     // Versioned metadata supplies its existing lock/field comparison transaction.
-    // Native callers retain the original service-managed transaction unchanged.
+    // Direct callers retain the original service-managed transaction unchanged.
     if (manager) await updateLocked(manager);
     else await eventService.withEventTransaction(updateLocked);
     return 'Event updated';
@@ -667,7 +667,7 @@ async function updateSettings(id: string, body: any) {
     return 'Settings saved';
 }
 
-/** One capacity policy serves native/v1 presentation and registration admission.
+/** One capacity policy serves direct/versioned presentation and registration admission.
  * Missing limits remain unlimited, while a persisted zero still closes admission.
  * Callers supply their existing count so this rule introduces no read or lock. */
 function eventCapacityReached(limit: number | null | undefined, registrationCount: number): boolean {
@@ -713,7 +713,7 @@ async function createDeadlineBypassLink(event: Event, body: any, session: Sessio
     if (!session.auth?.user) throw new APIError('Must be logged in', body, 401, {cause: 'EVENT_LINK_ACCOUNT_REQUIRED'});
 
     // Account-only issuance is an action rejection for a valid guest, never session expiry.
-    // Preserve the native optional-expiry parser and fixed single-use persistence behavior.
+    // Preserve the shared optional-expiry parser and fixed single-use persistence behavior.
     const expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
     return await eventService.createDeadlineBypassLink(
         event.id,
@@ -735,7 +735,7 @@ async function deleteRegistration(event: Event, registrationId: string) {
 }
 
 /** Update one event-scoped registration within the Event's inclusive date window.
- * Native route middleware and the versioned method adapter independently enforce
+ * Document route middleware and the versioned method adapter independently enforce
  * MANAGE_REGISTRATIONS before calling this shared validation/persistence owner. */
 async function updateRegistrationDates(event: Event, registrationId: string, body: any, permData?: PermBundle) {
     const schema = Joi.object({
@@ -833,7 +833,7 @@ function requireEvent(event: Event | null): Event {
     return event;
 }
 
-/** Every Event method uses the same event participant audience as native middleware. */
+/** Every Event method uses the same event participant audience as permission middleware. */
 async function eventPermissions(event: Event, session: SessionLike, manager?: EntityManager): Promise<PermView> {
     return evaluateSubject({kind: 'entity', entity: {
         entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
@@ -853,8 +853,8 @@ export function eventFormContext(): components['schemas']['EventCreateContext'] 
 
 /** Project account-page admission without creating an anonymous session or exposing Event content. */
 export function readEventCreateEntry(session: SessionLike, returnTo?: unknown): components['schemas']['EventCreateEntry'] {
-    const target = safeFrontendReturn(returnTo ?? '/frontend-pilot/event/create');
-    const entry = getAccountPageEntry(session, '/frontend-pilot/users/login', target);
+    const target = safeFrontendReturn(returnTo ?? '/event/create');
+    const entry = getAccountPageEntry(session, '/users/login', target);
     return {entry, context: entry.kind === 'render' ? eventFormContext() : null};
 }
 
@@ -871,7 +871,7 @@ export async function readEventGuestEntry(id: string): Promise<components['schem
 }
 
 /**
- * Share native page admission between SSR and client navigation. A token is
+ * Share document page admission between SSR and client navigation. A token is
  * navigation state only: neither guest entry nor prefetch consumes its use.
  * Administration admission and the roster's later method grant stay separate.
  */
@@ -879,7 +879,7 @@ export async function readEventResourceEntry(id: string, view: 'detail' | 'guest
     regToken?: string): Promise<components['schemas']['EventResourceEntry']> {
     return eventService.withEventReadSnapshot(id, async function readEntry(manager, row) {
         if (!row) return {entry: {kind: 'denied', status: 404, messageKey: 'event.notFound'}, guest: null};
-        const detailUrl = `/frontend-pilot/event/${encodeURIComponent(id)}`;
+        const detailUrl = `/event/${encodeURIComponent(id)}`;
         const tokenQuery = regToken ? `?${new URLSearchParams({regToken})}` : '';
         if (view === 'guest') {
             return session.profile
@@ -889,7 +889,7 @@ export async function readEventResourceEntry(id: string, view: 'detail' | 'guest
         if (!session.profile) {
             return {entry: {kind: 'redirect', url: `${detailUrl}/guest${tokenQuery}`, notice: null}, guest: null};
         }
-        // Native Event detail admits an active profile independently of ACCESS_VIEW.
+        // Event detail admits an active profile independently of ACCESS_VIEW.
         // Its admin route additionally requires ACCESS_ADMIN; no roster data enters admission.
         if (view === 'admin' && !mayPerformEventMethod(await eventPermissions(row, session, manager), 'admin')) {
             return {entry: {kind: 'denied', status: 403, messageKey: 'api:errors.FORBIDDEN'}, guest: null};
@@ -929,7 +929,7 @@ export async function readEvent(id: string, session: SessionLike, view: 'detail'
         const event = requireEvent(row);
         const permissions = await eventPermissions(event, session, manager);
         if (view === 'admin' && !mayPerformEventMethod(permissions, 'admin')) throw new ApiProblem('FORBIDDEN');
-        // Select only own attendance and a cardinality; never load the native invoice/roster aggregate.
+        // Select only own attendance and a cardinality; never load the full invoice/roster aggregate.
         const registration = await eventService.getRegistrationFor(session.profile!.id, id, manager);
         const registrationCount = await eventService.getEventRegistrationCount(id, manager);
         const archive = await eventArchive(event, session, manager);
@@ -964,7 +964,7 @@ export function normalizeEventMetadataPatch(body: unknown): unknown {
     return patch;
 }
 
-/** Preserve public DATA_DUPLICATE admission while copying only the native Event form surface. */
+/** Preserve public DATA_DUPLICATE admission while copying only the Event form surface. */
 export async function readEventDuplicate(id: string, session: SessionLike): Promise<components['schemas']['EventDuplicate']> {
     return eventService.withEventReadSnapshot(id, async function readDuplicate(manager, row) {
         const event = requireEvent(row);
@@ -972,7 +972,7 @@ export async function readEventDuplicate(id: string, session: SessionLike): Prom
         // Source attendance, invoices, images and archival state never become new-event input.
         return {values: {title: event.title, description: event.description ?? '',
             startDate: event.startDate, endDate: event.endDate, location: event.location ?? '',
-            // Native duplication inserts the persisted timestamp directly into datetime-local;
+            // Duplication inserts the persisted timestamp directly into datetime-local;
             // the browser presents an empty control. Do not silently change that copied draft.
             bindingDeadline: '', deadlineTz: event.timezone || 'UTC',
             maxParticipants: event.maxParticipants || null, requireDietaryInfo: Boolean(event.requireDietaryInfo),
@@ -999,7 +999,7 @@ async function eventMetadata(event: Event, session: SessionLike, manager: Entity
         editToken: comparisonToken('event-metadata', event.id, session, values)};
 }
 
-/** Native Event property methods are publicly grantable; disclose only their permitted field baseline. */
+/** Event property methods are publicly grantable; disclose only their permitted field baseline. */
 export async function readEventMetadata(id: string, session: SessionLike): Promise<components['schemas']['EventMetadata']> {
     return eventService.withEventReadSnapshot(id, async function readMetadata(manager, row) {
         return eventMetadata(requireEvent(row), session, manager);
@@ -1081,7 +1081,7 @@ export async function readEventSettings(id: string, session: SessionLike): Promi
     });
 }
 
-/** Native registration retains its capacity/deadline/dietary checks and transactional token consumption. */
+/** Registration retains its capacity/deadline/dietary checks and transactional token consumption. */
 export async function saveEventRegistration(id: string, body: components['schemas']['EventRegistrationInput'], session: SessionLike) {
     requireSessionProfileId(session);
     const event = requireEvent(await eventService.getEventById(id));
@@ -1091,18 +1091,18 @@ export async function saveEventRegistration(id: string, body: components['schema
     return {changed: true};
 }
 
-/** Cancellation retains native profile admission, deadline policy and an absent-attendance no-op. */
+/** Cancellation retains profile admission, deadline policy and an absent-attendance no-op. */
 export async function cancelEventRegistration(id: string, session: SessionLike) {
     requireSessionProfileId(session);
     const event = requireEvent(await eventService.getEventById(id));
-    // The native Event root has no parent eventId, so its participant middleware
+    // The Event root has no parent eventId, so its participant middleware
     // adds no attendance requirement. Repeated own-profile cancellation succeeds;
     // the shared operation still rejects a closed deadline before its scoped delete.
     await cancelRegistration(event, session);
     return {changed: true};
 }
 
-/** Authorize a named native Event method without disclosing its protected operation data first. */
+/** Authorize a named Event method without disclosing its protected operation data first. */
 async function requireEventMethod(id: string, session: SessionLike, method: EventMethod): Promise<Event> {
     const event = requireEvent(await eventService.getEventById(id));
     if (!mayPerformEventMethod(await eventPermissions(event, session), method)) throw new ApiProblem('FORBIDDEN');
@@ -1121,7 +1121,7 @@ export async function readEventParticipants(id: string, session: SessionLike): P
         allergies: data.allergies, comments: data.comments, generatedAt: data.generatedAt};
 }
 
-/** Organizer edits retain native date validation and event-scoped persistence. */
+/** Organizer edits retain date validation and event-scoped persistence. */
 export async function editEventRegistration(id: string, registrationId: string,
     body: components['schemas']['EventRegistrationDates'], session: SessionLike) {
     const event = await requireEventMethod(id, session, 'manageRegistrations');
@@ -1146,7 +1146,7 @@ export async function readEventRegistrationLinks(id: string, session: SessionLik
         profileId: link.profileId ?? null, status: link.status as components['schemas']['EventRegistrationLink']['status']}))};
 }
 
-/** Link creation retains the native account-only, single-use command without a postcommit read. */
+/** Link creation retains the account-only, single-use command without a postcommit read. */
 export async function addEventRegistrationLink(id: string, body: components['schemas']['EventRegistrationLinkInput'], session: SessionLike) {
     const event = await requireEventMethod(id, session, 'manageRegistrations');
     return createDeadlineBypassLink(event, body, session);
@@ -1159,13 +1159,13 @@ export async function revokeEventRegistrationLink(id: string, linkId: string, se
     return {changed: true};
 }
 
-/** Event cards share native membership and archival decoration, without private Overview placement. */
+/** Event cards share membership and archival decoration, without private Overview placement. */
 export async function readEventThingsToDo(id: string, session: SessionLike, view: 'detail' | 'admin' = 'detail'): Promise<components['schemas']['EventThingsToDo']> {
     const event = await requireEventMethod(id, session, view === 'admin' ? 'admin' : 'items');
     const profileId = requireSessionProfileId(session);
     const registration = await eventService.getRegistrationFor(profileId, id);
     const manages = mayPerformEventMethod(await eventPermissions(event, session), 'manageAssignments');
-    // The native detail reveals children only after registration or assignment-management admission.
+    // The detail projection reveals children only after registration or assignment-management admission.
     if (!mayReadEventChildren(registration, manages)) return {items: []};
     const [activityPlans, packingLists, driversLists] = await Promise.all([
         eventService.getActivityPlansForEvent(id), eventService.getPackingListsForEvent(id), eventService.getDriverListsForEvent(id),
@@ -1239,7 +1239,7 @@ async function requireEventChildScope(id: string, outcome: EntityMutationOutcome
     const event = requireEvent(await eventService.getEventById(id, manager));
     const permissions = await eventPermissions(event, session, manager);
     if (!mayPerformEventMethod(permissions, view === 'admin' ? 'admin' : 'items')) throw new ApiProblem('FORBIDDEN');
-    // Native child discovery requires own attendance or assignment management,
+    // Child discovery requires own attendance or assignment management,
     // independently of the child's archive authority already checked by its owner.
     const registration = await eventService.getRegistrationFor(requireSessionProfileId(session), id, manager);
     if (!mayReadEventChildren(registration, mayPerformEventMethod(permissions, 'manageAssignments'))) throw new ApiProblem('FORBIDDEN');
@@ -1326,7 +1326,7 @@ export async function setEventAdmin(id: string, profileId: string, mask: number 
     });
 }
 
-/** Reuse native secure account-profile search; no guest credentials or raw addresses enter options. */
+/** Reuse secure account-profile search; no guest credentials or raw addresses enter options. */
 export async function searchEventProfiles(id: string, query: string, session: SessionLike): Promise<components['schemas']['PackingProfileOptions']> {
     await requireEventMethod(id, session, 'managePermissions');
     return (await userService.searchUsersSecure(query)).map(profile => ({profileId: profile.id, name: profile.name,
@@ -1354,7 +1354,7 @@ export async function setEventHeader(id: string, file: Express.Multer.File | und
     return {changed: receipt.changed};
 }
 
-/** Native Event image reads precede page admission; storage paths remain internal to the binary adapter. */
+/** Event image reads precede page admission; storage paths remain internal to the binary adapter. */
 export async function readEventHeaderPath(id: string, _session: SessionLike): Promise<string> {
     const event = requireEvent(await eventService.getEventById(id));
     if (!event.headerImg) throw new ApiProblem('NOT_FOUND');
@@ -1374,7 +1374,7 @@ export async function setEventArchived(id: string, archived: boolean, session: S
     }
 }
 
-/** Permanent deletion preserves native owner admission and existing record/file operation ordering. */
+/** Permanent deletion preserves shared owner admission and existing record/file operation ordering. */
 export async function removeEvent(id: string, session: SessionLike) {
     const profileId = requireSessionProfileId(session);
     const event = requireEvent(await eventService.getEventById(id));

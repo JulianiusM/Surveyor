@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {computed, onBeforeUnmount, ref, shallowRef, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
-import type {PilotPlainMessageKey} from '../../../types/FrontendPilotUiTypes';
-import {useActionState, usePilot} from '../../app/context';
+import type {FrontendPlainMessageKey} from '../../../types/FrontendUiTypes';
+import {useActionState, useFrontend} from '../../app/context';
 import {ApiFailure} from '../../app/transport';
 import {useCommand} from '../../composables/command';
 import {useReadRetry} from '../../composables/feedback';
@@ -20,8 +20,8 @@ import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 const props = defineProps<{eventId: string; pool: components['schemas']['FinancePool']; open: boolean;
     savedShares: components['schemas']['FinanceShare'][];
     active: boolean; hasPendingEdits: () => boolean; refresh: () => Promise<void>}>();
-const emit = defineEmits<{close: []; saved: [notice: PilotPlainMessageKey]}>();
-const context = usePilot();
+const emit = defineEmits<{close: []; saved: [notice: FrontendPlainMessageKey]}>();
+const context = useFrontend();
 const {messages, locale} = context;
 const api = useFinanceApi(context);
 const id = useId();
@@ -102,7 +102,7 @@ async function apply(): Promise<void> {
         return;
     }
     const input = {expectedRevision: preview.value.revision, sendEmails: sendEmails.value};
-    const notice: PilotPlainMessageKey = recalculate
+    const notice: FrontendPlainMessageKey = recalculate
         ? input.sendEmails ? 'finance.poolRecalculatedWithEmails' : 'finance.poolRecalculatedWithoutEmails'
         : input.sendEmails ? 'finance.poolClosedWithEmails' : 'finance.poolClosedWithoutEmails';
     // Capture both revision and mail choice before disabling the controls. The

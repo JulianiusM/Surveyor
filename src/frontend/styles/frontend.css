@@ -1,0 +1,301 @@
+/* Keep the rendered Bootstrap theme while giving Vue exclusive ownership of interactive state. */
+.frontend-app { color: var(--bs-body-color); }
+/* Paused enhanced reads retain their real href for modified/new-tab navigation.
+   Ordinary clicks use the same action admission as the visible disabled state. */
+.frontend-app a.btn[aria-disabled="true"]:not(.disabled) { opacity: var(--bs-btn-disabled-opacity, .65); }
+/* Contextual page notices and transient notifications share the document flow.
+   This contextual grouping adds no extra containing layout box. */
+.frontend-page-notices { display: contents; }
+/* Header disclosures and card/filter disclosures sit above the shared sticky
+   feedback, while actual modal backdrops retain their higher application layer. */
+.frontend-app-header { position: relative; z-index: 1040; }
+.frontend-dropdown { position: relative; min-width: 0; max-width: 100%; }
+.frontend-dropdown[open] { z-index: 1040; }
+.frontend-dropdown > .dropdown-menu { z-index: 1040; }
+.frontend-nav-dropdown > summary { list-style: none; cursor: pointer; }
+.frontend-nav-dropdown > summary::-webkit-details-marker { display: none; }
+.frontend-nav-dropdown > .dropdown-menu { top: 100%; left: 0; margin-top: var(--bs-dropdown-spacer); }
+.frontend-nav-dropdown[open] > .dropdown-menu { display: block; }
+.frontend-nav-dropdown .dropdown-menu-end { right: 0; left: auto; }
+.frontend-app .dropdown-menu, .frontend-dialog .dropdown-menu { max-width: calc(100vw - 2rem); }
+/* Keep the minimum for short menus; translated labels choose their own
+   intrinsic width within the viewport rather than imposing an English gap. */
+.frontend-nav-dropdown > .dropdown-menu { width: max-content; min-width: min(10rem, calc(100vw - 2rem)); }
+@media (max-width: 991.98px) {
+    /* Collapsed navigation uses Bootstrap's normal-flow full row, independently
+       of desktop end alignment or the intrinsic width of translated labels. */
+    .frontend-nav-dropdown > .dropdown-menu { width: auto; max-width: 100%; }
+}
+.frontend-app :is(.dropdown-item, .dropdown-item-text, .dropdown-header),
+.frontend-dialog :is(.dropdown-item, .dropdown-item-text, .dropdown-header) { white-space: normal; overflow-wrap: anywhere; }
+.frontend-app-header :is(.navbar-collapse, .navbar-nav, .nav-item, .nav-link) { min-width: 0; }
+.frontend-app-header .nav-link { white-space: normal; overflow-wrap: anywhere; }
+.frontend-locale { width: auto; }
+/* Shared layout responds to available room rather than a selected language.
+   Allow actual labels and user titles to shrink/wrap without changing table
+   tracks, hidden-column policy or the feature-owned scrolling containers. */
+.frontend-app :is(.card, .card-header, .card-body, .card-footer, .row > *, .d-flex > *),
+.frontend-dialog :is(.card, .card-header, .card-body, .card-footer, .row > *, .d-flex > *) { min-width: 0; }
+.frontend-app .d-flex > .bi, .frontend-dialog .d-flex > .bi { flex-shrink: 0; }
+.frontend-app :is(h1, h2, h3, h4, h5, h6, .form-label, .form-check-label, .form-text, .accordion-button),
+.frontend-dialog :is(h1, h2, h3, h4, h5, h6, .form-label, .form-check-label, .form-text, .accordion-button) { overflow-wrap: anywhere; }
+.frontend-app .list-group-item, .frontend-dialog .list-group-item { overflow-wrap: anywhere; }
+.frontend-app :is(.btn, .badge), .frontend-dialog :is(.btn, .badge) {
+    max-width: 100%; white-space: normal; overflow-wrap: anywhere;
+}
+/* Bootstrap centers ordinary button text, but flex-based links otherwise start
+   at the left edge when the shared phone action row stretches them. Center the
+   whole icon/label group for every matching action, including portaled dialogs.
+   Picker, menu and accordion rows retain their separate list alignment. */
+.frontend-app .btn:is(.d-flex, .d-inline-flex), .frontend-dialog .btn:is(.d-flex, .d-inline-flex) {
+    align-items: center; justify-content: center;
+}
+/* Wide semantic tables keep complete words and their existing scroll owner.
+   Compact flex actions must not squeeze a label into separate letter fragments. */
+.frontend-app table :is(.btn, .badge), .frontend-dialog table :is(.btn, .badge) {
+    min-width: min-content; max-width: none; overflow-wrap: normal;
+}
+/* Bootstrap clips absolute radio controls inside tables. Give their existing
+   scrollport a containing block so offscreen controls cannot widen the document;
+   table scrolling and sticky cells retain the same overflow/position owners. */
+.frontend-app .table-responsive, .frontend-dialog .table-responsive { position: relative; }
+/* Initial Packing rows need actual editing room. Their existing table viewport
+   scrolls to the remaining fields/actions instead of squeezing out input text. */
+.frontend-app .packing-creation-items .form-control { min-width: 10rem; }
+.frontend-app .packing-creation-items .form-control[type="number"] { min-width: 5rem; }
+.frontend-app :is(.form-control, .form-select), .frontend-dialog :is(.form-control, .form-select) {
+    min-width: 0; max-width: 100%;
+}
+.frontend-app .card-header.d-flex, .frontend-dialog .card-header.d-flex {
+    flex-wrap: wrap; gap: .5rem 1rem;
+}
+.frontend-app .card-header.d-flex > *, .frontend-dialog .card-header.d-flex > * { max-width: 100%; }
+.frontend-app .card-header.d-flex > :first-child:not(:only-child):not(.bi),
+.frontend-dialog .card-header.d-flex > :first-child:not(:only-child):not(.bi) { flex: 1 1 auto; }
+.frontend-app .card-header > .d-flex, .frontend-dialog .card-header > .d-flex { flex-wrap: wrap; }
+/* Settings, Rules and future matching sections share these two compositions.
+   Headings and hints can take separate lines; actions retain their DOM order. */
+.frontend-section-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem 1rem; }
+.frontend-section-heading > * { min-width: 0; max-width: 100%; }
+.frontend-action-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; max-width: 100%; }
+.card-header > .frontend-action-row { justify-content: flex-end; margin-inline-start: auto; }
+/* A disclosure and its independent read action share one painted heading.
+   Refresh stays a sibling button and never changes the disclosure state. */
+.frontend-app .frontend-accordion-heading { margin: 0; background: var(--bs-accordion-btn-bg);
+    border-radius: var(--bs-accordion-border-radius);
+    border-bottom: var(--bs-accordion-border-width) solid var(--bs-accordion-border-color); }
+.frontend-app .frontend-accordion-heading:has(> .accordion-button:not(.collapsed)) { background: var(--bs-accordion-active-bg); }
+.frontend-app .frontend-accordion-heading > .accordion-button { flex: 1 1 auto; width: auto; min-width: 0;
+    background: transparent; border-bottom: 0; box-shadow: none; }
+/* The three/four choice columns give whole words their actual width.
+   Very narrow screens contain labels within the available three tracks. */
+.frontend-choice-grid { display: grid; grid-template-columns: repeat(3, minmax(min-content, 1fr)); gap: .5rem; }
+.frontend-choice-grid .form-check-label { overflow-wrap: normal; }
+@media (min-width: 768px) { .frontend-choice-grid { grid-template-columns: repeat(4, minmax(min-content, 1fr)); } }
+@media (max-width: 359.98px) {
+    .frontend-choice-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .frontend-choice-grid .form-check-label { overflow-wrap: anywhere; }
+}
+/* A sticky host reserves its real height at its original position. The stack
+   becomes empty on dismissal/expiry, releasing that space without a stale gap.
+   Sticky positioning keeps results visible after scrolling past their origin;
+   no notification changes focus or requests a document/dialog scroll. */
+.frontend-notice-region { position: sticky; top: 0; z-index: 1035; min-height: 0; flex: 0 0 auto; pointer-events: none; }
+.frontend-notice-stack { display: grid; gap: .5rem;
+    max-height: min(65dvh, 32rem); overflow-y: auto; overscroll-behavior: contain; pointer-events: none; }
+.frontend-notice-stack:not(:empty) { margin-bottom: 1rem; }
+.frontend-notification { min-width: 0; max-width: 100%; margin: 0 !important; overflow-wrap: anywhere; pointer-events: auto; }
+.frontend-notice-with-action { display: flex; align-items: flex-start; gap: .75rem 1rem; }
+.frontend-notice-body { min-width: 0; overflow-wrap: anywhere; }
+/* Notices without an action retain their caller's original inline/flex content
+   layout; only the shared action composition needs a separate text column. */
+:is(.status-notice, .alert):not(.frontend-notice-with-action) > .frontend-notice-body { display: contents; }
+.frontend-notice-with-action > .frontend-notice-body { flex: 1 1 auto; }
+.frontend-notice-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: .5rem;
+    max-width: 45%; margin-inline-start: auto; }
+.frontend-notice-actions > .btn { margin-inline: 0 !important; }
+.frontend-dialog .frontend-notice-region { z-index: 3; }
+/* SSR has no mounted injection target yet. Its local origin uses the same
+   natural height before hydration relocates the unchanged receipt. */
+.frontend-notice-origin { display: contents; }
+.frontend-notice-origin.frontend-notice-region { display: block; margin-bottom: 1rem; }
+.frontend-notice-origin.frontend-notice-region > .frontend-notification {
+    max-height: min(65dvh, 32rem); overflow-y: auto;
+}
+/* The header keeps one fixed slot for route delivery. A small spinner conveys
+   pending navigation without inserting a skeleton row above the current page. */
+.frontend-navigation-indicator { display: inline-flex; width: 1rem; height: 1rem; margin-inline-start: .5rem; }
+.frontend-navigation-indicator .spinner-border { width: 1rem; height: 1rem; }
+.frontend-dialog-backdrop { position: fixed; inset: 0; z-index: 1050; background: rgb(0 0 0 / 50%); }
+.frontend-dialog { position: fixed; z-index: 1055; inset: 1.75rem auto auto 50%; transform: translateX(-50%);
+    --bs-modal-header-padding-x: 1rem; --bs-modal-header-padding-y: 1rem; --bs-modal-title-line-height: 1.5;
+    --bs-modal-inner-border-radius: calc(var(--bs-border-radius-lg) - var(--bs-border-width));
+    width: min(500px, calc(100vw - 1rem)); max-height: calc(100dvh - 3.5rem); overflow: hidden;
+    border: 1px solid var(--bs-border-color-translucent); border-radius: var(--bs-border-radius-lg); }
+.frontend-dialog .modal-header, .frontend-dialog .modal-body, .frontend-dialog .modal-footer { padding: 1rem; }
+/* Bootstrap's header has no flex gap. Extra spacing would narrow the
+   subtitle on mobile and move every following panel below its position. */
+.frontend-dialog .modal-header, .frontend-dialog .modal-footer { display: flex; align-items: center; }
+.frontend-dialog .modal-header { justify-content: space-between; border-bottom: 1px solid var(--bs-border-color); }
+.frontend-dialog .modal-body { overflow-y: auto; }
+.frontend-dialog .modal-header, .frontend-dialog .modal-footer { flex-shrink: 0; }
+.frontend-dialog .modal-footer { justify-content: flex-end; padding: .75rem; gap: 0; border-top: 1px solid var(--bs-border-color); }
+.frontend-dialog .modal-footer > * { margin: .25rem; }
+/* Finance instructions and saved history share their readable palette. Portals
+   retain that context explicitly after leaving the page's finance ancestor. */
+[data-finance-section] .text-secondary, .finance-dialog .text-secondary { color: #adb5bd !important; }
+/* Scope settings panel geometry to the dialog so inline feature panels retain
+   their own layout and spacing. */
+.frontend-dialog .entity-settings-nav .nav-item { flex: 1 1 auto; }
+.frontend-dialog .entity-settings-nav .nav-link { width: 100%; padding: .5rem .65rem; }
+.frontend-dialog .entity-property-group { padding: .85rem; border: 1px solid var(--bs-border-color-translucent);
+    border-radius: var(--bs-border-radius); }
+.frontend-dialog .entity-property-group > summary { cursor: pointer; }
+.frontend-dialog .entity-settings-panel { min-width: 0; }
+.frontend-conflict-values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+.frontend-conflict-values dd { overflow-wrap: anywhere; white-space: pre-wrap; }
+/* Only an active conflict needs reading room; the table's existing horizontal scroll
+   keeps mobile review usable without widening ordinary cells or their inputs. */
+.frontend-inline-conflict { min-width: 14rem; }
+@media (min-width: 992px) { .frontend-dialog { width: 800px; } }
+@media (max-width: 575.98px) {
+    .frontend-dialog .entity-settings-nav .nav-item { flex: 1 1 40%; }
+    .frontend-conflict-values { grid-template-columns: 1fr; }
+    .frontend-dialog { inset: .5rem auto auto 50%; max-height: calc(100dvh - 1rem); }
+    .frontend-dialog.frontend-dialog-fullscreen { inset: 0; transform: none; width: 100%; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
+}
+@media (max-width: 767.98px) {
+    /* Compact summary/action rows wrap as a unit instead of forcing the page
+       wider. Tables keep their existing display and horizontal scroll owner. */
+    .frontend-app .d-flex:is(.justify-content-between, .justify-content-end):not(.flex-column),
+    .frontend-dialog .d-flex:is(.justify-content-between, .justify-content-end):not(.flex-column) { flex-wrap: wrap; row-gap: .5rem; column-gap: .75rem; }
+    .frontend-app .btn-group, .frontend-dialog .btn-group { max-width: 100%; flex-wrap: wrap; }
+    /* Table answer groups remain one coherent row. Their existing table
+       viewport reveals wide choices without changing label or radio order. */
+    .frontend-app table .btn-group, .frontend-dialog table .btn-group { max-width: none; flex-wrap: nowrap; }
+    /* Help tables retain natural column widths and word wrapping.
+       Only actual overflow scrolls locally, including ordinary prose tables. */
+    .frontend-app .help-content table { display: block; overflow-x: auto; }
+}
+/* Guest identity choices use the centered default modal, not the wide settings layout. */
+.frontend-dialog.frontend-dialog-standard { width: min(500px, calc(100vw - 1rem)); }
+.frontend-dialog.frontend-dialog-compact { inset: 50% auto auto 50%; transform: translate(-50%, -50%);
+    width: min(500px, calc(100vw - 1rem)); height: auto; max-height: calc(100dvh - 1rem);
+    border: 1px solid var(--bs-border-color-translucent); border-radius: var(--bs-border-radius-lg); }
+
+/* Loading geometry follows the existing field, table, card and article proportions.
+   It carries no content/actions and never covers a feature's already loaded projection. */
+.frontend-skeleton { display: block; min-width: 0; }
+.frontend-skeleton-shapes, .frontend-skeleton-content { display: grid; gap: .75rem; min-width: 0; }
+/* Only the loading region pulses. Nested decorative primitives share that
+   animation instead of multiplying opacity changes or announcing another status. */
+.frontend-skeleton-animated { animation: frontend-skeleton-pulse 1.6s ease-in-out infinite; }
+.frontend-skeleton-shapes.card { gap: 0; }
+.frontend-skeleton-page-header .frontend-skeleton-heading { width: 60%; height: clamp(1.75rem, 4vw, 2.5rem); margin: 0 auto; }
+/* Entity and account headers share the same desktop title/action row. This
+   geometry carries no record text or controls and grants no authority. */
+.frontend-skeleton-balanced-header { display: grid; grid-template-columns: minmax(0, 1fr) 2rem; align-items: center; gap: 1rem; padding: 1rem; }
+.frontend-skeleton-balanced-header > .frontend-skeleton-heading { grid-column: 1 / -1; grid-row: 1; width: 60%; justify-self: center; font-size: calc(1.375rem + 1.5vw); height: 1.2em; }
+.frontend-skeleton-balanced-header > .frontend-skeleton-header-actions { grid-column: 2; grid-row: 1; justify-self: end; width: 2rem; height: 1.9375rem; }
+/* Entity Settings uses the normal button height beside compact Refresh. */
+:is(.frontend-skeleton-list-detail, .frontend-skeleton-activity, .frontend-skeleton-survey, .frontend-skeleton-event, .frontend-skeleton-event-admin) .frontend-skeleton-header-actions { height: 2.375rem; }
+@media (min-width: 1200px) {
+    .frontend-skeleton-balanced-header > .frontend-skeleton-heading { font-size: 2.5rem; }
+}
+.frontend-skeleton-content.card-body { gap: 1.5rem; }
+.frontend-skeleton-bar { display: block; min-width: 0; height: 1rem; border-radius: var(--bs-border-radius-sm);
+    background: currentColor; opacity: .18; }
+.frontend-skeleton-lines > .frontend-skeleton-content > .frontend-skeleton-bar:last-child { width: 70%; }
+.frontend-skeleton-label { width: 30%; min-width: 4rem; margin-bottom: .5rem; }
+.frontend-skeleton-control { height: 2.375rem; border-radius: var(--bs-border-radius); }
+.frontend-skeleton-heading { width: 60%; height: 1.75rem; margin-bottom: .5rem; }
+.frontend-skeleton-short { width: 70%; }
+.frontend-skeleton-table { gap: 0; }
+.frontend-skeleton-table-viewport { display: block; min-width: 0; overflow-x: auto; }
+.frontend-skeleton-table-grid { display: grid; min-width: 40rem; }
+.frontend-skeleton-table-heading, .frontend-skeleton-table-row { display: grid;
+    grid-template-columns: var(--frontend-skeleton-tracks, repeat(var(--frontend-skeleton-columns), minmax(0, 1fr)));
+    gap: 1rem; padding: 1rem .5rem; border-bottom: 1px solid var(--bs-border-color-translucent); }
+.frontend-skeleton-table-heading { padding-top: .5rem; }
+.frontend-skeleton-table-row { min-height: 3.5rem; }
+/* Approximate the actual list columns, including Packing's narrow personal
+   checkbox. Other table consumers retain their independently declared geometry. */
+.frontend-skeleton-list-detail [data-skeleton-columns="6"] { --frontend-skeleton-tracks: 5fr 25fr 25fr 20fr 10fr 15fr; }
+.frontend-skeleton-list-detail [data-skeleton-columns="5"] { --frontend-skeleton-tracks: 20fr 20fr 25fr 10fr 25fr; }
+.frontend-skeleton-cards .card, .frontend-skeleton-paragraph { display: grid; gap: .75rem; }
+.frontend-skeleton-article > .frontend-skeleton-content, .frontend-skeleton-overview > .frontend-skeleton-content { gap: 1.5rem; }
+.frontend-skeleton-collection { display: grid; gap: 1rem; min-width: 0; }
+.frontend-skeleton-toolbar, .frontend-skeleton-counters, .frontend-skeleton-summary { display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; min-width: 0; }
+.frontend-skeleton-roster-row { display: grid; grid-template-columns: minmax(0, 1fr) 8rem;
+    align-items: center; gap: 1rem; padding: .75rem; border: 1px solid var(--bs-border-color-translucent); }
+.frontend-skeleton-textarea { height: 6rem; }
+.frontend-skeleton-introduction { width: 75%; margin-inline: auto; }
+.frontend-skeleton-form-footer { width: 12rem; margin-left: auto; }
+.frontend-skeleton-form-footer-half { width: 50%; margin-inline: auto; }
+.frontend-skeleton-form-footer-full { width: 100%; }
+.frontend-skeleton-form-footer-two-thirds { width: 66.666667%; margin-inline: auto; }
+.frontend-skeleton-recovery { display: grid; gap: 1rem; padding-top: 1rem;
+    border-top: 1px solid var(--bs-border-color-translucent); }
+@keyframes frontend-skeleton-pulse { 0%, 100% { opacity: .65; } 50% { opacity: 1; } }
+@media (max-width: 767.98px) {
+    .frontend-skeleton-balanced-header { grid-template-columns: minmax(0, 1fr); }
+    .frontend-skeleton-balanced-header > .frontend-skeleton-heading { grid-column: 1; }
+    .frontend-skeleton-balanced-header > .frontend-skeleton-header-actions { grid-column: 1; grid-row: 2; justify-self: stretch; width: 100%; height: 2.375rem; }
+    /* Refresh follows the shared heading fold through narrow tablet widths.
+       Other action rows and table controls retain their own phone breakpoint. */
+    .frontend-action-row:has(> .frontend-refresh-button) { width: 100%; align-items: stretch; flex-direction: column; }
+    .frontend-action-row:has(> .frontend-refresh-button) > .btn { width: 100%; margin-inline: 0 !important; }
+    /* The whole accordion heading includes its normal-width Refresh row.
+       Inset margins retain a gutter inside the continuous painted boundary. */
+    .frontend-app .frontend-accordion-heading { flex-direction: column; align-items: stretch !important; }
+    .frontend-app .frontend-accordion-heading > .accordion-button { width: 100%; }
+    .frontend-app .frontend-accordion-heading > .frontend-refresh-button { width: auto; align-self: stretch; margin: .5rem !important; }
+    /* Entity headings have Settings and Refresh as separate narrow actions.
+       Decorative bands mirror their geometry without presenting live controls. */
+    :is(.frontend-skeleton-list-detail, .frontend-skeleton-activity, .frontend-skeleton-survey, .frontend-skeleton-event, .frontend-skeleton-event-admin) .frontend-skeleton-header-actions {
+        height: 5.25rem; background: linear-gradient(to bottom, currentColor 0 2.375rem, transparent 2.375rem 2.875rem, currentColor 2.875rem 5.25rem); }
+    .frontend-skeleton-summary { grid-template-columns: minmax(0, 1fr); }
+    .frontend-skeleton-form-footer-two-thirds { width: 100%; }
+    /* The participant roster alone folds email into the name column below md.
+       Other tables retain all columns and their horizontal clipping behavior. */
+    .frontend-skeleton-table-grid[data-skeleton-hide-column] { min-width: 0; }
+    .frontend-skeleton-table-grid[data-skeleton-hide-column] .frontend-skeleton-table-heading,
+    .frontend-skeleton-table-grid[data-skeleton-hide-column] .frontend-skeleton-table-row {
+        grid-template-columns: repeat(var(--frontend-skeleton-mobile-columns), minmax(0, 1fr));
+    }
+}
+@media (max-width: 575.98px) {
+    .frontend-skeleton-form-footer-half { width: 100%; }
+    /* Ordinary action bars and dialog footers follow the phone layout:
+       each complete action gets a row; table answer groups remain independent. */
+    .frontend-action-row { width: 100%; align-items: stretch; flex-direction: column; }
+    .frontend-action-row > :is(.btn, .btn-group, .frontend-dropdown, .d-inline-block) { width: 100%; }
+    .frontend-action-row > :is(.btn, .btn-group) { margin-inline: 0 !important; }
+    .frontend-action-row > .btn-group { display: flex !important; flex-direction: column; gap: .5rem; }
+    .frontend-action-row > .btn-group > .btn { width: 100%; margin-inline-start: 0; border-radius: var(--bs-btn-border-radius); }
+    .frontend-action-row > .d-inline-block > .frontend-dropdown > summary,
+    .frontend-action-row > .frontend-dropdown > summary { width: 100%; }
+    .frontend-dialog .modal-footer { flex-direction: column; align-items: stretch; }
+    .frontend-dialog .modal-footer > * { width: auto; }
+    .frontend-notice-with-action { flex-direction: column; align-items: stretch; }
+    .frontend-notice-actions { width: 100%; max-width: 100%; flex-direction: column; }
+    .frontend-notice-actions > .btn { width: 100%; }
+    .frontend-skeleton-toolbar { grid-template-columns: minmax(0, 1fr); }
+}
+/* Respect the same motion preference across every feature. */
+@media (prefers-reduced-motion: reduce) {
+    .frontend-skeleton-animated, .frontend-app .spinner-border, .frontend-dialog .spinner-border { animation: none; }
+}
+
+/* One gesture owner supplies these classes to lists and schedule cards. Inset
+   edges show the actual insertion position without changing row/card geometry. */
+.frontend-reorder-dragging { opacity: .5; }
+.frontend-reorder-before { box-shadow: inset 0 3px var(--bs-info); }
+.frontend-reorder-after { box-shadow: inset 0 -3px var(--bs-info); }
+/* Collapsed table borders and Bootstrap's cell background shadows otherwise
+   cover a row shadow. Preserve the table's existing background under the edge. */
+tr.frontend-reorder-before > * { box-shadow: inset 0 3px var(--bs-info),
+    inset 0 0 0 9999px var(--bs-table-bg-state, var(--bs-table-bg-type, var(--bs-table-accent-bg))); }
+tr.frontend-reorder-after > * { box-shadow: inset 0 -3px var(--bs-info),
+    inset 0 0 0 9999px var(--bs-table-bg-state, var(--bs-table-bg-type, var(--bs-table-accent-bg))); }

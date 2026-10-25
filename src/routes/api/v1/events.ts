@@ -25,7 +25,7 @@ router.post('/', asyncHandler(async function createEvent(req, res) {
         // decodes only the data part, retaining unknown fields for rejection.
         await receiveApiUpload(req, res, uploadHeader);
         validateOperationRequest(req, 'createEvent', body => decodeApiMultipartData(body, req.file));
-        // The controller cleans native validation failures before creation. Once
+        // The controller cleans existing validation failures before creation. Once
         // its existing creation owner runs, an uploaded image may be committed.
         enteredCreation = true;
         const result = await eventApi.createEvent(req.body.data, req.file, actor);
@@ -247,7 +247,7 @@ router.delete('/:eventId', asyncHandler(async function deleteEvent(req, res) {
     sendValidatedJson(req, res, 'deleteEvent', 200, result);
 }));
 
-/** Capture authoritative request context before the shared native search limiter can reject. */
+/** Capture authoritative request context before the shared existing search limiter can reject. */
 async function admitEventProfileSearch(req: Request, res: Response, next: NextFunction): Promise<void> {
     await requireApiContext(req, res);
     validateOperationRequest(req, 'searchEventProfiles');

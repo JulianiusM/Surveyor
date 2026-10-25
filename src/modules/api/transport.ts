@@ -125,7 +125,7 @@ export function validateOperationRequest(req: Request, operationId: ApiOperation
     const parameterValidator = contractValidator(operation.parametersValidator);
     if (!parameterValidator(parameters)) throw validationProblem(parameterValidator.errors);
 
-    // Feature normalization runs only after media admission, preserving native
+    // Feature normalization runs only after media admission, preserving form-shaped
     // trim/empty-value semantics while retaining the generated structural contract.
     if (operation.requestSchema) {
         if (!req.is(operation.requestMediaType ?? 'application/json')) throw new ApiProblem('UNSUPPORTED_MEDIA_TYPE');

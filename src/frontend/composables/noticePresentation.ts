@@ -1,26 +1,26 @@
 import {computed, onBeforeUnmount, onMounted, onUpdated, ref, shallowReactive, toRaw, watch} from 'vue';
-import type {PilotContext} from '../../types/FrontendPilotUiTypes';
-import type {PilotNoticePresentationSource} from '../../types/FrontendFeedbackTypes';
+import type {FrontendContext} from '../../types/FrontendUiTypes';
+import type {FrontendNoticePresentationSource} from '../../types/FrontendFeedbackTypes';
 
 // Each application/request has its own presentation readers. Mounted components
 // remain the owners of their props; this set copies no request or query state.
-const presentations = new WeakMap<PilotContext, Set<PilotNoticePresentationSource>>();
+const presentations = new WeakMap<FrontendContext, Set<FrontendNoticePresentationSource>>();
 
 /** Present one causal read failure through its live common notification. Ordinary
  * query notices keep their component/prop readers while their duplicate DOM is
  * hidden, so the common owner can display the query's actual freshness/deadline.
  * Different Error instances, missing errors and retired notices remain independent. */
-export function useNoticePresentation(context: PilotContext | null, source: PilotNoticePresentationSource) {
+export function useNoticePresentation(context: FrontendContext | null, source: FrontendNoticePresentationSource) {
     let entries = context ? presentations.get(context) : undefined;
     if (context && !entries) {
-        entries = shallowReactive(new Set<PilotNoticePresentationSource>());
+        entries = shallowReactive(new Set<FrontendNoticePresentationSource>());
         presentations.set(context, entries);
     }
     const readers = entries;
     const visible = ref(false);
     let observer: MutationObserver | undefined;
     let mounted = false;
-    const presentation: PilotNoticePresentationSource = {...source, presented: () => visible.value};
+    const presentation: FrontendNoticePresentationSource = {...source, presented: () => visible.value};
     /** Observe geometry/disclosure only; no visibility event initiates a read. */
     function refreshVisibility(): void {
         visible.value = source.common() && source.readError() instanceof Error && source.presented();
@@ -50,7 +50,7 @@ export function useNoticePresentation(context: PilotContext | null, source: Pilo
     onBeforeUnmount(() => { mounted = false; stopObservation(); readers?.delete(presentation); });
 
     /** Only actual Error identity joins two presentations of the same failed GET. */
-    function sameFailure(candidate: PilotNoticePresentationSource): boolean {
+    function sameFailure(candidate: FrontendNoticePresentationSource): boolean {
         const failure = source.readError();
         return failure instanceof Error && toRaw(candidate.readError()) === toRaw(failure);
     }

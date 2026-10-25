@@ -4,10 +4,10 @@ documentation-metadata
 audience: survey participants; survey organizers
 owner: survey feature maintainers
 status: current
-last-verified: 2026-10-24
+last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Weekday-occurrence terminology reconciled with the recurring monthly selection and current catalog labels; existing user journeys, native business reference and heading anchors retained. Diagram regeneration and visual review are recorded separately in the frontend review receipt.
-source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; docs/user-guide/en/assets/survey-recurring-pattern.png; docs/features/help/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; src/views/surveyor/survey-create.pug; src/views/surveyor/survey-vote.pug; src/public/js/survey-create.ts; src/routes/survey.ts; src/routes/api/survey.ts; src/controller/surveyController.ts; src/middleware/guestFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/surveys/Survey.ts; src/modules/database/entities/surveys/SurveyCombination.ts; src/modules/database/entities/surveys/SurveyResponse.ts; src/modules/database/services/SurveyService.ts; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/survey-workflows.spec.ts; tests/e2e/core-workflows.spec.ts; docs/decisions/DEC-001-SURVEY-COMBINATION-AUTHORIZATION.md; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; src/controller/helpController.ts; src/frontend/features/surveys/; src/frontend/components/EntitySettingsDialog.vue; src/locales/
+verification-scope: Restored native English Week of month and Day in month labels and options under the maintainer's wording correction; existing user journeys and heading anchors retained. The matching English Survey figure was regenerated from its catalog-bound owner and individually inspected at full and reduced sizes.
+source-anchors: src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; docs/user-guide/en/assets/survey-recurring-pattern.png; docs/features/help/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; src/controller/surveyController.ts; src/modules/database/entities/surveys/Survey.ts; src/modules/database/entities/surveys/SurveyCombination.ts; src/modules/database/entities/surveys/SurveyResponse.ts; src/modules/database/services/SurveyService.ts; tests/integration/survey-workflows.spec.ts; tests/e2e/core-workflows.spec.ts; docs/decisions/DEC-001-SURVEY-COMBINATION-AUTHORIZATION.md; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; src/controller/helpController.ts; src/frontend/features/surveys/; src/frontend/components/EntitySettingsDialog.vue; src/locales/; src/frontend/
 next-review: survey-visible-UI-or-behavior-change
 production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
 -->
@@ -16,9 +16,9 @@ Surveys are designed primarily for organizing **recurring monthly dates**, such 
 
 A survey can also compare options within one named month as a secondary use case. Put that month and year in the title or description, because the survey stores weekday positions rather than concrete calendar dates. When the decision is mainly about several exact dates, a date-specific polling service may offer a more direct experience; use Surveyor when the recurring monthly pattern is the important part.
 
-![Survey controls showing Weekday, Occurrence in month, Add, and the first Monday of every month with Yes, Maybe and No choices.](assets/survey-recurring-pattern.png)
+![Survey controls showing Weekday, Day in month, Add, and the first Monday of every month with Yes, Maybe and No choices.](assets/survey-recurring-pattern.png)
 
-*Choose **Monday** and **Occurrence 1 in month**, then **Add**, to propose the first Monday of every month. The actual calendar date changes from month to month.*
+*Choose **Monday** and **1. day in month**, then **Add**, to propose the first Monday of every month. The actual calendar date changes from month to month.*
 
 [View the recurring-pattern image at full size](/help/assets/survey-recurring-pattern.png).
 
@@ -138,7 +138,7 @@ No organizer or administrator role is required.
 
 1. Scroll to **Add new combination**.
 2. Under **Weekday:**, choose Monday through Sunday.
-3. Under **Occurrence in month:**, choose **Occurrence 1 in month**, **Occurrence 2 in month**, **Occurrence 3 in month**, **Occurrence 4 in month**, or **Last (4th/5th) occurrence in month**.
+3. Under **Day in month:**, choose **1. day in month**, **2. day in month**, **3. day in month**, **4. day in month**, or **Last (4./5.) day in month**.
 4. Select **Add**.
 
 The option appears as a new column for everyone. Each weekday-and-position combination can occur only once in a survey.
@@ -169,7 +169,7 @@ Surveyor does not enforce a survey response deadline. A date written in the desc
 The **Select date combinations** table starts with one row.
 
 1. Choose a **Weekday**.
-2. Choose the **Occurrence in month**: **1**, **2**, **3**, **4**, or **Last**.
+2. Choose the **Week of month**: **1**, **2**, **3**, **4**, or **Last**.
 3. Select **Add combination** for another row.
 4. Select **Remove** beside a row that should not be included.
 

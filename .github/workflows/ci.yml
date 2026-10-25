@@ -177,7 +177,7 @@ jobs:
           CI: true
           PLAYWRIGHT_JUNIT_OUTPUT: artifacts/junit-playwright-frontend.xml
           PLAYWRIGHT_HTML_OUTPUT_DIR: artifacts/playwright-frontend-report
-        # The application build above supplies native/client/SSR assets. This
+        # The application build above supplies browser/client/SSR assets. This
         # client runner starts no server, prepares no schema and is not E2E evidence.
         run: npm run test:frontend:browser --ignore-scripts -- --workers=2
 

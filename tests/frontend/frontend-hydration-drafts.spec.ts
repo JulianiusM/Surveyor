@@ -5,10 +5,10 @@ import {flushPromises} from '@vue/test-utils';
 import {createSSRApp, defineComponent, h, nextTick, onMounted, ref} from 'vue';
 import {renderToString} from 'vue/server-renderer';
 import {render} from '../../src/frontend/app/entry-server';
-import {createPilotApp} from '../../src/frontend/app/createApp';
+import {createFrontendApp} from '../../src/frontend/app/createApp';
 import {hasHydrationDrafts, mountPreservingDrafts} from '../../src/frontend/app/mountPreservingDrafts';
 import FormField from '../../src/frontend/components/FormField.vue';
-import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
+import type {FrontendBootstrap} from '../../src/types/FrontendTypes';
 import type {components} from '../../src/types/api/v1';
 
 const profileId = '11111111-1111-4111-8111-111111111111';
@@ -49,14 +49,14 @@ function selectEarlyImage(input: HTMLInputElement): void {
 
 /** Use the actual SSR/client tree. Only static Help has an editing window before
  * mount; interactive feature controls appear after the shared initialization gate. */
-async function nativeApplication(url: string, bootstrap: FrontendPilotBootstrap) {
+async function nativeApplication(url: string, bootstrap: FrontendBootstrap) {
     const result = await render(url, bootstrap);
-    document.body.innerHTML = `<div id="surveyor-pilot">${result.html}</div>`;
+    document.body.innerHTML = `<div id="surveyor-frontend">${result.html}</div>`;
     window.history.replaceState({}, '', url);
-    const browser = createPilotApp(JSON.parse(result.state) as FrontendPilotBootstrap, true);
+    const browser = createFrontendApp(JSON.parse(result.state) as FrontendBootstrap, true);
     await browser.router.isReady();
     cleanups.push(() => { browser.app.unmount(); browser.context.start()(); });
-    const container = document.getElementById('surveyor-pilot')!;
+    const container = document.getElementById('surveyor-frontend')!;
     async function hydrate() {
         await mountPreservingDrafts(browser.app, container);
         await nextTick();
@@ -71,7 +71,7 @@ async function nativeApplication(url: string, bootstrap: FrontendPilotBootstrap)
 
 describe('drafts entered before hydration', () => {
     it('uses the same admitted DOM draft rules for initial reload protection', () => {
-        document.body.innerHTML = `<div id="surveyor-pilot">
+        document.body.innerHTML = `<div id="surveyor-frontend">
             <input name="username" value="server value"><textarea>server text</textarea>
             <input type="number" data-hydration-draft value="1">
             <input type="checkbox" data-hydration-draft>
@@ -80,7 +80,7 @@ describe('drafts entered before hydration', () => {
             <input type="hidden" data-hydration-draft value="context">
             <input readonly value="read-only"><input disabled value="disabled">
         </div>`;
-        const container = document.getElementById('surveyor-pilot')!;
+        const container = document.getElementById('surveyor-frontend')!;
         const fields = container.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select');
         expect(hasHydrationDrafts(container)).toBe(false);
 
@@ -108,10 +108,10 @@ describe('drafts entered before hydration', () => {
             url: '/help/packing_lists?locale=de', contentLocale: 'en'};
         const fallback: components['schemas']['HelpPageData'] = {...help, locale: 'de', contentLocale: 'en', fallbackToEnglish: true,
             content: '<h2 id="task">A synthetic task</h2><p>Reviewed English instructions.</p>'
-                + '<a href="/help/packing_lists?locale=de#task">Packing</a><img src="/frontend-pilot/help/assets/figure.png?locale=en" alt="English figure">',
+                + '<a href="/help/packing_lists?locale=de#task">Packing</a><img src="/help/assets/figure.png?locale=en" alt="English figure">',
             docsList: [englishTopic], docsGroups: [{title: 'Organisieren und teilen', docs: [englishTopic]}],
             toc: [{id: 'task', title: 'A synthetic task', level: 2}]};
-        const {container, context, hydrate} = await nativeApplication('/frontend-pilot/help?locale=de', {
+        const {container, context, hydrate} = await nativeApplication('/help?locale=de', {
             session: {...session, locale: 'de'}, help: fallback,
         });
         const notice = container.querySelector<HTMLElement>('.help-language-fallback')!;
@@ -134,13 +134,13 @@ describe('drafts entered before hydration', () => {
     it('keeps an early help search and submits its edited value through client navigation', async () => {
         const request = vi.fn(() => { throw new Error('Hydration must not submit or read'); });
         vi.stubGlobal('fetch', request);
-        const {container, router, initialize} = await nativeApplication('/frontend-pilot/help?q=initial', {session, help});
-        const input = container.querySelector<HTMLInputElement>('#pilot-help-search')!;
+        const {container, router, initialize} = await nativeApplication('/help?q=initial', {session, help});
+        const input = container.querySelector<HTMLInputElement>('#frontend-help-search')!;
         input.value = 'My early help search';
         input.focus();
         input.setSelectionRange(3, 8);
         await initialize();
-        expect(container.querySelector('#pilot-help-search')).toBe(input);
+        expect(container.querySelector('#frontend-help-search')).toBe(input);
         expect(input.value).toBe('My early help search');
         expect(document.activeElement).toBe(input);
         expect([input.selectionStart, input.selectionEnd]).toEqual([3, 8]);
@@ -169,11 +169,11 @@ describe('drafts entered before hydration', () => {
         vi.stubGlobal('fetch', request);
         const account: components['schemas']['SessionView'] = {...session, kind: 'account',
             activeProfile: {id: profileId, name: 'Fixture'}, profiles: [{id: profileId, name: 'Fixture'}], logoutUrl: '/users/logout'};
-        const {container, router, initialize} = await nativeApplication('/frontend-pilot/users/dashboard?owner_main_q=initial', {
+        const {container, router, initialize} = await nativeApplication('/users/dashboard?owner_main_q=initial', {
             session: account, overview: [],
         });
         expect(container.querySelector('main input')).toBeNull();
-        expect(container.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+        expect(container.querySelector('[data-frontend-initial-loading]')).not.toBeNull();
         await initialize();
         await flushPromises();
         // Both newly mounted regions perform their independent initial reads.
@@ -199,14 +199,14 @@ describe('drafts entered before hydration', () => {
             status: 400, code: 'VALIDATION_FAILED', detail: 'Review the request.', messageKey: 'api:errors.VALIDATION_FAILED', params: {}}),
         {status: 400, headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context}}));
         vi.stubGlobal('fetch', request);
-        const {container, context, initialize} = await nativeApplication('/frontend-pilot/users/login', {session});
+        const {container, context, initialize} = await nativeApplication('/users/login', {session});
         expect(container.querySelector('main form')).toBeNull();
-        expect(container.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
-        expect(container.querySelector<HTMLSelectElement>('#pilot-locale')!.disabled).toBe(true);
+        expect(container.querySelector('[data-frontend-initial-loading]')).not.toBeNull();
+        expect(container.querySelector<HTMLSelectElement>('#frontend-locale')!.disabled).toBe(true);
         await initialize();
         const username = container.querySelector<HTMLInputElement>('#username')!;
         const password = container.querySelector<HTMLInputElement>('#password')!;
-        const locale = container.querySelector<HTMLSelectElement>('#pilot-locale')!;
+        const locale = container.querySelector<HTMLSelectElement>('#frontend-locale')!;
         username.value = 'early-account';
         password.value = 'synthetic-early-password';
         username.dispatchEvent(new Event('input', {bubbles: true}));
@@ -224,7 +224,7 @@ describe('drafts entered before hydration', () => {
         expect(request).toHaveBeenCalledOnce();
         const submitted = request.mock.calls[0]![0] as Request;
         expect(new URL(submitted.url).pathname).toBe('/api/v1/auth/login');
-        expect(await submitted.json()).toEqual({username: 'early-account', password: 'synthetic-early-password', next: '/frontend-pilot/users/dashboard'});
+        expect(await submitted.json()).toEqual({username: 'early-account', password: 'synthetic-early-password', next: '/users/dashboard'});
         expect(context.bootstrap).not.toHaveProperty('password');
     }, 30_000);
 
@@ -262,14 +262,14 @@ describe('drafts entered before hydration', () => {
                 items: [{title: 'Copied tent', description: '', maxAssignees: 2, requiredByAll: true}],
                 defaultPermissions: {...creation.defaults, participant: 3}, formContext: creation, selectedEvent: null,
             };
-            const url = mode === 'create' ? '/frontend-pilot/packing/create'
-                : `/frontend-pilot/packing/${profileId}/duplicate`;
-            const bootstrap: FrontendPilotBootstrap = mode === 'create'
+            const url = mode === 'create' ? '/packing/create'
+                : `/packing/${profileId}/duplicate`;
+            const bootstrap: FrontendBootstrap = mode === 'create'
                 ? {session: account, packingCreateContext: creation}
                 : {session: account, packingDuplicate: duplicate};
             const {container, initialize, context} = await nativeApplication(url, bootstrap);
             expect(container.querySelector('main form')).toBeNull();
-            expect(container.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+            expect(container.querySelector('[data-frontend-initial-loading]')).not.toBeNull();
             expect(request).not.toHaveBeenCalled();
             await initialize();
             const form = container.querySelector<HTMLFormElement>('main form')!;

@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import type {PilotCreationAdmissionNoticesProps} from '../../types/FrontendCreationTypes';
-import {usePilot} from '../app/context';
+import type {FrontendCreationAdmissionNoticesProps} from '../../types/FrontendCreationTypes';
+import {useFrontend} from '../app/context';
 import StatusNotice from './StatusNotice.vue';
 
 // Event, standalone Survey and list creation keep their admitted definitions,
 // local drafts and retry operations. This owner presents their matching read
 // warnings only; it creates no query, command, timer or authority snapshot.
-defineProps<PilotCreationAdmissionNoticesProps>();
+defineProps<FrontendCreationAdmissionNoticesProps>();
 const emit = defineEmits<{retryRead: []; retrySubmission: []}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 </script>
 
 <template>

@@ -1,17 +1,17 @@
 import type {Ref} from 'vue';
-import type {PilotActionState, PilotPlainMessageKey} from './FrontendPilotUiTypes';
+import type {FrontendActionState, FrontendPlainMessageKey} from './FrontendUiTypes';
 
 /** Feature-owned field identity for safe generated-input feedback. Draft values
  * and parser text are deliberately absent; collection positions identify controls. */
-export interface PilotInputField {
-    label: PilotPlainMessageKey;
-    row?: {label: PilotPlainMessageKey; number: number; day?: string};
+export interface FrontendInputField {
+    label: FrontendPlainMessageKey;
+    row?: {label: FrontendPlainMessageKey; number: number; day?: string};
 }
 
 /** A notice presents an existing operation's action without owning its admission or retry policy. */
-export interface PilotNoticeAction {
+export interface FrontendNoticeAction {
     /** Omitted when the existing action uses only shared initialization and its handler's guards. */
-    state?: PilotActionState;
+    state?: FrontendActionState;
     label: string;
     /** Existing callers distinguish ordinary and compact notice buttons. */
     class?: string;
@@ -19,14 +19,14 @@ export interface PilotNoticeAction {
 
 /** An existing error receipt may retain only the failed read's identity.
  * The query remains the owner of its data, freshness and retry deadline. */
-export interface PilotReadFailureDescriptor {
-    messageKey: PilotPlainMessageKey;
+export interface FrontendReadFailureDescriptor {
+    messageKey: FrontendPlainMessageKey;
     readError: Error;
 }
 
 /** Mounted notice prop readers coordinate presentation only. They retain no
  * query state, request lifetime, submitted values or recovery callback. */
-export interface PilotNoticePresentationSource {
+export interface FrontendNoticePresentationSource {
     readError(): Error | null | undefined;
     common(): boolean;
     presented(): boolean;
@@ -36,12 +36,12 @@ export interface PilotNoticePresentationSource {
 
 /** Read-only presentation of the command owner's existing receipts and status.
  * No draft, endpoint, mutation callback or authorization crosses this boundary. */
-export interface PilotCommandPresentation {
+export interface FrontendCommandPresentation {
     error: Readonly<Ref<string | null>>;
     transientError: Readonly<Ref<boolean>>;
     errorRenewal: Readonly<Ref<unknown>>;
     feedbackKind: Readonly<Ref<'danger' | 'info' | 'success'>>;
-    notice: Readonly<Ref<PilotPlainMessageKey | null>>;
+    notice: Readonly<Ref<FrontendPlainMessageKey | null>>;
     noticeKind: Readonly<Ref<'success' | 'warning'>>;
     transientNotice: Readonly<Ref<boolean>>;
     noticeRenewal: Readonly<Ref<unknown>>;
@@ -50,7 +50,7 @@ export interface PilotCommandPresentation {
     noticeReadError: Readonly<Ref<Error | null>>;
     /** Read recovery uses the same command owner and never repeats a write or
      * acknowledges an uncertain creation. Ordinary feature actions remain explicit. */
-    readRecoveryAction: PilotActionState;
+    readRecoveryAction: FrontendActionState;
     reconcileRead(): Promise<boolean>;
     dismissError(): void;
     dismissNotice(): void;
@@ -59,16 +59,16 @@ export interface PilotCommandPresentation {
 /** Features retain whether an uncertain creation needs review, its wording and
  * the read action. Feedback shares only the repeated paragraph/button rendering;
  * an emitted review request never acknowledges or retries a command itself. */
-export interface PilotCreationReviewPresentation {
+export interface FrontendCreationReviewPresentation {
     required: boolean;
-    message: PilotPlainMessageKey;
-    state: PilotActionState;
+    message: FrontendPlainMessageKey;
+    state: FrontendActionState;
     paragraphClass?: string;
 }
 
 /** Shared presentation keeps transient notifications and durable recovery with one receipt owner. */
 export interface CommandFeedbackProps {
-    feedback: PilotCommandPresentation;
+    feedback: FrontendCommandPresentation;
     part?: 'all' | 'error' | 'notice' | 'uncertain';
     disabled?: boolean;
     noMargin?: boolean;
@@ -76,7 +76,7 @@ export interface CommandFeedbackProps {
     noticeLastUpdatedAt?: number;
     noticeRetryAt?: number;
     noticeReadError?: Error | null;
-    unknownMessage?: PilotPlainMessageKey;
-    action?: PilotNoticeAction;
-    creationReview?: PilotCreationReviewPresentation;
+    unknownMessage?: FrontendPlainMessageKey;
+    action?: FrontendNoticeAction;
+    creationReview?: FrontendCreationReviewPresentation;
 }

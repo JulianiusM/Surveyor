@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {ref} from 'vue';
 import type {components} from '../../../types/api/v1';
-import type {PilotPlainMessageKey} from '../../../types/FrontendPilotUiTypes';
-import {useActionState, usePilot} from '../../app/context';
+import type {FrontendPlainMessageKey} from '../../../types/FrontendUiTypes';
+import {useActionState, useFrontend} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
 import FinanceCalculationReview from './FinanceCalculationReview.vue';
@@ -18,8 +18,8 @@ import StatusNotice from '../../components/StatusNotice.vue';
 const props = defineProps<{eventId: string; pool: components['schemas']['FinancePool']; active: boolean;
     shares: components['schemas']['FinanceShare'][];
     hasPendingEdits: () => boolean; refresh: () => Promise<void>}>();
-const emit = defineEmits<{saved: [notice: PilotPlainMessageKey]}>();
-const context = usePilot();
+const emit = defineEmits<{saved: [notice: FrontendPlainMessageKey]}>();
+const context = useFrontend();
 const {messages} = context;
 const api = useFinanceApi(context);
 const selected = ref<'calculation' | 'notify' | 'rollback' | null>(null);
@@ -76,24 +76,24 @@ function acknowledge(): void {
     if (!inspected.value || command.pending.value || command.recovering.value) return;
     command.acknowledge(); selected.value = null;
 }
-function calculationSaved(notice: PilotPlainMessageKey): void {emit('saved', notice);}
+function calculationSaved(notice: FrontendPlainMessageKey): void {emit('saved', notice);}
 </script>
 
 <template>
     <div class="border-top border-secondary-subtle mt-4 pt-3" data-finance-pool-outputs>
         <!-- Saved-calculation guidance and deliberate email/calculation intents
-             retain their native priority; shared action rows handle phone reflow. -->
+             retain their priority; shared action rows handle phone reflow. -->
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
             <div class="flex-grow-1">
                 <strong>{{ messages.t(pool.status === 'CLOSED' ? 'finance.updateTheCalculatedShares' : 'finance.readyToCalculateShares') }}</strong>
                 <p class="text-secondary small mb-0">{{ messages.t(pool.status === 'CLOSED' ? 'finance.previewTheUpdatedSharesAndCarryRecordedPaymentsForward' : 'finance.reviewInvoicesAttendanceAndSavedAllocationSettingsBeforeClosing') }}</p>
             </div>
-            <div class="pilot-action-row">
+            <div class="frontend-action-row">
                 <ActionButton v-if="pool.status === 'CLOSED'" variant="outline-info" :state="action" @click="open('notify')">{{ messages.t('finance.sendSettlementEmails') }}</ActionButton>
                 <ActionButton variant="warning" :state="action" @click="open('calculation')">{{ messages.t(pool.status === 'CLOSED' ? 'finance.recalculatePool' : 'finance.previewCalculation') }}</ActionButton>
             </div>
         </div>
-        <div v-if="pool.status === 'CLOSED' && pool.needsRecalculation" class="pilot-action-row align-items-center mt-3">
+        <div v-if="pool.status === 'CLOSED' && pool.needsRecalculation" class="frontend-action-row align-items-center mt-3">
             <ActionButton variant="outline-light" :disabled="action.disabled.value || !pool.canRollback" @click="open('rollback')">{{ messages.t('finance.rollBackPoolChanges') }}</ActionButton>
             <small v-if="!pool.canRollback" class="text-secondary">{{ messages.t('finance.rollbackBecomesAvailableAfterThisPoolSNextSuccessful') }}</small>
         </div>

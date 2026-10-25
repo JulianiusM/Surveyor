@@ -4,7 +4,7 @@ import {useRoute} from 'vue-router';
 import type {components} from '../../../types/api/v1';
 import type {FrontendListPendingControl, FrontendListQuickAddValues} from '../../../types/FrontendListTypes';
 import {usePackingApi} from './api';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {evictQueryFamilies, retireQueryFamily} from '../../app/queryCache';
 import {overviewKeys, packingKeys} from '../../app/queryKeys';
 import {usePageTitle} from '../../composables/pageTitle';
@@ -29,9 +29,9 @@ import FormField from '../../components/FormField.vue';
 
 type Item = components['schemas']['PackingItemView'];
 const route = useRoute();
-const context = usePilot();
+const context = useFrontend();
 // Personal failure fallback still belongs to this mounted actor, even though its
-// successfully persisted native keys deliberately remain independent of profile.
+// successfully persisted keys deliberately remain independent of profile.
 const packedScope = context.capture();
 const api = usePackingApi(context);
 const {messages} = context;
@@ -50,7 +50,7 @@ const freshItem = reactive<FrontendListQuickAddValues & {title: string}>({title:
 // shared command. A disabled sibling must never claim this initiator's focus.
 const pendingControl = ref<FrontendListPendingControl | null>(null);
 // The raw Everyone switch retains its exact row markup. Capture only the actual
-// initiating native node; no row value or command result is mirrored here.
+// initiating node; no row value or command result is mirrored here.
 const requiredControl = shallowRef<HTMLInputElement | null>(null);
 const quickAddDirty = computed(
     () => !!freshItem.title || !!freshItem.description || freshItem.maxAssignees !== 1,
@@ -98,7 +98,7 @@ function retireDetachedRequiredControl(): void {
     if (requiredControl.value && !requiredControl.value.isConnected) retireRequiredControl();
 }
 
-/** Packed state is optional browser-local presentation using the native keys.
+/** Packed state is optional browser-local presentation using the keys.
  * SSR never probes browser storage. A rejected getter becomes an unavailable
  * receipt, keeping shared commands usable while the page visibly explains failure. */
 function storage(): Storage | undefined {
@@ -139,7 +139,7 @@ watch(() => items.value.map((item) => item.id).join('|'), loadPacked);
 watch([listId, context.epoch, () => context.session.value?.context], resetPacked, {flush: 'sync'});
 
 /** Temporary preference evidence belongs to this mounted actor/list visit only.
- * Persisted keys retain their native cross-profile behavior after a fresh mount. */
+ * Persisted keys retain their cross-profile behavior after a fresh mount. */
 function resetPacked(): void {
     packed.value = {};
     pendingPackedWrites.clear();
@@ -199,7 +199,7 @@ watch(listId, () => {
 function revokeAccess(failure: Error): void {
     editorOpen.value = false;
     // A denied resource retires temporary personal choices immediately, before
-    // a later admitted recovery can restore only its actual persisted native keys.
+    // a later admitted recovery can restore only its actual persisted keys.
     resetPacked();
     // This feature owns the containing projections to retire. Cache lifetime is
     // shared, without teaching its generic owner any Packing or Overview policy.
@@ -231,12 +231,12 @@ function togglePacked(itemId: string, event: Event): void {
     if (writePacked(storage(), listId.value, itemId, selected)) pendingPackedWrites.delete(itemId);
     else pendingPackedWrites.add(itemId);
 }
-/** Preserve the native treatment of historical null capacities (IMP-025). */
+/** Preserve the treatment of historical null capacities (IMP-025). */
 function isFull(item: Item): boolean {
     return item.assignedCount >= (item.maxAssignees ?? 0);
 }
 /** Adapt one reviewed inline field without replacing unrelated item values.
- * The editor supplies its captured token; raw native capacity input is deliberately
+ * The editor supplies its captured token; raw capacity input is deliberately
  * left to the shared server/SQL boundary instead of coerced by this component. */
 async function patch(
     item: Item,
@@ -244,10 +244,10 @@ async function patch(
     value: string,
     token: string,
 ): Promise<boolean> {
-    // Native inline editing permits an empty item title. Only clearing the optional
+    // Inline editing permits an empty item title. Only clearing the optional
     // description uses null; creating a new item still requires its title. Capacity
     // keeps the number control's raw draft: Number('') would silently save zero and
-    // JavaScript rounding would differ from the native signed-integer DB conversion.
+    // JavaScript rounding would differ from the signed-integer DB conversion.
     const patch =
         field === 'maxAssignees'
             ? {maxAssignees: value}
@@ -293,7 +293,7 @@ async function toggleRequired(item: Item, event: Event): Promise<void> {
         );
     } finally { pendingControl.value = null; }
 }
-/** Native item deletion needs deliberate confirmation before its independently authorized command. */
+/** Item deletion needs deliberate confirmation before its independently authorized command. */
 async function removeItem(item: Item): Promise<void> {
     // Confirmation precedes both presentation ownership and dispatch. A blocked
     // sibling gesture cannot overwrite the active command's initiating row.
@@ -307,7 +307,7 @@ async function removeItem(item: Item): Promise<void> {
 }
 /** Remove one admitted saved assignment without touching the Quick Add draft. */
 async function removeAssignment(assignmentId: string): Promise<void> {
-    // Native manager removal submits immediately; its server permission/ownership
+    // Manager removal submits immediately; its server permission/ownership
     // checks remain authoritative and the shared command still prevents replay.
     if (!command.action.isAvailable()) return;
     pendingControl.value = {kind: 'assignment', id: assignmentId};
@@ -316,7 +316,7 @@ async function removeAssignment(assignmentId: string): Promise<void> {
             {success: 'common.removed'});
     } finally { pendingControl.value = null; }
 }
-/** Submit the native Quick Add draft once through the shared creation command.
+/** Submit the Quick Add draft once through the shared creation command.
  * Only a confirmed result clears the entered fields; a missing response retains
  * both that draft and explicit review, since a read cannot identify its new row. */
 async function addItem(): Promise<void> {
@@ -327,7 +327,7 @@ async function addItem(): Promise<void> {
             api.addItem(
                 listId.value,
                 {
-                    // Quick-add posts raw native form values. Creation's collection-row
+                    // Quick-add posts raw form values. Creation's collection-row
                     // trimming is a different workflow; a blank optional capacity uses one.
                     title: freshItem.title,
                     description: freshItem.description,
@@ -373,7 +373,7 @@ const reorder = useListReorder({
             <template #actions><RefreshButton :state="readAction" @refresh="refresh" /></template>
         </EntityHeader>
         <div class="card-body">
-            <!-- Native item/assignment commands present transient feedback in the
+            <!-- Item/assignment commands present transient feedback in the
                  shared page alert host; durable reconciliation stays beside the list. -->
             <CommandFeedback :feedback="command.feedback" :disabled="command.pending.value || command.recovering.value"
                 :creation-review="{required: command.reviewRequired.value, message: 'packing.reviewUnknownItem', state: readAction, paragraphClass: 'mb-2'}"
@@ -406,7 +406,7 @@ const reorder = useListReorder({
                 <small class="d-block mb-1 text-info fst-italic fw-light">{{ messages.t('packing.inlineHint') }}</small>
                 <template v-if="data">
                     <table
-                        class="table table-dark table-bordered table-hover align-middle pilot-packed-table"
+                        class="table table-dark table-bordered table-hover align-middle frontend-packed-table"
                     >
                         <thead>
                             <tr>
@@ -461,9 +461,9 @@ const reorder = useListReorder({
                                         :pending-assignment-id="command.pending.value && pendingControl?.kind === 'assignment' ? pendingControl.id : null"
                                         :remove-label="messages.t('packing.removeAssignment')" @remove="removeAssignment" />
                                 </td>
-                                <!-- Native item editors have no HTML length caps. Their
+                                <!-- Item editors have no HTML length caps. Their
                                      generated command shape remains independent of the
-                                     root metadata editor's explicit native limits. -->
+                                     root metadata editor's explicit limits. -->
                                 <InlineCell
                                     :value="item.title"
                                     :token="item.editToken"
@@ -504,7 +504,7 @@ const reorder = useListReorder({
                                         v-if="item.capabilities.editRequired"
                                         class="form-check form-switch d-flex align-items-center justify-content-center me-2"
                                     >
-                                        <!-- Match native browser-restoration policy;
+                                        <!-- Match browser-restoration policy;
                                              the admitted shared flag owns this switch. -->
                                         <input
                                             class="form-check-input"
@@ -518,7 +518,7 @@ const reorder = useListReorder({
                                         />
                                         <span class="ms-1 small">{{ messages.t('common.all') }}</span>
                                     </div>
-                                    <!-- Native admission displays these personal controls
+                                    <!-- Admission displays these personal controls
                                          even when the independent write grant is absent.
                                          Preserve that presentation; the server rechecks
                                          ACCESS_VIEW before every assignment command. -->

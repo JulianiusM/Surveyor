@@ -3,8 +3,8 @@ import {computed, reactive, ref, watch} from 'vue';
 import {useRoute} from 'vue-router';
 import type {components} from '../../../types/api/v1';
 import type {WeekDay, WeekInMonth} from '../../../types/SurveyTypes';
-import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
-import {usePilot} from '../../app/context';
+import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import {useFrontend} from '../../app/context';
 import {surveyKeys} from '../../app/queryKeys';
 import {useCreationCommand} from '../../composables/creation';
 import {usePageEntry} from '../../composables/pageEntry';
@@ -23,7 +23,7 @@ import FileField from '../../components/FileField.vue';
 // Survey creation is standalone: its feature draft contains recurring choices,
 // title, description and bytes. The shared owner handles command admission,
 // uncertainty, dirty departure and confirmed navigation for this distinct form.
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useSurveysApi(context);
 const route = useRoute();
@@ -45,7 +45,7 @@ const submission = useCreationCommand<components['schemas']['SurveyCreated']>({
     dirty: () => !!image.value || baseline.value !== null && snapshot() !== baseline.value,
     eligible: () => admitted.value && baseline.value !== null,
     readEntry: readSubmissionEntry, navigateEntry: entry.navigate,
-    destination: result => '/frontend-pilot/survey/' + result.id,
+    destination: result => '/survey/' + result.id,
     success: 'survey.created', unknownMessage: 'survey.leaveUnknown',
 });
 const {command, blocked, createAction, submissionAdmissionError, submissionAdmittedAt,
@@ -67,7 +67,7 @@ function initialCreation(): Creation | undefined {
 
 /** Duplication admits reading copied values; submission separately checks the
  * account-only create journey. Neither admission read persists a Survey. */
-async function readCreation(scope: PilotRequestScope, signal: AbortSignal): Promise<Creation> {
+async function readCreation(scope: FrontendRequestScope, signal: AbortSignal): Promise<Creation> {
     const source = sourceId.value;
     if (!source) return api.createEntry(scope, signal, route.fullPath);
     const values = await api.duplicate(source, scope, signal);
@@ -113,7 +113,7 @@ function removeRow(key: number): void {
     // Never mutate rows while creation admission or delivery is in flight.
     if (!blocked.value && rows.value.length > 1) rows.value = rows.value.filter(row => row.key !== key);
 }
-async function readSubmissionEntry(scope: PilotRequestScope, returnTo: string) {
+async function readSubmissionEntry(scope: FrontendRequestScope, returnTo: string) {
     return (await api.createEntry(scope, undefined, returnTo)).entry;
 }
 async function create(): Promise<void> { await submission.submit(collectCreation); }
@@ -125,7 +125,7 @@ function collectCreation() {
     const input: components['schemas']['SurveyCreateInput'] = {title: fields.title, description: fields.description,
         combinations: rows.value.map(({weekday, nthWeek}) => ({weekday, nthWeek}))};
     const selectedImage = image.value;
-    return function createSurvey(scope: PilotRequestScope) { return api.createSurvey(input, selectedImage, scope); };
+    return function createSurvey(scope: FrontendRequestScope) { return api.createSurvey(input, selectedImage, scope); };
 }
 </script>
 
@@ -168,7 +168,7 @@ function collectCreation() {
                         </table>
                     </div>
                 </div>
-                <div class="pilot-action-row justify-content-between">
+                <div class="frontend-action-row justify-content-between">
                     <ActionButton id="addCombinationBtn" variant="outline-info" :disabled="blocked || !admitted" @click="addRow"><i class="bi bi-plus-circle me-1" aria-hidden="true"></i>{{ messages.t('survey.addCombination') }}</ActionButton>
                     <ActionButton type="submit" variant="success" :state="createAction"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>{{ messages.t('survey.create') }}</ActionButton>
                 </div>

@@ -8,8 +8,8 @@ import {createMemoryHistory, createRouter} from 'vue-router';
 import {QueryObserver, VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import type {components} from '../../src/types/api/v1';
-import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
-import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
+import type {FrontendBootstrap} from '../../src/types/FrontendTypes';
+import {createFrontendContext, observeInitialDocument, frontendContextKey} from '../../src/frontend/app/context';
 import {packingKeys} from '../../src/frontend/app/queryKeys';
 import PackingEntry from '../../src/frontend/features/packing/PackingEntry.vue';
 import IdentityPage from '../../src/frontend/features/identity/IdentityPage.vue';
@@ -57,27 +57,27 @@ afterEach(async () => {
 /** The production wrapper, generated response validators, query owner and real router remain
  * intact. Only HTTP delivery is replaced; fixtures carry server-owned entry decisions. */
 async function mounted(path: string, handler: (request: Request) => Promise<Response>, detailIsDestination = false,
-                       initial: Omit<FrontendPilotBootstrap, 'session'> = {}) {
+                       initial: Omit<FrontendBootstrap, 'session'> = {}) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
-    const context = createPilotContext({...initial, session}, true, request);
+    const context = createFrontendContext({...initial, session}, true, request);
     context.hydrated.value = true;
     const Destination = defineComponent({template: '<p>Admitted destination</p>'});
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/frontend-pilot/packing/:listId/guest', component: PackingEntry},
-        {path: '/frontend-pilot/packing/:listId/duplicate', component: Destination},
-        {path: '/frontend-pilot/packing/:listId', component: detailIsDestination ? Destination : PackingEntry},
-        {path: '/frontend-pilot/users/login', component: IdentityPage, meta: {identityMode: 'login'}},
-        {path: '/frontend-pilot/users/register', component: Destination},
-        {path: '/frontend-pilot/guest/recovery', component: IdentityPage, meta: {identityMode: 'recovery'}},
-        {path: '/frontend-pilot/help', component: Destination},
-        {path: '/frontend-pilot', component: Destination},
+        {path: '/packing/:listId/guest', component: PackingEntry},
+        {path: '/packing/:listId/duplicate', component: Destination},
+        {path: '/packing/:listId', component: detailIsDestination ? Destination : PackingEntry},
+        {path: '/users/login', component: IdentityPage, meta: {identityMode: 'login'}},
+        {path: '/users/register', component: Destination},
+        {path: '/guest/recovery', component: IdentityPage, meta: {identityMode: 'recovery'}},
+        {path: '/help', component: Destination},
+        {path: '/', component: Destination},
     ]});
     await router.push(path);
     await router.isReady();
     const stopInitialDocument = observeInitialDocument(context, router);
     const wrapper = mount(App, {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[pilotContextKey as symbol]: context},
+        provide: {[frontendContextKey as symbol]: context},
     }});
     cleanups.push(async () => {
         wrapper.unmount();
@@ -92,7 +92,7 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
 /** Keep the originating route while its small logical owner unmounts. The real
  * shell then presents the same application-owned confirmed receipt as fallback. */
 async function confirmedReadVisit(read: (request: Request) => Promise<Response>) {
-    const visit = await mounted(`/frontend-pilot/packing/${firstId}/guest`, async request =>
+    const visit = await mounted(`/packing/${firstId}/guest`, async request =>
         new URL(request.url).pathname === '/api/v1/session' ? read(request)
             : json({entry: {kind: 'render'}, guest: {id: firstId, title: 'Guest fixture'}}));
     let completion!: ReturnType<typeof useConfirmedNavigation>;
@@ -103,8 +103,8 @@ async function confirmedReadVisit(read: (request: Request) => Promise<Response>)
     }});
     const ConfirmedHost = defineComponent({components: {ConfirmedOwner},
         template: '<div><ConfirmedOwner v-if="showOwner" /></div>', setup() { return {showOwner}; }});
-    visit.router.addRoute({path: '/frontend-pilot/confirmed-read-fixture', component: ConfirmedHost});
-    await visit.router.push('/frontend-pilot/confirmed-read-fixture');
+    visit.router.addRoute({path: '/confirmed-read-fixture', component: ConfirmedHost});
+    await visit.router.push('/confirmed-read-fixture');
     await flushPromises();
     visit.request.mockClear();
     return {...visit, completion, showOwner, origin: visit.router.currentRoute.value.fullPath};
@@ -113,7 +113,7 @@ async function confirmedReadVisit(read: (request: Request) => Promise<Response>)
 /** Exercise the shared admission owner and real query promise independently of a
  * feature's command UI, including its own denial-generation transition. */
 async function freshEntryVisit(read: () => Promise<{entry: components['schemas']['PageEntryOutcome']}>) {
-    const visit = await mounted('/frontend-pilot', async request => {
+    const visit = await mounted('/', async request => {
         if (new URL(request.url).pathname === '/api/v1/locale') {
             const {locale} = await request.json();
             return json({...session, locale});
@@ -125,8 +125,8 @@ async function freshEntryVisit(read: () => Promise<{entry: components['schemas']
         admission = usePageEntry({key: computed(() => ['fresh-entry-fixture']), read});
         return {};
     }});
-    visit.router.addRoute({path: '/frontend-pilot/fresh-entry-fixture', component: EntryOwner});
-    await visit.router.push('/frontend-pilot/fresh-entry-fixture');
+    visit.router.addRoute({path: '/fresh-entry-fixture', component: EntryOwner});
+    await visit.router.push('/fresh-entry-fixture');
     await flushPromises();
     return {...visit, admission};
 }
@@ -162,13 +162,13 @@ describe('server-owned page entry and canonical navigation', () => {
         const rejected = expect(fresh).rejects.toBeDefined();
         await flushPromises();
         if (retirement === 'locale') await context.changeLocale('de');
-        else await router.push('/frontend-pilot/help');
+        else await router.push('/help');
         resolveRead({entry: {kind: 'render'}});
         await rejected;
         await flushPromises();
         expect(context.locale.value).toBe(retirement === 'locale' ? 'de' : 'en');
         expect(router.currentRoute.value.path).toBe(retirement === 'locale'
-            ? '/frontend-pilot/fresh-entry-fixture' : '/frontend-pilot/help');
+            ? '/fresh-entry-fixture' : '/help');
     });
 
     it.each([400, 404])('keeps private cached locales retired after typed %s denial and admits only a fresh restoration', async status => {
@@ -177,7 +177,7 @@ describe('server-owned page entry and canonical navigation', () => {
         const heldEnglish = deferredResponse();
         const deniedEntry = {kind: 'denied' as const, status,
             messageKey: status === 400 ? 'packing.eventRegistrationRequired' : 'packing.notFound'};
-        const {wrapper, context, request} = await mounted(`/frontend-pilot/packing/${firstId}`, async request => {
+        const {wrapper, context, request} = await mounted(`/packing/${firstId}`, async request => {
             const url = new URL(request.url);
             if (url.pathname === '/api/v1/locale') {
                 const {locale} = await request.json();
@@ -191,7 +191,7 @@ describe('server-owned page entry and canonical navigation', () => {
             // admission must retire its old private DTO without that fallback firing.
             if (denied) return new Promise<Response>(function holdDetail() {});
             return json(privateList);
-        }, false, {initialUrl: `/frontend-pilot/packing/${firstId}`, pageEntry: {kind: 'render'}});
+        }, false, {initialUrl: `/packing/${firstId}`, pageEntry: {kind: 'render'}});
         expect(wrapper.text()).toContain(privateList.title);
         const actor = session.context;
         const otherDetail = packingKeys.detail(actor, secondId);
@@ -243,7 +243,7 @@ describe('server-owned page entry and canonical navigation', () => {
     });
 
     it('does not reseed the initial document when a reused resource wrapper returns after cache eviction', async () => {
-        const path = `/frontend-pilot/packing/${firstId}/guest`;
+        const path = `/packing/${firstId}/guest`;
         const heldReturn = deferredResponse();
         const {wrapper, context, router} = await mounted(path, async request => {
             return request.url.includes(firstId) ? heldReturn.response
@@ -252,7 +252,7 @@ describe('server-owned page entry and canonical navigation', () => {
         expect(wrapper.text()).toContain('Initial guest title');
         await router.push(path + '#registration');
         expect(context.initialDocumentFor(path)).toBeDefined();
-        await router.push(`/frontend-pilot/packing/${secondId}/guest`);
+        await router.push(`/packing/${secondId}/guest`);
         await flushPromises();
         context.queryClient.removeQueries({queryKey: packingKeys.entry(session.context, firstId, 'guest')});
         await router.push(path);
@@ -266,7 +266,7 @@ describe('server-owned page entry and canonical navigation', () => {
     });
 
     it('retains admitted input and read authority during native-style fragment movement', async () => {
-        const path = `/frontend-pilot/packing/${firstId}/guest`;
+        const path = `/packing/${firstId}/guest`;
         const {wrapper, router, request} = await mounted(path, async () => json({
             entry: {kind: 'render'}, guest: {id: firstId, title: 'Guest fixture'},
         }));
@@ -287,17 +287,17 @@ describe('server-owned page entry and canonical navigation', () => {
     });
 
     it('does not revive expired document feedback after slow canonical delivery', async () => {
-        const {context, router} = await mounted(`/frontend-pilot/packing/${firstId}/guest`, async () => json({
+        const {context, router} = await mounted(`/packing/${firstId}/guest`, async () => json({
             entry: {kind: 'render'}, guest: {id: firstId, title: 'Guest fixture'},
         }));
         let finishDelivery!: (component: Component) => void;
-        router.addRoute({path: '/frontend-pilot/slow-destination', component: function loadDestination() {
+        router.addRoute({path: '/packing/slow-destination', component: function loadDestination() {
             return new Promise<Component>(resolve => { finishDelivery = resolve; });
         }});
         context.pageNotice.value = {kind: 'success', messageKey: 'auth.loginDone'};
         context.personalLink.value = 'https://fixture.test/guest/private-token';
         const delivery = navigatePageEntry(context, router,
-            {kind: 'redirect', url: '/frontend-pilot/slow-destination', notice: null});
+            {kind: 'redirect', url: '/packing/slow-destination', notice: null});
         await flushPromises();
 
         // Expiry or explicit dismissal belongs to the live owner while its current
@@ -314,8 +314,8 @@ describe('server-owned page entry and canonical navigation', () => {
         const profile = {id: firstId, name: 'Newly admitted account'};
         const account: components['schemas']['SessionView'] = {...session, kind: 'account',
             activeProfile: profile, profiles: [profile], logoutUrl: '/users/logout'};
-        const {context, router} = await mounted('/frontend-pilot', async () => json(account));
-        const destination = '/frontend-pilot/users/login?next=/frontend-pilot/users/dashboard';
+        const {context, router} = await mounted('/', async () => json(account));
+        const destination = '/users/login?next=/users/dashboard';
         const delivery = navigatePageEntry(context, router, {kind: 'redirect', url: destination,
             notice: {kind: 'info', messageKey: 'auth.loginRequired'}});
         // Real identity acceptance retires the actor synchronously before its
@@ -327,12 +327,12 @@ describe('server-owned page entry and canonical navigation', () => {
         await visit;
         await flushPromises();
 
-        expect(router.currentRoute.value.fullPath).toBe(deliberate ? destination : '/frontend-pilot');
+        expect(router.currentRoute.value.fullPath).toBe(deliberate ? destination : '/');
         expect(context.pageNotice.value).toBeNull();
     });
 
     it('retains a confirmed destination after lazy delivery fails and retries only navigation', async () => {
-        const {context, router} = await mounted(`/frontend-pilot/packing/${firstId}/guest`, async () => json({
+        const {context, router} = await mounted(`/packing/${firstId}/guest`, async () => json({
             entry: {kind: 'render'}, guest: {id: firstId, title: 'Guest fixture'},
         }));
         let completion!: ReturnType<typeof useConfirmedNavigation>;
@@ -349,20 +349,20 @@ describe('server-owned page entry and canonical navigation', () => {
             return Destination;
         }
 
-        router.addRoute({path: '/frontend-pilot/command-fixture', component: ConfirmedOwner});
-        router.addRoute({path: '/frontend-pilot/confirmed-destination', component: deliverDestination});
-        await router.push('/frontend-pilot/command-fixture');
+        router.addRoute({path: '/command-fixture', component: ConfirmedOwner});
+        router.addRoute({path: '/packing/confirmed-destination', component: deliverDestination});
+        await router.push('/command-fixture');
         await flushPromises();
         const origin = router.currentRoute.value.fullPath;
         expect(completion.available.value).toBe(true);
-        expect(await completion.navigate('/frontend-pilot/confirmed-destination', context.capture(), origin)).toBe(false);
+        expect(await completion.navigate('/packing/confirmed-destination', context.capture(), origin)).toBe(false);
         expect(completion.available.value).toBe(false);
-        expect(completion.target.value).toBe('/frontend-pilot/confirmed-destination');
+        expect(completion.target.value).toBe('/packing/confirmed-destination');
         expect(completion.pending.value).toBe(false);
         expect(router.currentRoute.value.fullPath).toBe(origin);
 
         await router.push(origin + '#confirmed-command');
-        expect(completion.target.value).toBe('/frontend-pilot/confirmed-destination');
+        expect(completion.target.value).toBe('/packing/confirmed-destination');
 
         const unload = new Event('beforeunload', {cancelable: true});
         window.dispatchEvent(unload);
@@ -377,11 +377,11 @@ describe('server-owned page entry and canonical navigation', () => {
         expect(context.updates.requestRecoveryReload()).toBe(false);
         // A caller cannot replace a confirmed receipt by attempting its command destination
         // again. The only recovery operation retained here is delivery of that first result.
-        expect(await completion.navigate('/frontend-pilot/help')).toBe(false);
+        expect(await completion.navigate('/help')).toBe(false);
         expect(await completion.retry()).toBe(true);
         await flushPromises();
         expect(deliveries).toBe(2);
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/confirmed-destination');
+        expect(router.currentRoute.value.path).toBe('/packing/confirmed-destination');
         expect(completion.target.value).toBeNull();
         expect(completion.available.value).toBe(true);
     });
@@ -400,16 +400,16 @@ describe('server-owned page entry and canonical navigation', () => {
             cleanups.push(async () => { stopRead(); });
             const notice = {kind: 'success' as const, messageKey: 'packing.deleted'};
             const replacement = {...notice};
-            const delivery = visit.completion.navigate('/frontend-pilot/help', visit.context.capture(), visit.origin,
+            const delivery = visit.completion.navigate('/help', visit.context.capture(), visit.origin,
                 notice, false, [family]);
             await flushPromises();
             try {
                 // One confirmed result is visible immediately. Its pending read
                 // must not make that successful action look eligible for Retry.
-                const success = visit.wrapper.get('[data-pilot-notices] .alert-success');
+                const success = visit.wrapper.get('[data-frontend-notices] .alert-success');
                 expect(success.text()).toBe(visit.context.messages.value.t('packing.deleted'));
                 expect(success.find('button:not(.btn-close)').exists()).toBe(false);
-                expect(visit.wrapper.find('[data-pilot-notices] .alert-warning').exists()).toBe(false);
+                expect(visit.wrapper.find('[data-frontend-notices] .alert-warning').exists()).toBe(false);
                 if (disposition === 'dismissed') await success.get('.btn-close').trigger('click');
                 else if (disposition === 'expired') await vi.advanceTimersByTimeAsync(10_001);
                 else visit.context.pageNotice.value = replacement;
@@ -420,9 +420,9 @@ describe('server-owned page entry and canonical navigation', () => {
                 expect(await delivery).toBe(false);
                 await flushPromises();
                 expect(visit.context.pageNotice.value).toEqual(disposition === 'replaced' ? replacement : null);
-                const warning = visit.wrapper.get('[data-pilot-notices] .alert-warning');
+                const warning = visit.wrapper.get('[data-frontend-notices] .alert-warning');
                 expect(warning.text()).toContain(visit.context.messages.value.t('state.deliveryFailed'));
-                expect(visit.wrapper.findAll('[data-pilot-notices] .alert-warning')).toHaveLength(1);
+                expect(visit.wrapper.findAll('[data-frontend-notices] .alert-warning')).toHaveLength(1);
 
                 // The shell reaches this still-mounted origin's existing receipt.
                 // Recovery sends only a fresh GET and its canonical navigation;
@@ -431,7 +431,7 @@ describe('server-owned page entry and canonical navigation', () => {
                 await flushPromises();
                 expect(visit.context.pageNotice.value).toEqual(disposition === 'replaced' ? replacement : null);
                 expect(visit.completion.recoveryTarget.value).toBeNull();
-                expect(visit.wrapper.find('[data-pilot-notices] .alert-warning').exists()).toBe(false);
+                expect(visit.wrapper.find('[data-frontend-notices] .alert-warning').exists()).toBe(false);
                 expect(visit.request.mock.calls.map(([value]) => (value as Request).method)).toEqual(['GET', 'GET']);
             } finally {
                 held.resolve(json(session));
@@ -461,7 +461,7 @@ describe('server-owned page entry and canonical navigation', () => {
 
         // A previous read's server deadline must pause GET delivery, not skip
         // retiring snapshots after a newly confirmed irreversible command.
-        expect(await visit.completion.navigate('/frontend-pilot/help', visit.context.capture(), visit.origin,
+        expect(await visit.completion.navigate('/help', visit.context.capture(), visit.origin,
             null, false, [family])).toBe(false);
         expect(visit.completion.available.value).toBe(false);
         expect(visit.completion.retryAction.disabled.value).toBe(true);
@@ -472,7 +472,7 @@ describe('server-owned page entry and canonical navigation', () => {
         unavailable = false;
         await vi.advanceTimersByTimeAsync(1001);
         expect(await visit.completion.retry()).toBe(true);
-        expect(visit.router.currentRoute.value.path).toBe('/frontend-pilot/help');
+        expect(visit.router.currentRoute.value.path).toBe('/help');
         expect(visit.request).toHaveBeenCalledTimes(2);
     });
 
@@ -497,9 +497,9 @@ describe('server-owned page entry and canonical navigation', () => {
         cleanups.push(async () => { stopRead(); stopHidden(); });
         vi.useFakeTimers();
         const notice = {kind: 'success' as const, messageKey: 'packing.deleted'};
-        expect(await visit.completion.navigate('/frontend-pilot/help', visit.context.capture(), visit.origin, notice, false, [family])).toBe(false);
+        expect(await visit.completion.navigate('/help', visit.context.capture(), visit.origin, notice, false, [family])).toBe(false);
         expect(visit.router.currentRoute.value.path).toBe(visit.origin);
-        expect(visit.completion.target.value).toBe('/frontend-pilot/help');
+        expect(visit.completion.target.value).toBe('/help');
         expect(visit.completion.notice.value).toEqual(notice);
         expect(visit.completion.retryAction.disabled.value).toBe(true);
         expect(visit.completion.retryAt.value).toBeGreaterThan(Date.now());
@@ -511,11 +511,11 @@ describe('server-owned page entry and canonical navigation', () => {
         // existing fallback observes the same cache-owned deadline and receipt.
         visit.showOwner.value = false;
         await flushPromises();
-        const deadline = visit.wrapper.get('[data-pilot-notices] [data-read-retry-at]');
+        const deadline = visit.wrapper.get('[data-frontend-notices] [data-read-retry-at]');
         const timestamp = deadline.get('time').attributes('datetime');
         expect(timestamp).toBeDefined();
         expect(Date.parse(timestamp!)).toBeGreaterThan(Date.now());
-        const retry = visit.wrapper.get('[data-pilot-notices] .status-notice button');
+        const retry = visit.wrapper.get('[data-frontend-notices] .status-notice button');
         expect(retry.attributes('disabled')).toBeDefined();
         await retry.trigger('click');
         expect(visit.request).toHaveBeenCalledOnce();
@@ -526,7 +526,7 @@ describe('server-owned page entry and canonical navigation', () => {
         failRead = false;
         await retry.trigger('click');
         await flushPromises();
-        expect(visit.router.currentRoute.value.path).toBe('/frontend-pilot/help');
+        expect(visit.router.currentRoute.value.path).toBe('/help');
         expect(visit.request).toHaveBeenCalledTimes(2);
         expect(visit.request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
         expect(hiddenRead).not.toHaveBeenCalled();
@@ -540,7 +540,7 @@ describe('server-owned page entry and canonical navigation', () => {
             queryFn: () => visit.context.api.bootstrap(), initialData: session, staleTime: Infinity, retry: false});
         const stopRead = observer.subscribe(() => {});
         cleanups.push(async () => { stopRead(); });
-        const delivery = visit.completion.navigate('/frontend-pilot/help', visit.context.capture(), visit.origin, null, false, [family]);
+        const delivery = visit.completion.navigate('/help', visit.context.capture(), visit.origin, null, false, [family]);
         await flushPromises();
         try {
             expect(visit.request).toHaveBeenCalledOnce();
@@ -564,9 +564,9 @@ describe('server-owned page entry and canonical navigation', () => {
             queryFn: read, initialData: session, staleTime: Infinity, enabled: false});
         const stopRead = observer.subscribe(() => {});
         cleanups.push(async () => { stopRead(); });
-        expect(await visit.completion.navigate('/frontend-pilot/help', visit.context.capture(), visit.origin, null, false,
+        expect(await visit.completion.navigate('/help', visit.context.capture(), visit.origin, null, false,
             [family, ['absent-confirmed-dependency']])).toBe(true);
-        expect(visit.router.currentRoute.value.path).toBe('/frontend-pilot/help');
+        expect(visit.router.currentRoute.value.path).toBe('/help');
         expect(read).not.toHaveBeenCalled();
         expect(visit.request).not.toHaveBeenCalled();
     });
@@ -592,8 +592,8 @@ describe('server-owned page entry and canonical navigation', () => {
             await flushPromises();
             expect(visit.context.readsReady.value).toBe(false);
             expect(visit.context.sessionRead.value.pending).toBe(true);
-            expect(await visit.completion.navigate('/frontend-pilot/help', visit.context.capture(), visit.origin, null, false, [family])).toBe(false);
-            expect(visit.completion.target.value).toBe('/frontend-pilot/help');
+            expect(await visit.completion.navigate('/help', visit.context.capture(), visit.origin, null, false, [family])).toBe(false);
+            expect(visit.completion.target.value).toBe('/help');
             expect(visit.context.queryClient.getQueryState(hiddenKey)?.isInvalidated).toBe(true);
             expect(visit.completion.retryAction.disabled.value).toBe(true);
             expect(await visit.completion.retry()).toBe(false);
@@ -612,11 +612,11 @@ describe('server-owned page entry and canonical navigation', () => {
         expect(visit.completion.retryAction.disabled.value).toBe(false);
         expect(await visit.completion.retry()).toBe(true);
         expect(visit.request).toHaveBeenCalledTimes(2);
-        expect(visit.router.currentRoute.value.path).toBe('/frontend-pilot/help');
+        expect(visit.router.currentRoute.value.path).toBe('/help');
     });
 
     it('protects a pending confirmed destination and retires a cancelled receipt on another actor', async () => {
-        const {context, router} = await mounted(`/frontend-pilot/packing/${firstId}/guest`, async () => json({
+        const {context, router} = await mounted(`/packing/${firstId}/guest`, async () => json({
             entry: {kind: 'render'}, guest: {id: firstId, title: 'Guest fixture'},
         }));
         let completion!: ReturnType<typeof useConfirmedNavigation>;
@@ -632,24 +632,24 @@ describe('server-owned page entry and canonical navigation', () => {
             return held;
         }
 
-        router.addRoute({path: '/frontend-pilot/command-fixture', component: ConfirmedOwner});
-        router.addRoute({path: '/frontend-pilot/confirmed-destination', component: deliverDestination});
-        await router.push('/frontend-pilot/command-fixture');
+        router.addRoute({path: '/command-fixture', component: ConfirmedOwner});
+        router.addRoute({path: '/packing/confirmed-destination', component: deliverDestination});
+        await router.push('/command-fixture');
         await flushPromises();
         const origin = router.currentRoute.value.fullPath;
-        const navigation = completion.navigate('/frontend-pilot/confirmed-destination');
+        const navigation = completion.navigate('/packing/confirmed-destination');
         await flushPromises();
         expect(completion.pending.value).toBe(true);
         expect(context.mayChangeIdentity()).toBe(false);
         expect(await completion.retry()).toBe(false);
-        await router.push('/frontend-pilot/help');
+        await router.push('/help');
         expect(router.currentRoute.value.fullPath).toBe(origin);
         context.locale.value = 'de';
         finishDelivery(Destination);
         // The competing aborted navigation supersedes the first router attempt. Its
         // confirmed receipt stays reachable; Retry still navigates and never writes.
         expect(await navigation).toBe(false);
-        expect(completion.target.value).toBe('/frontend-pilot/confirmed-destination');
+        expect(completion.target.value).toBe('/packing/confirmed-destination');
         context.session.value = {...session, context: 'superseding-context-1234567890'};
         await flushPromises();
         expect(completion.target.value).toBeNull();
@@ -659,7 +659,7 @@ describe('server-owned page entry and canonical navigation', () => {
     });
 
     it('shows a retained delivery Retry only in the same-type instance that confirmed its command', async () => {
-        const {router, wrapper} = await mounted(`/frontend-pilot/packing/${firstId}/guest`, async () => json({
+        const {router, wrapper} = await mounted(`/packing/${firstId}/guest`, async () => json({
             entry: {kind: 'render'}, guest: {id: firstId, title: 'Guest fixture'},
         }));
         const ConfirmedOwner = defineComponent({
@@ -667,16 +667,16 @@ describe('server-owned page entry and canonical navigation', () => {
             template: '<section><button :disabled="!completion.available.value" @click="complete">Confirm command</button><p v-if="completion.target.value">Retry confirmed delivery</p></section>',
             setup(props) {
                 const completion = useConfirmedNavigation(props.identity);
-                function complete(): Promise<boolean> { return completion.navigate('/frontend-pilot/help'); }
+                function complete(): Promise<boolean> { return completion.navigate('/help'); }
                 return {completion, complete};
             },
         });
         const SameTypeOwners = defineComponent({components: {ConfirmedOwner},
             template: '<div><ConfirmedOwner identity="first" /><ConfirmedOwner identity="second" /></div>'});
-        router.addRoute({path: '/frontend-pilot/parallel-command-fixture', component: SameTypeOwners});
-        await router.push('/frontend-pilot/parallel-command-fixture');
+        router.addRoute({path: '/parallel-command-fixture', component: SameTypeOwners});
+        await router.push('/parallel-command-fixture');
         await flushPromises();
-        const cancelDelivery = router.beforeEach(to => to.path === '/frontend-pilot/help' ? false : undefined);
+        const cancelDelivery = router.beforeEach(to => to.path === '/help' ? false : undefined);
         try {
             const owners = wrapper.findAllComponents(ConfirmedOwner);
             await owners[0]!.get('button').trigger('click');
@@ -689,7 +689,7 @@ describe('server-owned page entry and canonical navigation', () => {
     });
 
     it('redirects standalone anonymous detail to its canonical guest form, with the real title', async () => {
-        const path = `/frontend-pilot/packing/${firstId}`;
+        const path = `/packing/${firstId}`;
         const {wrapper, router, request} = await mounted(path, async request => {
             const query = new URL(request.url).searchParams;
             return json(query.get('view') === 'detail'
@@ -705,17 +705,17 @@ describe('server-owned page entry and canonical navigation', () => {
     });
 
     it('renders attached anonymous denial without substituting guest registration', async () => {
-        const {wrapper, router} = await mounted(`/frontend-pilot/packing/${firstId}`, async () => json({
+        const {wrapper, router} = await mounted(`/packing/${firstId}`, async () => json({
             entry: {kind: 'denied', status: 400, messageKey: 'packing.eventRegistrationRequired'}, guest: null,
         }));
-        expect(router.currentRoute.value.path).toBe(`/frontend-pilot/packing/${firstId}`);
+        expect(router.currentRoute.value.path).toBe(`/packing/${firstId}`);
         expect(wrapper.get('h1').text()).toBe('Error');
         expect(wrapper.find('#guest-name').exists()).toBe(false);
         expect(wrapper.find('[data-loading-skeleton]').exists()).toBe(false);
     });
 
     it('replaces an explicit guest URL with the admitted detail instead of swapping content under /guest', async () => {
-        const path = `/frontend-pilot/packing/${firstId}`;
+        const path = `/packing/${firstId}`;
         const {wrapper, router} = await mounted(path + '/guest', async () => json({
             entry: {kind: 'redirect', url: path, notice: null}, guest: null,
         }), true);
@@ -727,23 +727,23 @@ describe('server-owned page entry and canonical navigation', () => {
     it('does not let a late retired-resource redirect replace the next page', async () => {
         let finishRead!: (response: Response) => void;
         const held = new Promise<Response>(resolve => { finishRead = resolve; });
-        const {wrapper, router} = await mounted(`/frontend-pilot/packing/${firstId}`, async () => held);
-        await router.push('/frontend-pilot/help');
-        finishRead(json({entry: {kind: 'redirect', url: `/frontend-pilot/packing/${firstId}/guest`, notice: null}, guest: null}));
+        const {wrapper, router} = await mounted(`/packing/${firstId}`, async () => held);
+        await router.push('/help');
+        finishRead(json({entry: {kind: 'redirect', url: `/packing/${firstId}/guest`, notice: null}, guest: null}));
         await flushPromises();
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/help');
+        expect(router.currentRoute.value.path).toBe('/help');
         expect(wrapper.text()).toContain('Admitted destination');
     });
 
     it('retires the prior resource projection when the same wrapper receives another identifier', async () => {
         let finishSecond!: (response: Response) => void;
         const held = new Promise<Response>(resolve => { finishSecond = resolve; });
-        const {wrapper, router} = await mounted(`/frontend-pilot/packing/${firstId}/guest`, async request => {
+        const {wrapper, router} = await mounted(`/packing/${firstId}/guest`, async request => {
             return request.url.includes(secondId) ? held
                 : json({entry: {kind: 'render'}, guest: {id: firstId, title: 'First public title'}});
         });
         expect(wrapper.text()).toContain('First public title');
-        await router.push(`/frontend-pilot/packing/${secondId}/guest`);
+        await router.push(`/packing/${secondId}/guest`);
         await flushPromises();
         expect(wrapper.text()).not.toContain('First public title');
         expect(wrapper.find('#guest-name').exists()).toBe(false);
@@ -756,7 +756,7 @@ describe('server-owned page entry and canonical navigation', () => {
         let finishLocale!: (response: Response) => void;
         const held = new Promise<Response>(resolve => { finishLocale = resolve; });
         const fixture = {entry: {kind: 'render'}, guest: {id: firstId, title: 'Shared guest title'}};
-        const {wrapper, context} = await mounted(`/frontend-pilot/packing/${firstId}/guest`, async request => {
+        const {wrapper, context} = await mounted(`/packing/${firstId}/guest`, async request => {
             return request.headers.get('X-Surveyor-Locale') === 'de' ? held : json(fixture);
         });
         const input = wrapper.get<HTMLInputElement>('#guest-name');
@@ -774,23 +774,23 @@ describe('server-owned page entry and canonical navigation', () => {
     });
 
     it('shows a typed one-time redirect notice on its destination and removes it only on the next committed visit', async () => {
-        const returnPath = `/frontend-pilot/packing/${firstId}/duplicate`;
-        const {wrapper, context, router} = await mounted(`/frontend-pilot/packing/${firstId}`, async () => json({
-            entry: {kind: 'redirect', url: '/frontend-pilot/users/login?next=' + encodeURIComponent(returnPath),
+        const returnPath = `/packing/${firstId}/duplicate`;
+        const {wrapper, context, router} = await mounted(`/packing/${firstId}`, async () => json({
+            entry: {kind: 'redirect', url: '/users/login?next=' + encodeURIComponent(returnPath),
                 notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, guest: null,
         }));
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');
+        expect(router.currentRoute.value.path).toBe('/users/login');
         expect(router.currentRoute.value.query.next).toBe(returnPath);
         expect(context.pageNotice.value?.kind).toBe('info');
         expect(wrapper.find('.alert-info').exists()).toBe(true);
-        await router.push('/frontend-pilot/help');
+        await router.push('/help');
         await flushPromises();
         expect(context.pageNotice.value).toBeNull();
         expect(wrapper.find('.alert-info').exists()).toBe(false);
     });
 
     it('retains the current draft and notice when its guard cancels an admission redirect', async () => {
-        const path = `/frontend-pilot/packing/${firstId}/guest`;
+        const path = `/packing/${firstId}/guest`;
         const {wrapper, context, router} = await mounted(path, async () => json({
             entry: {kind: 'render'}, guest: {id: firstId, title: 'Public guest title'},
         }));
@@ -802,7 +802,7 @@ describe('server-owned page entry and canonical navigation', () => {
         const confirm = vi.fn(() => false);
         vi.stubGlobal('confirm', confirm);
         const decision: components['schemas']['PageEntryOutcome'] = {
-            kind: 'redirect', url: '/frontend-pilot/users/login',
+            kind: 'redirect', url: '/users/login',
             notice: {kind: 'info', messageKey: 'auth.accountRequired'},
         };
 
@@ -814,19 +814,19 @@ describe('server-owned page entry and canonical navigation', () => {
 
         confirm.mockReturnValue(true);
         expect(await navigatePageEntry(context, router, decision, context.capture(), path)).toBe(true);
-        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot/users/login');
+        expect(router.currentRoute.value.fullPath).toBe('/users/login');
         expect(context.pageNotice.value).toEqual(decision.notice);
         expect(confirm).toHaveBeenCalledTimes(2);
     });
 
     it('keeps a dirty admitted guest subtree through a canceled server-read redirect and retires it on denial', async () => {
-        const path = `/frontend-pilot/packing/${firstId}/guest`;
+        const path = `/packing/${firstId}/guest`;
         let decision: 'render' | 'redirect' | 'denied' = 'render';
         const guest = {id: firstId, title: 'Public guest title'};
         const {wrapper, context, router} = await mounted(path, async request => {
             if (!new URL(request.url).pathname.endsWith('/entry')) return json(guest);
             if (decision === 'redirect') return json({entry: {kind: 'redirect',
-                url: '/frontend-pilot/users/login', notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, guest: null});
+                url: '/users/login', notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, guest: null});
             if (decision === 'denied') return json({entry: {kind: 'denied', status: 400,
                 messageKey: 'packing.eventRegistrationRequired'}, guest: null});
             return json({entry: {kind: 'render'}, guest});
@@ -860,7 +860,7 @@ describe('server-owned page entry and canonical navigation', () => {
 
     it.each([false, true])('admits a guest registration after its held advisory read only while the form remains mounted (retired=%s)',
         async function heldGuestAdvisoryRead(retireForm) {
-            const path = `/frontend-pilot/packing/${firstId}/guest`;
+            const path = `/packing/${firstId}/guest`;
             const heldLookup = deferredResponse();
             let denied = false;
             let registrations = 0;
@@ -935,7 +935,7 @@ describe('server-owned page entry and canonical navigation', () => {
         });
 
     it('recovers a confirmed guest identity and its private link through Retry without replaying registration', async () => {
-        const path = `/frontend-pilot/packing/${firstId}`;
+        const path = `/packing/${firstId}`;
         const personalLink = 'https://example.test/guest/edit/confirmed-token';
         const guest = {...session, kind: 'guest' as const, context: 'confirmed-guest-context-1234567890'};
         let registered = false;
@@ -977,8 +977,8 @@ describe('server-owned page entry and canonical navigation', () => {
     });
 
     it('rolls back a cancelled completion receipt and retains an accepted one only at its message destination', async () => {
-        const path = `/frontend-pilot/packing/${firstId}/guest`;
-        const destination = '/frontend-pilot/guest/recovery';
+        const path = `/packing/${firstId}/guest`;
+        const destination = '/guest/recovery';
         const {wrapper, context, router} = await mounted(path, async () => json({
             entry: {kind: 'render'}, guest: {id: firstId, title: 'Public guest title'},
         }));
@@ -999,34 +999,34 @@ describe('server-owned page entry and canonical navigation', () => {
         expect(wrapper.get('h1').text()).toBe('Success');
         expect(context.pageCompletion.value?.destination).toBe(destination);
 
-        await router.push('/frontend-pilot/help');
+        await router.push('/help');
         await flushPromises();
         expect(context.pageCompletion.value).toBeNull();
     });
 
     it('keeps a confirmed message mounted when the next lazy destination fails before commitment', async () => {
-        const origin = `/frontend-pilot/packing/${firstId}/guest`;
-        const destination = '/frontend-pilot/guest/recovery';
+        const origin = `/packing/${firstId}/guest`;
+        const destination = '/guest/recovery';
         const {wrapper, context, router} = await mounted(origin, async () => json({
             entry: {kind: 'render'}, guest: {id: firstId, title: 'Public guest title'},
         }));
         expect(await completePageEntry(context, router, destination, 'auth.recoverySent', 'success')).toBe(true);
-        router.addRoute({path: '/frontend-pilot/unavailable', component: unavailablePage});
+        router.addRoute({path: '/unavailable', component: unavailablePage});
 
         async function unavailablePage(): Promise<never> {
             throw new Error('Failed to fetch dynamically imported module');
         }
-        await expect(router.push('/frontend-pilot/unavailable')).rejects.toThrow('Failed to fetch dynamically imported module');
+        await expect(router.push('/unavailable')).rejects.toThrow('Failed to fetch dynamically imported module');
         await flushPromises();
         expect(router.currentRoute.value.fullPath).toBe(destination);
         expect(context.pageCompletion.value?.destination).toBe(destination);
         expect(wrapper.get('h1').text()).toBe('Success');
-        expect(wrapper.find('.pilot-navigation-loading').exists()).toBe(false);
+        expect(wrapper.find('.frontend-navigation-loading').exists()).toBe(false);
     });
 
     it.each([false, true])('retains confirmed completion across a locale change before or during lazy navigation (before=%s)', async before => {
-        const origin = `/frontend-pilot/packing/${firstId}/guest`;
-        const destination = '/frontend-pilot/completion-fixture';
+        const origin = `/packing/${firstId}/guest`;
+        const destination = '/packing/completion-fixture';
         const {context, router} = await mounted(origin, async () => json({
             entry: {kind: 'render'}, guest: {id: firstId, title: 'Public guest title'},
         }));
@@ -1053,8 +1053,8 @@ describe('server-owned page entry and canonical navigation', () => {
     });
 
     it.each([false, true])('resumes only the matching confirmed account destination after bootstrap Retry (mismatch=%s)', async mismatch => {
-        const destination = `/frontend-pilot/packing/${firstId}/duplicate?eventId=${secondId}`;
-        const path = '/frontend-pilot/users/login?next=' + encodeURIComponent(destination);
+        const destination = `/packing/${firstId}/duplicate?eventId=${secondId}`;
+        const path = '/users/login?next=' + encodeURIComponent(destination);
         const account = {...session, kind: 'account' as const, context: 'confirmed-account-context-1234567890',
             activeProfile: {id: firstId, name: 'Organizer'}, profiles: [{id: firstId, name: 'Organizer'}]};
         const recoveredActor = mismatch ? {...account, context: 'different-account-context-1234567890'} : account;

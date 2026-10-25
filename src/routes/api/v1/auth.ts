@@ -16,7 +16,7 @@ import type {components} from '../../../types/api/v1';
 
 const router = Router();
 
-/** Warm Vue entry shares native account/guest admission without executing a command. */
+/** Warm Vue entry shares existing account/guest admission without executing a command. */
 router.get('/profiles/workflow-entry', asyncHandler(async function getProfileWorkflowEntry(req, res) {
     await admit(req, res, 'getProfileWorkflowEntry');
     sendValidatedJson(req, res, 'getProfileWorkflowEntry', 200,
@@ -30,14 +30,14 @@ router.post('/profiles/migration/token', asyncHandler(async function requestProf
     sendValidatedJson(req, res, 'requestProfileMigrationToken', 200, result);
 }));
 
-/** Retain the native transfer operation and return only its own scalar completion evidence. */
+/** Retain the existing transfer operation and return only its own scalar completion evidence. */
 router.post('/profiles/migration/execute', asyncHandler(async function executeIdentityProfileMigration(req, res) {
     await admit(req, res, 'executeIdentityProfileMigration');
     const result = await userController.executeIdentityProfileMigration(req, req.body.token);
     sendPreparedJson(req, res, prepareValidatedJson(req, 'executeIdentityProfileMigration', 200, result, result.resultingContext));
 }));
 
-/** A late native selection failure remains uncertain after an entered deactivation. */
+/** A late existing selection failure remains uncertain after an entered deactivation. */
 router.post('/profiles/current/deactivate', asyncHandler(async function deactivateIdentityProfile(req, res) {
     await admit(req, res, 'deactivateIdentityProfile');
     const result = await userController.deactivateIdentityProfile(req, req.body);
@@ -143,7 +143,7 @@ router.post('/auth/forgot-password', asyncHandler(async function requestPassword
 router.get('/auth/reset-password', asyncHandler(async function checkPasswordReset(req, res) {
     await admit(req, res, 'checkPasswordReset');
     requireLocalLogin();
-    // The native reset GET admits the form only after this same controller check. This
+    // The existing reset GET admits the form only after this same controller check. This
     // read neither consumes the token nor guarantees it will still be valid at submission.
     await userController.checkPasswordForgotToken(String(req.query.token));
     sendValidatedJson(req, res, 'checkPasswordReset', 200, {valid: true});
@@ -245,7 +245,7 @@ router.get('/profiles', asyncHandler(async function getIdentityProfiles(req, res
     sendValidatedJson(req, res, 'getIdentityProfiles', 200, await userController.getIdentityProfiles(req.apiActor!));
 }));
 
-/** Adapt native field editing without changing its persistence or session-save boundary. */
+/** Adapt existing field editing without changing its persistence or session-save boundary. */
 router.patch('/profiles/current', asyncHandler(async function updateIdentityProfile(req, res) {
     await admit(req, res, 'updateIdentityProfile');
     // Admission captures current ownership. Profile selection remains server-owned;
@@ -261,7 +261,7 @@ router.patch('/profiles/current', asyncHandler(async function updateIdentityProf
 /** Add a profile through the existing account operation without selecting it. */
 router.post('/profiles', asyncHandler(async function createIdentityProfile(req, res) {
     await admit(req, res, 'createIdentityProfile');
-    // Mirror native account admission using the captured actor. Neither the
+    // Mirror existing account admission using the captured actor. Neither the
     // request body nor response preparation introduces another business owner.
     const user = req.apiActor!.auth?.user;
     if (!user) throw new ApiProblem(req.apiActor!.auth?.guest ? 'FORBIDDEN' : 'AUTH_REQUIRED');
@@ -278,7 +278,7 @@ router.get('/packing-lists/:listId/guest', asyncHandler(async function getPackin
 router.post('/packing-lists/:listId/guest', asyncHandler(async function registerPackingGuest(req, res) {
     await admit(req, res, 'registerPackingGuest');
     const list = await readPackingGuestEntry(String(req.params.listId));
-    await registerGuestForEntry(req, res, `/frontend-pilot/packing/${list.id}`, 'registerPackingGuest');
+    await registerGuestForEntry(req, res, `/packing/${list.id}`, 'registerPackingGuest');
 
 }));
 
@@ -290,7 +290,7 @@ router.get('/drivers-lists/:listId/guest', asyncHandler(async function getDriver
 router.post('/drivers-lists/:listId/guest', asyncHandler(async function registerDriversGuest(req, res) {
     await admit(req, res, 'registerDriversGuest');
     const list = await readDriversGuestEntry(String(req.params.listId));
-    await registerGuestForEntry(req, res, `/frontend-pilot/drivers/${list.id}`, 'registerDriversGuest');
+    await registerGuestForEntry(req, res, `/drivers/${list.id}`, 'registerDriversGuest');
 
 }));
 
@@ -304,7 +304,7 @@ router.get('/surveys/:surveyId/guest', asyncHandler(async function getSurveyGues
 router.post('/surveys/:surveyId/guest', asyncHandler(async function registerSurveyGuest(req, res) {
     await admit(req, res, 'registerSurveyGuest');
     const survey = await readSurveyGuestEntry(String(req.params.surveyId));
-    await registerGuestForEntry(req, res, `/frontend-pilot/survey/${survey.id}`, 'registerSurveyGuest');
+    await registerGuestForEntry(req, res, `/survey/${survey.id}`, 'registerSurveyGuest');
 }));
 
 /** Activity guest entry uses the existing identity transaction and plan admission. */
@@ -316,7 +316,7 @@ router.get('/activity-plans/:planId/guest', asyncHandler(async function getActiv
 router.post('/activity-plans/:planId/guest', asyncHandler(async function registerActivityGuest(req, res) {
     await admit(req, res, 'registerActivityGuest');
     const plan = await readActivityGuestEntry(String(req.params.planId));
-    await registerGuestForEntry(req, res, `/frontend-pilot/activity/${plan.id}`, 'registerActivityGuest');
+    await registerGuestForEntry(req, res, `/activity/${plan.id}`, 'registerActivityGuest');
 }));
 
 router.get('/events/:eventId/guest', asyncHandler(async function getEventGuestEntry(req, res) {
@@ -330,7 +330,7 @@ router.post('/events/:eventId/guest', asyncHandler(async function registerEventG
     // The opaque registration token remains only a return destination until a
     // later explicit attendance submission; guest creation never consumes it.
     const token = typeof req.query.regToken === 'string' ? `?${new URLSearchParams({regToken: req.query.regToken})}` : '';
-    await registerGuestForEntry(req, res, `/frontend-pilot/event/${event.id}${token}`, 'registerEventGuest');
+    await registerGuestForEntry(req, res, `/event/${event.id}${token}`, 'registerEventGuest');
 }));
 
 /**

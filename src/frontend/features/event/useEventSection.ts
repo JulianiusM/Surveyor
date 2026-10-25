@@ -2,10 +2,10 @@ import {computed, onBeforeUnmount, ref, shallowRef, watch} from 'vue';
 import type {ComputedRef} from 'vue';
 import {hashKey, QueryObserver, useQuery} from '@tanstack/vue-query';
 import type {Query, QueryCacheNotifyEvent, QueryFunctionContext} from '@tanstack/vue-query';
-import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {EntityEntryRetirement} from '../../../types/FrontendEntityEntryTypes';
 import {eventKeys, overviewKeys} from '../../app/queryKeys';
-import {refreshInterval, useActionState, usePilot} from '../../app/context';
+import {refreshInterval, useActionState, useFrontend} from '../../app/context';
 import {refetchFreshQuery, retireQueryFamily, useQueryAdmission} from '../../app/queryCache';
 import {isReadDenial, ObsoleteRequestError} from '../../app/transport';
 import {readFailureMessage, useReadRetry, useReadRetryAt} from '../../composables/feedback';
@@ -41,11 +41,11 @@ export function eventDeniedQueries(actor: string | null | undefined, resource: s
  * Denials retire private data immediately; transient failures retain only that same
  * scoped query's result. Collapsing a disclosure keeps that admitted snapshot/draft. */
 export function useEventSection<T>(key: ComputedRef<readonly unknown[]>,
-                                   read: (scope: PilotRequestScope, signal: AbortSignal) => Promise<T>,
+                                   read: (scope: FrontendRequestScope, signal: AbortSignal) => Promise<T>,
                                    eligible: ComputedRef<boolean>,
                                    polling: ComputedRef<boolean> = eligible,
                                    retainPrevious?: (previousKey: readonly unknown[], currentKey: readonly unknown[]) => boolean) {
-    const context = usePilot();
+    const context = useFrontend();
     const revoked = ref(false);
     // A localized consumer can retain its existing registered Query while a new
     // language read waits/fails. The cache remains the sole snapshot owner; this

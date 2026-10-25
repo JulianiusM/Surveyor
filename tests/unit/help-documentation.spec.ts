@@ -7,19 +7,19 @@ import {
     resolveHelpAssetPath,
     validateTrustedHelpMarkdown,
 } from '../../src/controller/helpController';
-import {pilotHelpUrl, resolveContextualHelpUrl, resolvePilotHelpQuery} from '../../src/modules/lib/helpNavigation';
+import {frontendHelpUrl, resolveContextualHelpUrl, resolveFrontendHelpQuery} from '../../src/modules/lib/helpNavigation';
 
 // Application behavior only: these tests also run with docs/ entirely absent.
 // Real guide wording, examples, links and images belong to tests/documentation/.
 describe('help renderer and source boundaries (synthetic fixtures)', () => {
     it('uses a fixed help root and rejects traversal and executable asset formats', () => {
-        expect(path.relative(process.cwd(), getHelpDocsBasePath()).split(path.sep).join('/')).toBe('docs/user-guide');
+        expect(path.relative(process.cwd(), getHelpDocsBasePath()).split(path.sep).join('/')).toBe('docs/user-guide/en');
         expect(path.relative(process.cwd(), getHelpDocsBasePath('en')).split(path.sep).join('/'))
             .toBe('docs/user-guide/en');
         expect(path.relative(process.cwd(), getHelpDocsBasePath('de')).split(path.sep).join('/'))
             .toBe('docs/user-guide/de');
         // Staging holds documentation drafts only. This expectation is independent of
-        // the selector and protects the approved native/pilot source distinction.
+        // the selector and protects the reviewed language corpus boundary.
         expect(getHelpDocsBasePath('en')).not.toContain('frontend-migration');
         expect(getHelpDocsBasePath('de')).not.toContain('frontend-migration');
         expect(getHelpDocsBasePath('en')).not.toContain('frontend-help');
@@ -95,37 +95,37 @@ describe('help renderer and source boundaries (synthetic fixtures)', () => {
         [undefined, {q: '', doc: 'events'}, {q: ''}],
         [undefined, {doc: 'packing_lists'}, {doc: 'packing_lists'}],
         [undefined, {}, {}],
-    ] as const)('shares native path precedence and canonical pilot query selection (%s)', (pathDoc, query, expected) => {
-        expect(resolvePilotHelpQuery(pathDoc, query)).toEqual(expected);
+    ] as const)('shares native path precedence and canonical frontend query selection (%s)', (pathDoc, query, expected) => {
+        expect(resolveFrontendHelpQuery(pathDoc, query)).toEqual(expected);
     });
 
     it('bounds enhanced search without changing the native selected article', () => {
-        expect(resolvePilotHelpQuery('search', {q: 'x'.repeat(150)})).toEqual({q: 'x'.repeat(100)});
-        expect(resolvePilotHelpQuery('packing_lists', {q: 'x'.repeat(150)})).toEqual({doc: 'packing_lists'});
+        expect(resolveFrontendHelpQuery('search', {q: 'x'.repeat(150)})).toEqual({q: 'x'.repeat(100)});
+        expect(resolveFrontendHelpQuery('packing_lists', {q: 'x'.repeat(150)})).toEqual({doc: 'packing_lists'});
     });
 
     it.each([
-        ['/help/search?doc=events&source=fixture#prompt', '/frontend-pilot/help/search', {q: ''}],
-        ['/help/search?q=packing&doc=events#results', '/frontend-pilot/help/search', {q: 'packing'}],
-        ['/help/packing_lists?q=ignored&doc=events&source=fixture#task', '/frontend-pilot/help/packing_lists', {doc: 'packing_lists'}],
-        ['/help?q=ignored&doc=events&source=fixture#home', '/frontend-pilot/help/readme', {doc: 'readme'}],
-    ] as const)('keeps native ignored parameters and fragments inert when adapting %s', (href, pathname, selected) => {
+        ['/help/search?doc=events&source=fixture#prompt', '/help/search', {q: ''}],
+        ['/help/search?q=packing&doc=events#results', '/help/search', {q: 'packing'}],
+        ['/help/packing_lists?q=ignored&doc=events&source=fixture#task', '/help/packing_lists', {doc: 'packing_lists'}],
+        ['/help?q=packing&doc=events&source=fixture#home', '/help', {q: 'packing'}],
+    ] as const)('retains canonical query selection, article path precedence and fragments for %s', (href, pathname, selected) => {
         const source = new URL(href, 'https://fixture.test');
-        const target = new URL(pilotHelpUrl(href, 'de'), 'https://fixture.test');
+        const target = new URL(frontendHelpUrl(href, 'de'), 'https://fixture.test');
         expect(target.pathname).toBe(pathname);
         expect(target.hash).toBe(source.hash);
         for (const [key, value] of source.searchParams) expect(target.searchParams.get(key)).toBe(value);
         expect(target.searchParams.get('locale')).toBe('de');
         expect(target.searchParams.has('list')).toBe(false);
-        const pathDoc = /^\/frontend-pilot\/help\/([^/]+)$/u.exec(target.pathname)?.[1];
-        expect(resolvePilotHelpQuery(pathDoc, Object.fromEntries(target.searchParams))).toEqual(selected);
+        const pathDoc = /^\/help\/([^/]+)$/u.exec(target.pathname)?.[1];
+        expect(resolveFrontendHelpQuery(pathDoc, Object.fromEntries(target.searchParams))).toEqual(selected);
     });
 
-    it('retains ordinary pilot article query links and leaves separate assets/external URLs native', () => {
-        expect(pilotHelpUrl('/help/packing_lists?source=fixture#task', 'en'))
-            .toBe('/frontend-pilot/help?source=fixture&doc=packing_lists&locale=en#task');
-        expect(pilotHelpUrl('/help#home', 'en')).toBe('/frontend-pilot/help?locale=en#home');
-        expect(pilotHelpUrl('/help/assets/figure.png?locale=de', 'en')).toBe('/help/assets/figure.png?locale=de');
-        expect(pilotHelpUrl('https://example.org/help?q=packing', 'en')).toBe('https://example.org/help?q=packing');
+    it('retains ordinary frontend article query links and leaves separate assets/external URLs native', () => {
+        expect(frontendHelpUrl('/help/packing_lists?source=fixture#task', 'en'))
+            .toBe('/help?source=fixture&doc=packing_lists&locale=en#task');
+        expect(frontendHelpUrl('/help#home', 'en')).toBe('/help?locale=en#home');
+        expect(frontendHelpUrl('/help/assets/figure.png?locale=de', 'en')).toBe('/help/assets/figure.png?locale=de');
+        expect(frontendHelpUrl('https://example.org/help?q=packing', 'en')).toBe('https://example.org/help?q=packing');
     });
 });

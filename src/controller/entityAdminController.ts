@@ -53,9 +53,9 @@ const eventPropertyPermissions: Partial<Record<EntityPropertyField, PermType>> =
     allowDietComment: 'MANAGE_REQUIREMENTS', allowRegDietUpdateAfterDeadline: 'MANAGE_REQUIREMENTS',
 };
 
-// These methods are already shared by native feature factories. Keep their grant
+// These methods are already shared by feature operations. Keep their grant
 // definitions in this controller so a migrated capability/command cannot drift
-// from the native adapter while retaining each method's distinct admission checks.
+// from the direct adapter while retaining each method's distinct admission checks.
 const entityMethodPermissions = {
     editHeader: 'EDIT_META',
     changeEvent: 'EDIT_META',
@@ -191,7 +191,7 @@ export function normalizeBasicProperties(body: unknown): BasicEntityPropertyPatc
         .min(1).unknown(false).required();
     const {value, error} = schema.validate(body, {abortEarly: false});
     if (error) {
-        // Preserve native validation while identifying only the authored field
+        // Preserve shared validation while identifying only the authored field
         // and rule for an actionable, value-free versioned explanation.
         const detail = error.details[0];
         const cause = detail?.path[0] === 'title' ? 'ENTITY_TITLE_INVALID'
@@ -218,7 +218,7 @@ export function getAuthorizedEventUrl(eventId: string, permissions: PermView): s
 }
 
 /** Share parent-field disclosure without granting navigation from a relationship.
- * Native presentation omits protected labels/dates; versioned adapters may map
+ * Shared presentation omits protected labels/dates; versioned adapters may map
  * those absent fields to their authored null shape. Only ACCESS_VIEW supplies a URL. */
 export function projectCurrentEntityEvent(
     event: Pick<Event, 'id' | 'title' | 'startDate' | 'endDate'>,
@@ -300,11 +300,11 @@ export function requireLockedArchiveRoot(context: LockedArchiveContext): Archive
     return root;
 }
 
-/** Change one explicit association through the shared native/versioned owner.
+/** Change one explicit association through the shared direct/versioned owner.
  * Normalize the submitted old/new parent first, then evaluate source/target
  * authority under the DBAL's parent/root locks. Authorized unchanged choices
  * acknowledge a no-op before comparison; actual changes additionally require the
- * captured relationship and any versioned reviewed-token callback. Native errors,
+ * captured relationship and any versioned reviewed-token callback. Controller errors,
  * post-change archival presentation and view-admission redirects remain intact. */
 export function changeEntityEvent(type: EntityType, entity: EntityBase, body: unknown, session: SessionLike,
     invalidateContext?: (id: string) => void, validateReviewedContext?: (manager: EntityManager) => Promise<void>): Promise<EntityEventChangeResult>;
@@ -313,7 +313,7 @@ export function changeEntityEvent<Result>(type: EntityType, entity: EntityBase, 
     invalidateContext: ((id: string) => void) | undefined,
     validateReviewedContext: ((manager: EntityManager) => Promise<void>) | undefined,
     completion: EntityMutationCompletion<Result>): Promise<Result>;
-/** Keep native presentation compatible while preparing an explicit feature completion before its final commit. */
+/** Keep shared presentation compatible while preparing an explicit feature completion before its final commit. */
 export async function changeEntityEvent<Result>(type: EntityType, entity: EntityBase, body: unknown, session: SessionLike,
     invalidateContext?: (id: string) => void, validateReviewedContext?: (manager: EntityManager) => Promise<void>,
     completion?: EntityMutationCompletion<Result>): Promise<EntityEventChangeResult | Result> {
@@ -340,7 +340,7 @@ export async function changeEntityEvent<Result>(type: EntityType, entity: Entity
         if (!permissions.get(`${type}:${root.id}`)?.has(entityMethodPermission('changeEvent'))) throw new APIError('Not allowed to change the linked event.', {}, 403);
         if (target && !permissions.get(`event:${target.id}`)?.has('MANAGE_ASSIGNMENTS')) throw new APIError('Not allowed to attach entities to this event.', {}, 403);
 
-        // An authorized unchanged choice performs no write. Native and v1 both
+        // An authorized unchanged choice performs no write. Direct and versioned both
         // retain this harmless outcome before expected-parent/token comparison;
         // only an actual relationship change needs the reviewed precondition.
         const changed = root.eventId !== value.eventId;
@@ -367,7 +367,7 @@ export async function changeEntityEvent<Result>(type: EntityType, entity: Entity
     }
 
     // The DBAL commits only after the locked action and any explicit receipt
-    // preparation finish. Native callers retain their existing later projection.
+    // preparation finish. Direct callers retain their existing later projection.
     const {changed, root, prepared} = await lifecycleService.withLockedArchiveTarget(reference, changeLocked, value.eventId ? [value.eventId] : []);
     // The supplied callback has already prepared its exact result, including a
     // legitimate undefined result. No later query can reject that completed write.
@@ -388,7 +388,7 @@ export async function changeEntityEvent<Result>(type: EntityType, entity: Entity
 export async function getEntityViewAdmission(type: EntityType, entity: Pick<EntityBase, 'id' | 'ownerId' | 'eventId'>,
     session: SessionLike, manager?: EntityManager, knownPermissions?: PermView): Promise<EntityViewAdmission> {
     // The linked-event rejection deliberately precedes guest registration. A missing
-    // profile must not turn an attached entity's native 400 into a standalone login redirect.
+    // profile must not turn an attached entity's document 400 into a standalone login redirect.
     if (!session.profile) return entity.eventId ? 'event-registration-required' : 'guest';
     if (!entity.eventId) return 'render';
     if (await eventService.isRegisteredForEvent(session.profile.id, entity.eventId, manager)) return 'render';
@@ -400,20 +400,20 @@ export async function getEntityViewAdmission(type: EntityType, entity: Pick<Enti
     return permissions.has('ACCESS_VIEW') ? 'render' : 'event-registration-required';
 }
 
-/** Boolean compatibility adapter for existing native callers and reassociation redirects. */
+/** Boolean compatibility adapter for existing direct callers and reassociation redirects. */
 export async function canAccessEntityView(type: EntityType, entity: Pick<EntityBase, 'id' | 'ownerId' | 'eventId'>, session: SessionLike): Promise<boolean> {
     return await getEntityViewAdmission(type, entity, session) === 'render';
 }
 
-/** Adapt the shared method declaration to the native middleware's bitmask input. */
+/** Adapt the shared method declaration to the permission middleware's bitmask input. */
 export function requiredAdminManagePerm() {
     return PERM[entityMethodPermission('managePermissions')];
 }
 
-/** One controller-owned administrator operation for normalized native/v1 intent.
+/** One controller-owned administrator operation for normalized direct/versioned intent.
  * The profile check and required mask have one owner. A versioned caller may
  * compare its reviewed grant and choose add/update inside its existing locked
- * transaction; native callers retain their direct command and persistence defaults.
+ * transaction; direct callers retain their direct command and persistence defaults.
  * Domain outcomes leave each adapter's established error/feedback shape unchanged. */
 export async function applyEntityAdministrator(
     entityType: CombEntityType, entityId: string, profileId: string,
@@ -440,13 +440,13 @@ export async function applyEntityAdministrator(
     return 'saved';
 }
 
-/** Native adapters preserve the original profile-first errors and operation receipts. */
-function requireNativeAdministratorOutcome(outcome: EntityAdministratorOutcome): void {
+/** Direct adapters preserve the original profile-first errors and operation receipts. */
+function requireAdministratorOutcome(outcome: EntityAdministratorOutcome): void {
     if (outcome === 'profile-missing') throw new Error('Not Found');
     if (outcome === 'mask-required') throw new Error('Either mask or perms must be provided');
 }
 
-/** POST /admins — add one administrator using the native collector and feedback. */
+/** Add one administrator using the form collector and direct error interpretation. */
 export async function addAdmin(entityType: CombEntityType, entityId: string, body: any, creator?: Profile | null) {
     const schema = Joi.object({
         profileId: Joi.string().uuid().required(),
@@ -469,11 +469,11 @@ export async function addAdmin(entityType: CombEntityType, entityId: string, bod
 
     const outcome = await applyEntityAdministrator(entityType, entityId, value.profileId,
         {kind: 'add', mask, createdBy: creator?.userId});
-    requireNativeAdministratorOutcome(outcome);
+    requireAdministratorOutcome(outcome);
     return 'Admin added';
 }
 
-/** Decode native mask/key input and preserve its validation wording. The common
+/** Decode mask/key form input and preserve its validation wording. The common
  * command owner checks target existence before reporting a missing mask. */
 export async function updateAdmin(entityType: CombEntityType, entityId: string, profileId: string, body: any) {
     const schema = Joi.object({
@@ -489,15 +489,15 @@ export async function updateAdmin(entityType: CombEntityType, entityId: string, 
     else if (Array.isArray(value.perms)) mask = toMask(value.perms);
 
     const outcome = await applyEntityAdministrator(entityType, entityId, profileId, {kind: 'update', mask});
-    requireNativeAdministratorOutcome(outcome);
+    requireAdministratorOutcome(outcome);
     return 'Permissions updated';
 }
 
-/** Native removal shares profile-first validation and persistence, while keeping
+/** Direct removal shares profile-first validation and persistence, while keeping
  * its established literal acknowledgement even when no grant row remains. */
 export async function removeAdmin(entityType: CombEntityType, entityId: string, profileId: string) {
     const outcome = await applyEntityAdministrator(entityType, entityId, profileId, {kind: 'remove'});
-    requireNativeAdministratorOutcome(outcome);
+    requireAdministratorOutcome(outcome);
     return 'Admin removed';
 }
 
@@ -563,7 +563,7 @@ export async function getArchivePresentations(
     snapshot?: Map<string, ArchiveSnapshotEntry>,
     manager?: EntityManager,
 ): Promise<Map<string, ArchivePresentation>> {
-    // Reuse an existing overview/transaction snapshot. Without one, native callers
+    // Reuse an existing overview/transaction snapshot. Without one, direct callers
     // keep their ordinary reads; a supplied manager keeps lifecycle and grants in
     // the versioned caller's same transaction, rather than starting a second read.
     const currentSnapshot = snapshot ?? (manager ? await lifecycleService.getArchiveSnapshot(references, manager) : undefined);
@@ -682,7 +682,7 @@ function hasIndependentSchedule(reference: ArchiveReference, root: ArchiveTarget
 /** Set only direct archival; retries preserve the first timestamp and never copy it to children. */
 export function archiveEntity(reference: ArchiveReference, body: unknown, session: SessionLike,
     now?: Date): Promise<ArchivePresentation | undefined>;
-/** A feature can prepare its receipt under the existing archive lock without requesting native presentation. */
+/** A feature can prepare its receipt under the existing archive lock without requesting shared presentation. */
 export function archiveEntity<Result>(reference: ArchiveReference, body: unknown, session: SessionLike,
     now: Date | undefined, completion: EntityMutationCompletion<Result>): Promise<Result>;
 /** Share archival policy and persistence, selecting prepared completion only when explicitly requested. */
@@ -707,7 +707,7 @@ export async function archiveEntity<Result>(reference: ArchiveReference, body: u
     const prepared = await lifecycleService.withLockedArchiveTarget(reference, archiveLocked);
 
     // Explicit feature receipts already passed their fallible preparation before commit.
-    // The original presentation read remains the default for native archive callers.
+    // The original presentation read remains the default for direct archive callers.
     if (completion) return prepared as Result;
     return (await getArchivePresentations([reference], session)).get(archiveKey(reference));
 }
@@ -720,7 +720,7 @@ export function restoreEntity(reference: ArchiveReference, body: unknown, sessio
 /** Prepare an explicit feature receipt inside the shared restoration transaction. */
 export function restoreEntity<Result>(reference: ArchiveReference, body: unknown, session: SessionLike,
     completion: EntityMutationCompletion<Result>): Promise<Result>;
-/** Keep native restoration presentation compatible while allowing precommit feature completion. */
+/** Keep restoration presentation compatible while allowing precommit feature completion. */
 export async function restoreEntity<Result>(reference: ArchiveReference, body: unknown, session: SessionLike,
     completion?: EntityMutationCompletion<Result>): Promise<ArchivePresentation | undefined | Result> {
     // Restoration accepts only its existing narrow command and an admitted profile.
@@ -742,12 +742,12 @@ export async function restoreEntity<Result>(reference: ArchiveReference, body: u
     }
     const prepared = await lifecycleService.withLockedArchiveTarget(reference, restoreLocked);
 
-    // The explicit completion replaces only unused postcommit presentation; native defaults remain intact.
+    // The explicit completion replaces only unused postcommit presentation; direct defaults remain intact.
     if (completion) return prepared as Result;
     return (await getArchivePresentations([reference], session)).get(archiveKey(reference));
 }
 
-/** Native pause/resume retains its existing postcommit presentation. */
+/** Direct pause/resume retains its existing postcommit presentation. */
 export function setAutomaticArchival(reference: ArchiveReference, body: unknown, session: SessionLike): Promise<ArchivePresentation | undefined>;
 /** A scoped adapter can prepare its acknowledgement under the existing lifecycle locks. */
 export function setAutomaticArchival<Result>(reference: ArchiveReference, body: unknown, session: SessionLike,
@@ -765,7 +765,7 @@ export async function setAutomaticArchival<Result>(reference: ArchiveReference, 
         if (!hasIndependentSchedule(reference, root)) throw new APIError('Automatic archival is controlled by an event or a standalone activity plan.', {}, 409, {cause: 'ARCHIVE_SCHEDULE_UNAVAILABLE'});
         await lifecycleService.updateLifecycleMetadata(manager, reference, {autoArchivePaused: value.paused});
         // The feature can recheck its captured parent scope and serialize a reply
-        // before commit; native callers keep their original presentation below.
+        // before commit; direct callers keep their original presentation below.
         return completion ? completion.prepare(manager, {changed: root.autoArchivePaused !== value.paused,
             root: {...root, autoArchivePaused: value.paused}}) : undefined;
     }
@@ -777,8 +777,8 @@ export async function setAutomaticArchival<Result>(reference: ArchiveReference, 
 /** Keep inherited restoration distinct from a changed root/parent relationship. */
 export function classifyArchiveCommandError(error: unknown, archived: boolean): unknown {
     if (error instanceof ApiProblem) return error;
-    // A controller-owned schedule diagnostic is more specific than the legacy
-    // parent-change fallback. Native prose/data never cross this adapter.
+    // A controller-owned schedule diagnostic is more specific than the generic
+    // parent-change fallback. Controller prose/data never cross this adapter.
     const declared = declaredApiProblem(error);
     if (declared) return declared;
     if (error instanceof APIError && error.status === 409) {

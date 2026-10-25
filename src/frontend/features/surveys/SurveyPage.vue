@@ -3,8 +3,8 @@ import {computed, onBeforeUnmount, reactive, ref, watch} from 'vue';
 import {useRoute} from 'vue-router';
 import type {components} from '../../../types/api/v1';
 import type {SurveyAnswer, WeekDay, WeekInMonth} from '../../../types/SurveyTypes';
-import type {PilotRead} from '../../../types/FrontendPilotUiTypes';
-import {useActionState, usePilot} from '../../app/context';
+import type {FrontendRead} from '../../../types/FrontendUiTypes';
+import {useActionState, useFrontend} from '../../app/context';
 import {evictQueryFamilies, observeQueryReads, retireQueryFamily} from '../../app/queryCache';
 import {overviewKeys, surveyKeys} from '../../app/queryKeys';
 import {useListCommands, useListDetail} from '../../composables/listDetail';
@@ -23,7 +23,7 @@ import SurveyResults from './SurveyResults.vue';
 import CombinationFields from './CombinationFields.vue';
 import SurveySettings from './SurveySettings.vue';
 
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const route = useRoute();
 const api = useSurveysApi(context);
@@ -54,7 +54,7 @@ usePageTitle(() => messages.value.t('survey.documentTitle', {title: data.value?.
 watch(data, value => {
     if (!command.pending.value && !command.recovering.value) receiveBallot(value);
 }, {immediate: true});
-const stopReads = observeQueryReads<PilotRead<components['schemas']['SurveyView']>>(context.queryClient, () => key.value, result => {
+const stopReads = observeQueryReads<FrontendRead<components['schemas']['SurveyView']>>(context.queryClient, () => key.value, result => {
     // Equal successful responses can refresh untouched personal values too.
     // Reads concurrent with a command cannot replace its confirmed baseline;
     // the command's causal follow-up below adopts only its own fresh response.

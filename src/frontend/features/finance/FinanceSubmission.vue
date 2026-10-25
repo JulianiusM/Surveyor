@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, onBeforeUnmount, reactive, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
-import {useActionState, usePilot} from '../../app/context';
+import {useActionState, useFrontend} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
 import {financeDecimal, protectFinanceNumberFromScroll} from './numbers';
@@ -15,7 +15,7 @@ import StatusNotice from '../../components/StatusNotice.vue';
 // mounted after rejection/uncertainty; only confirmed save or departure releases it.
 const props = defineProps<{eventId: string; pools: components['schemas']['FinancePool'][]; refresh: () => Promise<void>; active: boolean}>();
 const emit = defineEmits<{history: []}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useFinanceApi(context);
 const id = useId();
@@ -178,7 +178,7 @@ function acknowledgeHistory(): void {
                     </div>
                 </div>
             </div>
-            <div class="pilot-action-row justify-content-end mt-2">
+            <div class="frontend-action-row justify-content-end mt-2">
                 <ActionButton type="submit" :state="submitAction" :pending="command.pending.value" :show-spinner="false">
                     <i class="bi bi-cloud-upload me-1" aria-hidden="true"></i>
                     {{ messages.t(command.pending.value ? 'finance.submitting' : command.uncertain.value ? 'finance.submissionUnconfirmed' : 'finance.submitInvoice') }}

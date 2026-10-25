@@ -1,14 +1,14 @@
 import {inject, nextTick, onBeforeUnmount, watch} from 'vue';
-import {pilotContextKey} from '../app/context';
-import type {PilotPendingFocusControl, PilotPendingFocusSource} from '../../types/FrontendPilotUiTypes';
+import {frontendContextKey} from '../app/context';
+import type {FrontendPendingFocusControl, FrontendPendingFocusSource} from '../../types/FrontendUiTypes';
 
 /** Retain only the initiating control's temporary DOM focus across native pending
  * disabling. Operations, drafts and admission remain with the existing caller;
  * another interaction or an obsolete actor always releases this claim. */
-export function usePendingFocus(source: PilotPendingFocusSource): void {
-    const context = inject(pilotContextKey, null);
+export function usePendingFocus(source: FrontendPendingFocusSource): void {
+    const context = inject(frontendContextKey, null);
     let mounted = true;
-    let focusTarget: PilotPendingFocusControl | null = null;
+    let focusTarget: FrontendPendingFocusControl | null = null;
     let focusGeneration = 0;
 
     // Capture in this component's pre-render queue before native disabling. At

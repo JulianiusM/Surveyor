@@ -49,7 +49,7 @@ export interface EntityMutationCompletion<Result> {
     prepare(manager: EntityManager, outcome: EntityMutationOutcome): Result | Promise<Result>;
 }
 
-/** Native reassociation retains its existing postcommit archive presentation and navigation choice. */
+/** Reassociation retains its existing postcommit archive presentation and navigation choice. */
 export interface EntityEventChangeResult {
     archive: ArchivePresentation | undefined;
     redirectUrl: string | undefined;

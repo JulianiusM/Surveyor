@@ -2,7 +2,7 @@
 import {computed, onBeforeUnmount, onMounted, provide, ref} from 'vue';
 import {RouterLink, RouterView, useRoute, useRouter} from 'vue-router';
 import type {NavigationFailure, RouteLocationNormalized} from 'vue-router';
-import {useActionState, usePilot} from './context';
+import {useActionState, useFrontend} from './context';
 import {isPlainMessageKey} from '../../modules/localization/translator';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
 import StatusNotice from '../components/StatusNotice.vue';
@@ -15,7 +15,7 @@ import {useDraftProtection} from '../composables/command';
 import {noticeTargetKey, useReadRetry, useReadRetryAt} from '../composables/feedback';
 import {observePageNavigation} from '../composables/pageNavigation';
 
-const context = usePilot();
+const context = useFrontend();
 const noticeTarget = ref<HTMLElement | null>(null);
 provide(noticeTargetKey, noticeTarget);
 const {messages, session, epoch, ready, notice} = context;
@@ -77,7 +77,7 @@ function keepInitialNativeNavigation(event: MouseEvent): void {
 }
 
 /** Only explicitly declared HTML GET forms are usable without initialized JS.
- * Client-only forms have no native submit contract; their omitted method must
+ * Client-only forms have no HTML submit contract; their omitted method must
  * never turn partially mounted credentials into a browser-default GET request. */
 function keepInitialNativeSubmission(event: Event): void {
     if (context.hydrated.value || !(event.target instanceof HTMLFormElement)) return;
@@ -126,37 +126,37 @@ function dismissPersonalLink(): void {
 </script>
 
 <template>
-    <div class="pilot-app d-flex flex-column min-vh-100 bg-secondary">
+    <div class="frontend-app d-flex flex-column min-vh-100 bg-secondary">
         <AppHeader @locale-error="localeError = true" @locale-recovered="localeError = false" />
         <!-- SSR and hydration own this same notice directly below navigation.
              The independent monitor selects its visibility through root startup
              attributes; neither it nor the entry replaces Vue-owned markup. -->
-        <section id="surveyor-pilot-javascript-required" class="container-fluid py-3">
-            <div id="surveyor-pilot-startup-recovery" class="alert alert-warning" role="alert">
+        <section id="surveyor-frontend-javascript-required" class="container-fluid py-3">
+            <div id="surveyor-frontend-startup-recovery" class="alert alert-warning" role="alert">
                 <p>{{ messages.t('state.javascriptRequired') }}</p>
-                <p data-pilot-startup-failure>{{ messages.t('state.startupFailed') }}</p>
-                <div class="pilot-action-row">
-                    <a class="btn btn-outline-light" :href="`/frontend-pilot/help?locale=${context.locale.value}`">{{ messages.t('app.help') }}</a>
+                <p data-frontend-startup-failure>{{ messages.t('state.startupFailed') }}</p>
+                <div class="frontend-action-row">
+                    <a class="btn btn-outline-light" :href="`/help?locale=${context.locale.value}`">{{ messages.t('app.help') }}</a>
                     <!-- Entry exposes this existing node only after attaching its
                          deliberately guarded reload callback. Without that module
                          the notice keeps functional Help navigation alone. -->
-                    <button type="button" class="btn btn-outline-light" data-pilot-startup-reload>
+                    <button type="button" class="btn btn-outline-light" data-frontend-startup-reload>
                         <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>{{ messages.t('state.refreshPage') }}
                     </button>
                 </div>
             </div>
         </section>
-        <main id="pilot-main" class="container-fluid flex-grow-1 py-3" tabindex="-1"
-            :data-pilot-interactive="interactiveContent ? '' : undefined">
+        <main id="frontend-main" class="container-fluid flex-grow-1 py-3" tabindex="-1"
+            :data-frontend-interactive="interactiveContent ? '' : undefined">
             <!-- The shared sticky host reserves space for visible results at its
                  origin. Receipt changes never focus a control or request a scroll. -->
-            <div class="pilot-notice-region">
-                <div ref="noticeTarget" class="pilot-notice-stack" data-pilot-notices>
-                    <!-- Guest registration delivers the native one-visit transient flash.
+            <div class="frontend-notice-region">
+                <div ref="noticeTarget" class="frontend-notice-stack" data-frontend-notices>
+                    <!-- Guest registration delivers the one-visit transient flash.
                          The matching identity receipt can restore it after failed bootstrap. -->
                     <StatusNotice v-if="context.personalLink.value && personalLinkText" kind="success"
                         transient placement="hosted" :renewal="context.personalLink.value" @dismiss="dismissPersonalLink">
-                        <!-- Native guest feedback is an escaped plain-text sentence.
+                        <!-- Guest feedback is an escaped plain-text sentence.
                              Its private URL shares the flash's expiry and visit lifetime. -->
                         {{ personalLinkText }}
                     </StatusNotice>
@@ -169,7 +169,7 @@ function dismissPersonalLink(): void {
                         :renewal="notice" @dismiss="dismissNotice">{{ messages.t(notice) }}</StatusNotice>
                 </div>
             </div>
-            <div class="pilot-page-notices">
+            <div class="frontend-page-notices">
                 <StatusNotice v-if="notice && notice !== 'auth.logoutDone'" kind="warning"
                     :renewal="notice"
                     :last-updated-at="notice === 'state.stale' && ready ? context.sessionRead.value.updatedAt : undefined"
@@ -190,15 +190,15 @@ function dismissPersonalLink(): void {
             </div>
             <!-- Pending navigation belongs to the header indicator, not a page
                  skeleton. Keep the mounted route and announce progress once. -->
-            <span v-if="ready && pendingNavigation" class="pilot-navigation-loading visually-hidden" role="status">{{ messages.t('common.loading') }}</span>
+            <span v-if="ready && pendingNavigation" class="frontend-navigation-loading visually-hidden" role="status">{{ messages.t('common.loading') }}</span>
             <!-- Route presentation selects the same public layout for SSR and hydration.
                  The renderer owns shared geometry; no private read or command is implied. -->
-            <LoadingSkeleton v-if="ready && initialLoading" data-pilot-initial-loading v-bind="route.meta.loadingSkeleton" page />
+            <LoadingSkeleton v-if="ready && initialLoading" data-frontend-initial-loading v-bind="route.meta.loadingSkeleton" page />
             <CommonPage v-else-if="ready && commonPage" :page="commonPage" />
             <RouterView v-else-if="ready" :key="epoch" />
             <section v-else class="card bg-dark text-white p-4">
                 <p>{{ messages.t('state.sessionChanged') }}</p>
-                <RouterLink class="btn btn-primary align-self-start" to="/frontend-pilot/users/login">
+                <RouterLink class="btn btn-primary align-self-start" to="/users/login">
                     {{ messages.t('common.reauthenticate') }}
                 </RouterLink>
                 <ActionButton class="align-self-start mt-2" variant="outline-light"

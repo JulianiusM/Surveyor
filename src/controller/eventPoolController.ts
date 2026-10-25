@@ -58,11 +58,11 @@ import type {InvoiceSharesPdfData, InvoiceTextFormatter, InvoiceAppliedTakeover,
 import type {MessageKey, MessageParameters} from '../types/LocalizationTypes';
 import type {PermBundle, SessionLike} from '../types/PermissionTypes';
 
-/** Bind the shared financial presentation to this request without changing the native English default. */
+/** Bind the shared financial presentation to this request without changing the English default. */
 function financeFormatter(locale?: string): InvoiceTextFormatter {
     if (!locale) return invoiceText;
     const translator = createTranslator(locale);
-    // The presenter selects native catalog keys dynamically; the translator checks their exact runtime parameters.
+    // The presenter selects catalog keys dynamically; the translator checks their exact runtime parameters.
     return (key, parameters = {}) => translator.t(`finance.${key}` as MessageKey, parameters as MessageParameters[MessageKey]);
 }
 
@@ -71,7 +71,7 @@ async function loadFinanceSubject(eventId: string, session: SessionLike) {
     const event = await eventService.getEventById(eventId);
     if (!event) throw new ApiProblem('NOT_FOUND');
 
-    // Native management grants may include public audiences independently of profile or page admission.
+    // Management grants may include public audiences independently of profile or page admission.
     const permissions = await evaluateSubject({kind: 'entity', entity: {
         entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
     }}, session);
@@ -107,7 +107,7 @@ function projectFinanceInvoice(eventId: string, pool: EventInvoicePool, invoice:
         recordedByName: invoice.recordedByName || invoice.recordedByProfile?.name || null,
         participantName: participant?.name ?? null, participantEmail: audience === 'organizer' ? participant?.email ?? null : null,
         proofOriginalName: invoice.proofOriginalName ?? null,
-        proofUrl: invoice.proofPath ? `/api/event/${encodeURIComponent(eventId)}/invoice-pools/${encodeURIComponent(pool.id)}/invoices/${invoice.id}/proof` : null,
+        proofUrl: invoice.proofPath ? `/event/${encodeURIComponent(eventId)}/invoice-pools/${encodeURIComponent(pool.id)}/invoices/${invoice.id}/proof` : null,
         canRetract: ownsInvoice && invoice.status === 'NEW', canClose: ownsInvoice && invoice.status === 'APPROVED'};
 }
 
@@ -154,13 +154,13 @@ function projectFinanceCoverage(takeovers: readonly InvoiceAppliedTakeover[], pa
         const id = takeover.beneficiaryRegistrationId;
         group.beneficiaries.push({id: String(id), name: names.get(id) || text('participant', {id})});
     }
-    // Native coverage pages complete payer groups sorted by their visible names; presentation does not alter responsibility.
+    // Coverage projections complete payer groups sorted by their visible names; presentation does not alter responsibility.
     const result = [...groups.values()].sort((left, right) => left.payerName.localeCompare(right.payerName));
     for (const group of result) group.beneficiaries.sort((left, right) => left.name.localeCompare(right.name));
     return result;
 }
 
-/** Project only the participant contact fields already shown by the native organizer and eligible coverage choosers. */
+/** Project only the participant contact fields already shown by the organizer and eligible coverage choosers. */
 function projectFinanceParticipant(participant: ParticipantRow): components['schemas']['FinanceParticipant'] {
     return {id: String(participant.id), name: participant.name, email: participant.email ?? null};
 }
@@ -177,7 +177,7 @@ function projectFinancePool(pool: EventInvoicePool, participants: readonly Parti
     const assignedCount = pool.assignAll ? participants.length : pool.assignments.length;
     const assignedIds = new Set(pool.assignAll ? participants.map(row => Number(row.id)) : pool.assignments.map(row => row.registrationId));
     const snapshot = pool.calculationSnapshot;
-    // Native personal coverage receives only eligible OPEN pools. History/share-only pool metadata cannot widen its roster.
+    // Personal coverage receives only eligible OPEN pools. History/share-only pool metadata cannot widen its roster.
     const coverageGroups = showCoverage ? projectFinanceCoverage(invoiceAppliedTakeovers(pool), participants, text) : [];
     const pendingCoverageGroups = organizer && pool.status === 'CLOSED' && (!coverageKnown || hasPendingTakeovers)
         ? projectFinanceCoverage(pool.takeovers, participants, text) : [];
@@ -208,7 +208,7 @@ function projectFinancePool(pool: EventInvoicePool, participants: readonly Parti
 function financeSummary(pool: EventInvoicePool, text: InvoiceTextFormatter): components['schemas']['FinanceSummary'] {
     const summary = invoicePoolSummary(pool, text);
     // Only the wire scalar changes. Labels, ordering and all accounting decisions
-    // remain those of the presenter also used by native pages, email and exports.
+    // remain those of the presenter also used by documents, email and exports.
     return {primary: summary.primary.map(financeMetric), details: summary.details.map(financeMetric), saved: summary.saved.map(financeMetric)};
 }
 
@@ -233,7 +233,7 @@ export async function readEventFinance(eventId: string, session: SessionLike,
     const shares = pools.flatMap(pool => pool.shares.filter(share => audience === 'organizer'
         || share.registrationId === registration!.id).map(share => projectFinanceShare(pool, share, participants, audience, text)));
     invoices.sort((left, right) => (right.createdAt ?? '').localeCompare(left.createdAt ?? '') || Number(right.id) - Number(left.id));
-    // The native participant page uses other pool metadata only to name an own invoice/share; unrelated pools stay private.
+    // The participant projection uses other pool metadata only to name an own invoice/share; unrelated pools stay private.
     const visiblePools = audience === 'organizer' ? pools : pools.filter(pool => eligiblePoolIds.has(pool.id)
         || invoices.some(invoice => invoice.poolId === pool.id) || shares.some(share => share.poolId === pool.id));
     return {audience, registrationId: registration ? String(registration.id) : null, invoices, shares,
@@ -262,7 +262,7 @@ export async function readEventFinanceBreakdown(eventId: string, poolId: string,
         needsRecalculation: Boolean(pool.needsRecalculation), settledShareNotice: invoiceSettledShareNotice(pool, share, participants, 'organizer', text)};
 }
 
-/** Match native participant-route admission before accepting any uploaded proof bytes. */
+/** Match participant document admission before accepting any uploaded proof bytes. */
 export async function admitEventInvoiceSubmission(eventId: string, session: SessionLike): Promise<Event> {
     return (await admitFinance(eventId, session, 'participant')).event;
 }
@@ -290,7 +290,7 @@ export async function retractEventInvoice(eventId: string, poolId: string, invoi
     }
 }
 
-/** Retain native participant close admission and explicitly disable the organizer override. */
+/** Retain participant close admission and explicitly disable the organizer override. */
 export async function closeEventInvoice(eventId: string, poolId: string, invoiceId: string, session: SessionLike): Promise<void> {
     const event = await admitOwnFinanceInvoice(eventId, poolId, invoiceId, session);
     await closeInvoice(event, poolId, invoiceId, session as Request['session'], undefined, false);
@@ -303,7 +303,7 @@ export async function readEventInvoiceProof(eventId: string, poolId: string, inv
     return serveInvoiceProof(event, poolId, invoiceId, session as Request['session'], {entity: permissions} as PermBundle);
 }
 
-/** Admit only the native management method, retaining explicit identity requirements for attributed invoice changes. */
+/** Admit only the management method, retaining explicit identity requirements for attributed invoice changes. */
 async function admitFinanceManagement(eventId: string, session: SessionLike, requireProfile: boolean) {
     if (requireProfile && !session.profile?.id) throw new ApiProblem('AUTH_REQUIRED');
     const {event, permissions} = await loadFinanceSubject(eventId, session);
@@ -312,7 +312,7 @@ async function admitFinanceManagement(eventId: string, session: SessionLike, req
     return {event, permissions};
 }
 
-/** Preserve the native organizer method grant independently from organizer-page admission. */
+/** Preserve the organizer method grant independently from organizer-page admission. */
 export async function admitEventFinanceOrganizer(eventId: string, session: SessionLike, requireProfile = false): Promise<Event> {
     const {event} = await admitFinanceManagement(eventId, session, requireProfile);
     return event;
@@ -323,13 +323,13 @@ async function runFinanceOperation<T>(operation: () => Promise<T>): Promise<T> {
     try {
         return await operation();
     } catch (error) {
-        // Legacy prose stays private; no mutable admission or response preparation runs after a successful write.
+        // Controller prose stays private; no mutable admission or response preparation runs after a successful write.
         if (error instanceof APIError && error.status === 409) throw declaredApiProblem(error) ?? new ApiProblem('RESOURCE_CONFLICT');
         throw error;
     }
 }
 
-/** Create a pool through the existing validated controller owner after matching its native method grant. */
+/** Create a pool through the existing validated controller owner after matching its shared method grant. */
 export async function createEventFinancePool(eventId: string, body: unknown, session: SessionLike): Promise<string> {
     const event = await admitEventFinanceOrganizer(eventId, session);
     return runFinanceOperation(() => createInvoicePool(event, body));
@@ -357,7 +357,7 @@ export async function recordEventOrganizerInvoice(event: Event, poolId: string, 
 /** Dispatch one admitted invoice review to its existing owner, preserving evidence and revision requirements. */
 export async function reviewEventFinanceInvoice(eventId: string, poolId: string, invoiceId: string,
     action: 'approve' | 'decline' | 'close' | 'revise' | 'reject', body: unknown, session: SessionLike): Promise<void> {
-    // Retroactive changes retain the native actor requirement; initial review follows the independent method grant.
+    // Retroactive changes retain the actor requirement; initial review follows the independent method grant.
     const {event, permissions} = await admitFinanceManagement(eventId, session, action === 'revise' || action === 'reject');
     const actor = session as Request['session'];
     // Every operation still validates event/pool ownership and lifecycle itself; this adapter supplies only method admission.
@@ -407,7 +407,7 @@ export async function previewEventFinancePool(eventId: string, poolId: string, s
     locale?: string): Promise<components['schemas']['FinancePreview']> {
     const event = await admitEventFinanceOrganizer(eventId, session);
     const text = financeFormatter(locale);
-    // The same preview engine projects carried settlements and arithmetic for native review and committed calculations.
+    // The same preview engine projects carried settlements and arithmetic for interactive review and committed calculations.
     const {pool, preview} = await runFinanceOperation(() => loadPoolPreview(event, poolId));
     // Re-present numeric provenance in the chosen interface language; saved notes retain their original authored content.
     const shares = preview.shares.map(share => {
@@ -753,7 +753,7 @@ async function loadPoolPreview(event: Event, poolId: string) {
     return {pool, preview: buildPoolCalculationPreview(pool, participants, registrations)};
 }
 
-/** Return the existing native preview shape through the shared calculation-input owner. */
+/** Return the shared preview shape through the shared calculation-input owner. */
 async function previewPool(event: Event, poolId: string) {
     return (await loadPoolPreview(event, poolId)).preview;
 }
@@ -866,7 +866,7 @@ async function getInvoiceSharesPdfData(event: Event, poolId: string, query: unkn
         // Preserve the same frozen responsibility/history notice shown in both in-app share ledgers.
         settledShareNotice: invoiceSettledShareNotice(pool, share, participants),
     })).sort((left, right) => left.name.localeCompare(right.name) || left.registrationId - right.registrationId);
-    // Pass the saved explanation explicitly, retaining the missing-input fallback for legacy snapshots.
+    // Pass the saved explanation explicitly, retaining the missing-input fallback for historical snapshots.
     // The exporter receives frozen adjustment modes alongside the saved explanation, including older snapshots.
     return {event, pool, shares, explanation: pool.calculationSnapshot?.explanation,
       savedAdjustments: pool.calculationSnapshot?.surcharges, generatedAt: new Date().toISOString(), pdfOptions};

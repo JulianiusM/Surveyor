@@ -2,11 +2,11 @@
 import {ref} from 'vue';
 import {useActionState} from '../app/context';
 import {usePendingFocus} from '../composables/pendingFocus';
-import type {PilotActionState} from '../../types/FrontendPilotUiTypes';
+import type {FrontendActionState} from '../../types/FrontendUiTypes';
 
 // Specialized list-group actions retain their caller-owned appearance, while
 // this same button owns initialization, pending and transient focus behavior.
-const props = withDefaults(defineProps<{state?: PilotActionState; pending?: boolean; disabled?: boolean; showSpinner?: boolean; unstyled?: boolean;
+const props = withDefaults(defineProps<{state?: FrontendActionState; pending?: boolean; disabled?: boolean; showSpinner?: boolean; unstyled?: boolean;
     variant?: string; type?: 'button' | 'submit'}>(),
     {pending: false, disabled: false, showSpinner: true, unstyled: false, variant: 'primary', type: 'button'});
 // Render actual disabled controls until their JS handlers have initialized. HTML

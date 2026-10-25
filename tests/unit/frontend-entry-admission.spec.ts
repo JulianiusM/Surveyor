@@ -11,9 +11,9 @@ import {Guest} from '../../src/modules/database/entities/user/Guest';
 
 describe('shared server-owned page admission', () => {
     it('admits account creation and sends guests/anonymous users to login with the exact duplicate return', async () => {
-        const destination = '/frontend-pilot/packing/84305c09-5386-47bc-b62d-520b8a8edbb2/duplicate';
+        const destination = '/packing/84305c09-5386-47bc-b62d-520b8a8edbb2/duplicate';
         const result = await readPackingCreateEntry({}, destination);
-        expect(result).toEqual({entry: {kind: 'redirect', url: `/frontend-pilot/users/login?next=${encodeURIComponent(destination)}`,
+        expect(result).toEqual({entry: {kind: 'redirect', url: `/users/login?next=${encodeURIComponent(destination)}`,
             notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, context: null});
         expect(contractValidator('PackingCreateEntry')(result)).toBe(true);
         expect(getAccountPageEntry({auth: {guest: new Guest()}, profile: new Profile()}, '/users/login', '/activity/source/duplicate').kind)

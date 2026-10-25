@@ -2,7 +2,7 @@
 import {computed, ref} from 'vue';
 import RichMessage from '../../components/RichMessage.vue';
 import type {components} from '../../../types/api/v1';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {useListReorder} from '../../composables/listReorder';
 import {activityDateLabel, activityDayLabel} from './presentation';
 import ActionButton from '../../components/ActionButton.vue';
@@ -17,14 +17,14 @@ const props = defineProps<{view: components['schemas']['ActivityView']; disabled
     reorder(order: components['schemas']['ActivityOrderInput']['order'], token: string): Promise<unknown>}>();
 const emit = defineEmits<{edit: [slot: components['schemas']['ActivitySlotView']]; add: [day: string]; remove: [slot: components['schemas']['ActivitySlotView']];
     assign: [slot: components['schemas']['ActivitySlotView'], assigned: boolean, role?: string]; removeAssignment: [id: string]; roles: [slot: components['schemas']['ActivitySlotView']]; editing: [active: boolean]; denied: [source?: Event]}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const filter = ref('all');
 const draggedDay = ref('');
 const editing = ref(0);
 const editingDescriptions = ref(new Set<string>());
 const weeks = computed(() => props.view.weeks);
-/** Keep the server's native time/position order within each date before filtering. */
+/** Keep the server's time/position order within each date before filtering. */
 function daySlots(day: string): components['schemas']['ActivitySlotView'][] {
     return props.view.slots.filter(slot => slot.day === day);
 }
@@ -33,11 +33,11 @@ function shown(slot: components['schemas']['ActivitySlotView']): boolean {
 }
 function full(slot: components['schemas']['ActivitySlotView']): boolean { return slot.assignedCount >= (slot.maxAssignees ?? 0); }
 function mayJoin(slot: components['schemas']['ActivitySlotView']): boolean { return props.view.canSelfAssign && (props.view.allowOverfillAfterFull || !full(slot)); }
-/** Native role add-ons prefer the shared role description as their visible label. */
+/** Role add-ons prefer the shared role description as their visible label. */
 function roleLabel(role: components['schemas']['ActivitySlotRole']): string {
     return props.view.allRoles.find(candidate => candidate.id === role.id)?.description || role.name;
 }
-/** The native pencil is admitted by metadata/description editing. Title and
+/** The pencil is admitted by metadata/description editing. Title and
  * capacity-only grants retain their independent inline controls. */
 function canEdit(slot: components['schemas']['ActivitySlotView']): boolean {
     return slot.capabilities.editMeta || slot.capabilities.editDescription;
@@ -115,7 +115,7 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                 @click="filter = option">{{ messages.t(option === 'all' ? 'activity.allSlots' : option === 'mine' ? 'activity.mySlots' : 'activity.openSlots') }}</ActionButton>
         </div>
         <small class="text-secondary mb-0">{{ messages.t('activity.filterHint') }}</small>
-        <div v-if="view.capabilities.exportSchedule" class="pilot-action-row mt-2 mt-sm-0">
+        <div v-if="view.capabilities.exportSchedule" class="frontend-action-row mt-2 mt-sm-0">
             <a class="btn btn-outline-light btn-sm" :href="'/activity/' + view.id + '/export/schedule'" target="_blank">
                 <i class="bi bi-printer me-1" aria-hidden="true"></i>{{ messages.t('activity.exportSchedule') }}</a>
         </div>
@@ -151,7 +151,7 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                     <tr>
                         <td v-for="day in week.days" :key="day">
                             <div class="slot-container" :data-date="day">
-                                <!-- Bootstrap's d-grid is important; native d-none must own
+                                <!-- Bootstrap's d-grid is important; d-none must own
                                 hiding rather than an inline display style that loses. -->
                                 <div
                                     v-for="slot in daySlots(day)"
@@ -312,7 +312,7 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                                             </template>
                                         </EntityAssignees>
                                     </div>
-                                    <div class="pilot-action-row mt-2">
+                                    <div class="frontend-action-row mt-2">
                                         <ActionButton
                                             v-if="slot.selfAssigned"
                                             type="button"

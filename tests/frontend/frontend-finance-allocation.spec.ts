@@ -58,7 +58,7 @@ describe('P8 independently saved allocation inputs', () => {
         await mounted.wrapper.setProps({pool: {...pool, status: 'ORGANIZER_ONLY'}});
         expect(button(mounted.wrapper, 'Open participant invoices').classes()).toContain('btn-outline-light');
         expect(mounted.wrapper.get('p.small.text-secondary').element.previousElementSibling)
-            .toBe(mounted.wrapper.get('.pilot-action-row').element);
+            .toBe(mounted.wrapper.get('.frontend-action-row').element);
         await mounted.wrapper.setProps({pool: {...pool, status: 'CLOSED'}});
         expect(mounted.wrapper.text()).not.toContain('Open participant invoices');
         expect(mounted.wrapper.text()).not.toContain('Close participant invoices');

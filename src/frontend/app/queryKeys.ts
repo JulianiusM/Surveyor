@@ -181,7 +181,7 @@ function belongsToEventFinanceFamily(query: Parameters<typeof matchQuery>[1], co
 }
 
 /** Only these existing projection owners include translated server content. Locale-free
- * machine snapshots remain available during a language preference command. Future migrated
+ * machine snapshots remain available during a language preference command. Future
  * language-owned projections extend this owner rather than invalidating the whole cache. */
 export function belongsToLocalizedQueryFamily(query: Parameters<typeof matchQuery>[1], context: string | null): boolean {
     // Match complete actor families, including obsolete locale variants and inactive pages.

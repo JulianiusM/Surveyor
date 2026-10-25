@@ -7,7 +7,7 @@ import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import type {components} from '../../src/types/api/v1';
-import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
+import {createFrontendContext, observeInitialDocument, frontendContextKey} from '../../src/frontend/app/context';
 import {activityKeys} from '../../src/frontend/app/queryKeys';
 import ActivityRequirements from '../../src/frontend/features/activity/ActivityRequirements.vue';
 import ActivityPage from '../../src/frontend/features/activity/ActivityPage.vue';
@@ -80,17 +80,17 @@ function json(value: unknown, status = 200): Response {
  * substituted HTTP delivery. Persistence belongs to integration and built E2E. */
 async function mounted(handler: (request: Request) => Promise<Response>, component: Component = ActivityRequirements) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
-    const context = createPilotContext({session}, true, request);
+    const context = createFrontendContext({session}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/frontend-pilot/activity/:planId', component, props: component === ActivityRequirements},
-        {path: '/frontend-pilot', component: defineComponent({template: '<p>Overview</p>'})},
+        {path: '/activity/:planId', component, props: component === ActivityRequirements},
+        {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
     ]});
-    await router.push('/frontend-pilot/activity/' + planId);
+    await router.push('/activity/' + planId);
     const stopInitial = observeInitialDocument(context, router);
     const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[pilotContextKey as symbol]: context},
+        provide: {[frontendContextKey as symbol]: context},
     }});
     cleanups.push(async () => { root.unmount(); stopInitial(); await context.queryClient.cancelQueries(); context.queryClient.clear(); });
     await vi.waitFor(() => expect(root.find('#requirementForm').exists()).toBe(true));
@@ -120,14 +120,14 @@ describe('Activity requirements production frontend', () => {
 
             // Depart through the actual router so the production parent and its
             // requirement draft are disposed while the QueryClient stays alive.
-            await router.push('/frontend-pilot');
+            await router.push('/');
             await flushPromises();
             if (cacheState === 'stale') {
                 // A normal stale visit must also work when its successful GET
                 // returns equal JSON and Query retains the original data object.
                 await context.queryClient.invalidateQueries({queryKey: key, refetchType: 'none'});
             }
-            await router.push('/frontend-pilot/activity/' + planId);
+            await router.push('/activity/' + planId);
             await vi.waitFor(() => expect(root.find('#requirementForm').exists()).toBe(true));
             if (cacheState === 'stale') await vi.waitFor(() => expect(requirementReads).toBe(2));
             await flushPromises();
@@ -277,9 +277,9 @@ describe('Activity requirements production frontend', () => {
         vi.stubGlobal('confirm', confirm);
         const reads = request.mock.calls.length;
         await wrapper.get('[data-requirements-refresh]').trigger('click');
-        await router.push('/frontend-pilot');
+        await router.push('/');
         expect(confirm).toHaveBeenCalledTimes(2);
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/activity/' + planId);
+        expect(router.currentRoute.value.path).toBe('/activity/' + planId);
         expect(request.mock.calls.length).toBe(reads);
         expect((wrapper.get('#stayRequirement-2').element as HTMLInputElement).value).toBe('4');
         confirm.mockReturnValue(true);
@@ -311,7 +311,7 @@ describe('Activity requirements production frontend', () => {
                     });
             const reason = invalid.reason === 'minimum' ? context.messages.value.t('validation.minimum', {limit: 0})
                 : context.messages.value.t('validation.integer');
-            expect(wrapper.get('.pilot-notification.alert-danger').text())
+            expect(wrapper.get('.frontend-notification.alert-danger').text())
                 .toContain(context.messages.value.t('validation.fieldError', {field, reason}));
             expect(wrapper.get(invalid.selector).element).toBe(control.element);
             expect(control.element.value).toBe(invalid.value);
@@ -354,9 +354,9 @@ describe('Activity requirements production frontend', () => {
         try {
             await wrapper.get('[data-requirements-baseline-calc]').trigger('click');
             const calculated = (wrapper.get('#requiredShifts').element as HTMLInputElement).value;
-            expect(wrapper.find('.pilot-notification').exists()).toBe(true);
-            await wrapper.get('.pilot-notification .btn-close').trigger('click');
-            expect(wrapper.find('.pilot-notification').exists()).toBe(false);
+            expect(wrapper.find('.frontend-notification').exists()).toBe(true);
+            await wrapper.get('.frontend-notification .btn-close').trigger('click');
+            expect(wrapper.find('.frontend-notification').exists()).toBe(false);
             expect((wrapper.get('#requiredShifts').element as HTMLInputElement).value).toBe(calculated);
             expect(wrapper.get('[data-requirements-dirty]').text()).toBe('Unsaved changes');
 
@@ -366,10 +366,10 @@ describe('Activity requirements production frontend', () => {
             await vi.advanceTimersByTimeAsync(9000);
             await wrapper.get('[data-requirements-baseline-calc]').trigger('click');
             await vi.advanceTimersByTimeAsync(1000);
-            expect(wrapper.find('.pilot-notification').exists()).toBe(true);
+            expect(wrapper.find('.frontend-notification').exists()).toBe(true);
             await vi.advanceTimersByTimeAsync(9000);
             await flushPromises();
-            expect(wrapper.find('.pilot-notification').exists()).toBe(false);
+            expect(wrapper.find('.frontend-notification').exists()).toBe(false);
             expect((wrapper.get('#requiredShifts').element as HTMLInputElement).value).toBe(calculated);
             expect(wrapper.get('[data-requirements-dirty]').text()).toBe('Unsaved changes');
             expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);

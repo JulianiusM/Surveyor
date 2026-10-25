@@ -2,7 +2,7 @@
 import {useActionState} from '../app/context';
 
 // Features own disclosure state, panel DOM and readable contents. This button
-// shares only native accordion presentation and initialized activation admission.
+// shares only accordion presentation and initialized activation admission.
 const props = withDefaults(defineProps<{expanded: boolean; controls?: string; disabled?: boolean}>(), {disabled: false});
 const emit = defineEmits<{click: [source: MouseEvent]}>();
 const action = useActionState({blocked: () => props.disabled});

@@ -308,7 +308,7 @@ describe('authoritative archival and personal overview visibility', () => {
         expect(await card(owner, event)).toMatchObject({visibility: 'default', overviewHidden: true});
     });
 
-    it('rolls back a pilot preference when the actual archival permission projection fails', async () => {
+    it('rolls back a frontend preference when the actual archival permission projection fails', async () => {
         const event = await createEvent('Visibility projection rollback');
         await registerEventAttendance(event.id, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         await setVisibility(participant.id, event, 'shown');
@@ -325,7 +325,7 @@ describe('authoritative archival and personal overview visibility', () => {
         expect(await card(participant, event, 'participant')).toMatchObject({visibility: 'shown', overviewHidden: false});
     });
 
-    it('rolls back a pilot preference when the generated response preparation rejects its completion', async () => {
+    it('rolls back a frontend preference when the generated response preparation rejects its completion', async () => {
         const event = await createEvent('Visibility output rollback');
         const session = {profile: owner, auth: {user: owner.user!}};
         await setVisibility(owner.id, event, 'shown');
@@ -346,7 +346,7 @@ describe('authoritative archival and personal overview visibility', () => {
         expect(await card(owner, event)).toMatchObject({visibility: 'shown', overviewHidden: false});
     });
 
-    it('preserves native visibility presentation and the exact pilot DTO while preparing immutable transport output', async () => {
+    it('preserves native visibility presentation and the exact frontend DTO while preparing immutable transport output', async () => {
         const event = await createEvent('Visibility completion values');
         await archiveAsOwner(event);
         const session = {profile: owner, auth: {user: owner.user!}};

@@ -3,13 +3,13 @@ import type {InjectionKey, Ref} from 'vue';
 import {useTranslation} from 'i18next-vue';
 import {QueryClient} from '@tanstack/vue-query';
 import type {QueryCacheNotifyEvent} from '@tanstack/vue-query';
-import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
-import type {PilotActionInputs, PilotActionState, PilotContext, PilotIdentityConfirmation, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
+import type {FrontendBootstrap} from '../../types/FrontendTypes';
+import type {FrontendActionInputs, FrontendActionState, FrontendContext, FrontendIdentityConfirmation, FrontendRequestScope} from '../../types/FrontendUiTypes';
 import type {Locale, MessageKey} from '../../types/LocalizationTypes';
 import type {components} from '../../types/api/v1';
 import type {RouteLocationNormalized, Router} from 'vue-router';
 import {createLocalizationInstance, createTranslator, resolveLocale} from '../../modules/localization/translator';
-import {PilotApi} from './api';
+import {FrontendApi} from './api';
 import {ApiFailure, isTerminalReadFailure, ObsoleteRequestError} from './transport';
 import {createUpdateCoordinator} from './updateCoordinator';
 import {frontendDocumentUrl, frontendIdentityMessageFeedback} from '../../modules/lib/frontendIdentity';
@@ -17,13 +17,13 @@ import {belongsToLocalizedQueryFamily} from './queryKeys';
 
 // Development SSR can invalidate the context module between app construction and a lazy route
 // import. A stable key spans those module generations; the provided value remains app/request-local.
-export const pilotContextKey: InjectionKey<PilotContext> = Symbol.for('Surveyor pilot context');
+export const frontendContextKey: InjectionKey<FrontendContext> = Symbol.for('Surveyor frontend context');
 
 /** JS-only reusable controls share the application's initialization boundary.
- * Standalone controls keep their established behavior without requiring a pilot
+ * Standalone controls keep their established behavior without requiring a frontend
  * context; real HTML navigation/search never uses this interaction gate. */
 export function useClientInitialization() {
-    const context = inject(pilotContextKey, null);
+    const context = inject(frontendContextKey, null);
     return computed(() => !context || context.hydrated.value);
 }
 
@@ -31,7 +31,7 @@ export function useClientInitialization() {
  * Admission belongs to the operation: a scoped read can wait for bootstrap while
  * session recovery and local draft controls remain available. No input, request,
  * retry or outcome is copied here, and an admitted operation keeps its lifetime. */
-export function useActionState(inputs: PilotActionInputs = {}): PilotActionState {
+export function useActionState(inputs: FrontendActionInputs = {}): FrontendActionState {
     const initialized = useClientInitialization();
     // Disposal retires only future admission. Pending promises keep their existing
     // command/read settlement owners and are never canceled or replayed here.
@@ -52,9 +52,9 @@ export function useActionState(inputs: PilotActionInputs = {}): PilotActionState
     return {available, disabled: computed(() => !available.value), pending, isAvailable};
 }
 
-export function usePilot(): PilotContext {
-    const context = inject(pilotContextKey);
-    if (!context) throw new Error('The pilot application context is missing.');
+export function useFrontend(): FrontendContext {
+    const context = inject(frontendContextKey);
+    if (!context) throw new Error('The frontend application context is missing.');
     const {t} = useTranslation();
     // Keep the application contract typed while letting the selected Vue binding own
     // translation dependencies, including changes to resources during development HMR.
@@ -71,9 +71,9 @@ function retryDelay(attempt: number): number {
 }
 
 /** Request-local on the server, application-local in the browser; never a module singleton. */
-export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: boolean,
+export function createFrontendContext(bootstrap: FrontendBootstrap, browser: boolean,
                                    requestFetch?: typeof fetch,
-                                   mayReloadAutomatically: () => boolean = () => false): PilotContext {
+                                   mayReloadAutomatically: () => boolean = () => false): FrontendContext {
     const session = shallowRef(bootstrap.session);
     const epoch = ref(0);
     const locale = ref<Locale>(resolveLocale(bootstrap.session.locale));
@@ -86,7 +86,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     const readsReady = ref(true);
     // Construction accepts the validated initial document's session receipt,
     // matching query initialData. A failed later GET must retain that observation.
-    const sessionRead = shallowRef<PilotContext['sessionRead']['value']>({error: null, updatedAt: Date.now(), pending: false});
+    const sessionRead = shallowRef<FrontendContext['sessionRead']['value']>({error: null, updatedAt: Date.now(), pending: false});
     const initialDocumentActive = ref(true);
     const initialDocumentUrl = bootstrap.initialUrl === undefined ? undefined : frontendDocumentUrl(bootstrap.initialUrl);
     const hydrated = ref(false);
@@ -99,9 +99,9 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     // existing independent lifetime and must not replace an admission notice's severity.
     const pageNotice = ref<components['schemas']['EntryNotice'] | null>(bootstrap.pageNotice
         ?? (bootstrap.identityFeedback === 'auth.activated' ? {kind: 'success', messageKey: 'auth.activated'} : null));
-    // A confirmed command can finish on a native message destination without another
+    // A confirmed command can finish on a message destination without another
     // write. This presentation receipt is memory-only and belongs to the current actor.
-    const pageCompletion = ref<PilotContext['pageCompletion']['value']>(
+    const pageCompletion = ref<FrontendContext['pageCompletion']['value']>(
         bootstrap.pageCompletion?.context === bootstrap.session.context ? bootstrap.pageCompletion : null,
     );
     const personalLink = ref<string | null>(bootstrap.personalLink ?? null);
@@ -136,7 +136,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     let desiredLocale: Locale | null = null;
     // Retain only a confirmed identity receipt while its authoritative session read
     // is unavailable. Retry can deliver the private link without replaying registration.
-    let pendingIdentity: PilotIdentityConfirmation | undefined;
+    let pendingIdentity: FrontendIdentityConfirmation | undefined;
     // Identity and language have independent ordering. A confirmed language command retires
     // only older locale projections, without discarding authoritative identity/deployment data.
     let localeGeneration = 0;
@@ -145,7 +145,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     const identityGuards = new Set<() => boolean>();
     // Admission keeps its query/denial descriptor. Context retains only a live
     // presentation predicate and its actor fence, shared by rendering and reload.
-    const pageOutcomes = shallowRef(new Set<{scope: PilotRequestScope;
+    const pageOutcomes = shallowRef(new Set<{scope: FrontendRequestScope;
         route: Readonly<Ref<string>>; isStatic: () => boolean}>());
 
     /** Explicit cookie-changing controls must pass the same draft/pending checks as navigation.
@@ -162,7 +162,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
 
     /** Capture server-projected evidence without inventing an anonymous visitor.
      * A null pair still has this app's ordinary epoch/route/draft lifetimes. */
-    function capture(): PilotRequestScope {
+    function capture(): FrontendRequestScope {
         return {context: session.value.context, csrfToken: session.value.csrfToken,
             locale: locale.value, epoch: epoch.value};
     }
@@ -170,7 +170,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     /** Bootstrap is evidence of the initial GET's admission and authorized feedback.
      * A later visit to the same URL is a new GET-style journey and must obtain fresh admission.
      * The reactive eligibility flag prevents reused views from reviving an old response. */
-    function initialDocumentFor(url: string): FrontendPilotBootstrap | undefined {
+    function initialDocumentFor(url: string): FrontendBootstrap | undefined {
         // A fragment selects content within the same document; it is not sent to Express.
         // Path and query still identify the original request and may never revive on return.
         if (!initialDocumentActive.value || !ready.value || initialDocumentUrl !== frontendDocumentUrl(url)
@@ -178,7 +178,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         return bootstrap;
     }
 
-    /** Committed departure retires native presentation; canceled navigation retains it.
+    /** Committed departure retires presentation; canceled navigation retains it.
      * Omit the destination when fresh admission explicitly supersedes the initial response.
      * Identity retirement independently revokes eligibility even if the URL stays unchanged. */
     function retireInitialDocument(destination?: string): void {
@@ -233,14 +233,14 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         return route.meta.javascriptRequired === true && !hasStaticPageOutcome(route);
     }
 
-    function isCurrent(scope: PilotRequestScope, checkLocale = false): boolean {
+    function isCurrent(scope: FrontendRequestScope, checkLocale = false): boolean {
         return !disposed && ready.value && scope.epoch === epoch.value && scope.context === session.value.context
             && (!checkLocale || scope.locale === locale.value);
     }
 
     /** Session checks control new read dispatch, not the lifetime of admitted writes
      * or already captured responses. Visibility/hydration remain each observer's policy. */
-    function mayRead(scope?: PilotRequestScope, checkLocale = false): boolean {
+    function mayRead(scope?: FrontendRequestScope, checkLocale = false): boolean {
         return !disposed && readsReady.value && ready.value && (!scope || isCurrent(scope, checkLocale));
     }
 
@@ -280,7 +280,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         void refreshSession().catch(() => { /* Keep the private view closed until bootstrap succeeds. */ });
     }
 
-    const api = new PilotApi(isCurrent, invalidateIdentity, requestFetch, mayRead);
+    const api = new FrontendApi(isCurrent, invalidateIdentity, requestFetch, mayRead);
 
     /** Publish one coherent session/language projection while retaining the server's actor evidence. */
     function receiveSession(current: components['schemas']['SessionView'], selectedLocale: Locale): void {
@@ -438,7 +438,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
 
     /** Bootstrap remains authoritative after a cookie-changing command. A private guest link
      * is shown only when the confirmed identity is still current, and never survives a switch. */
-    async function acceptIdentity(result: PilotIdentityConfirmation): Promise<void> {
+    async function acceptIdentity(result: FrontendIdentityConfirmation): Promise<void> {
         // A focus/bootstrap read may have captured the cookie before the command changed it.
         // Retire that generation and drain its promise before asking for authoritative new state.
         // Reusing it would incorrectly compare a successful login to the old anonymous context.
@@ -536,7 +536,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
 /** Observe the actual router commitment, independently of which view happens to be mounted.
  * Server rendering and browser startup share this lifetime; failure and canceled guards do
  * not consume the initial document. The returned subscription belongs to that router. */
-export function observeInitialDocument(context: PilotContext, router: Router): () => void {
+export function observeInitialDocument(context: FrontendContext, router: Router): () => void {
     return router.afterEach(function retireCommittedDocument(to, _from, failure): void {
         if (!failure) context.retireInitialDocument(to.fullPath);
     });

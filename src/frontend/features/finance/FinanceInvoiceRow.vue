@@ -2,7 +2,7 @@
 import {computed, ref} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {FinanceInvoiceRowProps} from '../../../types/FrontendFinanceReviewTypes';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {financeDate, financeMoney, invoiceStatus, invoiceStatusClass} from './presentation';
 import {useFinanceInvoiceReview} from './invoiceReview';
 import {protectFinanceNumberFromScroll} from './numbers';
@@ -17,7 +17,7 @@ type Invoice = components['schemas']['FinanceInvoice'];
 const props = defineProps<FinanceInvoiceRowProps>();
 const emit = defineEmits<{retract: [invoice: Invoice]; closeInvoice: [invoice: Invoice];
     review: [invoice: Invoice, action: 'approve' | 'decline' | 'revise' | 'reject' | 'close']}>();
-const {messages, locale} = usePilot();
+const {messages, locale} = useFrontend();
 const confirmationOpen = ref(false);
 const review = props.admin && !props.readOnly && props.eventId && props.pool && props.refreshSaved
     ? useFinanceInvoiceReview({
@@ -33,7 +33,7 @@ const review = props.admin && !props.readOnly && props.eventId && props.pool && 
 const rowBlocked = computed(() => !!props.disabled || !!review && (review.command.pending.value
     || review.command.recovering.value || review.command.uncertain.value));
 
-/** Open only the native final gate after the row owner captures relevant input. */
+/** Open only the final gate after the row owner captures relevant input. */
 function beginNew(action: 'approve' | 'decline'): void {
     if (review?.beginInline(action)) confirmationOpen.value = true;
 }
@@ -72,7 +72,7 @@ function beginNew(action: 'approve' | 'decline'): void {
         </td>
         <td class="invoice-cell-wide" :data-label="messages.t(admin ? 'finance.organizerReview' : 'finance.description')">
             <!-- NEW inputs stay in this row's one review owner. Buttons alone
-                 choose which captured payload enters the native final gate. -->
+                 choose which captured payload enters the final gate. -->
             <div v-if="review && invoice.status === 'NEW' && !readOnly" class="invoice-review-fields" @wheel.capture.passive="protectFinanceNumberFromScroll">
                 <FormField :id="`${review.id}-inline-amount`" v-model="review.draft.amount" :name="null" type="number" lexical-number
                     min="0.01" step="0.01" input-mode="decimal" control-class="form-control-sm invoice-corrected-amount" label-class="small mb-1"
@@ -114,7 +114,7 @@ function beginNew(action: 'approve' | 'decline'): void {
             <span v-else class="text-secondary">{{ messages.t(invoice.organizerRecorded && !invoice.proofOriginalName ? 'finance.noProofAttached' : 'finance.proofExpired') }}</span>
         </td>
         <td v-if="admin && !readOnly" class="invoice-cell-actions" :data-label="messages.t('finance.actions')">
-            <div class="pilot-action-row flex-wrap gap-1">
+            <div class="frontend-action-row flex-wrap gap-1">
                 <template v-if="invoice.status === 'NEW'">
                     <ActionButton variant="success" class="btn-sm" :disabled="disabled" :state="review?.actionState"
                         :pending="review?.command.pending.value && review.operation.value === 'approve'" :show-spinner="false"

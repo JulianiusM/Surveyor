@@ -281,8 +281,8 @@ describe('P8A organizer finance forms', () => {
         expect((button(row, 'Correct').element as HTMLButtonElement).disabled).toBe(false);
         const discard = vi.fn(() => false);
         vi.stubGlobal('confirm', discard);
-        await mounted.router.push('/frontend-pilot/packing/another-list');
-        expect(mounted.router.currentRoute.value.path).toBe('/frontend-pilot/packing/another-list');
+        await mounted.router.push('/packing/another-list');
+        expect(mounted.router.currentRoute.value.path).toBe('/packing/another-list');
         expect(discard).not.toHaveBeenCalled();
         expect(mounted.request).not.toHaveBeenCalled();
     });
@@ -322,11 +322,11 @@ describe('P8A organizer finance forms', () => {
         await mounted.dialog.get('form').trigger('submit');
         await flushPromises();
         expect(mounted.request).not.toHaveBeenCalled();
-        const feedback = mounted.dialog.get('.pilot-notification.alert-danger');
+        const feedback = mounted.dialog.get('.frontend-notification.alert-danger');
         for (const locale of ['en', 'de'] as const) {
             mounted.context.locale.value = locale;
             await flushPromises();
-            expect(mounted.dialog.get('.pilot-notification.alert-danger').element).toBe(feedback.element);
+            expect(mounted.dialog.get('.frontend-notification.alert-danger').element).toBe(feedback.element);
             expect(feedback.text()).toContain(mounted.context.messages.value.t('validation.fieldError', {
                 field: mounted.context.messages.value.t('finance.description'),
                 reason: mounted.context.messages.value.t('validation.maxLength', {limit: 4000}),
@@ -465,7 +465,7 @@ describe('P8A organizer finance forms', () => {
         expect(document.querySelector('[role="dialog"]')).toBeNull();
 
         const surface = new DOMWrapper(document.body);
-        const common = surface.get('.pilot-notification.status-notice.alert-warning');
+        const common = surface.get('.frontend-notification.status-notice.alert-warning');
         expect(surface.findAll('.status-notice.alert-warning')).toHaveLength(1);
         expect(common.text()).toContain(mounted.context.messages.value.t('state.savedRefreshFailed'));
         expect(common.find('[data-read-issue]').exists()).toBe(true);
@@ -493,7 +493,7 @@ describe('P8A organizer finance forms', () => {
         if (failAgain) {
             expect(query.state.error).not.toBe(originalFailure);
             expect(surface.findAll('.status-notice.alert-warning')).toHaveLength(1);
-            const retained = surface.get('.pilot-notification.status-notice.alert-warning');
+            const retained = surface.get('.frontend-notification.status-notice.alert-warning');
             expect(retained.find('[data-read-issue]').exists()).toBe(true);
             expect(retained.find('[data-read-retry-at]').exists()).toBe(true);
             expect((button(retained, mounted.context.messages.value.t('common.retry')).element as HTMLButtonElement).disabled).toBe(true);

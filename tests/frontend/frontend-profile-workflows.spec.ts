@@ -3,18 +3,16 @@ import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {defineComponent, nextTick, ref} from 'vue';
 import {flushPromises, mount} from '@vue/test-utils';
-import {resolve} from 'node:path';
-import * as pug from 'pug';
 import I18NextVue from 'i18next-vue';
 import {VueQueryPlugin} from '@tanstack/vue-query';
-import {createPilotApp, initializePilotApp} from '../../src/frontend/app/createApp';
+import {createFrontendApp, initializeFrontendApp} from '../../src/frontend/app/createApp';
 import {render} from '../../src/frontend/app/entry-server';
 import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
-import {pilotContextKey} from '../../src/frontend/app/context';
+import {frontendContextKey} from '../../src/frontend/app/context';
 import {useDraftProtection} from '../../src/frontend/composables/command';
 import ProfileWorkflowPage from '../../src/frontend/features/identity/ProfileWorkflowPage.vue';
 import type {components} from '../../src/types/api/v1';
-import type {FrontendPilotBootstrap, FrontendProfileWorkflow} from '../../src/types/FrontendPilotTypes';
+import type {FrontendBootstrap, FrontendProfileWorkflow} from '../../src/types/FrontendTypes';
 
 const profileId = '11111111-1111-4111-8111-111111111111';
 const token = 'private-migration-token-1234567890';
@@ -42,7 +40,7 @@ afterEach(() => {
 /** Use actual routes, SSR bootstrap, hydration, shell and SPA command owners.
  * Only HTTP is substituted; persistence and real browser delivery belong to application E2E. */
 async function mounted(workflow: FrontendProfileWorkflow | undefined,
-                       path = '/frontend-pilot/users/profile/migrate/show',
+                       path = '/users/profile/migrate/show',
                        read: typeof fetch = rejectUnexpectedRequest,
                        readAdmission?: (request: Request) => Promise<Response>) {
     const request = vi.fn(function deliverWorkflowRequest(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -61,15 +59,15 @@ async function mounted(workflow: FrontendProfileWorkflow | undefined,
         return read(input, init);
     });
     vi.stubGlobal('fetch', request);
-    const bootstrap: FrontendPilotBootstrap = {session, ...(workflow ? {profileWorkflow: workflow} : {})};
+    const bootstrap: FrontendBootstrap = {session, ...(workflow ? {profileWorkflow: workflow} : {})};
     const rendered = await render(path, bootstrap);
     const host = document.createElement('div');
     host.innerHTML = rendered.html;
     document.body.append(host);
     window.history.replaceState({}, '', path);
-    const application = createPilotApp(await decodeBootstrap(JSON.parse(rendered.state)), true);
+    const application = createFrontendApp(await decodeBootstrap(JSON.parse(rendered.state)), true);
     await application.router.isReady();
-    const stop = await initializePilotApp(application, host);
+    const stop = await initializeFrontendApp(application, host);
     cleanups.push(function disposeApplication() { application.app.unmount(); stop(); });
     await flushPromises();
     return {...application, host, request};
@@ -94,7 +92,7 @@ function rejection(status: 400 | 500): Response {
 }
 
 /** Query may hold admission, never token input, issued output or private preview. */
-function expectPrivateCache(context: ReturnType<typeof createPilotApp>['context']): void {
+function expectPrivateCache(context: ReturnType<typeof createFrontendApp>['context']): void {
     const cached = JSON.stringify(context.queryClient.getQueryCache().getAll().map(query => ({key: query.queryKey, data: query.state.data})));
     for (const secret of [token, 'validated-response-token', preview.profile.name, 'owner@example.test'])
         expect(cached).not.toContain(secret);
@@ -106,15 +104,73 @@ function previewResponse(outcome: components['schemas']['ProfileMigrationPreview
         'X-Surveyor-Context': session.context}});
 }
 
-/** Compare authored native markup without executing its browser scripts or changing the comparator. */
-function nativePage(template: string, data?: unknown): Element {
-    const renderNative = pug.compileFile(resolve(`src/views/users/${template}.pug`));
-    const root = document.createElement('div');
-    root.innerHTML = renderNative({data, profile: session.activeProfile, auth: {user: {username: 'fixture'}},
-        messages: {}, version: session.shell.version, nxtUrl: '', permData: undefined, settings: {
-            rootUrl: 'https://example.test', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy'}});
-    return root.querySelector('main > .card')!;
-}
+/** Visible workflow contracts remain explicit after retiring native templates. */
+const workflowPresentation = {
+    "profile/migrate-token": {
+        "headings": [
+            "Migrate your profile"
+        ],
+        "lead": [
+            "Below is your personal migration token for this profile (Fixture profile). This will allow to migrate your profile to another user."
+        ],
+        "labels": [],
+        "buttons": []
+    },
+    "profile/migrate-token-enter": {
+        "headings": [
+            "Migrate profile to your user"
+        ],
+        "lead": [
+            "Enter the migration token below. You will get a preview of the profile you are about to migrate."
+        ],
+        "labels": [
+            "Migration token *"
+        ],
+        "buttons": [
+            "Show migration profile"
+        ]
+    },
+    "profile/migrate-validate": {
+        "headings": [
+            "Migrate profile to your user"
+        ],
+        "lead": [
+            "Look at the profile to migrate below. When you are ready, confirm migration to proceed."
+        ],
+        "labels": [],
+        "buttons": [
+            "Permanently migrate profile"
+        ]
+    },
+    "profile/delete": {
+        "headings": [
+            "Deactivate your profile?"
+        ],
+        "lead": [
+            "Enter your profile name to confirm deleting your account. This action is permanent and cannot be undone!"
+        ],
+        "labels": [
+            "Profile name *"
+        ],
+        "buttons": [
+            "Permanently deactivate profile"
+        ]
+    },
+    "delete-account": {
+        "headings": [
+            "Delete your account?"
+        ],
+        "lead": [
+            "Enter your username to confirm deleting your account. This action is permanent and cannot be undone!"
+        ],
+        "labels": [
+            "Username *"
+        ],
+        "buttons": [
+            "Permanently delete account"
+        ]
+    }
+};
 
 function text(element: Element): string { return element.textContent!.replace(/\s+/gu, ' ').trim(); }
 
@@ -142,8 +198,8 @@ async function guardedWorkflow() {
     const uncertain = ref(false);
     const request = vi.fn(async function rejectConfirmedWorkflow() { return rejection(400); });
     vi.stubGlobal('fetch', request);
-    window.history.replaceState({}, '', '/frontend-pilot/users/profile/delete');
-    const application = createPilotApp({session, initialUrl: '/frontend-pilot/users/profile/delete', profileWorkflow: {kind: 'deactivate', value: ''}}, true);
+    window.history.replaceState({}, '', '/users/profile/delete');
+    const application = createFrontendApp({session, initialUrl: '/users/profile/delete', profileWorkflow: {kind: 'deactivate', value: ''}}, true);
     await application.router.isReady();
     application.context.hydrated.value = true;
     const Sibling = defineComponent({
@@ -162,7 +218,7 @@ async function guardedWorkflow() {
     const wrapper = mount(Owner, {attachTo: document.body, global: {plugins: [application.router,
         [VueQueryPlugin, {queryClient: application.context.queryClient}],
         [I18NextVue, {i18next: application.context.i18next}]],
-        provide: {[pilotContextKey as symbol]: application.context}}});
+        provide: {[frontendContextKey as symbol]: application.context}}});
     cleanups.push(function disposeGuards() { wrapper.unmount(); application.context.start()(); });
     await flushPromises();
     return {wrapper, request, context: application.context, busy, dirty, uncertain};
@@ -175,7 +231,7 @@ describe('SPA profile workflows', () => {
         let finishRecovery!: () => void;
         const recovered = new Promise<void>(resolve => { finishRecovery = resolve; });
         const {host, context, request} = await mounted({kind: 'deactivate', value: ''},
-            '/frontend-pilot/users/profile/delete', async function verifyCurrentSession(input) {
+            '/users/profile/delete', async function verifyCurrentSession(input) {
                 expect(new URL((input as Request).url).pathname).toBe('/api/v1/session');
                 return json(session);
             }, async function deliverWorkflowAdmission() {
@@ -222,7 +278,7 @@ describe('SPA profile workflows', () => {
         let finishAdmission!: (response: Response) => void;
         const admissionResponse = new Promise<Response>(resolve => { finishAdmission = resolve; });
         const {host, context, request} = await mounted({kind: 'token', token: ''},
-            '/frontend-pilot/users/profile/migrate/request', async function verifySession(input) {
+            '/users/profile/migrate/request', async function verifySession(input) {
                 expect(new URL((input as Request).url).pathname).toBe('/api/v1/session');
                 return json(session);
             }, async function holdAuthorityAdmission(received) {
@@ -260,7 +316,7 @@ describe('SPA profile workflows', () => {
         let finishToken!: (response: Response) => void;
         const response = new Promise<Response>(resolve => { finishToken = resolve; });
         const {host, context, request} = await mounted({kind: 'token', token: ''},
-            '/frontend-pilot/users/profile/migrate/request', async function holdTokenCommand(input) {
+            '/users/profile/migrate/request', async function holdTokenCommand(input) {
                 const received = input as Request;
                 expect(received.method).toBe('POST');
                 expect(new URL(received.url).pathname).toBe('/api/v1/profiles/migration/token');
@@ -300,7 +356,7 @@ describe('SPA profile workflows', () => {
         let finishBootstrap!: (response: Response) => void;
         const bootstrap = new Promise<Response>(resolve => { finishBootstrap = resolve; });
         const {host, context, request} = await mounted(candidate.kind === 'entry' ? {kind: 'entry'}
-            : {kind: candidate.kind, value: ''}, `/frontend-pilot/users/${candidate.path}`,
+            : {kind: candidate.kind, value: ''}, `/users/${candidate.path}`,
         async function readWorkflow(request) {
             if (new URL((request as Request).url).pathname === '/api/v1/session') return bootstrap;
             return candidate.kind === 'entry' ? previewResponse(preview) : rejection(400);
@@ -349,21 +405,21 @@ describe('SPA profile workflows', () => {
         {workflow: {kind: 'delete-account', value: ''}, path: 'account/delete', template: 'delete-account'},
     ] as const)('retains native $workflow.kind headings and submitted fields with approved copy', async function matchesNative(candidate) {
         const withPreview = 'preview' in candidate;
-        const {host, context, request} = await mounted(candidate.workflow, `/frontend-pilot/users/${candidate.path}`,
+        const {host, context, request} = await mounted(candidate.workflow, `/users/${candidate.path}`,
             withPreview ? async function readNativePreview() { return previewResponse(preview); } : rejectUnexpectedRequest);
         if (withPreview) await enterPreview(host);
-        const native = nativePage(candidate.template, 'data' in candidate ? candidate.data : undefined);
+        const expected = workflowPresentation[candidate.template];
         const actual = host.querySelector('main > section.card')!;
 
-        expect(text(actual.querySelector('h1')!)).toBe(text(native.querySelector('h1')!));
+        expect(text(actual.querySelector('h1')!)).toBe(expected.headings[0]);
         // Approved R2 (2026-10-25) changes only Vue's deactivation consequence
         // warning. Other workflow prose retains the unchanged native comparator.
         const expectedLead = candidate.workflow.kind === 'deactivate'
             ? [context.messages.value.t('profile.deactivateIntro')]
-            : Array.from(native.querySelectorAll('p.lead'), text);
+            : expected.lead;
         expect(Array.from(actual.querySelectorAll('p.lead'), text)).toEqual(expectedLead);
-        expect(Array.from(actual.querySelectorAll('label'), text)).toEqual(Array.from(native.querySelectorAll('label'), text));
-        expect(Array.from(actual.querySelectorAll('form button'), text)).toEqual(Array.from(native.querySelectorAll('form button'), text));
+        expect(Array.from(actual.querySelectorAll('label'), text)).toEqual(expected.labels);
+        expect(Array.from(actual.querySelectorAll('form button'), text)).toEqual(expected.buttons);
         expect(request).toHaveBeenCalledTimes(withPreview ? 1 : 0);
         expectPrivateCache(context);
         for (const anchor of host.querySelectorAll<HTMLAnchorElement>('a[href]')) expect(anchor.href).not.toContain(token);
@@ -379,7 +435,7 @@ describe('SPA profile workflows', () => {
     it('expires actual confirmation rejection without reviving it on translation or clearing input', async function expiresConfirmationFeedback() {
         vi.useFakeTimers();
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
-        const {host, context} = await mounted({kind: 'deactivate', value: ''}, '/frontend-pilot/users/profile/delete',
+        const {host, context} = await mounted({kind: 'deactivate', value: ''}, '/users/profile/delete',
             async function rejectConfirmation() { return rejection(400); });
         const input = host.querySelector<HTMLInputElement>('#name')!;
         input.value = 'Incorrect confirmation';
@@ -400,7 +456,7 @@ describe('SPA profile workflows', () => {
 
     it.each(['token', 'entry', 'preview'] as const)('refreshes workflow authority while retaining its %s without replaying secret commands', async kind => {
         const workflow: FrontendProfileWorkflow = kind === 'token' ? {kind: 'token', token} : {kind: 'entry'};
-        const path = kind === 'token' ? '/frontend-pilot/users/profile/migrate/request' : '/frontend-pilot/users/profile/migrate/show';
+        const path = kind === 'token' ? '/users/profile/migrate/request' : '/users/profile/migrate/show';
         const {host, context, request} = await mounted(workflow, path, async input => {
             const received = input as Request;
             if (new URL(received.url).pathname === '/api/v1/session') return json(session);
@@ -466,7 +522,7 @@ describe('SPA profile workflows', () => {
         expect(input.value).toBe('Keep unsubmitted token');
         expect(document.activeElement).toBe(input);
         expect([input.selectionStart, input.selectionEnd]).toEqual([2, 8]);
-        const warning = host.querySelector('.pilot-notification [data-read-retry-at]')!.closest('.pilot-notification')!;
+        const warning = host.querySelector('.frontend-notification [data-read-retry-at]')!.closest('.frontend-notification')!;
         expect(warning.textContent).toContain(context.messages.value.t('state.loadFailed'));
         expect(host.querySelectorAll('[data-read-retry-at]')).toHaveLength(1);
         expect(warning.querySelector('[data-last-successful-refresh]')).not.toBeNull();
@@ -564,7 +620,7 @@ describe('SPA profile workflows', () => {
 
     it('keeps entry text through secret-free preview Back/Forward and uses only the validated token for execution', async function retainsPreviewHistory() {
         let executedToken: string | undefined;
-        const path = '/frontend-pilot/users/profile/migrate/show?locale=en&keep=hello%20world';
+        const path = '/users/profile/migrate/show?locale=en&keep=hello%20world';
         const {host, router, context, request} = await mounted({kind: 'entry'}, path, async function readPreview(input) {
             const received = input as Request;
             if (new URL(received.url).pathname === '/api/v1/profiles/migration/execute') {
@@ -658,7 +714,7 @@ describe('SPA profile workflows', () => {
     });
 
     it('reloads a public preview marker as a blank entry without storing or automatically reading its private result', async function reloadsWithoutPrivateResult() {
-        const path = '/frontend-pilot/users/profile/migrate/show?locale=en&keep=hello%20world';
+        const path = '/users/profile/migrate/show?locale=en&keep=hello%20world';
         const {host, request, router} = await mounted({kind: 'entry'}, path + '#migration-preview',
             async function readExplicitReloadPreview() { return previewResponse(preview); });
         expect(host.querySelector<HTMLInputElement>('#token')!.value).toBe('');
@@ -703,7 +759,7 @@ describe('SPA profile workflows', () => {
         let finish!: (response: Response) => void;
         const held = new Promise<Response>(resolve => { finish = resolve; });
         const {host, context, router, request} = await mounted({kind: candidate.kind, value: ''},
-            '/frontend-pilot/users/' + candidate.path, function holdWorkflow() { return held; });
+            '/users/' + candidate.path, function holdWorkflow() { return held; });
         const form = host.querySelector<HTMLFormElement>('#forgotForm')!;
         const input = form.querySelector<HTMLInputElement>('#' + candidate.field)!;
         input.value = '  native confirmation text  ';
@@ -730,8 +786,8 @@ describe('SPA profile workflows', () => {
         expect(submit(form).defaultPrevented).toBe(true);
         expect(context.mayChangeIdentity()).toBe(false);
         expect(context.updates.requestRecoveryReload()).toBe(false);
-        await router.push('/frontend-pilot/home');
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/' + candidate.path);
+        await router.push('/');
+        expect(router.currentRoute.value.path).toBe('/users/' + candidate.path);
         const unload = new Event('beforeunload', {cancelable: true});
         window.dispatchEvent(unload);
         expect(unload.defaultPrevented).toBe(true);
@@ -750,8 +806,8 @@ describe('SPA profile workflows', () => {
         {path: 'profile/delete', field: 'name'},
         {path: 'account/delete', field: 'username'},
     ])('admits the warm $path form through a read without a Refresh dead end or command', async function admitsWarmWorkflow(candidate) {
-        const {host, router, request, context} = await mounted(undefined, '/frontend-pilot/home');
-        await router.push('/frontend-pilot/users/' + candidate.path);
+        const {host, router, request, context} = await mounted(undefined, '/');
+        await router.push('/users/' + candidate.path);
         await flushPromises();
         expect(host.querySelector('form#forgotForm')).not.toBeNull();
         expect(host.querySelector<HTMLInputElement>('#' + candidate.field)!.value).toBe('');
@@ -793,7 +849,7 @@ describe('SPA profile workflows', () => {
     });
 
     it('rejects default-canceled and invalid submissions without releasing the input', async function rejectsCanceledSubmission() {
-        const {host, request} = await mounted({kind: 'deactivate', value: ''}, '/frontend-pilot/users/profile/delete');
+        const {host, request} = await mounted({kind: 'deactivate', value: ''}, '/users/profile/delete');
         const form = host.querySelector<HTMLFormElement>('#forgotForm')!;
         expect(submit(form).defaultPrevented).toBe(true);
         const input = host.querySelector<HTMLInputElement>('#name')!;
@@ -817,7 +873,7 @@ describe('SPA profile workflows', () => {
             {...preview, profile: {...preview.profile, owner: {...preview.profile.owner, password: 'never admitted'}}},
             {kind: 'deactivate', value: '', error: 'profile.invalidAccountDeletion'},
             {kind: 'delete-account', value: ['not a string']},
-        ]) await expect(decodeBootstrap({session, profileWorkflow})).rejects.toThrow('Invalid pilot bootstrap field: profileWorkflow');
+        ]) await expect(decodeBootstrap({session, profileWorkflow})).rejects.toThrow('Invalid frontend bootstrap field: profileWorkflow');
     });
 
     it.each([
@@ -825,7 +881,7 @@ describe('SPA profile workflows', () => {
         {kind: 'delete-account', path: 'account/delete', field: 'username', key: 'profile.invalidAccountDeletion'},
     ] as const)('retains rejected $kind confirmation in the same input through translation', async function retainsRejectedCommand(candidate) {
         const {host, context, request} = await mounted({kind: candidate.kind, value: ''},
-            '/frontend-pilot/users/' + candidate.path, async function rejectConfirmation() { return rejection(400); });
+            '/users/' + candidate.path, async function rejectConfirmation() { return rejection(400); });
         const input = host.querySelector<HTMLInputElement>('#' + candidate.field)!;
         input.value = 'Wrong confirmation';
         input.dispatchEvent(new Event('input', {bubbles: true}));
@@ -844,7 +900,7 @@ describe('SPA profile workflows', () => {
     });
 
     it.each([false, true])('keeps an uncertain command locked through recovery with bootstrap failure=%s', async function retainsUnknownCommand(bootstrapFailure) {
-        const {host, context, request} = await mounted({kind: 'deactivate', value: ''}, '/frontend-pilot/users/profile/delete',
+        const {host, context, request} = await mounted({kind: 'deactivate', value: ''}, '/users/profile/delete',
             async function readUnknownWorkflow(input) {
                 if (new URL((input as Request).url).pathname === '/api/v1/session') {
                     if (bootstrapFailure) throw new TypeError('The authoritative session read failed.');
@@ -881,7 +937,7 @@ describe('SPA profile workflows', () => {
 
     it('issues once from the actual warm Show link, never from Back/Forward, and offers explicit issuance without intent', async function issuesFromDeliberateLink() {
         let issued = 0;
-        const {host, context, request, router} = await mounted(undefined, '/frontend-pilot/home', async function handleTokenWorkflow(input) {
+        const {host, context, request, router} = await mounted(undefined, '/', async function handleTokenWorkflow(input) {
             const received = input as Request;
             const pathname = new URL(received.url).pathname;
             if (pathname === '/api/v1/session') return json(session);
@@ -894,9 +950,9 @@ describe('SPA profile workflows', () => {
             issued++;
             return json({token: issued === 1 ? token : token + '-second'});
         });
-        await router.push('/frontend-pilot/users/profile');
+        await router.push('/users/profile');
         await flushPromises();
-        const link = host.querySelector<HTMLAnchorElement>('a[href="/frontend-pilot/users/profile/migrate/request"]')!;
+        const link = host.querySelector<HTMLAnchorElement>('a[href="/users/profile/migrate/request"]')!;
         expect(link).not.toBeNull();
         link.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
         await flushPromises();
@@ -908,10 +964,10 @@ describe('SPA profile workflows', () => {
 
         router.back();
         await flushPromises();
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/profile');
+        expect(router.currentRoute.value.path).toBe('/users/profile');
         router.forward();
         await flushPromises();
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/profile/migrate/request');
+        expect(router.currentRoute.value.path).toBe('/users/profile/migrate/request');
         expect(issued).toBe(1);
         expect(host.querySelector('h3')).toBeNull();
         const explicit = Array.from(host.querySelectorAll<HTMLButtonElement>('main button')).find(button => text(button) === context.messages.value.t('profile.showMigrationToken'))!;
@@ -925,11 +981,11 @@ describe('SPA profile workflows', () => {
     });
 
     it('keeps lost token issuance unknown without automatic reissue during read recovery', async function retainsLostIssuance() {
-        const {host, context, request, router} = await mounted(undefined, '/frontend-pilot/home', async function loseTokenResponse(input) {
+        const {host, context, request, router} = await mounted(undefined, '/', async function loseTokenResponse(input) {
             if (new URL((input as Request).url).pathname === '/api/v1/session') return json(session);
             throw new TypeError('The issuance response was lost.');
         });
-        await router.push({path: '/frontend-pilot/users/profile/migrate/request', state: {profileTokenRequest: true}});
+        await router.push({path: '/users/profile/migrate/request', state: {profileTokenRequest: true}});
         await flushPromises();
         expect(window.history.state.profileTokenRequest).toBe(false);
         expect(host.textContent).toContain(context.messages.value.t('state.unknownOutcome'));

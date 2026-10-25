@@ -65,11 +65,11 @@ describe('localized fixed-source help documents', () => {
 
     it('retains a newly discovered interface locale when its entire Help corpus is absent', () => {
         files.set(path.join(helpSources.native, 'README.md'), '# Native-only guide\n\nDo not borrow native instructions.');
-        files.set(path.join(helpSources.en, 'README.md'), article('Pilot guide', 'Take an item', '1:guide; 2:take-an-item',
-            'Take bottles. [Packing](PACKING_LISTS.md#take-an-item) ![Pilot figure](assets/figure.png)'));
-        files.set(path.join(helpSources.en, 'PACKING_LISTS.md'), article('Pilot packing', 'Take an item',
+        files.set(path.join(helpSources.en, 'README.md'), article('Frontend guide', 'Take an item', '1:guide; 2:take-an-item',
+            'Take bottles. [Packing](PACKING_LISTS.md#take-an-item) ![Frontend figure](assets/figure.png)'));
+        files.set(path.join(helpSources.en, 'PACKING_LISTS.md'), article('Frontend packing', 'Take an item',
             '1:packing; 2:take-an-item', 'Take bottles.'));
-        files.set(path.join(helpSources.en, 'assets', 'figure.png'), 'Reviewed English pilot figure');
+        files.set(path.join(helpSources.en, 'assets', 'figure.png'), 'Reviewed English frontend figure');
 
         const page = fetchHelpIndex('nl-NL');
         expect(page.locale).toBe('nl');
@@ -78,9 +78,9 @@ describe('localized fixed-source help documents', () => {
         expect(page.content).toContain('Take bottles.');
         expect(page.content).not.toContain('Native-only');
         expect(page.content).toContain('/help/packing_lists?locale=nl#take-an-item');
-        expect(page.content).toContain('/frontend-pilot/help/assets/figure.png?locale=en');
+        expect(page.content).toContain('/help/assets/figure.png?locale=en');
         expect(page.docsList).toEqual(expect.arrayContaining([expect.objectContaining({
-            title: 'Pilot packing', contentLocale: 'en', url: '/help/packing_lists?locale=nl',
+            title: 'Frontend packing', contentLocale: 'en', url: '/help/packing_lists?locale=nl',
         })]));
         const search = fetchHelpSearch('bottles', 'nl');
         expect(search.locale).toBe('nl');
@@ -173,15 +173,14 @@ describe('localized fixed-source help documents', () => {
         try {
             const de = fetchHelpIndex('de-DE');
             const en = fetchHelpIndex('en');
-            // Native default mode remains independent of the complete localized English/
-            // German corpora, including original links and hyphen search behavior.
+            // An omitted locale uses the same reviewed English corpus, including
+            // catalog groups, stable links and exact visible-control searches.
             const original = fetchHelpIndex();
-            expect(original.title).toBe('Native guide');
-            expect(original.content).toContain('Original English body.');
-            expect(original.content).toContain('/help/packing_lists#native-task');
-            expect(original.content).not.toContain('locale=');
-            expect(fetchHelpSearch('Auto-generate').searchResults).toEqual([]);
-            expect(fetchHelpSearch('Auto generate').searchResults).toEqual([expect.objectContaining({title: 'Native packing'})]);
+            expect(original).toEqual(en);
+            expect(original.content).not.toContain('Original English body.');
+            expect(original.content).toContain('/help/packing_lists?locale=en#take-an-item');
+            expect(fetchHelpSearch('Auto-generate').searchResults).toEqual([expect.objectContaining({title: 'Packing'})]);
+            expect(fetchHelpSearch('Auto generate').searchResults).toEqual([expect.objectContaining({title: 'Packing'})]);
             expect(de.locale).toBe('de');
             expect(de.contentLocale).toBe('de');
             expect(de.fallbackToEnglish).toBe(false);
@@ -244,8 +243,8 @@ describe('localized fixed-source help documents', () => {
         try {
             const rendered = renderTrustedHelpMarkdown('# Anleitung\n\n![Abbildung](assets/figure.png?locale=de)\n\n[Vollbild](/help/assets/figure.png?locale=de) [Weiter](/help/packing_lists?locale=de#take-an-item) [Datei](PACKING_LISTS.md?locale=de#take-an-item)',
                 'synthetic translation', 'de');
-            expect(rendered.content).toContain('src="/frontend-pilot/help/assets/figure.png?locale=de"');
-            expect(rendered.content).toContain('href="/frontend-pilot/help/assets/figure.png?locale=de"');
+            expect(rendered.content).toContain('src="/help/assets/figure.png?locale=de"');
+            expect(rendered.content).toContain('href="/help/assets/figure.png?locale=de"');
             expect(rendered.content.match(/href="\/help\/packing_lists\?locale=de#take-an-item"/gu)).toHaveLength(2);
             expect(rendered.content).not.toContain('locale=en');
             expect(resolveHelpAssetPath('figure.png', 'de')).toBe(path.join(german, 'assets', 'figure.png'));
@@ -274,11 +273,11 @@ describe('localized fixed-source help documents', () => {
     it.each([
         '![Abbildung](assets/figure.png?locale=en)',
         '[Vollbild](/help/assets/figure.png?locale=en)',
-        '[Vollbild](/frontend-pilot/help/assets/figure.png?locale=en)',
+        '[Vollbild](/help/assets/figure.png?locale=en#full-size)',
         '[Weiter](/help/packing_lists?locale=en#task)',
         '[Datei](PACKING_LISTS.md?locale=en#task)',
         '[Index](/help?locale=en)',
-        '[Index](/frontend-pilot/help?locale=en)',
+        '[Index](/help?doc=packing_lists&locale=en)',
         '[Suche](/help/search?locale=en&q=packing)',
     ])('rejects explicitly authored other-language Help references: %s', reference => {
         files.set(path.join(helpSources.de, 'PACKING_LISTS.md'), '# Packen');
@@ -295,9 +294,9 @@ describe('localized fixed-source help documents', () => {
         files.set(path.join(helpSources[locale], 'PACKING_LISTS.md'), '# Guide');
         files.set(path.join(helpSources[locale], 'assets', 'figure.png'), 'Reviewed same-language figure');
         const markdown = `# Guide\n\n![Figure](assets/figure.png?locale=${hint}) [Full size](/help/assets/figure.png?locale=${hint})`
-            + ` [Next](PACKING_LISTS.md?locale=${hint}) [Index](/frontend-pilot/help?locale=${hint})`;
+            + ` [Next](PACKING_LISTS.md?locale=${hint}) [Index](/help?locale=${hint})`;
         const rendered = renderTrustedHelpMarkdown(markdown, 'synthetic regional hint', locale);
-        expect(rendered.content).toContain(`/frontend-pilot/help/assets/figure.png?locale=${locale}`);
+        expect(rendered.content).toContain(`/help/assets/figure.png?locale=${locale}`);
         expect(rendered.content).toContain(`/help/packing_lists?locale=${locale}`);
         expect(rendered.fallbackToEnglish).toBe(false);
         expect(resolveHelpAssetSource('figure.png', locale)).toMatchObject({locale});
@@ -327,8 +326,8 @@ describe('localized fixed-source help documents', () => {
             expect(result).toMatchObject({locale: 'de', contentLocale: 'en', fallbackToEnglish: true, title: 'English overview'});
             expect(result.content).toContain('English bottles.');
             expect(result.content).not.toContain('Deutsche Flaschen.');
-            expect(result.content).toContain('src="/frontend-pilot/help/assets/english-figure.png?locale=en"');
-            expect(result.content).toContain('href="/frontend-pilot/help/assets/english-figure.png?locale=en"');
+            expect(result.content).toContain('src="/help/assets/english-figure.png?locale=en"');
+            expect(result.content).toContain('href="/help/assets/english-figure.png?locale=en"');
             expect(result.content).toContain('/help/packing_lists?locale=de');
             expect(result.toc).toEqual([{id: 'bring-bottles', title: 'Bring bottles', level: 2}]);
             expect(result.docsList.find(doc => doc.path === 'readme')).toMatchObject({title: 'English overview', contentLocale: 'en', url: '/help?locale=de'});
@@ -339,7 +338,8 @@ describe('localized fixed-source help documents', () => {
         })]);
         expect(resolveHelpAssetSource('figure.png', 'de')).toBeNull();
         expect(resolveHelpAssetSource('english-figure.png', 'de')).toBeNull();
-        expect(fetchHelpIndex().content).toContain('Original native body.');
+        expect(fetchHelpIndex().content).toContain('English bottles.');
+        expect(fetchHelpIndex().content).not.toContain('Original native body.');
     });
 
     it.each([

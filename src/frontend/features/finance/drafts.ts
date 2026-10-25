@@ -9,7 +9,7 @@ interface FinanceDraft {
 }
 const draftsKey: InjectionKey<Set<FinanceDraft>> = Symbol('finance-drafts');
 
-/** Coordinate the native per-pool saved-input preview boundary across sibling
+/** Coordinate the per-pool saved-input preview boundary across sibling
  * Vue forms without copying their drafts or introducing another state store. */
 export function provideFinanceDrafts(): (poolId: string) => boolean {
     const drafts = new Set<FinanceDraft>();

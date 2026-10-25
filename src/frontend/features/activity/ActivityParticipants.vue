@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue';
 import type {components} from '../../../types/api/v1';
-import type {PilotPlainMessageKey} from '../../../types/FrontendPilotUiTypes';
-import {usePilot} from '../../app/context';
+import type {FrontendPlainMessageKey} from '../../../types/FrontendUiTypes';
+import {useFrontend} from '../../app/context';
 import {activityDateLabel, activityParticipantName} from './presentation';
 import ActionButton from '../../components/ActionButton.vue';
 
@@ -11,10 +11,10 @@ import ActionButton from '../../components/ActionButton.vue';
 const props = withDefaults(defineProps<{participants: components['schemas']['ActivityParticipant'][]; assignmentMode: 'FREE' | 'REQUIRED';
     id?: string; heading?: boolean; localizeAttendance?: boolean}>(),
 {id: 'participant-status-overview', heading: true, localizeAttendance: false});
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const search = ref('');
 const filter = ref('all');
-const filters: {value: string; label: PilotPlainMessageKey; color: string}[] = [
+const filters: {value: string; label: FrontendPlainMessageKey; color: string}[] = [
     {value: 'all', label: 'common.all', color: 'light'}, {value: 'assigned', label: 'activity.assigned', color: 'light'},
     {value: 'unassigned', label: 'activity.unassigned', color: 'light'}, {value: 'unstarted', label: 'activity.notStarted', color: 'danger'},
     {value: 'needs-more', label: 'activity.needsSlots', color: 'warning'}, {value: 'complete', label: 'activity.complete', color: 'success'},
@@ -47,12 +47,12 @@ const visible = computed(() => props.participants.filter(person => {
     return filter.value === 'all' || filter.value === 'assigned' && person.assignedShifts > 0
         || filter.value === 'unassigned' && person.assignedShifts === 0 || state(person) === filter.value;
 }));
-/** Saved participant overviews keep their native ISO dates; the live Rules
+/** Saved participant overviews keep their ISO dates; the live Rules
  * coverage consumer opts into the approved shared civil-day presentation. */
 function attendance(person: components['schemas']['ActivityParticipant']): string {
     if (!person.attendance?.arrivalDate && !person.attendance?.departureDate) return messages.value.t('activity.fullPlan');
     // Presentation never changes the admitted civil dates or attendance count.
-    // Both native paths retain the same missing-boundary wording.
+    // Both paths retain the same missing-boundary wording.
     const arrival = person.attendance?.arrivalDate;
     const departure = person.attendance?.departureDate;
     return (arrival ? props.localizeAttendance ? activityDateLabel(arrival, messages.value.locale) : arrival
@@ -68,7 +68,7 @@ function attendance(person: components['schemas']['ActivityParticipant']): strin
         class="participant-status-component"
         data-participant-status
         :data-assignment-mode="assignmentMode">
-        <!-- The Rules coverage step supplies its own native heading. Both views
+        <!-- The Rules coverage step supplies its own heading. Both views
         retain one participant/filter presentation and their independent search. -->
         <h4 v-if="heading" class="mb-2">{{ messages.t('activity.participants') }}</h4>
         <p v-if="heading" class="small text-secondary mb-3">{{ messages.t('activity.participantDescription') }}</p>

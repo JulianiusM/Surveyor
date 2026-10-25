@@ -71,10 +71,10 @@ function registerInvoiceReview(path: string, operation: 'approveEventFinanceInvo
     | 'closeEventOrganizerInvoice' | 'reviseEventFinanceInvoice' | 'rejectAcceptedEventFinanceInvoice',
     action: Parameters<typeof reviewEventFinanceInvoice>[3]): void {
     router.post(`/pools/:poolId/invoices/:invoiceId/${path}`, asyncHandler(async function reviewInvoice(req, res) {
-        // Only retroactive review requires an invoice actor; native initial review accepts the independent method grant.
+        // Only retroactive review requires an invoice actor; existing initial review accepts the independent method grant.
         const actor = await requireApiContext(req, res, action === 'revise' || action === 'reject');
         validateOperationRequest(req, operation);
-        // Prepare the fixed receipt before any legacy operation writes; sending cannot introduce a new admission failure.
+        // Prepare the fixed receipt before any shared operation writes; sending cannot introduce a new admission failure.
         const reply = prepareValidatedJson(req, operation, 200, {changed: true});
         await reviewEventFinanceInvoice(String(req.params.eventId), String(req.params.poolId), String(req.params.invoiceId), action, req.body, actor);
         sendPreparedJson(req, res, reply);
@@ -142,7 +142,7 @@ function registerCalculationCommand(recalculate: boolean): void {
     router.post(`/pools/:poolId/${recalculate ? 'recalculate' : 'close'}`, asyncHandler(async function calculatePool(req, res) {
         const actor = await requireApiContext(req, res);
         validateOperationRequest(req, operation);
-        // Prepare the fixed receipt before entering legacy persistence and its postcommit notification behavior.
+        // Prepare the fixed receipt before entering shared persistence and its postcommit notification behavior.
         const reply = prepareValidatedJson(req, operation, 200, {changed: true});
         await calculateEventFinancePool(String(req.params.eventId), String(req.params.poolId), req.body, actor, recalculate);
         sendPreparedJson(req, res, reply);
@@ -209,7 +209,7 @@ router.post('/pools/:poolId/invoices', asyncHandler(async function submitEventIn
         await receiveApiUpload(req, res, uploadProof);
         validateOperationRequest(req, 'submitEventInvoice', body => decodeApiMultipartData(body, req.file, 'proof'));
         const reply = prepareValidatedJson(req, 'submitEventInvoice', 200, {changed: true});
-        // The existing business operation repeats pool state/assignment checks and owns its recorded legacy behavior.
+        // The existing business operation repeats pool state/assignment checks and owns its recorded behavior.
         enteredOperation = true;
         try {
             await invoiceController.submitInvoice(event, String(req.params.poolId), req.body.data, actor, req.file);

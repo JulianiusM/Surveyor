@@ -4,7 +4,7 @@ import {isNavigationFailure, useRoute, useRouter} from 'vue-router';
 import type {LocationQuery, NavigationFailure, RouteLocationNormalized} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components, paths} from '../../../types/api/v1';
-import type {PilotOverviewCardInteraction, PilotOverviewCountRead, PilotOverviewRegionProps, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import type {FrontendOverviewCardInteraction, FrontendOverviewCountRead, FrontendOverviewRegionProps, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import {overviewQueryParameters, useOverviewApi} from './api';
 import {usePackingApi} from '../packing/api';
 import {useEventApi} from '../event/api';
@@ -12,7 +12,7 @@ import {useDriversApi} from '../drivers/api';
 import {useSurveysApi} from '../surveys/api';
 import {useActivityApi} from '../activity/api';
 import {createEntityLifecycle, useEntityRemoval} from '../../composables/entityLifecycle';
-import {useActionState, usePilot, refreshInterval} from '../../app/context';
+import {useActionState, useFrontend, refreshInterval} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {isOrdinaryNavigation, useConfirmedNavigation} from '../../composables/pageEntry';
 import {useDebouncedValue} from '../../composables/debounced';
@@ -31,9 +31,9 @@ import AppNavigationDropdown from '../../components/AppNavigationDropdown.vue';
 import OverviewCard from './OverviewCard.vue';
 import OverviewItems from './OverviewItems.vue';
 
-const props = withDefaults(defineProps<PilotOverviewRegionProps>(), {active: true});
-const emit = defineEmits<{counts: [source: PilotOverviewCountRead | null, scope: PilotRequestScope]}>();
-const context = usePilot();
+const props = withDefaults(defineProps<FrontendOverviewRegionProps>(), {active: true});
+const emit = defineEmits<{counts: [source: FrontendOverviewCountRead | null, scope: FrontendRequestScope]}>();
+const context = useFrontend();
 const api = useOverviewApi(context);
 const packingApi = usePackingApi(context);
 const eventApi = useEventApi(context);
@@ -42,20 +42,20 @@ const surveyApi = useSurveysApi(context);
 const activityApi = useActivityApi(context);
 // The mixed projection owns feature command dispatch. Cards receive operations
 // from this owner, keeping their presentation independent of feature endpoints.
-const packingInteraction: PilotOverviewCardInteraction = {migrated: true, readHeader: packingApi.header.bind(packingApi)};
-const nativeInteraction: PilotOverviewCardInteraction = {migrated: false};
+const packingInteraction: FrontendOverviewCardInteraction = {clientNavigation: true, readHeader: packingApi.header.bind(packingApi)};
+const documentInteraction: FrontendOverviewCardInteraction = {clientNavigation: false};
 // Typed identity is presentation only: different entity families may share a UUID.
 // The existing command remains the only request, authority and outcome owner.
 const pendingRemoval = shallowRef<{type: components['schemas']['OverviewCard']['type']; id: string} | null>(null);
 
-function cardInteraction(card: components['schemas']['OverviewCard']): PilotOverviewCardInteraction {
+function cardInteraction(card: components['schemas']['OverviewCard']): FrontendOverviewCardInteraction {
     const removePending = pendingRemoval.value?.type === card.type && pendingRemoval.value.id === card.id;
     const writeState = {removePending, removeDisabled: removal.action.disabled.value, writesDisabled: overviewInvalidated.value};
-    if (card.type === 'event') return {...writeState, migrated: true, readHeader: eventApi.header.bind(eventApi), duplicateUrl: card.url + '/duplicate'};
-    if (card.type === 'drivers') return {...writeState, migrated: true, readHeader: driversApi.header.bind(driversApi), duplicateUrl: card.url + '/duplicate'};
-    if (card.type === 'survey') return {...writeState, migrated: true, readHeader: surveyApi.header.bind(surveyApi), duplicateUrl: card.url + '/duplicate'};
-    if (card.type === 'activity') return {...writeState, migrated: true, readHeader: activityApi.header.bind(activityApi), duplicateUrl: card.url + '/duplicate'};
-    if (card.type !== 'packing') return nativeInteraction;
+    if (card.type === 'event') return {...writeState, clientNavigation: true, readHeader: eventApi.header.bind(eventApi), duplicateUrl: card.url + '/duplicate'};
+    if (card.type === 'drivers') return {...writeState, clientNavigation: true, readHeader: driversApi.header.bind(driversApi), duplicateUrl: card.url + '/duplicate'};
+    if (card.type === 'survey') return {...writeState, clientNavigation: true, readHeader: surveyApi.header.bind(surveyApi), duplicateUrl: card.url + '/duplicate'};
+    if (card.type === 'activity') return {...writeState, clientNavigation: true, readHeader: activityApi.header.bind(activityApi), duplicateUrl: card.url + '/duplicate'};
+    if (card.type !== 'packing') return documentInteraction;
     return {...packingInteraction, ...writeState, duplicateUrl: card.url + '/duplicate'};
 }
 const {messages} = context;
@@ -66,7 +66,7 @@ const router = useRouter();
 // delivery scoped to this logical region through any actor-driven remount.
 const destination = useConfirmedNavigation(props.collection + ':' + props.region);
 // Each collection/region retains its own navigation and command lifetime while
-// matching cards share the same migrated presentation and feature API owners.
+// matching cards share the same card presentation and feature API owners.
 let readGeneration = 0;
 let mounted = true;
 const element = ref<HTMLElement | null>(null);
@@ -86,7 +86,7 @@ type Query = NonNullable<paths['/overview']['get']['parameters']['query']>;
 type NavigationAction = 'filter' | 'page' | 'expand' | 'back';
 interface NavigationRead {
     parameters: Query;
-    scope: PilotRequestScope;
+    scope: FrontendRequestScope;
     generation: number;
     action: NavigationAction;
     history: 'push' | 'replace';
@@ -98,14 +98,14 @@ const refreshingOverview = ref(false);
 const failedRead = shallowRef<NavigationRead | null>(null);
 const navigationError = shallowRef<Error | null>(null);
 let preparedRead: NavigationRead | undefined;
-let pendingFocus: {key: string; scope: PilotRequestScope; action: NavigationAction} | undefined;
+let pendingFocus: {key: string; scope: FrontendRequestScope; action: NavigationAction} | undefined;
 let returnPosition: {eventId: string; filters: string; scrollY: number} | undefined;
 const lastConfirmed = shallowRef<{
-    scope: PilotRequestScope;
+    scope: FrontendRequestScope;
     data: components['schemas']['OverviewRegion'];
     updatedAt: number;
 } | null>(null);
-const deniedRead = shallowRef<{scope: PilotRequestScope; error: ApiFailure} | null>(null);
+const deniedRead = shallowRef<{scope: FrontendRequestScope; error: ApiFailure} | null>(null);
 
 function parameter(name: string, values = route.query): string | undefined {
     const value = values[prefix.value + name];
@@ -171,7 +171,7 @@ const filterTypes = computed(() => {
     // personal hide. Retain the validated choice so an empty result does not claim All types.
     return selected && selected !== 'all' && !types.includes(selected) ? [...types, selected] : types;
 });
-// Empty membership keeps the native omission of search/filter controls. Refresh
+// Empty membership keeps the omission of search/filter controls. Refresh
 // remains available independently, so this region can recover new remote content.
 const showSearchControls = computed(() => Boolean(!displayed.value || displayed.value.regionEntities || displayed.value.q
     || displayed.value.type !== 'all' || searchPending.value || search.value));
@@ -202,7 +202,7 @@ function finishOverviewRead(value: components['schemas']['OverviewRegion'], upda
 
 watch(overview.data, (value) => {
     if (value && !deniedRead.value) {
-        // Native bookmarked reads render the server's normalized query. Adopt it
+        // Bookmarked reads render the server's normalized query. Adopt it
         // only while this field still represents the route's unchanged input;
         // a newer typed draft or target navigation owns its separate confirmation.
         // Equal text leaves the focused input and its selection untouched.
@@ -305,7 +305,7 @@ async function loadOverview(signal: AbortSignal): Promise<components['schemas'][
 }
 
 /** Both route-owned refreshes and enhanced navigation share the same captured read fence. */
-async function readRegion(requested: Query, scope: PilotRequestScope, generation: number,
+async function readRegion(requested: Query, scope: FrontendRequestScope, generation: number,
                           signal: AbortSignal): Promise<components['schemas']['OverviewRegion']> {
     try {
         const result = await api.overview(requested, scope, signal);
@@ -324,7 +324,7 @@ async function readRegion(requested: Query, scope: PilotRequestScope, generation
 /** A current denial retires this region's fallback and every cached filter/page variant.
  * Advance the generation before cache cancellation so a held target response cannot
  * publish cards, a canonical cache alias or history after access has been withdrawn. */
-function retireDeniedRegion(scope: PilotRequestScope, error: ApiFailure): void {
+function retireDeniedRegion(scope: FrontendRequestScope, error: ApiFailure): void {
     readGeneration++;
     pendingRead.value = null;
     failedRead.value = null;
@@ -349,7 +349,7 @@ function isOverviewRoute(target: RouteLocationNormalized): boolean {
 }
 
 /** Admit only this mounted region's current scope and actual dashboard record. */
-function mayPresentRead(scope: PilotRequestScope, generation: number): boolean {
+function mayPresentRead(scope: FrontendRequestScope, generation: number): boolean {
     return mounted && props.active !== false && generation === readGeneration && context.isCurrent(scope, true)
         && isOverviewRoute(route) && (!navigation.destination.value || isOverviewRoute(navigation.destination.value));
 }
@@ -375,7 +375,7 @@ function finishNavigation(to: RouteLocationNormalized, _from?: RouteLocationNorm
     if (failure && pendingFocus?.key === navigationKey(regionParameters(to.query))) pendingFocus = undefined;
 }
 
-/** Cancel this region's previous reads before the native debounce expires. Other regions
+/** Cancel this region's previous reads before the debounce expires. Other regions
  * retain their independent requests, and the last confirmed cards stay readable. */
 function retireReads(): void {
     readGeneration++;
@@ -413,7 +413,7 @@ watch(() => props.active, active => {
  * URL. Undefined removes only its own field; other collections, selected events
  * and hidden-region disclosure survive independent navigation in a sibling. */
 function navigationQuery(values: Record<string, string | undefined>) {
-    // Native typing during Back targets the requested destination rather than the
+    // Typing during Back targets the requested destination rather than the
     // still-rendered old event. Merge only this region into the latest whole-page URL.
     const next = {...(navigation.destination.value?.query ?? route.query)};
     for (const [key, value] of Object.entries(values)) {
@@ -421,7 +421,7 @@ function navigationQuery(values: Record<string, string | undefined>) {
         else next[prefix.value + key] = value;
     }
 
-    // Native region URLs explicitly retain disclosure even when entered through a
+    // Region URLs explicitly retain disclosure even when entered through a
     // selected-event deep link that did not originally include the open parameter.
     if (props.region === 'hidden') next[prefix.value + 'open'] = '1';
     return next;
@@ -541,7 +541,7 @@ function targetQuery(parameters: Query): LocationQuery {
     return result;
 }
 
-/** Native event expansion remembers its originating card and scroll position. Filter
+/** Event expansion remembers its originating card and scroll position. Filter
  * changes retain that origin so Back can reveal the card instead of restoring an obsolete offset. */
 function expand(card: components['schemas']['OverviewCard']): void {
     if (!navigationAction.isAvailable()) return;
@@ -590,7 +590,7 @@ async function restoreCommittedFocus(): Promise<void> {
 }
 // GET search submits this region's controls, preserves other regions and the selected
 // event, and drops both old pagers. Navigation needs no server-held per-tab state.
-const nativeSearchFields = computed(() => Object.entries(route.query).filter(([key, value]) => typeof value === 'string'
+const searchQueryFields = computed(() => Object.entries(route.query).filter(([key, value]) => typeof value === 'string'
     && !['q', 'type', 'page', 'childPage'].some(name => key === prefix.value + name)) as Array<[string, string]>);
 function pageHref(next: number): string {
     return navigationHref({[displayed.value?.parent ? 'childPage' : 'page']: String(next)});
@@ -599,7 +599,7 @@ function expandHref(card: components['schemas']['OverviewCard']): string {
     return navigationHref({event: card.id, childPage: undefined});
 }
 function filterType(type: string): void {
-    // Native type buttons submit the search field's current draft as well. Preserve that
+    // Type buttons submit the search field's current draft as well. Preserve that
     // behavior and reset both pagers without disturbing the selected event or other regions.
     void navigate({q: search.value || undefined, type: type === 'all' ? undefined : type,
         page: undefined, childPage: undefined}, 'replace');
@@ -629,7 +629,7 @@ async function archive(card: components['schemas']['OverviewCard'], restore: boo
         card.type === 'event' ? restore ? 'event.confirmRestore' : 'event.confirmArchive' : undefined, !!card.automation);
 }
 
-/** Personal Overview retains native schedule controls for admitted Event and
+/** Personal Overview retains schedule controls for admitted Event and
  * standalone Activity roots. Reuse their generated operations and this region's
  * command/refresh lifetime; card state never replaces server authorization. */
 async function automate(card: components['schemas']['OverviewCard'], paused: boolean): Promise<void> {
@@ -659,7 +659,7 @@ async function remove(card: components['schemas']['OverviewCard']): Promise<void
         if (pendingRemoval.value === intent) pendingRemoval.value = null;
     }
 
-    async function deleteCard(commandScope: PilotRequestScope): Promise<void> {
+    async function deleteCard(commandScope: FrontendRequestScope): Promise<void> {
         if (card.type === 'event') await eventApi.deleteEvent(card.id, commandScope);
         else if (card.type === 'drivers') await driversApi.deleteDrivers(card.id, commandScope);
         else if (card.type === 'survey') await surveyApi.deleteSurvey(card.id, commandScope);
@@ -702,11 +702,11 @@ function page(next: number): void {
                     method="get" :action="frontendOverviewPath"
                     @submit.prevent="submitSearch"
                 >
-                    <!-- Native keeps this navigation focus target visually hidden;
+                    <!-- Keep this navigation focus target visually hidden;
                          the existing collection heading already names empty membership. -->
                     <h3 class="js-overview-heading visually-hidden mb-0" tabindex="-1">{{ title }}</h3>
                     <template v-if="showSearchControls">
-                        <input v-for="[name, value] in nativeSearchFields" :key="name" type="hidden" :name="name" :value="value" />
+                        <input v-for="[name, value] in searchQueryFields" :key="name" type="hidden" :name="name" :value="value" />
                         <div class="input-group input-group-sm" style="max-width: 320px">
                             <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span
                             ><input
@@ -732,7 +732,7 @@ function page(next: number): void {
                             :name="prefix + 'type'" :value="query.type ?? 'all'">{{
                             messages.t('overview.search')
                         }}</ActionButton>
-                        <!-- Preserve the native Filter disclosure and ordinary type submit buttons.
+                        <!-- Preserve the Filter disclosure and ordinary type submit buttons.
                              Search stays first in DOM order so Enter retains the current type. The
                              shared disclosure owns dismissal/focus; this region owns URL selection. -->
                         <AppNavigationDropdown :navigation="false" menu-tag="ul"

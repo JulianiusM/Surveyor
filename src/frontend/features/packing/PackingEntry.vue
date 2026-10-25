@@ -2,9 +2,9 @@
 import {computed} from 'vue';
 import {useRoute} from 'vue-router';
 import type {components} from '../../../types/api/v1';
-import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {EntityEntryRetirement} from '../../../types/FrontendEntityEntryTypes';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {resourceRouteIntent} from '../../composables/pageEntry';
 import {overviewKeys, packingKeys} from '../../app/queryKeys';
 import {usePackingApi} from './api';
@@ -12,7 +12,7 @@ import PackingPage from './PackingPage.vue';
 import EntityEntryPage from '../../components/EntityEntryPage.vue';
 import GuestEntryPage from '../identity/GuestEntryPage.vue';
 
-const context = usePilot();
+const context = useFrontend();
 const api = usePackingApi(context);
 const route = useRoute();
 const listId = computed(() => String(route.params.listId).toLowerCase());
@@ -20,11 +20,11 @@ const guestRoute = computed(() => resourceRouteIntent(route) === 'guest');
 
 // Initial admission belongs to one URL and identity. Reusing this wrapper for another
 // list, locale or explicit guest route gets its own query through the shared entry owner.
-const nativeInitial = context.initialDocumentFor(route.fullPath);
-const initialEntry: components['schemas']['PackingResourceEntry'] | undefined = nativeInitial
-    ? {entry: nativeInitial.pageEntry ?? (nativeInitial.packingError
-        ? {kind: 'denied', status: 404, messageKey: nativeInitial.packingError} : {kind: 'render'}),
-        guest: nativeInitial.guestEntry ?? null}
+const initialDocument = context.initialDocumentFor(route.fullPath);
+const initialEntry: components['schemas']['PackingResourceEntry'] | undefined = initialDocument
+    ? {entry: initialDocument.pageEntry ?? (initialDocument.packingError
+        ? {kind: 'denied', status: 404, messageKey: initialDocument.packingError} : {kind: 'render'}),
+        guest: initialDocument.guestEntry ?? null}
     : undefined;
 
 
@@ -32,7 +32,7 @@ const initialEntry: components['schemas']['PackingResourceEntry'] | undefined = 
  * projections even when it unmounts the detail before that read can report its own failure.
  * Public guest admission has its own policy; a participant denial does not revoke it.
  * Copied duplicate drafts also remain independent of their source list's read authority. */
-function deniedQueries(entry: {readonly status: number}, scope: PilotRequestScope): EntityEntryRetirement {
+function deniedQueries(entry: {readonly status: number}, scope: FrontendRequestScope): EntityEntryRetirement {
     const actor = scope.context;
     const resource = listId.value;
     const families: (readonly unknown[])[] = [packingKeys.detailFamily(actor, resource), packingKeys.editors(actor, resource),
@@ -49,16 +49,16 @@ function deniedQueries(entry: {readonly status: number}, scope: PilotRequestScop
 
 /** The server owns the distinction between detail admission and the explicit public guest
  * entry exception. The feature supplies only its route intent and resource identifier. */
-function readEntry(scope: PilotRequestScope, signal: AbortSignal): Promise<components['schemas']['PackingResourceEntry']> {
+function readEntry(scope: FrontendRequestScope, signal: AbortSignal): Promise<components['schemas']['PackingResourceEntry']> {
     return api.resourceEntry(listId.value, guestRoute.value ? 'guest' : 'detail', scope, signal);
 }
 
 /** Inject Packing's generated operations into the shared guest presentation. */
-function readGuestEntry(scope: PilotRequestScope, signal?: AbortSignal) {
+function readGuestEntry(scope: FrontendRequestScope, signal?: AbortSignal) {
     return api.guestEntry(listId.value, scope, signal);
 }
 
-function registerGuest(input: components['schemas']['GuestRegistrationInput'], scope: PilotRequestScope) {
+function registerGuest(input: components['schemas']['GuestRegistrationInput'], scope: FrontendRequestScope) {
     return api.registerGuest(listId.value, input, scope);
 }
 
@@ -70,7 +70,7 @@ function registerGuest(input: components['schemas']['GuestRegistrationInput'], s
         :initial="initialEntry" :read="readEntry" :denied-queries="deniedQueries"
     >
         <template #default="{guest}">
-            <GuestEntryPage v-if="guestRoute" :entry="guest" :resource-id="listId" :destination="'/frontend-pilot/packing/' + listId"
+            <GuestEntryPage v-if="guestRoute" :entry="guest" :resource-id="listId" :destination="'/packing/' + listId"
                 title-key="app.packing"
                 :query-key="packingKeys.guest(context.session.value?.context, listId)"
                 :read-entry="readGuestEntry" :register-guest="registerGuest" />

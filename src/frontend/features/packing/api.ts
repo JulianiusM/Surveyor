@@ -1,7 +1,7 @@
 import type {components} from '../../../types/api/v1';
-import type {PilotContext, PilotEventPickerQuery, PilotEventPickerSource, PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
-import type {PilotApi} from '../../app/api';
-import type {PilotInputField} from '../../../types/FrontendFeedbackTypes';
+import type {FrontendContext, FrontendEventPickerQuery, FrontendEventPickerSource, FrontendRead, FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import type {FrontendApi} from '../../app/api';
+import type {FrontendInputField} from '../../../types/FrontendFeedbackTypes';
 import {packingKeys} from '../../app/queryKeys';
 import {createMultipartForm, generatedInputError} from '../../app/transport';
 import {validatePackingListView} from '../../../../.generated/api/v1/browser/validatePackingListView.mjs';
@@ -28,11 +28,11 @@ type Assignment = components['schemas']['PackingAssignmentResult'];
 
 /** Feature operations own their generated validators; transport and actor admission are shared. */
 export class PackingApi {
-    constructor(private transport: PilotApi) {}
+    constructor(private transport: FrontendApi) {}
 
     // The feature owns discovery authorization and cache families. The shared picker only
     // renders and selects the supplied options, so another feature can reuse its behavior.
-    readonly eventPicker: PilotEventPickerSource = {
+    readonly eventPicker: FrontendEventPickerSource = {
         search: (query, scope, signal) => this.events(query, scope, signal),
         pageKey: packingKeys.eventPage,
         filterKey: packingKeys.eventFilters,
@@ -41,10 +41,10 @@ export class PackingApi {
     /** Read the captured list with its caller-supplied conditional snapshot.
      * The transport validates actor scope before accepting a 304; the feature
      * query owner ensures that previous belongs to this same resource family. */
-    async packing(listId: string, scope: PilotRequestScope, signal?: AbortSignal,
-                  previous?: PilotRead<List>): Promise<PilotRead<List>> {
+    async packing(listId: string, scope: FrontendRequestScope, signal?: AbortSignal,
+                  previous?: FrontendRead<List>): Promise<FrontendRead<List>> {
         const transport = this.transport;
-        async function readPacking(): Promise<PilotRead<List>> {
+        async function readPacking(): Promise<FrontendRead<List>> {
             const response = await transport.client.GET('/packing-lists/{listId}', {
                 params: {path: {listId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
             });
@@ -56,10 +56,10 @@ export class PackingApi {
     /** Obtain permitted root fields and usable comparison evidence together.
      * Missing/malformed ETags cannot authorize an editor, even when the body
      * passed its generated shape validator or a previous snapshot is available. */
-    async metadata(listId: string, scope: PilotRequestScope, signal?: AbortSignal,
-                   previous?: PilotRead<Metadata>): Promise<PilotRead<Metadata>> {
+    async metadata(listId: string, scope: FrontendRequestScope, signal?: AbortSignal,
+                   previous?: FrontendRead<Metadata>): Promise<FrontendRead<Metadata>> {
         const transport = this.transport;
-        async function readMetadata(): Promise<PilotRead<Metadata>> {
+        async function readMetadata(): Promise<FrontendRead<Metadata>> {
             const response = await transport.client.GET('/packing-lists/{listId}/metadata', {
                 params: {path: {listId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
             });
@@ -74,7 +74,7 @@ export class PackingApi {
      * A confirmed response must include newly admitted header evidence as well as
      * valid field data; neither the previous token nor saved values renew authority. */
     async saveMetadata(listId: string, patch: components['schemas']['PackingMetadataPatch'], etag: string,
-                       scope: PilotRequestScope): Promise<PilotRead<Metadata>> {
+                       scope: FrontendRequestScope): Promise<FrontendRead<Metadata>> {
         // Structural validation precedes transport; business/field checks remain server-owned.
         if (!validatePackingMetadataPatch(patch)) throw generatedInputError(validatePackingMetadataPatch.errors, path => packingInputField(path));
 
@@ -86,7 +86,7 @@ export class PackingApi {
         return result;
     }
 
-    async assign(listId: string, itemId: string, assigned: boolean, scope: PilotRequestScope): Promise<Assignment> {
+    async assign(listId: string, itemId: string, assigned: boolean, scope: FrontendRequestScope): Promise<Assignment> {
         const options = {params: {path: {listId, itemId}, header: this.transport.headers(scope)}, cache: 'no-store' as const};
         const result = assigned
             ? await this.transport.client.PUT('/packing-lists/{listId}/items/{itemId}/self-assignment', options)
@@ -97,7 +97,7 @@ export class PackingApi {
     /** Settings are a separately authorized projection, not authority inherited
      * from detail or metadata. Preserve cancellation and the settings read's own
      * cooldown while its generated validator checks the permitted panels/tokens. */
-    async settings(listId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['PackingSettings']> {
+    async settings(listId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['PackingSettings']> {
         const transport = this.transport;
         async function readSettings(): Promise<components['schemas']['PackingSettings']> {
             const response = await transport.client.GET('/packing-lists/{listId}/settings', {
@@ -110,7 +110,7 @@ export class PackingApi {
 
     /** Creation admission is distinct from the public duplication projection. The caller supplies
      * its exact return destination; the server owns account admission and bounded destination policy. */
-    async createEntry(scope: PilotRequestScope, signal?: AbortSignal,
+    async createEntry(scope: FrontendRequestScope, signal?: AbortSignal,
                       returnTo?: string, eventId?: string): Promise<components['schemas']['PackingCreateEntry']> {
         const transport = this.transport;
         async function readCreationEntry(): Promise<components['schemas']['PackingCreateEntry']> {
@@ -122,9 +122,9 @@ export class PackingApi {
         return transport.allowedRead('packing/create-entry/' + (returnTo ?? '') + '/' + (eventId ?? ''), scope, readCreationEntry, signal);
     }
 
-    /** Detail and explicit guest routes deliberately have different native admission. Never
+    /** Detail and explicit guest routes deliberately have different admission. Never
      * infer either route from session presence or from permissions on the other projection. */
-    async resourceEntry(listId: string, view: 'detail' | 'guest', scope: PilotRequestScope,
+    async resourceEntry(listId: string, view: 'detail' | 'guest', scope: FrontendRequestScope,
                         signal?: AbortSignal): Promise<components['schemas']['PackingResourceEntry']> {
         const transport = this.transport;
         async function readResourceEntry(): Promise<components['schemas']['PackingResourceEntry']> {
@@ -139,7 +139,7 @@ export class PackingApi {
     /** Read only the server's permitted duplication surface. Destination selection
      * is independently admitted and part of this read's key. Source assignments,
      * administrator grants and files stay excluded; copied values grant no creation permission. */
-    async duplicate(listId: string, scope: PilotRequestScope, signal?: AbortSignal,
+    async duplicate(listId: string, scope: FrontendRequestScope, signal?: AbortSignal,
                     eventId?: string): Promise<components['schemas']['PackingDuplicate']> {
         const transport = this.transport;
         async function readDuplicate(): Promise<components['schemas']['PackingDuplicate']> {
@@ -156,7 +156,7 @@ export class PackingApi {
      * Only a validated creation receipt confirms success, and uncertain delivery is left to
      * the shared command owner without replaying this non-idempotent request. */
     async createPacking(input: components['schemas']['PackingCreateInput'], image: File | null,
-                        scope: PilotRequestScope, itemRows?: readonly number[]): Promise<components['schemas']['PackingCreated']> {
+                        scope: FrontendRequestScope, itemRows?: readonly number[]): Promise<components['schemas']['PackingCreated']> {
         // Validate machine data before adapting it to the established multipart envelope.
         // The image is a separate part rather than a second handwritten creation schema.
         if (!validatePackingCreateInput(input)) {
@@ -174,7 +174,7 @@ export class PackingApi {
 
     /** Quick-add keeps its separate generated creation bounds. A rejected row
      * stays editable without dispatch or an uncertain creation receipt. */
-    async addItem(listId: string, input: components['schemas']['PackingNewItem'], scope: PilotRequestScope) {
+    async addItem(listId: string, input: components['schemas']['PackingNewItem'], scope: FrontendRequestScope) {
         if (!validatePackingNewItem(input)) throw generatedInputError(validatePackingNewItem.errors, path => packingInputField(path));
         return this.transport.read('createPackingItem', await this.transport.client.POST('/packing-lists/{listId}/items', {
             params: {path: {listId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
@@ -184,26 +184,26 @@ export class PackingApi {
     /** Existing-item edits retain their own scalar rules and comparison token;
      * field feedback does not replace the shared conflict/draft lifecycle. */
     async updateItem(listId: string, itemId: string, patch: components['schemas']['PackingItemPatch'], token: string,
-                     scope: PilotRequestScope) {
+                     scope: FrontendRequestScope) {
         if (!validatePackingItemPatch(patch)) throw generatedInputError(validatePackingItemPatch.errors, path => packingInputField(path));
         return this.transport.read('updatePackingItem', await this.transport.client.PATCH('/packing-lists/{listId}/items/{itemId}', {
             params: {path: {listId, itemId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: patch, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
-    async deleteItem(listId: string, itemId: string, scope: PilotRequestScope) {
+    async deleteItem(listId: string, itemId: string, scope: FrontendRequestScope) {
         return this.transport.read('deletePackingItem', await this.transport.client.DELETE('/packing-lists/{listId}/items/{itemId}', {
             params: {path: {listId, itemId}, header: this.transport.headers(scope)}, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
-    async reorder(listId: string, itemIds: string[], token: string, scope: PilotRequestScope) {
+    async reorder(listId: string, itemIds: string[], token: string, scope: FrontendRequestScope) {
         return this.transport.read('reorderPackingItems', await this.transport.client.PUT('/packing-lists/{listId}/item-order', {
             params: {path: {listId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: {itemIds}, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
-    async removeAssignment(listId: string, assignmentId: string, scope: PilotRequestScope) {
+    async removeAssignment(listId: string, assignmentId: string, scope: FrontendRequestScope) {
         return this.transport.read('deletePackingAssignment', await this.transport.client.DELETE('/packing-lists/{listId}/assignments/{assignmentId}', {
             params: {path: {listId, assignmentId: String(assignmentId)}, header: this.transport.headers(scope)}, cache: 'no-store',
         }), validateMutationResult, scope).data;
@@ -212,8 +212,8 @@ export class PackingApi {
     /** Read the feature-owned event options for this exact filter/selection page.
      * The picker receives validated presentation only; eligibility and the final
      * relationship change remain independently checked by existing server owners. */
-    async events(query: PilotEventPickerQuery,
-                  scope: PilotRequestScope, signal?: AbortSignal) {
+    async events(query: FrontendEventPickerQuery,
+                  scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
         async function readEventOptions(): Promise<components['schemas']['EventPickerOptions']> {
             const response = await transport.client.GET('/packing-lists/events', {
@@ -224,13 +224,13 @@ export class PackingApi {
         return transport.allowedRead(`packing/events/${JSON.stringify(query)}`, scope, readEventOptions, signal);
     }
 
-    async linkEvent(listId: string, input: components['schemas']['PackingEventChange'], token: string, scope: PilotRequestScope) {
+    async linkEvent(listId: string, input: components['schemas']['PackingEventChange'], token: string, scope: FrontendRequestScope) {
         return this.transport.read('changePackingEvent', await this.transport.client.PUT('/packing-lists/{listId}/event', {
             params: {path: {listId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: input, cache: 'no-store',
         }), validatePackingEventChanged, scope).data;
     }
 
-    async setDefaults(listId: string, defaults: components['schemas']['PermissionDefaultsPatch'], token: string, scope: PilotRequestScope) {
+    async setDefaults(listId: string, defaults: components['schemas']['PermissionDefaultsPatch'], token: string, scope: FrontendRequestScope) {
         return this.transport.read('updatePackingDefaults', await this.transport.client.PUT('/packing-lists/{listId}/default-permissions', {
             params: {path: {listId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: defaults, cache: 'no-store',
         }), validateMutationResult, scope).data;
@@ -239,7 +239,7 @@ export class PackingApi {
     /** Discover account-profile options under this list's management grant.
      * Keep result shape, cancellation and rate-limit recovery with the existing
      * transport; a displayed username never becomes the acting identity. */
-    async profiles(listId: string, q: string, scope: PilotRequestScope, signal?: AbortSignal) {
+    async profiles(listId: string, q: string, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
         async function readProfileOptions(): Promise<components['schemas']['PackingProfileOptions']> {
             const response = await transport.client.GET('/packing-lists/{listId}/profiles', {
@@ -250,25 +250,25 @@ export class PackingApi {
         return transport.allowedRead(`packing/${listId}/profiles/${q}`, scope, readProfileOptions, signal);
     }
 
-    async addAdmin(listId: string, input: components['schemas']['PackingAdminInput'], token: string, scope: PilotRequestScope) {
+    async addAdmin(listId: string, input: components['schemas']['PackingAdminInput'], token: string, scope: FrontendRequestScope) {
         return this.transport.read('addPackingAdmin', await this.transport.client.POST('/packing-lists/{listId}/admins', {
             params: {path: {listId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: input, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
-    async updateAdmin(listId: string, profileId: string, mask: number, token: string, scope: PilotRequestScope) {
+    async updateAdmin(listId: string, profileId: string, mask: number, token: string, scope: FrontendRequestScope) {
         return this.transport.read('updatePackingAdmin', await this.transport.client.PATCH('/packing-lists/{listId}/admins/{profileId}', {
             params: {path: {listId, profileId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: {mask}, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
-    async removeAdmin(listId: string, profileId: string, token: string, scope: PilotRequestScope) {
+    async removeAdmin(listId: string, profileId: string, token: string, scope: FrontendRequestScope) {
         return this.transport.read('deletePackingAdmin', await this.transport.client.DELETE('/packing-lists/{listId}/admins/{profileId}', {
             params: {path: {listId, profileId}, header: {...this.transport.headers(scope), 'If-Match': token}}, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
-    async header(listId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<Blob> {
+    async header(listId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<Blob> {
         const transport = this.transport;
 
         /** openapi-fetch uses blob decoding only for success. Error bodies retain its
@@ -289,7 +289,7 @@ export class PackingApi {
      * Multipart serialization transports bytes while generated operation metadata still
      * identifies the request. The controller owns image admission, locked comparison and
      * committed cleanup; this adapter confirms only a validated mutation receipt. */
-    async uploadHeader(listId: string, image: File, token: string, scope: PilotRequestScope) {
+    async uploadHeader(listId: string, image: File, token: string, scope: FrontendRequestScope) {
         // Keep the chosen bytes separate from their generated filename placeholder.
         // The serializer supplies the actual multipart body without copying upload policy.
         const form = createMultipartForm(null, image);
@@ -301,19 +301,19 @@ export class PackingApi {
         }), validateMutationResult, scope).data;
     }
 
-    async removeHeader(listId: string, token: string, scope: PilotRequestScope) {
+    async removeHeader(listId: string, token: string, scope: FrontendRequestScope) {
         return this.transport.read('deletePackingHeader', await this.transport.client.DELETE('/packing-lists/{listId}/header', {
             params: {path: {listId}, header: {...this.transport.headers(scope), 'If-Match': token}}, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
-    async archive(listId: string, restore: boolean, scope: PilotRequestScope) {
+    async archive(listId: string, restore: boolean, scope: FrontendRequestScope) {
         const options = {params: {path: {listId}, header: this.transport.headers(scope)}, cache: 'no-store' as const};
         return this.transport.read(restore ? 'restorePackingList' : 'archivePackingList', restore ? await this.transport.client.POST('/packing-lists/{listId}/restore', options)
             : await this.transport.client.POST('/packing-lists/{listId}/archive', options), validateMutationResult, scope).data;
     }
 
-    async deletePacking(listId: string, scope: PilotRequestScope) {
+    async deletePacking(listId: string, scope: FrontendRequestScope) {
         return this.transport.read('deletePackingList', await this.transport.client.DELETE('/packing-lists/{listId}', {
             params: {path: {listId}, header: this.transport.headers(scope)}, cache: 'no-store',
         }), validateMutationResult, scope).data;
@@ -323,7 +323,7 @@ export class PackingApi {
     /** Read the public guest-entry surface without fetching private detail/setup.
      * This operation supplies entry presentation only; registering a guest is a
      * separate identity command with its own confirmed context and destination. */
-    async guestEntry(listId: string, scope: PilotRequestScope, signal?: AbortSignal) {
+    async guestEntry(listId: string, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
         async function readGuestEntry(): Promise<components['schemas']['GuestEntry']> {
             const response = await transport.client.GET('/packing-lists/{listId}/guest', {
@@ -334,7 +334,7 @@ export class PackingApi {
         return transport.allowedRead('packing/' + listId + '/guest', scope, readGuestEntry, signal);
     }
 
-    async registerGuest(listId: string, input: components['schemas']['GuestRegistrationInput'], scope: PilotRequestScope) {
+    async registerGuest(listId: string, input: components['schemas']['GuestRegistrationInput'], scope: FrontendRequestScope) {
         return this.transport.identity("registerPackingGuest", await this.transport.client.POST('/packing-lists/{listId}/guest', {
             params: {path: {listId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
         }), scope);
@@ -343,7 +343,7 @@ export class PackingApi {
 
 /** Root fields and item rows keep the labels of their actual controls. Visible
  * row numbers may differ from the collected array when blank drafts are omitted. */
-function packingInputField(path: string, itemRows?: readonly number[]): PilotInputField | undefined {
+function packingInputField(path: string, itemRows?: readonly number[]): FrontendInputField | undefined {
     const item = /^\/items\/(\d+)\/(\w+)$/u.exec(path);
     const field = item ? item[2] : path.slice(1);
     const label = field === 'title' ? 'packing.title' : field === 'description' ? 'packing.description'
@@ -355,12 +355,12 @@ function packingInputField(path: string, itemRows?: readonly number[]): PilotInp
     return undefined;
 }
 
-const owners = new WeakMap<PilotApi, PackingApi>();
+const owners = new WeakMap<FrontendApi, PackingApi>();
 
 /** Reuse one Packing transport wrapper for this application/request's API owner.
  * Component-local translation bindings may create context wrappers, but they retain the
  * same transport. A WeakMap preserves that ownership without sharing actors across apps. */
-export function usePackingApi(context: PilotContext): PackingApi {
+export function usePackingApi(context: FrontendContext): PackingApi {
     let owner = owners.get(context.api);
 
     // Construct lazily for this transport identity; component remounts reuse the wrapper

@@ -95,10 +95,10 @@ schemas:
         properties:
           showTitleEdit:
             type: boolean
-            description: Original native title-control visibility; command authorization is independently editTitle.
+            description: Title-control visibility; command authorization is independently editTitle.
           showCapacityEdit:
             type: boolean
-            description: Original native capacity-control visibility; command authorization is independently editCapacity.
+            description: Capacity-control visibility; command authorization is independently editCapacity.
           editTitle:
             type: boolean
           editDescription:
@@ -265,7 +265,7 @@ schemas:
       description:
         $ref: '#/schemas/PackingDescriptionValue'
   PackingDescriptionPatch:
-    description: Bounded adapter for the independently grantable native description method; root properties remain profile-only.
+    description: Bounded adapter for the independently grantable description method; root properties remain profile-only.
     type: object
     additionalProperties: false
     required: [description]
@@ -506,7 +506,7 @@ schemas:
           - "null"
         maxLength: 65535
       maxAssignees:
-        description: Existing native inline edits carry a numeric value, the number control's raw string draft, or null. The existing signed nullable integer column retains native rounding and rejects invalid/overflow values. New-item creation has its separate positive integer policy.
+        description: Inline edits carry a numeric value, the number control's raw string draft, or null. The signed nullable integer column retains established rounding and rejects invalid/overflow values. New-item creation has its separate positive integer policy.
         anyOf:
           - type: number
           - type: string

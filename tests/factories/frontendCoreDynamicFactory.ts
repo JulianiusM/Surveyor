@@ -3,10 +3,6 @@ import type { PackingItem } from "../../src/modules/database/entities/packing/Pa
 import type { SurveyCombination } from "../../src/modules/database/entities/surveys/SurveyCombination";
 import type { ActivitySlot } from "../../src/modules/database/entities/activity/ActivitySlot";
 import type {
-  RecommendationParticipantOption,
-  RecommendationRow,
-} from "../../src/public/js/modules/activity/activity-types";
-import type {
   PermBundle,
   PermType,
   PermView,
@@ -49,14 +45,6 @@ export interface ActivityCase {
   startDate: Date;
   endDate: Date;
   expectedDates: string[];
-}
-
-export interface RecommendationCase {
-  description: string;
-  participant: RecommendationParticipantOption;
-  row: RecommendationRow;
-  slotDay: string;
-  available: boolean;
 }
 
 export function createPasswordCases(): PasswordCase[] {
@@ -378,36 +366,6 @@ export function createActivityCases(): ActivityCase[] {
       startDate: new Date("2026-08-05"),
       endDate: new Date("2026-08-09"),
       expectedDates: [day],
-    };
-  });
-}
-
-export function createRecommendationCases(): RecommendationCase[] {
-  return Array.from({ length: 15 }, (_, index) => {
-    const day = `2026-08-${String((index % 5) + 5).padStart(2, "0")}`;
-    const participant: RecommendationParticipantOption = {
-      key: `profile-${index}`,
-      label: `Participant ${index}`,
-      profileId: `profile-${index}`,
-      arrivalDate: "2026-08-05",
-      departureDate: "2026-08-09",
-    };
-    return {
-      description: `matches available participant to recommendation ${index + 1}`,
-      participant,
-      row: {
-        item: {
-          id: `slot-${index}`,
-          title: `Activity ${index}`,
-          day,
-          startTime: "10:00:00",
-          endTime: "11:00:00",
-        },
-        profile: { id: `profile-${index}`, name: participant.label },
-        status: "PENDING",
-      },
-      slotDay: day,
-      available: true,
     };
   });
 }

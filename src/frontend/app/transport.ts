@@ -1,13 +1,13 @@
 import createClient from 'openapi-fetch';
 import type {components, paths} from '../../types/api/v1';
-import type {PilotPlainMessageKey, PilotRead, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
+import type {FrontendPlainMessageKey, FrontendRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
 import {validateProblem} from '../../../.generated/api/v1/browser/validateProblem.mjs';
 import {validateSafeProblemDetails} from '../../../.generated/api/v1/browser/validateSafeProblemDetails.mjs';
 import {validateComparisonToken} from '../../../.generated/api/v1/browser/validateComparisonToken.mjs';
 import {apiCompatibility, operationPolicies} from '../../../.generated/api/v1/policy.mjs';
 import type {ApiOperationId} from '../../types/ApiTransportTypes';
 import type {ErrorObject} from 'ajv';
-import type {PilotInputField} from '../../types/FrontendFeedbackTypes';
+import type {FrontendInputField} from '../../types/FrontendFeedbackTypes';
 import type {InputDiagnostic} from '../../types/InputValidationTypes';
 import {fieldDiagnostic, fieldDiagnosticInput} from '../../modules/localization/inputValidation';
 
@@ -63,7 +63,7 @@ export class UnconfirmedResponseError extends Error {
  * Features may identify the invalid field with a typed catalog key; private
  * diagnostic text never becomes user feedback or implies a dispatched command. */
 export class InvalidInputError extends Error {
-    constructor(message?: string, readonly messageKey?: PilotPlainMessageKey,
+    constructor(message?: string, readonly messageKey?: FrontendPlainMessageKey,
                 readonly diagnostic?: InputDiagnostic) { super(message); }
 }
 
@@ -71,7 +71,7 @@ export class InvalidInputError extends Error {
  * constraints or exposing validator messages, payloads or schema locations.
  * Call immediately after validation: generated validators reuse their errors. */
 export function generatedInputError(errors: readonly ErrorObject[] | null | undefined,
-                                    field: (path: string, error: ErrorObject) => PilotInputField | PilotPlainMessageKey | undefined): InvalidInputError {
+                                    field: (path: string, error: ErrorObject) => FrontendInputField | FrontendPlainMessageKey | undefined): InvalidInputError {
     // Prefer feature-specific fields and their actual row/day identities. Keep
     // a generated generic field only as a fallback, without publishing raw paths.
     let fallback: InputDiagnostic | undefined;
@@ -114,20 +114,20 @@ export function createMultipartForm(data: object | null, file: File | null, bina
  * The generated client owns request shapes. This finite adapter adds runtime checking and identity
  * boundaries without introducing a second schema, a response cache, or any automatic command replay.
  */
-export class PilotTransport {
+export class FrontendTransport {
     readonly client;
     private nextAllowedRead = new Map<string, number>();
 
-    constructor(protected isCurrent: (scope: PilotRequestScope, checkLocale?: boolean) => boolean,
+    constructor(protected isCurrent: (scope: FrontendRequestScope, checkLocale?: boolean) => boolean,
                 protected identityLost: () => void, requestFetch: typeof fetch = globalThis.fetch,
-                private mayRead?: (scope: PilotRequestScope) => boolean) {
+                private mayRead?: (scope: FrontendRequestScope) => boolean) {
         this.client = createClient<paths>({baseUrl: `${globalThis.location?.origin ?? 'http://localhost'}/api/v1`, fetch: requestFetch});
     }
 
     /** Sessionless public reads/actions carry no fabricated identity evidence.
      * The server still selects the actor from its actual session and decides
      * which protections that operation requires; omitted headers grant nothing. */
-    headers(scope: PilotRequestScope, etag?: string | null) {
+    headers(scope: FrontendRequestScope, etag?: string | null) {
         // Bootstrap validates this pair together. Reject a malformed internal
         // caller too, rather than submit half a stored session's evidence.
         if ((scope.context === null) !== (scope.csrfToken === null)) throw new InvalidInputError(undefined, 'state.sessionChanged');
@@ -140,7 +140,7 @@ export class PilotTransport {
     }
 
     /** Check the captured actor before processing even an error from an obsolete request. */
-    checkScope(response: Response, scope?: PilotRequestScope, checkLocale = false): void {
+    checkScope(response: Response, scope?: FrontendRequestScope, checkLocale = false): void {
         if (!scope) return;
         if (!this.isCurrent(scope, checkLocale)) throw new ObsoleteRequestError();
         const admitted = response.headers.get('X-Surveyor-Context');
@@ -157,7 +157,7 @@ export class PilotTransport {
     /** JSON and binary operations share this error boundary. Check actor/locale before
      * granting known machine-code behavior or retaining a safe future explanation;
      * the generated client's decoded error stays unknown until these checks pass. */
-    reject(response: Response, error: unknown, scope?: PilotRequestScope, checkLocale = false): never {
+    reject(response: Response, error: unknown, scope?: FrontendRequestScope, checkLocale = false): never {
         this.checkScope(response, scope, checkLocale);
         const problem = validateProblem(error) && error.status === response.status ? error : null;
         const validatedDetails = validateSafeProblemDetails(error) && error.status === response.status;
@@ -176,7 +176,7 @@ export class PilotTransport {
      * scope. A 304 can reuse only the caller's supplied snapshot after positive
      * context checks; malformed/empty success never confirms a command or read. */
     read<T>(operationId: ApiOperationId, result: {data?: unknown; error?: unknown; response: Response; signal?: AbortSignal}, validate: Validator<T>,
-                     scope?: PilotRequestScope, previous?: PilotRead<T>, checkLocale = false): PilotRead<T> {
+                     scope?: FrontendRequestScope, previous?: FrontendRead<T>, checkLocale = false): FrontendRead<T> {
         const {response, data, error, signal} = result;
         // A transport adapter can finish headers/body decoding after cancellation.
         // Retire that read before any success, identity change or error policy is
@@ -193,7 +193,7 @@ export class PilotTransport {
         if (!response.ok) this.reject(response, error, scope, checkLocale);
         this.checkScope(response, scope, checkLocale);
 
-        // A 204 is a valid empty HTTP response, but no pilot read/write declares an empty success body.
+        // A 204 is a valid empty HTTP response, but no frontend read/write declares an empty success body.
         // Never turn that absence (or redirected login HTML) into a successful typed command.
         if (!operationPolicies[operationId].successStatuses.includes(response.status) || response.status === 204
             || !response.headers.get('content-type')?.includes('application/json') || !validate(data)) {
@@ -207,7 +207,7 @@ export class PilotTransport {
      * save confirmation; timeout, abort and unusable delivery remain uncertain.
      * The feature retains its form, draft and explicit recovery decisions. */
     async uploadJson<T>(operationId: ApiOperationId, path: string, form: FormData, validate: Validator<T>,
-                        scope: PilotRequestScope, progress: (loaded: number, total: number | null, complete?: boolean) => void): Promise<T> {
+                        scope: FrontendRequestScope, progress: (loaded: number, total: number | null, complete?: boolean) => void): Promise<T> {
         if (!this.isCurrent(scope)) throw new ObsoleteRequestError();
         if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\'))
             throw new InvalidInputError(undefined, 'state.uploadDestinationInvalid');
@@ -260,7 +260,7 @@ export class PilotTransport {
     /** Admit a header image through the same captured-scope/error policy as JSON
      * reads. Features supply generated HTTP operations and retain their read key;
      * binary decoding never introduces another actor or retry owner. */
-    headerImage(result: {data?: unknown; error?: unknown; response: Response}, scope: PilotRequestScope,
+    headerImage(result: {data?: unknown; error?: unknown; response: Response}, scope: FrontendRequestScope,
                 signal?: AbortSignal): Blob {
         // Cancel before classifying errors so an obsolete response cannot publish
         // identity loss or a Retry-After lease into a newer image visit.
@@ -286,7 +286,7 @@ export class PilotTransport {
 
     /** Every read entry point shares one deadline: focus/manual callers cannot bypass Retry-After.
      * No delayed requests are queued; the caller's ordinary query timer may retry after the deadline. */
-    async allowedRead<T>(resource: string, scope: PilotRequestScope | undefined, operation: () => Promise<T>,
+    async allowedRead<T>(resource: string, scope: FrontendRequestScope | undefined, operation: () => Promise<T>,
                          signal?: AbortSignal): Promise<T> {
         this.checkReadCancellation(signal);
         // Observer enabled state cannot protect explicit refetches or image reads.

@@ -2,8 +2,8 @@
  * page/dialog. Passive capture runs before native number-input wheel stepping. */
 export function protectFinanceNumberFromScroll(event: WheelEvent): void {
     const input = event.target;
-    // Forms explicitly install this shared behavior; neither a portal nor the
-    // native frontend is needed to discover the owning numeric control.
+    // Forms install this shared behavior directly; the event target identifies
+    // the owning numeric control without a document-level registry.
     if (input instanceof HTMLInputElement && input.type === 'number' && document.activeElement === input) input.blur();
 }
 
@@ -16,7 +16,7 @@ export function financeDecimal(value: string, fractionDigits?: number): string {
 
     // Remove insignificant mantissa zeroes before bounding expansion. A large
     // exponent can balance an equally long mantissa and still denote ordinary
-    // finite input; bounding the exponent alone would reject that native value.
+    // finite input; bounding the exponent alone would reject that value.
     const rawDigits = match[2] + (match[3] ?? '');
     if (!/[1-9]/u.test(rawDigits) || fractionDigits !== undefined && Number(value) === 0) {
         // Zero accepts any exponent. Factors also retain the native number

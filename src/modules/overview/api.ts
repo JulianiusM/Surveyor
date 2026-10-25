@@ -15,7 +15,7 @@ import {APIError} from '../lib/errors';
 import {ApiProblem} from '../api/problem';
 import {isOwner} from '../permissionEngine';
 
-/** Project the native mixed overview independently of any one migrated feature's command API. */
+/** Project the mixed overview independently of each feature command API. */
 export async function readOverview(query: operations['getOverview']['parameters']['query'], session: SessionLike): Promise<components['schemas']['OverviewRegion']> {
     const prefix = `${query.collection}_${query.region}_`;
     // Badges and cards must use the same authorized roots. An absent filter includes all
@@ -24,7 +24,7 @@ export async function readOverview(query: operations['getOverview']['parameters'
     for (const key of ['q', 'page', 'childPage'] as const) if (query[key] !== undefined) navigation[`${prefix}${key}`] = query[key];
     if (query.eventId) navigation[`${prefix}event`] = query.eventId;
     const region = await getOverviewRegion(session, navigation);
-    // Both migrated feature families use the same bounded card owner.
+    // All supported feature families use the same bounded card owner.
     function projectCard(card: Entity): components['schemas']['OverviewCard'] {
         return projectOverviewCard(card, session, region.collection === 'owner');
     }
@@ -39,34 +39,34 @@ export async function readOverview(query: operations['getOverview']['parameters'
 /**
  * Project shared card presentation without widening membership or child admission.
  * Event Things to do opts into existing shared lifecycle controls; personal Overview
- * retains only migrated actions. Both callers use the same destination/image mapping.
+ * retains only actions supported by its card types. Both callers use the same destination/image mapping.
  */
 export function projectOverviewCard(card: Entity, session: SessionLike, ownerCollection = false,
     sharedLifecycle = false): components['schemas']['OverviewCard'] {
-    // Activity joins the existing explicit opt-in roots. Output documents retain
+    // These five resource families support card actions. Output documents retain
     // their feature-owned URLs independently of these card destinations.
-    const migrated = card.type === 'packing' || card.type === 'event' || card.type === 'drivers'
+    const supportedType = card.type === 'packing' || card.type === 'event' || card.type === 'drivers'
         || card.type === 'survey' || card.type === 'activity';
-    const ownerActions = (migrated || sharedLifecycle) && ownerCollection && isOwner(session, card.ownerId);
+    const ownerActions = (supportedType || sharedLifecycle) && ownerCollection && isOwner(session, card.ownerId);
     const resource = encodeURIComponent(card.id);
     const headerFamily = card.type === 'event' ? 'events' : card.type === 'drivers' ? 'drivers-lists'
         : card.type === 'survey' ? 'surveys' : card.type === 'activity' ? 'activity-plans' : 'packing-lists';
     const eventContext = card.eventContext ? {...card.eventContext,
-        url: card.eventContext.url.replace(/^\/event\//u, '/frontend-pilot/event/')} : null;
+        url: card.eventContext.url.replace(/^\/event\//u, '/event/')} : null;
     return {id: card.id, type: card.type, title: card.title, description: card.description ?? null,
-        url: migrated ? `/frontend-pilot/${card.type}/${resource}` : card.url,
-        headerUrl: card.imageUrl ? migrated ? `/api/v1/${headerFamily}/${resource}/header` : card.imageUrl : null,
+        url: supportedType ? `/${card.type}/${resource}` : card.url,
+        headerUrl: card.imageUrl ? supportedType ? `/api/v1/${headerFamily}/${resource}/header` : card.imageUrl : null,
         headerVersion: card.imageVersion ?? null, eventContext,
         visibility: card.visibility ?? 'default', overviewHidden: Boolean(card.overviewHidden),
         archived: Boolean(card.archive?.archived), inheritedArchived: Boolean(card.archive?.inheritedFromEventId),
-        capabilities: {archive: (migrated || sharedLifecycle) && Boolean(card.archive?.canArchive),
-            restore: (migrated || sharedLifecycle) && Boolean(card.archive?.canRestore),
+        capabilities: {archive: (supportedType || sharedLifecycle) && Boolean(card.archive?.canArchive),
+            restore: (supportedType || sharedLifecycle) && Boolean(card.archive?.canRestore),
             duplicate: ownerActions, remove: ownerActions},
         // Event Things to do retains its existing optional schedule context.
-        // Personal Overview exposes the same native controls only to an actor
+        // Personal Overview exposes the same controls only to an actor
         // admitted to manage that independent schedule; other viewers receive
         // neither its pause state nor a new management capability.
-        ...((sharedLifecycle || migrated && card.archive?.canManageAutomation) && card.archive?.hasAutomaticSchedule ? {automation: {
+        ...((sharedLifecycle || supportedType && card.archive?.canManageAutomation) && card.archive?.hasAutomaticSchedule ? {automation: {
             paused: card.archive.autoArchivePaused, canManage: card.archive.canManageAutomation}} : {}),
         children: card.overview ? {total: card.overview.total, matching: card.overview.matching} : null};
 }
@@ -84,7 +84,7 @@ export async function setOverviewVisibility<Result>(entityType: components['sche
     prepareResult?: ApiResponsePreparer<'setOverviewVisibility', 200, Result>): Promise<components['schemas']['OverviewVisibilityResult'] | Result> {
     /** Keep wire mapping separate from membership/placement policy and optional transport preparation. */
     function prepareVisibility(_manager: EntityManager, outcome: PersonalVisibilityResult) {
-        // Only these public primitives leave the adapter; native archive capability
+        // Only these public primitives leave the adapter; archive capability
         // details remain in the shared controller's presentation contract.
         const result = {visibility: outcome.visibility, overviewHidden: outcome.overviewHidden, archived: Boolean(outcome.archive?.archived)};
         return prepareResult ? prepareResult(result) : result;

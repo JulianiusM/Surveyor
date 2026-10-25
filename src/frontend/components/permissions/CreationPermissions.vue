@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {ref} from 'vue';
 import type {components} from '../../../types/api/v1';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import AppAccordionButton from '../AppAccordionButton.vue';
 import AudiencePermissions from './AudiencePermissions.vue';
 
@@ -16,7 +16,7 @@ defineProps<{
     hydrationDraft?: boolean;
 }>();
 const emit = defineEmits<{'update:modelValue': [value: components['schemas']['PermissionDefaults']]}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const expanded = ref(false);
 </script>
 

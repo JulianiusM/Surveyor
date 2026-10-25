@@ -71,7 +71,7 @@ export function prepareFileUploader(dir: string, allowImg: boolean = true, allow
 }
 
 /** Validate and replace an image through its owning persistence operation.
- * Existing native callbacks return void and use the supplied entity's old path.
+ * Callbacks without a completion receipt return void and use the supplied entity's old path.
  * A locked controller callback returns its actual previous path only after commit;
  * unlinking therefore cannot destroy the authoritative image on a rolled-back write.
  * A failed write removes the newly uploaded file through this same policy owner. */
@@ -95,7 +95,7 @@ export async function performImageSwap<T extends void | ImageSwapReceipt>(
     }
 
     // Callback resolution is the commit boundary for receipt-producing owners.
-    // Void native callbacks retain the original resource's previous reference.
+    // Callbacks returning void retain the original resource's previous reference.
     const previousImage = saved && typeof saved === 'object' ? saved.previousImage : entity.headerImg;
     if (previousImage) {
         removeImage(previousImage);
@@ -103,7 +103,7 @@ export async function performImageSwap<T extends void | ImageSwapReceipt>(
     return saved;
 }
 
-/** Retain native image-type admission and its invalid-upload cleanup. Multipart
+/** Retain image-type admission and its invalid-upload cleanup. Multipart
  * byte/extension limits belong to the uploader; this helper checks the admitted MIME. */
 export function checkNewImage(file?: Express.Multer.File) {
     const mimetypes = ["image/jpeg", "image/png", "image/gif"];

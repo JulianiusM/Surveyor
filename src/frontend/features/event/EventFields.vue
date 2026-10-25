@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import type {EntityMetadataValues} from '../../../types/FrontendEntityMetadataTypes';
 import TimezonePicker from '../../components/TimezonePicker.vue';
 import FormField from '../../components/FormField.vue';
@@ -7,7 +7,7 @@ import FormField from '../../components/FormField.vue';
 // The same field owner serves creation and permission-filtered properties. The
 // caller retains values; absent fields never render a hidden writable mirror.
 defineProps<{values: EntityMetadataValues; fields?: readonly string[]; prefix: string; disabled?: boolean; pending?: boolean}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const flags = [
     {field: 'allowRegDateUpdatesAfterDeadline', label: 'event.dateUpdates', icon: 'bi-calendar-range'},
     {field: 'allowRegCancelationAfterDeadline', label: 'event.cancelUpdates', icon: 'bi-calendar-x'},
@@ -26,7 +26,7 @@ const propertyInputs = [
 </script>
 
 <template>
-    <!-- Native properties use independent disclosure families, compact generic
+    <!-- Properties use independent disclosure families, compact generic
          labels and a stricter capacity constraint than creation. Both capacity
          consumers retain their lexical draft until the existing save operation. -->
 
@@ -64,7 +64,7 @@ const propertyInputs = [
     </div>
 
     <template v-else>
-        <!-- Native field order, column widths, constraints and unchecked omission are
+        <!-- Field order, column widths, constraints and unchecked omission are
              retained. These flags configure distinct server-enforced deadline rules. -->
         <FormField :id="prefix + '-title'" class="mb-3" name="title" :model-value="String(values.title ?? '')"
             :label="messages.t('event.title')" label-icon="bi-tag" label-class="" required :required-marker="false"

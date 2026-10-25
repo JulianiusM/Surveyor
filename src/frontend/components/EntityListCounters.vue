@@ -15,7 +15,7 @@ defineProps<{
 </script>
 
 <template>
-    <!-- Badge margins own the native counter gaps. Keep labels and adjacent
+    <!-- Badge margins own the counter gaps. Keep labels and adjacent
          badges together so template whitespace introduces no extra spacing.
          This root replaces the existing panel without another layout wrapper. -->
     <div class="d-flex justify-content-between align-items-center mb-3">

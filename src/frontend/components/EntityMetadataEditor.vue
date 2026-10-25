@@ -2,9 +2,9 @@
 import {computed, onBeforeUnmount, ref, watch} from 'vue';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../types/api/v1';
-import type {PilotRead, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
+import type {FrontendRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
 import type {EntityMetadataEditorProps, EntityMetadataSnapshot, EntityMetadataValues} from '../../types/FrontendEntityMetadataTypes';
-import {useActionState, usePilot, refreshInterval} from '../app/context';
+import {useActionState, useFrontend, refreshInterval} from '../app/context';
 import {isReadDenial} from '../app/transport';
 import {MetadataDraft} from '../composables/metadataDraft';
 import {useReadRetry, useReadRetryAt} from '../composables/feedback';
@@ -19,7 +19,7 @@ import LoadingSkeleton from './LoadingSkeleton.vue';
 // blocks another write while its retained editor must still offer read/review.
 const props = withDefaults(defineProps<EntityMetadataEditorProps>(), {active: true});
 const emit = defineEmits<{close: []; saved: []; accessLost: []}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 type Metadata = EntityMetadataSnapshot;
 type Values = EntityMetadataValues;
@@ -47,7 +47,7 @@ const {pending, recovering: refreshing, uncertain: unknown, setInformation, clea
 
 function noIndependentDraft(): boolean { return false; }
 
-/** Conditional metadata failure has the native editor wording. All other validated
+/** Conditional metadata failure has the editor wording. All other validated
  * errors, including safe future codes, keep the shared presentation fallback. */
 function metadataProblem(problem: components['schemas']['Problem']) {
     if (problem.code === 'PRECONDITION_FAILED') return 'draft.conflict' as const;
@@ -68,7 +68,7 @@ const metadata = useQuery({
             props.resourceId,
             context.capture(),
             signal,
-            context.queryClient.getQueryData<PilotRead<Metadata>>(queryKey),
+            context.queryClient.getQueryData<FrontendRead<Metadata>>(queryKey),
         ),
     refetchInterval: (query) =>
         props.active !== false && context.mayRead() && context.visible.value
@@ -98,13 +98,13 @@ watch(
     },
     {immediate: true},
 );
-const stopMetadataReads = observeQueryReads<PilotRead<Metadata>>(context.queryClient, () => key.value, receiveMetadataRead);
+const stopMetadataReads = observeQueryReads<FrontendRead<Metadata>>(context.queryClient, () => key.value, receiveMetadataRead);
 onBeforeUnmount(stopMetadataReads);
 
 /** Healthy background convergence can restore a confirmed editor as well. Cache
  * aliases/cancellation do not call this path, and in-flight commands still own
  * their separate causal post-confirmation read before any baseline is adopted. */
-function receiveMetadataRead(result: PilotRead<Metadata>): void {
+function receiveMetadataRead(result: FrontendRead<Metadata>): void {
     if (!active || !result.etag) return;
     clearRecoveredError('state.loadFailed');
     if (pending.value || refreshing.value || !draft.value) return;
@@ -144,13 +144,13 @@ function mayRefreshMetadata(): boolean { return active && props.active !== false
 
 /** A current read can offer review after partial field revocation. A denied read
  * or retired actor/resource still forbids presenting any late result. */
-function mayPresentResult(scope: PilotRequestScope, resource: string): boolean {
+function mayPresentResult(scope: FrontendRequestScope, resource: string): boolean {
     return active && resource === props.resourceId && context.isCurrent(scope)
         && !lostAuthority.value;
 }
 
 /** A held command's old projection cannot restore fields removed by a newer read. */
-function mayPublishSavedResult(scope: PilotRequestScope, resource: string): boolean {
+function mayPublishSavedResult(scope: FrontendRequestScope, resource: string): boolean {
     return mayPresentResult(scope, resource) && !fieldAccessChanged.value;
 }
 
@@ -182,7 +182,7 @@ async function refresh(discard = false): Promise<void> {
 /** Every successful adoption shares the same feature-owned feedback policy, whether
  * reached by this editor, the dialog's Refresh, or healthy background convergence.
  * Only the warning about this confirmed write's failed read is cleared. */
-function acceptReadAuthority(result: PilotRead<Metadata>): void {
+function acceptReadAuthority(result: FrontendRead<Metadata>): void {
     if (!draft.value || !result.etag) return;
     draft.value.accept(result.data, result.etag);
     discardAfterSettings = false;
@@ -196,7 +196,7 @@ async function readMetadata(): Promise<void> {
     if (!active || lostAuthority.value) return;
     const scope = context.capture();
     const resource = props.resourceId;
-    const result = await refetchFreshQuery<PilotRead<Metadata>>(context.queryClient, key.value, refetchMetadata, mayRead);
+    const result = await refetchFreshQuery<FrontendRead<Metadata>>(context.queryClient, key.value, refetchMetadata, mayRead);
     if (!mayPresentResult(scope, resource) || !result.etag || !draft.value) return;
     clearRecoveredError('state.loadFailed');
     if (discardAfterSettings || draft.value.awaitingAuthority) {
@@ -263,7 +263,7 @@ async function save(): Promise<void> {
     )
         return;
     if (!form.value || !reportPropertyValidity(form.value)) return;
-    // Native Save remains available for a pristine form and explains the no-op.
+    // Save remains available for a pristine form and explains the no-op.
     // This receipt never opens a command lease or submits an empty PATCH.
     if (!draft.value.dirty) {
         setInformation('metadata.noChanges');
@@ -280,7 +280,7 @@ async function save(): Promise<void> {
     /** The response acknowledges submitted values, regardless of an older GET or
      * locale change. It never writes old grants/token into the query cache. A denial
      * or partial revocation still prevents that old response publishing controls. */
-    async function saveSubmittedMetadata(scope: PilotRequestScope): Promise<PilotRead<Metadata>> {
+    async function saveSubmittedMetadata(scope: FrontendRequestScope): Promise<FrontendRead<Metadata>> {
         const result = await props.save(resource, patch, token, scope);
         publishConfirmation = mayPublishSavedResult(scope, resource);
         if (mayPresentResult(scope, resource)) submittedDraft.confirm(result.data);
@@ -297,11 +297,11 @@ async function save(): Promise<void> {
     }
 }
 
-/** Native property forms reveal the invalid field's collapsed ancestors before
+/** Property forms reveal the invalid field's collapsed ancestors before
  * asking the browser to focus/report it. novalidate lets this owner perform that
  * reveal first; constraints still precede both pristine feedback and any PATCH. */
 function reportPropertyValidity(target: HTMLFormElement): boolean {
-    // The pilot's disabled-state fieldset can itself match :invalid because of
+    // The frontend's disabled-state fieldset can itself match :invalid because of
     // its descendants. Inspect actual candidate controls so the collapsed field,
     // rather than that outer container, determines which ancestors must open.
     const controls = target.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
@@ -371,7 +371,7 @@ defineExpose({mayLeave, pending, refreshing, unknown, dirty, awaitingAuthority, 
                     <h4 class="h6">
                         {{ fieldLabel(field) }}
                     </h4>
-                    <div class="pilot-conflict-values">
+                    <div class="frontend-conflict-values">
                         <dl>
                             <dt>{{ messages.t('draft.original') }}</dt>
                             <dd>{{ comparisonValue(draft.baseline.values[field]) }}</dd>

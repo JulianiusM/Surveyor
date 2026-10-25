@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue';
 import type {components} from '../../../types/api/v1';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useActivityApi} from './api';
 import ActionButton from '../../components/ActionButton.vue';
@@ -14,7 +14,7 @@ import StatusNotice from '../../components/StatusNotice.vue';
 // Shared text is plan data. Its dialog draft survives refreshes independently
 // from schedule filters, and only a confirmed save releases its entered values.
 const props = defineProps<{planId: string; fields: components['schemas']['ActivityTextField'][]; manage: boolean; disabled?: boolean; refresh(): Promise<void>}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useActivityApi(context);
 const open = ref(false);
@@ -40,7 +40,7 @@ const blocked = computed(() => props.disabled || command.action.disabled.value |
 
 function edit(field?: components['schemas']['ActivityTextField']): void {
     if (blocked.value || (field ? !field.capabilities.edit : !props.manage)) return;
-    // Native view-only editors enter the existing textarea directly; managers
+    // View-only editors enter the existing textarea directly; managers
     // get the title/text dialog. Both paths use the shared inline draft owner.
     if (field && !field.capabilities.editTitle) {
         void inlineEditors.value[field.id]?.begin();
@@ -107,7 +107,7 @@ async function reviewUnknown(): Promise<void> {
         <div v-for="field in fields" :key="field.id" class="card text-bg-dark border border-secondary-subtle mb-3">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong class="mb-0">{{ field.title }}</strong>
-                <div class="pilot-action-row">
+                <div class="frontend-action-row">
                     <ActionButton
                         v-if="field.capabilities.delete"
                         type="button"

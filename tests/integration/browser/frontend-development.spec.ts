@@ -1,8 +1,8 @@
 import {expect, test, type Page, type Route} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../../factories/e2eCoreFactory';
-import {createResourceViaForm, loginForE2E} from '../../keywords/e2eCoreKeywords';
-import {createBrowserReadGate, waitForPilotHydration} from '../../keywords/frontendDynamicKeywords';
+import {createProfileForE2E, createResourceViaForm, loginForE2E, selectProfileForE2E} from '../../keywords/e2eCoreKeywords';
+import {createBrowserReadGate, waitForFrontendHydration} from '../../keywords/frontendDynamicKeywords';
 import type {components} from '../../../src/types/api/v1';
 
 type SessionView = components['schemas']['SessionView'];
@@ -24,7 +24,7 @@ test.describe('actual frontend development runtime', () => {
                 contentType: response.headers()['content-type'] ?? ''});
         });
 
-        await page.goto('/frontend-pilot/help?locale=en');
+        await page.goto('/help?locale=en');
         const scripts = await page.locator('script[type="module"][src]').evaluateAll(nodes => nodes.map(node => node.getAttribute('src')!));
         expect(scripts.map(url => new URL(url, page.url()).pathname)).toContain('/app/src/frontend/app/entry-client.ts');
         expect(scripts.some(url => url.includes('/app/app/'))).toBe(false);
@@ -34,11 +34,11 @@ test.describe('actual frontend development runtime', () => {
         // same composition loaded by the client, without native stylesheets.
         await expect(page.locator('head link[href^="/app/src/frontend/styles/application.sass"]')).toHaveCount(1);
         await expect(page.locator('head link[href^="/style/"]')).toHaveCount(0);
-        await expect(page.locator('.pilot-app')).toHaveCSS('background-color', 'rgb(108, 117, 125)');
+        await expect(page.locator('.frontend-app')).toHaveCSS('background-color', 'rgb(108, 117, 125)');
         await expect(page.locator('.help-content')).toHaveCSS('color', 'rgb(233, 236, 239)');
         const helpPictures = await page.locator('.help-content img').evaluateAll(nodes => nodes.map(node => node.getAttribute('src')!));
         expect(helpPictures.length).toBeGreaterThan(0);
-        expect(helpPictures.every(url => url.startsWith('/frontend-pilot/help/assets/'))).toBe(true);
+        expect(helpPictures.every(url => url.startsWith('/help/assets/'))).toBe(true);
         expect(await page.locator('[src],[href]').evaluateAll(nodes => nodes.some(node =>
             ['src', 'href'].some(attribute => /^file:/i.test(node.getAttribute(attribute) ?? ''))))).toBe(false);
 
@@ -53,10 +53,10 @@ test.describe('actual frontend development runtime', () => {
 
         await page.getByRole('link', {name: 'Help home', exact: true}).click();
         const englishBody = await page.locator('.help-content').innerText();
-        await page.locator('#pilot-locale').selectOption('de');
+        await page.locator('#frontend-locale').selectOption('de');
         await expect(page.locator('html')).toHaveAttribute('lang', 'de');
         await expect(page.locator('.help-content')).not.toHaveText(englishBody);
-        await expect(page.locator('#pilot-locale')).toBeEnabled();
+        await expect(page.locator('#frontend-locale')).toBeEnabled();
 
         // Hold genuine HTTP responses rather than replace data/components. A slow help
         // refresh and a cold lazy page make the navigation/locale race deterministic.
@@ -71,18 +71,18 @@ test.describe('actual frontend development runtime', () => {
             identityStarted(); await identityGate; await route.continue();
         });
         try {
-            await page.locator('#pilot-locale').selectOption('en');
+            await page.locator('#frontend-locale').selectOption('en');
             await expect(page.locator('html')).toHaveAttribute('lang', 'en');
             await page.locator('header').getByRole('link', {name: 'Login', exact: true}).click();
             await identityAttempt;
             releaseHelp();
-            await expect(page.locator('#pilot-locale')).toBeEnabled();
+            await expect(page.locator('#frontend-locale')).toBeEnabled();
             releaseIdentity();
-            await expect(page).toHaveURL(/\/frontend-pilot\/users\/login/);
+            await expect(page).toHaveURL(/\/users\/login/);
             await expect(page.getByRole('button', {name: 'Login', exact: true})).toBeVisible();
             expect(await documentMarker(page)).toBe('original');
             await page.locator('header').getByRole('link', {name: 'Register', exact: true}).click();
-            await expect(page).toHaveURL(/\/frontend-pilot\/users\/register/);
+            await expect(page).toHaveURL(/\/users\/register/);
             await expect(page.getByRole('button', {name: 'Register', exact: true})).toBeVisible();
             expect(await documentMarker(page)).toBe('original');
         } finally {
@@ -99,11 +99,11 @@ test.describe('actual frontend development runtime', () => {
     test('withholds source Overview controls until initialization and retains its focused search through a real read', async ({page}) => {
         await loginForE2E(page.request, createE2ELogin());
         const marker = `Source search ${randomUUID().slice(0, 8)}`;
-        expect((await page.request.post('/users/profile/create', {form: {name: marker}, maxRedirects: 0})).status()).toBe(302);
+        await createProfileForE2E(page.request, marker);
         const session = await (await page.request.get('/api/v1/session')).json() as SessionView;
         const profile = session.profiles.find(item => item.name === marker);
         expect(profile).toBeDefined();
-        expect((await page.request.get(`/users/profile/change/${profile!.id}`, {maxRedirects: 0})).status()).toBe(302);
+        await selectProfileForE2E(page.request, profile!.id);
         const eventInput = createE2EEvent();
         eventInput.title = eventInput.form.title = `${marker} event`;
         const event = await createResourceViaForm(page.request, eventInput);
@@ -141,13 +141,13 @@ test.describe('actual frontend development runtime', () => {
         try {
             // The source renderer uses the approved initial skeleton, just like an
             // installed build. Holding its entry must expose no inactive editors.
-            await page.goto(`/frontend-pilot/users/dashboard?owner_main_q=${encodeURIComponent(marker)}`, {waitUntil: 'commit'});
+            await page.goto(`/users/dashboard?owner_main_q=${encodeURIComponent(marker)}`, {waitUntil: 'commit'});
             await entryStarted.promise;
-            await expect(page.locator('[data-pilot-initial-loading]')).toBeVisible();
+            await expect(page.locator('[data-frontend-initial-loading]')).toBeVisible();
             await expect(page.locator('main input, main form, [data-collection]')).toHaveCount(0);
             await page.evaluate(() => { document.documentElement.dataset.developmentDocument = 'overview-original'; });
             entryGate.release();
-            await waitForPilotHydration(page);
+            await waitForFrontendHydration(page);
 
             const owner = page.locator('[data-collection="owner"][data-region="main"]');
             await expect(owner.locator(`[data-id="${event.id}"]`)).toBeVisible();
@@ -198,7 +198,7 @@ test.describe('actual frontend development runtime', () => {
         const errors: string[] = [];
         page.on('pageerror', error => errors.push(error.message));
 
-        await page.goto(`/frontend-pilot/packing/${packing.id}?locale=en`);
+        await page.goto(`/packing/${packing.id}?locale=en`);
         await expect(page.locator('tr[data-item-id]').first()).toBeVisible();
         await page.evaluate(() => { document.documentElement.dataset.developmentDocument = 'packing-original'; });
 

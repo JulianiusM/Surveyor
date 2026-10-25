@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import {computed} from 'vue';
 import type {components} from '../../../types/api/v1';
-import type {PilotActionState, PilotOverviewCardInteraction} from '../../../types/FrontendPilotUiTypes';
-import {usePilot} from '../../app/context';
+import type {FrontendActionState, FrontendOverviewCardInteraction} from '../../../types/FrontendUiTypes';
+import {useFrontend} from '../../app/context';
 import {isOrdinaryNavigation} from '../../composables/pageEntry';
 import StatusNotice from '../../components/StatusNotice.vue';
 import OverviewCard from './OverviewCard.vue';
 
 type Card = components['schemas']['OverviewCard'];
-const props = defineProps<{view: components['schemas']['OverviewRegion']; disabled: boolean; navigationState?: PilotActionState; readRevision?: number; active?: boolean;
+const props = defineProps<{view: components['schemas']['OverviewRegion']; disabled: boolean; navigationState?: FrontendActionState; readRevision?: number; active?: boolean;
     pageHref: (page: number) => string; expandHref: (card: Card) => string;
-    cardInteraction: (card: Card) => PilotOverviewCardInteraction}>();
+    cardInteraction: (card: Card) => FrontendOverviewCardInteraction}>();
 const emit = defineEmits<{
     visibility: [card: Card, value: components['schemas']['OverviewVisibilityInput']['visibility']];
     archive: [card: Card, restore: boolean];
@@ -19,10 +19,10 @@ const emit = defineEmits<{
     expand: [card: Card];
     page: [page: number];
 }>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const filtered = computed(() => Boolean(props.view.q) || props.view.type !== 'all');
 // Empty membership, privately hidden content and an actual no-match filter are distinct
-// native states. The shared card counts alone cannot identify an applied filter.
+// states. The shared card counts alone cannot identify an applied filter.
 const emptyMessage = computed(() => {
     if (props.view.parent) return filtered.value ? 'overview.noMatchingChildren' : 'overview.emptyChildren';
     if (filtered.value) return 'overview.noMatches';
@@ -42,7 +42,7 @@ const range = computed(() => ({
     count: count.value,
 }));
 
-/** Disabled pagers remain inert; eligible modified clicks keep their native destination. */
+/** Disabled pagers remain inert; eligible modified clicks keep their destination. */
 function followPage(event: MouseEvent, page: number, available: boolean): void {
     if (!isOrdinaryNavigation(event)) return;
     event.preventDefault();
@@ -70,7 +70,7 @@ function followPage(event: MouseEvent, page: number, available: boolean): void {
             />
         </div>
     </div>
-    <!-- Empty and filtered regions retain native zero bottom spacing. Use the
+    <!-- Empty and filtered regions retain zero bottom spacing. Use the
          shared notice's spacing input so its default utility cannot override it. -->
     <StatusNotice v-else kind="info" no-margin>{{
         messages.t(emptyMessage)
@@ -83,7 +83,7 @@ function followPage(event: MouseEvent, page: number, available: boolean): void {
             messages.t(view.parent ? 'overview.childRange' : 'overview.cardRange', range)
         }}</span>
         <nav
-            class="pilot-action-row"
+            class="frontend-action-row"
             :aria-label="messages.t(view.parent ? 'overview.childNavigation' : 'overview.pageNavigation')"
         >
             <a

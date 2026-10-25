@@ -6,10 +6,7 @@ import {computed, defineComponent, nextTick, reactive, type Component} from 'vue
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
-import {readFileSync} from 'node:fs';
-import {resolve} from 'node:path';
-import * as pug from 'pug';
-import {createPilotContext, pilotContextKey, usePilot} from '../../src/frontend/app/context';
+import {createFrontendContext, frontendContextKey, useFrontend} from '../../src/frontend/app/context';
 import {helpKeys, overviewKeys, packingKeys} from '../../src/frontend/app/queryKeys';
 import {refetchFreshQueries, useQueryInvalidation} from '../../src/frontend/app/queryCache';
 import {ApiFailure, ObsoleteRequestError} from '../../src/frontend/app/transport';
@@ -25,8 +22,7 @@ import AppNavigationDropdown from '../../src/frontend/components/AppNavigationDr
 import ActionButton from '../../src/frontend/components/ActionButton.vue';
 import App from '../../src/frontend/app/App.vue';
 import type {components} from '../../src/types/api/v1';
-import type {PilotEventPickerSource} from '../../src/types/FrontendPilotUiTypes';
-import type {Entity, OverviewRegionView} from '../../src/types/UserTypes';
+import type {FrontendEventPickerSource} from '../../src/types/FrontendUiTypes';
 
 const profileId = '11111111-1111-4111-8111-111111111111';
 const eventId = '22222222-2222-4222-8222-222222222222';
@@ -54,12 +50,6 @@ const packing: components['schemas']['PackingListView'] = {
         reorder: false, manageSettings: false},
     counters: {participants: 0, open: 0, empty: 0}, items: [],
 };
-// Compile the immutable native oracle once per isolated file. Every comparison
-// still renders current fixture membership into a new DOM; no output or locals
-// are cached, and the migrated component never supplies its expected markup.
-const nativeRegionFilename = resolve('src/views/modules/module_unified_entity_cards.pug');
-const renderNativeRegion = pug.compile(readFileSync(resolve('src/views/modules/module_entity_archive.pug'), 'utf8')
-    + '\n' + readFileSync(nativeRegionFilename, 'utf8') + '\n+pagedEntityRegion(view)', {filename: nativeRegionFilename});
 const cleanups: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
     for (const cleanup of cleanups.splice(0)) await cleanup();
@@ -80,7 +70,7 @@ function deferred<T>() {
     return {promise, resolve};
 }
 
-function pickerSource(search: PilotEventPickerSource['search']): PilotEventPickerSource {
+function pickerSource(search: FrontendEventPickerSource['search']): FrontendEventPickerSource {
     return {search,
         pageKey: (actor, locale, filters, query) => ['selection-fixture', actor, locale, filters, query],
         filterKey: (actor, locale, filters) => ['selection-fixture', actor, locale, filters]};
@@ -116,24 +106,6 @@ function eventRegion(request: Request): components['schemas']['OverviewRegion'] 
         totalChildren: view.eventId ? 1 : 0, items: view.eventId ? [card] : [parent]};
 }
 
-/** Render the retained native presentation as the independent toolbar oracle. The
- * DTO supplies the same bounded fixture membership, without replacing either view's
- * rendering or inferring new expected labels from the migrated implementation. */
-function nativeOverviewRegion(value: components['schemas']['OverviewRegion']): HTMLElement {
-    function nativeCard(item: components['schemas']['OverviewCard']): Entity {
-        return {id: item.id, title: item.title, ownerId: 'another-profile', type: item.type,
-            description: item.description, url: item.url, visibility: item.visibility};
-    }
-    const view: OverviewRegionView = {...value, id: 'overview-' + value.collection + '-' + value.region,
-        title: 'Administrable entities', queryPrefix: value.collection + '_' + value.region + '_',
-        eventId: value.eventId ?? undefined, parent: value.parent ? nativeCard(value.parent) : undefined,
-        items: value.items.map(nativeCard), canonicalUrl: '/users/dashboard', backUrl: '/users/dashboard',
-        clearUrl: '/users/dashboard', loaded: true, searchFields: []};
-    const element = document.createElement('section');
-    element.innerHTML = renderNativeRegion({view, profile: session.activeProfile});
-    return element;
-}
-
 /** Compare the native HTML submit contract, including selected type and menu order. */
 function filterChoices(element: ParentNode) {
     const buttons = [...element.querySelectorAll<HTMLButtonElement>('button.dropdown-item[data-type]')];
@@ -146,16 +118,16 @@ function filterChoices(element: ParentNode) {
  * lifecycle and rendered controls remain their production implementations. */
 async function mounted(component: Component, props: Record<string, unknown>,
     handler: (request: Request) => Promise<Response> = async request => json(region(request)),
-    path = '/frontend-pilot/users/dashboard', previous = '/before', shell?: Component, prepare?: (context: ReturnType<typeof createPilotContext>) => void) {
+    path = '/users/dashboard', previous = '/before', shell?: Component, prepare?: (context: ReturnType<typeof createFrontendContext>) => void) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
-    const context = createPilotContext({session}, true, request);
+    const context = createFrontendContext({session}, true, request);
     context.hydrated.value = true;
     prepare?.(context);
     const componentProps = reactive({...props});
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/frontend-pilot/users/dashboard', component, props: () => componentProps},
-        {path: '/frontend-pilot/packing/:listId', component, props: () => componentProps},
-        {path: '/frontend-pilot/help', component, props: () => componentProps},
+        {path: '/users/dashboard', component, props: () => componentProps},
+        {path: '/packing/:listId', component, props: () => componentProps},
+        {path: '/help', component, props: () => componentProps},
         {path: '/before', component: defineComponent({template: '<p>Before overview</p>'})},
     ]});
     await router.push(previous);
@@ -163,7 +135,7 @@ async function mounted(component: Component, props: Record<string, unknown>,
     const root = mount(shell ?? defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}],
             [I18NextVue, {i18next: context.i18next}]],
-        provide: {[pilotContextKey as symbol]: context},
+        provide: {[frontendContextKey as symbol]: context},
         stubs: {AppDialog: defineComponent({template: '<section><slot /><slot name="footer" /></section>'})},
     }});
     await flushPromises();
@@ -180,11 +152,11 @@ async function mounted(component: Component, props: Record<string, unknown>,
 }
 
 describe('Overview Packing lifecycle actions', () => {
-    it.each(['/frontend-pilot/users/dashboard/', '/frontend-pilot/users/DASHBOARD'])(
+    it.each(['/users/dashboard/', '/users/DASHBOARD'])(
         'presents and refreshes admitted data at equivalent dashboard URL %s', async path => {
             const {wrapper, router, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
                 async captured => json(region(captured)), path);
-            expect(router.currentRoute.value.matched[0]!.path).toBe('/frontend-pilot/users/dashboard');
+            expect(router.currentRoute.value.matched[0]!.path).toBe('/users/dashboard');
             expect(wrapper.get('article.card').text()).toContain(card.title);
 
             // A valid route spelling must not discard successful data as obsolete,
@@ -208,7 +180,7 @@ describe('Overview Packing lifecycle actions', () => {
         vi.stubGlobal('confirm', confirmation);
         let writes = 0;
         const packingCard: components['schemas']['OverviewCard'] = {...card, type: 'packing',
-            url: `/frontend-pilot/packing/${card.id}`, inheritedArchived: action.inherited,
+            url: `/packing/${card.id}`, inheritedArchived: action.inherited,
             capabilities: {...card.capabilities, archive: !action.restore, restore: action.restore}};
         const {wrapper, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
             async function readLifecycle(captured): Promise<Response> {
@@ -231,7 +203,7 @@ describe('Overview Packing lifecycle actions', () => {
         await flushPromises();
         expect(confirmation).toHaveBeenLastCalledWith(context.messages.value.t(action.confirmation));
         expect(writes).toBe(0);
-        expect(wrapper.find('.pilot-notification').exists()).toBe(false);
+        expect(wrapper.find('.frontend-notification').exists()).toBe(false);
         const readsBeforeConfirmation = request.mock.calls.length;
 
         // The same command refreshes its region and publishes through shared
@@ -241,7 +213,7 @@ describe('Overview Packing lifecycle actions', () => {
         await flushPromises();
         expect(writes).toBe(1);
         expect(request.mock.calls.length).toBeGreaterThan(readsBeforeConfirmation + 1);
-        expect(wrapper.get('.pilot-notification').text()).toBe(context.messages.value.t(action.success));
+        expect(wrapper.get('.frontend-notification').text()).toBe(context.messages.value.t(action.success));
     });
 });
 
@@ -253,7 +225,7 @@ describe('Overview independent schedule controls', () => {
         const confirmation = vi.fn(() => false);
         vi.stubGlobal('confirm', confirmation);
         const schedule: components['schemas']['OverviewCard'] = {...card, type: candidate.type,
-            url: `/frontend-pilot/${candidate.type}/${card.id}`, title: 'Archived scheduled root',
+            url: `/${candidate.type}/${card.id}`, title: 'Archived scheduled root',
             archived: true, visibility: 'shown', overviewHidden: false,
             automation: {paused: true, canManage: true},
             capabilities: {...card.capabilities, restore: true}};
@@ -449,7 +421,7 @@ describe('visible resource recovery', () => {
         // A new component visit must recheck native GET admission even while the
         // old rejected query remains cached. Its former observer cannot suspend it.
         denied = false;
-        await router.push('/frontend-pilot/users/dashboard');
+        await router.push('/users/dashboard');
         await flushPromises();
         expect(reads).toBe(2);
         expect(root.findComponent(OverviewCard).exists()).toBe(true);
@@ -469,17 +441,17 @@ describe('visible resource recovery', () => {
             }
             return json(article);
         }
-        const {root, router} = await mounted(HelpPage, {}, readHelpTopic, '/frontend-pilot/help?doc=missing');
-        expect(root.find('.pilot-page-message').exists()).toBe(true);
+        const {root, router} = await mounted(HelpPage, {}, readHelpTopic, '/help?doc=missing');
+        expect(root.find('.frontend-page-message').exists()).toBe(true);
         expect(rejectedTopicReads).toBe(1);
-        await router.push('/frontend-pilot/help?doc=index');
+        await router.push('/help?doc=index');
         await flushPromises();
         expect(root.get('.help-content').text()).toContain('A readmitted task.');
         missing = false;
         router.back();
         await flushPromises();
         expect(rejectedTopicReads).toBe(2);
-        expect(root.find('.pilot-page-message').exists()).toBe(false);
+        expect(root.find('.frontend-page-message').exists()).toBe(false);
         expect(root.get('.help-content').text()).toContain('A readmitted task.');
     });
 
@@ -493,7 +465,7 @@ describe('visible resource recovery', () => {
             return held.promise;
         }
         const {root, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, readJoinedRegion,
-            '/frontend-pilot/users/dashboard', '/before', undefined, function prepareJoinedRead(context): void {
+            '/users/dashboard', '/before', undefined, function prepareJoinedRead(context): void {
                 const api = useOverviewApi(context);
                 const parameters = {collection: 'owner' as const, region: 'main' as const};
                 const scope = context.capture();
@@ -578,7 +550,7 @@ describe('visible resource recovery', () => {
             return json(packing);
         }
         const {wrapper, context, request} = await mounted(PackingPage, {}, readPacking,
-            '/frontend-pilot/packing/' + eventId);
+            '/packing/' + eventId);
         const stop = context.start();
         cleanups.push(stop);
         const input = wrapper.get<HTMLInputElement>('#quick-title');
@@ -636,7 +608,7 @@ describe('visible resource recovery', () => {
 
     it('pauses picker paging while retaining local draft controls and resumes without replay', async function coordinatesPickerActions() {
         const bootstrap = deferred<Response>();
-        const search = vi.fn<PilotEventPickerSource['search']>(async () => ({items: [event], selected: null,
+        const search = vi.fn<FrontendEventPickerSource['search']>(async () => ({items: [event], selected: null,
             nextCursor: 'next-batch'}));
         const {wrapper, context} = await mounted(EventPicker,
             {prefix: 'action-picker', modelValue: null, source: pickerSource(search)}, async () => bootstrap.promise);
@@ -667,7 +639,7 @@ describe('visible resource recovery', () => {
 
     it('retires a retained Help Retry callback with its mounted action owner', async function retiresReadAction() {
         const {wrapper, root, request} = await mounted(HelpPage, {}, async () => readFailure(403, 'future'),
-            '/frontend-pilot/help?doc=fixture');
+            '/help?doc=fixture');
         const retry = wrapper.findComponent(ActionButton);
         expect(retry.attributes('disabled')).toBeUndefined();
         // Retain the real parent handler supplied to the reusable control. DOM
@@ -694,7 +666,7 @@ describe('visible resource recovery', () => {
             return machine.promise;
         }
         const {wrapper, context, request} = await mounted(PackingPage, {}, readSelectedProjection,
-            '/frontend-pilot/packing/' + eventId);
+            '/packing/' + eventId);
         const input = wrapper.get<HTMLInputElement>('#quick-title');
         await input.setValue('Locale-independent draft');
         input.element.focus();
@@ -737,7 +709,7 @@ describe('visible resource recovery', () => {
             signal = request.signal;
             return fresh.promise;
         }
-        const {context} = await mounted(PackingPage, {}, readFocusedPacking, '/frontend-pilot/packing/' + eventId);
+        const {context} = await mounted(PackingPage, {}, readFocusedPacking, '/packing/' + eventId);
         const stop = context.start();
         cleanups.push(stop);
         vi.setSystemTime(new Date('2026-10-13T09:00:31Z'));
@@ -759,7 +731,7 @@ describe('visible resource recovery', () => {
             let signal: AbortSignal | undefined;
             let denied = false;
             let sessionReads = 0;
-            const search = vi.fn<PilotEventPickerSource['search']>(async function readAdmittedOptions(_query, _scope, currentSignal) {
+            const search = vi.fn<FrontendEventPickerSource['search']>(async function readAdmittedOptions(_query, _scope, currentSignal) {
                 signal = currentSignal;
                 if (search.mock.calls.length === 1) return options.promise;
                 if (denied) throw new ApiFailure(403, {type: 'about:blank', title: 'Forbidden', status: 403,
@@ -844,7 +816,7 @@ describe('visible resource recovery', () => {
                     totalCards: 1, hasNext: false});
             }
             const {wrapper, context} = await mounted(OverviewPage, {}, readCountRegion,
-                '/frontend-pilot/users/dashboard' + (hiddenOpen ? '?owner_hidden_open=1' : ''));
+                '/users/dashboard' + (hiddenOpen ? '?owner_hidden_open=1' : ''));
             const ownerBadge = () => wrapper.get('[aria-controls="overview-owner"] .badge').text();
             expect(ownerBadge()).toBe('2');
             denyMain = true;
@@ -873,7 +845,7 @@ describe('visible resource recovery', () => {
         const {root, context} = await mounted(draft, {}, async () => {
             if (unavailable) throw new TypeError('The session connection failed.');
             return json(session);
-        }, '/frontend-pilot/users/dashboard', '/before', App);
+        }, '/users/dashboard', '/before', App);
         const input = root.get<HTMLInputElement>('[data-session-draft]');
         await input.setValue('Unsaved session recovery draft');
         input.element.focus();
@@ -882,7 +854,7 @@ describe('visible resource recovery', () => {
         vi.setSystemTime(new Date('2026-10-11T08:20:30Z'));
         await context.refreshSession().catch(() => {});
         await flushPromises();
-        const warning = root.get('.pilot-page-notices .status-notice.alert-warning');
+        const warning = root.get('.frontend-page-notices .status-notice.alert-warning');
         const retry = warning.get('button');
         expect(retry.text()).toBe(context.messages.value.t('common.retry'));
         expect(warning.text()).toContain(context.messages.value.t('state.stale'));
@@ -893,7 +865,7 @@ describe('visible resource recovery', () => {
         // keeps one warning and the same successful receipt, draft and focus.
         await retry.trigger('click');
         await flushPromises();
-        expect(root.findAll('.pilot-page-notices .status-notice.alert-warning')).toHaveLength(1);
+        expect(root.findAll('.frontend-page-notices .status-notice.alert-warning')).toHaveLength(1);
         expect(warning.get('[data-last-successful-refresh] time').attributes('datetime')).toBe(successfulTime.toISOString());
         expect(root.get('[data-session-draft]').element).toBe(input.element);
         expect(input.element.value).toBe('Unsaved session recovery draft');
@@ -903,7 +875,7 @@ describe('visible resource recovery', () => {
         unavailable = false;
         await retry.trigger('click');
         await flushPromises();
-        expect(root.find('.pilot-page-notices .status-notice.alert-warning').exists()).toBe(false);
+        expect(root.find('.frontend-page-notices .status-notice.alert-warning').exists()).toBe(false);
         expect(root.get('[data-session-draft]').element).toBe(input.element);
         expect(document.activeElement).toBe(input.element);
     });
@@ -919,14 +891,14 @@ describe('visible resource recovery', () => {
             return limited ? new Response(JSON.stringify({type: 'urn:surveyor:problem:future-unavailable', title: 'Unavailable',
                 status: 503, detail: 'The session read is temporarily unavailable.', requestId: 'shell-session-deadline'}),
                 {status: 503, headers: {'Content-Type': 'application/json', 'Retry-After': '91'}}) : json(session);
-        }, '/frontend-pilot/users/dashboard', '/before', App);
+        }, '/users/dashboard', '/before', App);
         const stop = context.start();
         cleanups.push(stop);
         await context.refreshSession();
         limited = true;
         await context.refreshSession().catch(() => {});
         await flushPromises();
-        const warning = root.get('.pilot-page-notices .status-notice.alert-warning');
+        const warning = root.get('.frontend-page-notices .status-notice.alert-warning');
         const retry = warning.get('button');
         const deadline = new Date(Date.now() + 91_000);
         expect(warning.get('[data-read-retry-at] time').attributes('datetime')).toBe(deadline.toISOString());
@@ -948,29 +920,28 @@ describe('visible resource recovery', () => {
         await retry.trigger('click');
         await flushPromises();
         expect(reads).toBe(3);
-        expect(root.find('.pilot-page-notices .status-notice.alert-warning').exists()).toBe(false);
+        expect(root.find('.frontend-page-notices .status-notice.alert-warning').exists()).toBe(false);
     });
 
     it('preserves the native Filter disclosure, submit choices and English count caption', async () => {
         const projection = {...region(new Request('http://localhost/overview')), q: 'fixture',
             matchingEntities: 1, totalCards: 1, hasNext: false};
-        const native = nativeOverviewRegion(projection);
-        const nativeForm = native.querySelector<HTMLFormElement>('.js-overview-search')!;
         const {wrapper} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
-            async () => json(projection), '/frontend-pilot/users/dashboard?owner_main_q=fixture');
+            async () => json(projection), '/users/dashboard?owner_main_q=fixture');
         const form = wrapper.get('form');
         const trigger = form.get('summary');
-        const nativeTrigger = nativeForm.querySelector<HTMLElement>('.dropdown-toggle')!;
-        expect(trigger.attributes('role')).toBe(nativeTrigger.getAttribute('role') ?? nativeTrigger.tagName.toLowerCase());
-        expect(trigger.text()).toBe(nativeTrigger.textContent);
-        expect([...trigger.element.classList].sort()).toEqual([...nativeTrigger.classList].sort());
+        expect(trigger.attributes('role')).toBe('button');
+        expect(trigger.text()).toBe('Filter');
+        expect([...trigger.element.classList].sort()).toEqual(['btn', 'btn-outline-secondary', 'btn-sm', 'dropdown-toggle'].sort());
         expect(trigger.find('i, .badge').exists()).toBe(false);
         expect(form.find('ul.dropdown-menu > li > hr.dropdown-divider').exists()).toBe(true);
-        expect(filterChoices(form.element)).toEqual(filterChoices(nativeForm));
-        expect(form.get('[aria-live="polite"]').text()).toBe(nativeForm.querySelector('[aria-live="polite"]')!.textContent);
+        expect(filterChoices(form.element)).toEqual([
+            {label: 'All types', classes: 'dropdown-item', type: 'submit', name: 'owner_main_type', value: 'all', dataType: 'all', selected: 'true'},
+            {label: 'survey', classes: 'dropdown-item', type: 'submit', name: 'owner_main_type', value: 'survey', dataType: 'survey', selected: 'false'},
+        ]);
+        expect(form.get('[aria-live="polite"]').text()).toBe('1 matching entities');
         const search = form.get<HTMLButtonElement>('button[type="submit"]');
-        const nativeSearch = nativeForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-        expect([search.element.name, search.element.value]).toEqual([nativeSearch.name, nativeSearch.value]);
+        expect([search.element.name, search.element.value]).toEqual(['owner_main_type', 'all']);
         // No general clear action existed in the native toolbar. Selected-event recovery
         // keeps its separate Show all my linked entities link below this form.
         expect(form.find('a, select').exists()).toBe(false);
@@ -986,14 +957,12 @@ describe('visible resource recovery', () => {
         const projection = {...region(new Request('http://localhost/overview')), availableTypes: [], items: [],
             totalEntities: total, hiddenEntities: total, regionEntities: 0, matchingEntities: 0,
             totalCards: 0, hasNext: false};
-        const native = nativeOverviewRegion(projection);
         const {wrapper} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async () => json(projection));
-        expect(native.querySelector('.js-overview-search')).toBeNull();
         expect(wrapper.find('input[type="search"]').exists()).toBe(false);
         expect(wrapper.find('details').exists()).toBe(false);
         expect(wrapper.findAll('button').map(button => button.text())).toEqual(['Refresh']);
-        const nativeNotice = native.querySelector('.status-notice')!.textContent;
-        expect(wrapper.text()).toContain(nativeNotice);
+        expect(wrapper.text()).toContain(total ? 'All your entities in this collection are in Archived and hidden below.'
+            : "You don't have any administrable entities yet");
     });
 
     it.each(['main', 'hidden'] as const)('refreshes an empty %s region without losing its focused control or duplicating a pending read', async selectedRegion => {
@@ -1047,13 +1016,12 @@ describe('visible resource recovery', () => {
         const projection = {...region(new Request('http://localhost/overview')), q: value.canonical};
         if (!projection.q) Object.assign(projection, {availableTypes: [], items: [], totalEntities: 0,
             hiddenEntities: 0, regionEntities: 0, matchingEntities: 0, totalCards: 0, hasNext: false});
-        const native = nativeOverviewRegion(projection);
         const {wrapper} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
-            async () => json(projection), '/frontend-pilot/users/dashboard?owner_main_q=' + encodeURIComponent(value.query));
-        expect(wrapper.find('input[type="search"]').exists()).toBe(!!native.querySelector('.js-overview-search'));
+            async () => json(projection), '/users/dashboard?owner_main_q=' + encodeURIComponent(value.query));
+        expect(wrapper.find('input[type="search"]').exists()).toBe(!!value.canonical);
         if (value.canonical) {
             expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value)
-                .toBe(native.querySelector<HTMLInputElement>('input[type="search"]')!.value);
+                .toBe(projection.q);
         }
     });
 
@@ -1112,17 +1080,16 @@ describe('visible resource recovery', () => {
                 hiddenEntities: 0, regionEntities: 0, matchingEntities: 0, totalCards: 0, hasNext: false};
             return json(confirmed);
         }
-        const path = '/frontend-pilot/users/dashboard' + (value.query ? '?owner_main_q=' + value.query : '');
+        const path = '/users/dashboard' + (value.query ? '?owner_main_q=' + value.query : '');
         const {wrapper, router} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, read, path);
         await wrapper.get('input[type="search"]').setValue(value.draft);
         await wrapper.get('form').trigger('submit');
         await flushPromises();
         expect(router.currentRoute.value.query.owner_main_q).toBe(value.canonical || undefined);
-        const native = nativeOverviewRegion(confirmed);
-        expect(wrapper.find('input[type="search"]').exists()).toBe(!!native.querySelector('.js-overview-search'));
+        expect(wrapper.find('input[type="search"]').exists()).toBe(!!value.canonical);
         if (value.canonical) {
             expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value)
-                .toBe(native.querySelector<HTMLInputElement>('input[type="search"]')!.value);
+                .toBe(confirmed.q);
         }
     });
 
@@ -1138,7 +1105,7 @@ describe('visible resource recovery', () => {
             return json(region(request));
         }
         const {wrapper, router} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, read,
-            '/frontend-pilot/users/dashboard?owner_main_q=fixture');
+            '/users/dashboard?owner_main_q=fixture');
         const input = wrapper.get<HTMLInputElement>('input[type="search"]');
         input.element.focus();
         await input.setValue(' fixture ');
@@ -1159,7 +1126,7 @@ describe('visible resource recovery', () => {
 
     it('renders the native canonical search after Back reuses equal raw and canonical cached projections', async () => {
         const rawQuery = ' fixture ';
-        const previous = '/frontend-pilot/users/dashboard?owner_main_q=' + encodeURIComponent(rawQuery);
+        const previous = '/users/dashboard?owner_main_q=' + encodeURIComponent(rawQuery);
         async function read(request: Request): Promise<Response> {
             const projection = region(request);
             return json({...projection, q: projection.q.trim()});
@@ -1187,13 +1154,12 @@ describe('visible resource recovery', () => {
         await wrapper.findAll('button').find(button => button.text() === 'Refresh')!.trigger('click');
         await flushPromises();
         expect(context.queryClient.getQueryData(rawKey)).toBe(projection);
-        const native = nativeOverviewRegion(projection);
         expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value)
-            .toBe(native.querySelector<HTMLInputElement>('input[type="search"]')!.value);
+            .toBe(projection.q);
     });
 
     it.each(['next', 'previous', 'retry'] as const)('marks only the initiating picker %s action pending on a retained middle page', async action => {
-        type Options = Awaited<ReturnType<PilotEventPickerSource['search']>>;
+        type Options = Awaited<ReturnType<FrontendEventPickerSource['search']>>;
         const held = deferred<Options>();
         let phase: 'ready' | 'reject' | 'held' = 'ready';
         let heldCursor: string | undefined;
@@ -1201,7 +1167,7 @@ describe('visible resource recovery', () => {
             const page = Number(cursor?.replace('page-', '') ?? 1);
             return {items: [event], selected: null, nextCursor: `page-${page + 1}`};
         }
-        const search = vi.fn<PilotEventPickerSource['search']>(async query => {
+        const search = vi.fn<FrontendEventPickerSource['search']>(async query => {
             if (phase === 'reject') throw new ApiFailure(400, null, null, 'Temporary page rejection', true);
             if (phase === 'held') { heldCursor = query.cursor; return held.promise; }
             return pageOptions(query.cursor);
@@ -1256,9 +1222,9 @@ describe('visible resource recovery', () => {
 
     it('keeps picker background reads and typed-filter debounce out of paging busy presentation', async () => {
         vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
-        const held = deferred<Awaited<ReturnType<PilotEventPickerSource['search']>>>();
+        const held = deferred<Awaited<ReturnType<FrontendEventPickerSource['search']>>>();
         let hold = false;
-        const search = vi.fn<PilotEventPickerSource['search']>(async query => hold ? held.promise
+        const search = vi.fn<FrontendEventPickerSource['search']>(async query => hold ? held.promise
             : {items: [event], selected: null, nextCursor: query.cursor ? 'page-three' : 'page-two'});
         const {wrapper, context} = await mounted(EventPicker,
             {prefix: 'background-picker', inline: true, modelValue: null, source: pickerSource(search)});
@@ -1291,11 +1257,11 @@ describe('visible resource recovery', () => {
     });
 
     it('releases a picker page marker when a fresh cached target dispatches no read', async () => {
-        const held = deferred<Awaited<ReturnType<PilotEventPickerSource['search']>>>();
+        const held = deferred<Awaited<ReturnType<FrontendEventPickerSource['search']>>>();
         let hold = false;
-        const search = vi.fn<PilotEventPickerSource['search']>(async () => hold ? held.promise
+        const search = vi.fn<FrontendEventPickerSource['search']>(async () => hold ? held.promise
             : {items: [event], selected: null, nextCursor: 'page-two'});
-        const source: PilotEventPickerSource = {search,
+        const source: FrontendEventPickerSource = {search,
             filterKey: () => ['cached-picker'], pageKey: (_actor, _locale, _filters, query) => ['cached-picker', query.cursor ?? 'first']};
         const {wrapper, context} = await mounted(EventPicker,
             {prefix: 'cached-picker', inline: true, modelValue: null, source});
@@ -1342,7 +1308,7 @@ describe('visible resource recovery', () => {
     it('clears only a recovered session-read notice and pauses checks while hidden', async () => {
         const visible = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
         const request = vi.fn(async () => json(session));
-        const context = createPilotContext({session}, true, request);
+        const context = createFrontendContext({session}, true, request);
         const stop = context.start();
         cleanups.push(stop);
         request.mockRejectedValueOnce(new TypeError('Session read unavailable'));
@@ -1399,7 +1365,7 @@ describe('selected-event authority', () => {
     it('does not restore a retired selection when its old discovery resolves after a new selection', async () => {
         const first = deferred<components['schemas']['EventPickerOptions']>();
         const next = {...event, id: otherId, title: 'Current camp'};
-        const search = vi.fn(async (query: Parameters<PilotEventPickerSource['search']>[0]) =>
+        const search = vi.fn(async (query: Parameters<FrontendEventPickerSource['search']>[0]) =>
             query.selectedId === eventId ? first.promise : {items: [], selected: next, nextCursor: null});
         const {wrapper, update} = await mounted(EventPicker,
             {prefix: 'late', inline: true, modelValue: eventId, current: event, source: pickerSource(search)});
@@ -1588,7 +1554,7 @@ describe('native overview search and history', () => {
         // read fails. The visible fallback and its date remain one scoped observation.
         vi.setSystemTime(new Date('2026-10-11T07:01:00Z'));
         unavailable = true;
-        await router.push('/frontend-pilot/users/dashboard?owner_main_page=2');
+        await router.push('/users/dashboard?owner_main_page=2');
         await flushPromises();
         expect(context.queryClient.getQueryData(overviewKeys.region(session.context, 'en',
             {collection: 'owner', region: 'main', q: undefined, type: undefined, page: '2',
@@ -1682,7 +1648,7 @@ describe('native overview search and history', () => {
                 messageKey: status === 403 ? 'api:errors.FORBIDDEN' : 'api:errors.NOT_FOUND', params: {}}),
                 {status, headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context}});
             return json(region(request));
-        }, '/frontend-pilot/users/dashboard?owner_main_q=initial');
+        }, '/users/dashboard?owner_main_q=initial');
         const oldVariant = overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main', q: 'older'});
         const translated = overviewKeys.region(session.context, 'de', {collection: 'owner', region: 'main', q: 'older'});
         const unrelated = overviewKeys.region(session.context, 'en', {collection: 'participant', region: 'hidden'});
@@ -1702,7 +1668,7 @@ describe('native overview search and history', () => {
         expect(context.queryClient.getQueryData(otherActor)).toBeDefined();
         expect(wrapper.text()).not.toContain(card.title);
 
-        await router.push('/frontend-pilot/users/dashboard');
+        await router.push('/users/dashboard');
         await flushPromises();
         try {
             // A Header/Back-owned route change starts a fresh read. Its empty error
@@ -1836,7 +1802,7 @@ describe('native overview search and history', () => {
         const outside = document.createElement('button');
         document.body.append(outside);
         outside.focus();
-        await router.push('/frontend-pilot/users/dashboard?owner_main_page=2');
+        await router.push('/users/dashboard?owner_main_page=2');
         await flushPromises();
         expect(wrapper.text()).toContain(card.title);
         expect(document.activeElement).toBe(outside);
@@ -1967,7 +1933,7 @@ describe('native overview search and history', () => {
 
     it('preserves native modified-click destinations without changing the current region or reading another page', async () => {
         const {wrapper, router, request, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
-            async request => json(eventRegion(request)), '/frontend-pilot/users/dashboard?owner_main_q=fixture&owner_main_event=' + eventId);
+            async request => json(eventRegion(request)), '/users/dashboard?owner_main_q=fixture&owner_main_event=' + eventId);
         const original = router.currentRoute.value.fullPath;
         const labels = [context.messages.value.t('overview.next'), context.messages.value.t('overview.showAllLinked')];
         const links = wrapper.findAll('a').filter(link => labels.includes(link.text()));
@@ -2001,7 +1967,7 @@ describe('native overview search and history', () => {
 
     it('uses one native close target that clears hidden parent/child paging and preserves independent filters', async () => {
         const {wrapper, router, context} = await mounted(OverviewPage, {}, undefined,
-            `/frontend-pilot/users/dashboard?owner_hidden_open=1&owner_hidden_event=${eventId}&owner_hidden_childPage=3&owner_hidden_q=saved&owner_main_page=2&participant_main_q=other`);
+            `/users/dashboard?owner_hidden_open=1&owner_hidden_event=${eventId}&owner_hidden_childPage=3&owner_hidden_q=saved&owner_main_page=2&participant_main_q=other`);
         const toggle = wrapper.findAll('a').find(link => link.text().startsWith(context.messages.value.t('overview.hidden'))
             && link.attributes('aria-controls') === 'overview-owner-hidden')!;
         const href = new URL(toggle.attributes('href')!, 'https://surveyor.invalid');
@@ -2016,7 +1982,7 @@ describe('native overview search and history', () => {
     it('retains native hidden disclosure in saved and committed navigation from a selected-event deep link', async () => {
         const {wrapper, router, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'hidden'},
             async request => json({...eventRegion(request), region: 'hidden', hiddenEntities: 2}),
-            `/frontend-pilot/users/dashboard?owner_hidden_event=${eventId}&participant_main_q=other`);
+            `/users/dashboard?owner_hidden_event=${eventId}&participant_main_q=other`);
         const back = wrapper.findAll('a').find(link => link.text() === 'Back to overview')!;
         const href = new URL(back.attributes('href')!, 'https://surveyor.invalid');
         expect(href.searchParams.get('owner_hidden_open')).toBe('1');
@@ -2060,7 +2026,7 @@ describe('native overview search and history', () => {
         await input.setValue('');
         await vi.advanceTimersByTimeAsync(300);
         await flushPromises();
-        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot/users/dashboard#overview-owner-main');
+        expect(router.currentRoute.value.fullPath).toBe('/users/dashboard#overview-owner-main');
         expect(request).toHaveBeenCalledTimes(2);
         expect(wrapper.text()).toContain('Latest survey');
     });
@@ -2068,7 +2034,7 @@ describe('native overview search and history', () => {
     it('debounces typed filters for 300 ms, preserves focus and other regions, and replaces filter history', async () => {
         vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
         const {wrapper, root, router, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
-            undefined, '/frontend-pilot/users/dashboard?participant_main_q=other&owner_main_page=2&owner_main_childPage=3');
+            undefined, '/users/dashboard?participant_main_q=other&owner_main_page=2&owner_main_childPage=3');
         const input = wrapper.get<HTMLInputElement>('input[type="search"]');
         input.element.focus();
         await input.setValue('first');
@@ -2130,9 +2096,9 @@ describe('native overview search and history', () => {
 
     it('applies typing during pending Back to the requested root rather than reopening the old event', async () => {
         vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
-        const previous = '/frontend-pilot/users/dashboard?owner_main_q=seed&participant_main_q=other';
+        const previous = '/users/dashboard?owner_main_q=seed&participant_main_q=other';
         const {wrapper, router} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, undefined,
-            '/frontend-pilot/users/dashboard?owner_main_q=old&owner_main_event=' + eventId + '&participant_main_q=other', previous);
+            '/users/dashboard?owner_main_q=old&owner_main_event=' + eventId + '&participant_main_q=other', previous);
         const backStarted = deferred<void>();
         const back = deferred<void>();
         const removeGuard = router.beforeResolve(async to => {
@@ -2197,13 +2163,11 @@ describe('shared native disclosure interaction', () => {
 
     it('uses the same disclosure owner for Overview actions and restores the actual trigger on Escape', async () => {
         const {wrapper, update} = await mounted(OverviewCard, {card,
-            interaction: {migrated: true, duplicateUrl: card.url + '/duplicate'}});
+            interaction: {clientNavigation: true, duplicateUrl: card.url + '/duplicate'}});
         const menu = wrapper.get('details');
         const trigger = menu.get<HTMLElement>('summary');
-        const nativeTrigger = nativeOverviewRegion(region(new Request('http://localhost/overview')))
-            .querySelector<HTMLElement>('.js-item .dropdown-toggle')!;
-        expect(trigger.attributes('role')).toBe(nativeTrigger.getAttribute('role') ?? nativeTrigger.tagName.toLowerCase());
-        expect(trigger.attributes('aria-label')).toBe(nativeTrigger.getAttribute('aria-label'));
+        expect(trigger.attributes('role')).toBe('button');
+        expect(trigger.attributes('aria-label')).toBe('Archival and visibility for Latest survey');
         await trigger.trigger('keydown', {key: 'ArrowDown'});
         expect(document.activeElement).toBe(menu.findAll('button')[0]!.element);
         await menu.trigger('keydown', {key: 'Escape'});
@@ -2241,7 +2205,7 @@ describe('mixed-family Overview integration', () => {
      * image operation and commands must retain the type as well as the ID. */
     function mixedCards(): components['schemas']['OverviewCard'][] {
         return families.map(family => ({...card, type: family.type, title: `Mixed ${family.type}`,
-            url: `/frontend-pilot/${family.type}/${otherId}`,
+            url: `/${family.type}/${otherId}`,
             headerUrl: `/api/v1/${family.endpoint}/${otherId}/header`, headerVersion: 'first-image',
             capabilities: {archive: true, restore: false, duplicate: true, remove: true}}));
     }
@@ -2259,7 +2223,7 @@ describe('mixed-family Overview integration', () => {
         const projection = defineComponent({
             props: {locale: {type: String, required: true}},
             setup(props) {
-                const context = usePilot();
+                const context = useFrontend();
                 const key = computed(() => overviewKeys.region(session.context, props.locale,
                     {collection: 'owner', region: 'main'}));
                 return {invalidated: useQueryInvalidation(context.queryClient, key)};
@@ -2269,7 +2233,7 @@ describe('mixed-family Overview integration', () => {
         // Isolate this read-only projection's subscription while retaining the
         // real cache's state reducer and notification delivery.
         const {wrapper, root, context, request, update} = await mounted(projection, {locale: 'en'}, undefined,
-            '/frontend-pilot/users/dashboard', '/before', undefined, function observeSubscription(context) {
+            '/users/dashboard', '/before', undefined, function observeSubscription(context) {
                 const cache = context.queryClient.getQueryCache();
                 const subscribe = cache.subscribe.bind(cache);
                 vi.spyOn(cache, 'subscribe').mockImplementation(function subscribeProjection(listener) {
@@ -2438,14 +2402,14 @@ describe('mixed-family Overview integration', () => {
                     return held.promise;
                 }
                 return json(mixedRegion(request, deletes ? [] : [selected]));
-            }, '/frontend-pilot/users/dashboard', '/before', App);
+            }, '/users/dashboard', '/before', App);
         const defaultKey = overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main'});
-        await router.push('/frontend-pilot/users/dashboard?owner_main_q=equipment');
+        await router.push('/users/dashboard?owner_main_q=equipment');
         await flushPromises();
         try {
             await wrapper.get('button.btn-danger').trigger('click');
             await flushPromises();
-            expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot/users/dashboard');
+            expect(router.currentRoute.value.fullPath).toBe('/users/dashboard');
             expect(heldRequest).toBeDefined();
             expect(context.queryClient.getQueryState(defaultKey)?.isInvalidated).toBe(true);
             const retained = wrapper.get<HTMLButtonElement>('button.btn-danger');
@@ -2456,12 +2420,12 @@ describe('mixed-family Overview integration', () => {
             expect(request.mock.calls.filter(([value]) => (value as Request).method === 'DELETE')).toHaveLength(1);
             // Confirmation has one common announcement while its genuine read
             // is pending. Successful deletion has no local or success Retry.
-            const success = root.get('[data-pilot-notices] .alert-success');
+            const success = root.get('[data-frontend-notices] .alert-success');
             expect(success.text()).toBe(context.messages.value.t('packing.deleted'));
-            expect(root.findAll('[data-pilot-notices] .alert-success')).toHaveLength(1);
+            expect(root.findAll('[data-frontend-notices] .alert-success')).toHaveLength(1);
             expect(success.find('button:not(.btn-close)').exists()).toBe(false);
             expect(wrapper.find('.alert-success').exists()).toBe(false);
-            expect(root.find('[data-pilot-notices] .alert-warning').exists()).toBe(false);
+            expect(root.find('[data-frontend-notices] .alert-warning').exists()).toBe(false);
         } finally {
             held.resolve(heldRequest ? json(mixedRegion(heldRequest, [])) : json({}));
             await flushPromises();
@@ -2544,8 +2508,8 @@ describe('mixed-family Overview integration', () => {
             wrapper.get(`article[data-type="${family.type}"] img`).attributes('src')]));
         for (const family of families) {
             const rendered = wrapper.get(`article[data-type="${family.type}"]`);
-            expect(rendered.get('a.card-body').attributes('href')).toBe(`/frontend-pilot/${family.type}/${otherId}`);
-            expect(rendered.get('a.btn-info').attributes('href')).toBe(`/frontend-pilot/${family.type}/${otherId}/duplicate`);
+            expect(rendered.get('a.card-body').attributes('href')).toBe(`/${family.type}/${otherId}`);
+            expect(rendered.get('a.btn-info').attributes('href')).toBe(`/${family.type}/${otherId}/duplicate`);
             expect(rendered.get('img').attributes('src')).toMatch(/^blob:mixed-image-/u);
             expect(rendered.get('img').attributes('alt')).toBe(`Mixed ${family.type}`);
         }
@@ -2672,7 +2636,7 @@ describe('mixed-family Overview integration', () => {
     it.each([false, true])('refreshes confirmed deletion on the default Overview and its warm filtered return (%s)', async filtered => {
         vi.stubGlobal('confirm', vi.fn(() => true));
         const selected = {...card, type: 'packing' as const, title: 'Delete this equipment',
-            url: `/frontend-pilot/packing/${otherId}`, capabilities: {...card.capabilities, remove: true}};
+            url: `/packing/${otherId}`, capabilities: {...card.capabilities, remove: true}};
         let deleted = false;
         const reads: string[] = [];
         const {wrapper, router, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
@@ -2684,13 +2648,13 @@ describe('mixed-family Overview integration', () => {
         const otherActorKey = overviewKeys.region('another-confirmed-deletion-actor', 'en', {collection: 'owner', region: 'main'});
         context.queryClient.setQueryData(otherActorKey, 'Other actor remains untouched');
         if (filtered) {
-            await router.push('/frontend-pilot/users/dashboard?owner_main_q=equipment');
+            await router.push('/users/dashboard?owner_main_q=equipment');
             await flushPromises();
         }
         await wrapper.get('button.btn-danger').trigger('click');
         await flushPromises();
 
-        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot/users/dashboard');
+        expect(router.currentRoute.value.fullPath).toBe('/users/dashboard');
         expect(wrapper.find('article.js-item').exists()).toBe(false);
         expect(reads).toEqual(filtered ? ['', 'equipment', 'equipment', ''] : ['', '']);
         expect(request.mock.calls.filter(([value]) => (value as Request).method === 'DELETE')).toHaveLength(1);
@@ -2747,13 +2711,13 @@ describe('mixed-family Overview integration', () => {
                 if (deletes && unavailable) return new Response('{}', {status,
                     headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context, 'Retry-After': '5'}});
                 return json(mixedRegion(request, deletes ? [] : [selected]));
-            }, '/frontend-pilot/users/dashboard', '/before', App);
+            }, '/users/dashboard', '/before', App);
         await wrapper.get('button.btn-danger').trigger('click');
         await flushPromises();
-        const confirmation = root.get('[data-pilot-notices] .alert-warning');
+        const confirmation = root.get('[data-frontend-notices] .alert-warning');
         const retry = confirmation.get<HTMLButtonElement>('button');
         expect(confirmation.text()).toContain(context.messages.value.t('state.deliveryFailed'));
-        expect(root.findAll('[data-pilot-notices] .alert-warning')).toHaveLength(1);
+        expect(root.findAll('[data-frontend-notices] .alert-warning')).toHaveLength(1);
         expect(wrapper.find('.alert-warning').exists()).toBe(false);
         expect(confirmation.get('[data-read-retry-at] time').attributes('datetime')).toBe('2026-10-23T12:00:05.000Z');
         expect(retry.element.disabled).toBe(true);
@@ -2772,9 +2736,9 @@ describe('mixed-family Overview integration', () => {
         expect(reads).toHaveLength(2);
         await retry.trigger('click');
         await flushPromises();
-        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot/users/dashboard');
+        expect(router.currentRoute.value.fullPath).toBe('/users/dashboard');
         expect(wrapper.find('article.js-item').exists()).toBe(false);
-        expect(root.find('[data-pilot-notices] .alert-warning').exists()).toBe(false);
+        expect(root.find('[data-frontend-notices] .alert-warning').exists()).toBe(false);
         expect(reads).toEqual(['/api/v1/overview', '/api/v1/overview', '/api/v1/overview']);
         expect(request.mock.calls.filter(([value]) => (value as Request).method === 'DELETE')).toHaveLength(1);
         expect(deletes).toBe(1);
@@ -2783,7 +2747,7 @@ describe('mixed-family Overview integration', () => {
     it.each(families)('retains the confirmed $type deletion message through failed delivery and retries navigation only', async family => {
         vi.stubGlobal('confirm', vi.fn(() => true));
         const selected = {...card, type: family.type, title: `Delete ${family.type}`,
-            url: `/frontend-pilot/${family.type}/${otherId}`, capabilities: {...card.capabilities, remove: true}};
+            url: `/${family.type}/${otherId}`, capabilities: {...card.capabilities, remove: true}};
         const writes: string[] = [];
 
         async function serveDeletion(request: Request): Promise<Response> {
@@ -2795,12 +2759,12 @@ describe('mixed-family Overview integration', () => {
         }
 
         const {wrapper, root, router, context} = await mounted(OverviewRegion,
-            {collection: 'owner', region: 'main'}, serveDeletion, '/frontend-pilot/users/dashboard?owner_main_q=delete', '/before', App);
+            {collection: 'owner', region: 'main'}, serveDeletion, '/users/dashboard?owner_main_q=delete', '/before', App);
         const stopDelivery = router.beforeEach(to => to.query.owner_main_q ? undefined : false);
         cleanups.push(stopDelivery);
         await wrapper.get('button.btn-danger').trigger('click');
         await flushPromises();
-        const notice = root.get('[data-pilot-notices] .alert-warning');
+        const notice = root.get('[data-frontend-notices] .alert-warning');
         expect(notice.text()).toContain(context.messages.value.t('state.deliveryFailed'));
         expect(context.pageNotice.value).toBeNull();
         expect(wrapper.find('.alert-success').exists()).toBe(false);
@@ -2816,7 +2780,7 @@ describe('mixed-family Overview integration', () => {
         stopDelivery();
         await notice.get('button').trigger('click');
         await flushPromises();
-        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot/users/dashboard');
+        expect(router.currentRoute.value.fullPath).toBe('/users/dashboard');
         expect(writes).toHaveLength(1);
     });
 });

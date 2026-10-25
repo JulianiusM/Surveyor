@@ -31,7 +31,7 @@ const dietaryMessages = {
     MEAT_OR_FISH: 'event.dietBadge.MEAT_OR_FISH', JUST_MEAT: 'event.dietBadge.JUST_MEAT', JUST_FISH: 'event.dietBadge.JUST_FISH',
 } as const;
 
-/** Localize known dietary badges/totals while retaining the exact native English
+/** Localize known dietary badges/totals while retaining the exact English
  * uppercase copy. Unknown wire tokens never become untranslated interface text. */
 export function eventDietaryLabel(messages: LocalizationContext, choice: string): string {
     if (!Object.hasOwn(dietaryMessages, choice)) return messages.t('common.unknown');

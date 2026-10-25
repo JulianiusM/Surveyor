@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, reactive, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
-import {useActionState, usePilot} from '../../app/context';
+import {useActionState, useFrontend} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
 import {useFinanceDraft} from './drafts';
@@ -23,7 +23,7 @@ const props = defineProps<{
     refresh: () => Promise<void>;
 }>();
 const emit = defineEmits<{close: []; saved: []}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useFinanceApi(context);
 const id = useId();
@@ -44,7 +44,7 @@ watch([() => props.participants, command.pending, command.uncertain], synchroniz
 watch([() => props.eventId, context.epoch, () => context.session.value?.context], resetDraft);
 
 /** Seed one admitted form from saved settings. The creation defaults match the
- * native form, including initial participant selection and rounded shares. */
+ * form, including initial participant selection and rounded shares. */
 function initialDraft() {
     const settings = props.pool?.settings;
     // Existing pool names and allocation flags are not part of a settings save.

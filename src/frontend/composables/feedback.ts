@@ -1,21 +1,20 @@
 import {computed, onBeforeUnmount, onMounted, ref, shallowRef, watch} from 'vue';
 import type {ComputedRef, InjectionKey, Ref} from 'vue';
-import {usePilot, canRetryRead} from '../app/context';
+import {useFrontend, canRetryRead} from '../app/context';
 import {ApiFailure, InvalidInputError} from '../app/transport';
 import type {LocalizationContext, MessageKey} from '../../types/LocalizationTypes';
 import type {components} from '../../types/api/v1';
-import type {PilotPlainMessageKey, PilotProblemPresentation} from '../../types/FrontendPilotUiTypes';
+import type {FrontendPlainMessageKey, FrontendProblemPresentation} from '../../types/FrontendUiTypes';
 import {validateProblem} from '../../../.generated/api/v1/browser/validateProblem.mjs';
 import {formatFieldDiagnostic, formatInputDiagnostic} from '../../modules/localization/inputValidation';
-import type {PilotReadFailureDescriptor} from '../../types/FrontendFeedbackTypes';
+import type {FrontendReadFailureDescriptor} from '../../types/FrontendFeedbackTypes';
 
-// Preserve the existing transient-feedback interval in this frontend's owner.
-// Native browser code remains an independent comparison implementation.
+// One shared lifetime governs transient receipts in the shell and its dialogs.
 const transientNoticeLifetimeMs = 10_000;
 
 /** Presentation scope supplied by the shell and overridden by the shared dialog.
  * It contains no command state: every receipt stays with its existing owner. */
-export const noticeTargetKey: InjectionKey<Readonly<Ref<HTMLElement | null>>> = Symbol('pilot.notice-target');
+export const noticeTargetKey: InjectionKey<Readonly<Ref<HTMLElement | null>>> = Symbol('frontend.notice-target');
 
 /** Make the shared server cooldown reactive even when a failed read has no polling observer.
  * The wakeup changes availability only; the caller owns explicit retry and request scope. */
@@ -87,7 +86,7 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
 
     function cancelLifetime(): void {
         // This receipt owns its timer directly. Retiring it cannot cancel another
-        // notice's interval or depend on a native DOM observer's global registry.
+        // notice's interval or depend on a DOM observer's global registry.
         if (lifetime?.timer !== undefined) clearTimeout(lifetime.timer);
         lifetime = undefined;
     }
@@ -108,7 +107,7 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
         // same outcome. Only a new semantic receipt may renew its deadline.
         if (lifetime && (lifetime.element !== element.value || !Object.is(lifetime.renewal, renewal()))) cancelLifetime();
         // Vue owns this node and its ancestors, including disclosure, relocation
-        // and the receipt's timer. No other frontend can remove or renew it.
+        // and the receipt's timer. No other feedback owner can remove or renew it.
         observer = new MutationObserver(refreshVisibility);
         observer.observe(document.body, {subtree: true, childList: true,
             attributes: true, attributeFilter: ['class', 'style', 'hidden', 'role', 'aria-hidden']});
@@ -183,7 +182,7 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
  * from a future server remains authoritative text; never guess its key or parameters. */
 export function problemMessage(messages: LocalizationContext,
     problem: components['schemas']['Problem'] | components['schemas']['SafeProblemDetails'],
-    presentation?: PilotProblemPresentation): string {
+    presentation?: FrontendProblemPresentation): string {
     if (!validateProblem(problem)) return problem.detail;
     // Known structural failures retain safe field/rule identities. Reformat at
     // display time so an existing rejected draft follows a later locale change.
@@ -207,9 +206,9 @@ export function readFailureMessage(messages: LocalizationContext, error?: Error 
 
 /** Keep message identity, rather than translated text, so a mounted form's validation follows
  * language changes. Only validated known Problems drive typed behavior; safe future details remain text. */
-export function useFeedbackError(presentation?: PilotProblemPresentation) {
-    const {messages} = usePilot();
-    const descriptor = shallowRef<MessageKey | ApiFailure | InvalidInputError | PilotReadFailureDescriptor | null>(null);
+export function useFeedbackError(presentation?: FrontendProblemPresentation) {
+    const {messages} = useFrontend();
+    const descriptor = shallowRef<MessageKey | ApiFailure | InvalidInputError | FrontendReadFailureDescriptor | null>(null);
     const readError = computed(() => {
         const value = descriptor.value;
         return value && typeof value === 'object' && 'readError' in value ? value.readError : null;
@@ -234,7 +233,7 @@ export function useFeedbackError(presentation?: PilotProblemPresentation) {
     function setError(value: MessageKey | ApiFailure | InvalidInputError | null, lifetime: 'transient' | 'durable' = 'transient'): void {
         descriptor.value = value;
         // Repeated validation/no-op feedback can have identical text. Its new
-        // receipt still starts a complete native dismissal interval.
+        // receipt still starts a complete dismissal interval.
         errorRenewal.value++;
         transientError.value = lifetime === 'transient';
         feedbackKind.value = 'danger';
@@ -242,23 +241,23 @@ export function useFeedbackError(presentation?: PilotProblemPresentation) {
 
     /** Retain the same durable localized read warning with its causal identity.
      * No query contents or server deadline are copied into this error receipt. */
-    function setReadError(messageKey: PilotPlainMessageKey, failure: unknown): void {
+    function setReadError(messageKey: FrontendPlainMessageKey, failure: unknown): void {
         setError(messageKey, 'durable');
         // Non-Error rejections keep the safe warning but cannot claim another
         // read notice merely because its error is also absent or malformed.
         if (failure instanceof Error) descriptor.value = {messageKey, readError: failure};
     }
 
-    /** Native form no-ops are information, with the same localized identity and
+    /** Form no-ops are information, with the same localized identity and
      * transient lifetime as other confirmed form feedback. They never imply a write. */
-    function setInformation(value: PilotPlainMessageKey): void {
+    function setInformation(value: FrontendPlainMessageKey): void {
         setError(value);
         feedbackKind.value = 'info';
     }
 
-    /** Confirmed inline property saves share the native transient receipt contract.
+    /** Confirmed inline property saves share the transient receipt contract.
      * Confirmation is supplied by the operation; this helper never infers a saved write. */
-    function setSuccess(value: PilotPlainMessageKey): void {
+    function setSuccess(value: FrontendPlainMessageKey): void {
         setError(value);
         feedbackKind.value = 'success';
     }

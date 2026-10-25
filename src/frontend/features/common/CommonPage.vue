@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import {computed} from 'vue';
 import {useRoute} from 'vue-router';
-import type {FrontendCommonPage} from '../../../types/FrontendPilotTypes';
+import type {FrontendCommonPage} from '../../../types/FrontendTypes';
 import {frontendDocumentUrl} from '../../../modules/lib/frontendIdentity';
 import {isPlainMessageKey} from '../../../modules/localization/translator';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {usePageTitle} from '../../composables/pageTitle';
 import PageMessage from '../../components/PageMessage.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 
 const props = defineProps<{page?: FrontendCommonPage}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const route = useRoute();
 // The translated projection and its source receipt have different lifetimes.
@@ -20,8 +20,7 @@ const page = computed(() => presentation.value.page);
 const localizedMessage = computed(() => page.value.messageKey && isPlainMessageKey(page.value.messageKey)
     ? messages.value.t(page.value.messageKey) : page.value.message);
 const messageTitleKeys = {info: 'common.infoTitle', success: 'common.successTitle', warning: 'common.warningTitle', error: 'common.errorTitle'} as const;
-// Message documents retain their native document branding. This scoped conversion
-// does not silently repair that inherited title while the native UI is the comparator.
+// Message and error documents use their respective complete branding and title.
 const title = computed(() => page.value.kind === 'message'
     ? `${messages.value.t(messageTitleKeys[page.value.severity])} | ControlPanel`
     : `${messages.value.t('common.errorTitle')} | ${messages.value.t('app.title')}`);
@@ -37,7 +36,7 @@ function resolvePresentation(): {page: FrontendCommonPage; renewal: unknown} {
     const initial = context.initialDocumentFor(route.fullPath)?.commonPage;
     if (initial) return {page: initial, renewal: initial};
 
-    if (route.matched.some(record => record.path === '/frontend-pilot/message')) {
+    if (route.matched.some(record => record.path === '/message')) {
         // Completion receipts bind the current actor and exact canonical destination.
         // Context-owned notices also retire on identity changes; neither source is URL text.
         const completion = context.pageCompletion.value;

@@ -1,46 +1,48 @@
-/*
- * Copyright 2026 Julian Malovanij
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Router} from 'express';
+import type {Request, Response} from 'express';
+import {asyncHandler} from '../modules/lib/asyncHandler';
+import {captureApiActor} from '../modules/api/session';
+import {renderFrontend} from '../modules/frontendRenderer';
+import {readDriversCreateEntry, readDriversDuplicate, readDriversResourceEntry} from '../controller/driversController';
+import {bootstrap, applyPageEntry} from './frontend';
+import {createHeaderHandler} from './outputs';
+import {readDriversHeaderPath} from '../controller/driversController';
 
-import express from 'express';
-import * as driverService from '../modules/database/services/DriverService';
-import {createGuestFlowRouter} from "../middleware/guestFlowFactory";
-import controller from "../controller/driversController";
-import {ENTITIES, ENTITY_ITEMS} from "../modules/lib/util";
+const router = Router();
+router.get('/create', asyncHandler(renderCreation));
+router.get('/:listId/duplicate', asyncHandler(renderDuplicate));
+for (const [path, intent] of [['/:listId', 'detail'], ['/:listId/guest', 'guest']] as const) {
+    /** The registered detail/guest route owns admission regardless of the
+     * equivalent URL spelling accepted by Express. */
+    router.get(path, asyncHandler(async function renderList(req, res) {
+        const state = await bootstrap(req);
+        // Keep controller authorization and original return URL unchanged;
+        // selecting this presentation never creates a guest identity.
+        const result = await readDriversResourceEntry(String(req.params.listId), intent, await captureApiActor(req));
+        if (await applyPageEntry(req, res, state, result.entry)) return;
+        state.guestEntry = result.guest ?? undefined;
+        await renderFrontend(res, req.originalUrl, state);
+    }));
+}
 
-const app = express.Router();
+/** Capture account admission and optional event selection before rendering. */
+async function renderCreation(req: Request, res: Response): Promise<void> {
+    const state = await bootstrap(req);
+    const form = await readDriversCreateEntry(await captureApiActor(req), req.originalUrl, req.query.eventId);
+    if (await applyPageEntry(req, res, state, form.entry)) return;
+    state.driversCreateContext = form.context ?? undefined;
+    state.driversSelectedEvent = form.selectedEvent ?? null;
+    await renderFrontend(res, req.originalUrl, state);
+}
 
-app.use("/", createGuestFlowRouter({
-    addToEvent: true,
-    entityType: ENTITIES.DRIVERS,
-    entityItemType: ENTITY_ITEMS.DRIVERS,
-    db: {
-        getById: driverService.getDriversListById,
-        getItems: driverService.getDriversItems,
-    },
-    templates: {
-        create: 'drivers/drivers-create',
-        view: 'drivers/drivers-view',
-    },
-    buildRedirect: (id: any) => `/drivers/${id}`,
-    preprocessCreate: controller.preprocessCreate,
-    createEntity: controller.createEntity,
-    afterCreateItems: controller.afterCreateItems,
-    fetchForView: controller.fetchForView,
-    fetchForDuplicate: controller.fetchForDuplicate,
-    deleteEntity: controller.deleteEntity,
-}));
+/** Duplication reads form values under its independent grant, without copying rides. */
+async function renderDuplicate(req: Request, res: Response): Promise<void> {
+    const state = await bootstrap(req);
+    state.driversDuplicate = await readDriversDuplicate(String(req.params.listId), await captureApiActor(req), req.query.eventId);
+    state.pageEntry = {kind: 'render'};
+    await renderFrontend(res, req.originalUrl, state);
+}
 
-export default app;
+router.get('/:headerId/header', createHeaderHandler(readDriversHeaderPath));
+
+export default router;

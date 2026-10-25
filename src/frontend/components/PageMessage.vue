@@ -1,30 +1,30 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue';
 import {RouterLink, useRoute} from 'vue-router';
-import {usePilot} from '../app/context';
+import {useFrontend} from '../app/context';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
-import type {PilotNoticeAction} from '../../types/FrontendFeedbackTypes';
+import type {FrontendNoticeAction} from '../../types/FrontendFeedbackTypes';
 import StatusNotice from './StatusNotice.vue';
 
 const props = withDefaults(defineProps<{
     kind: 'info' | 'success' | 'warning' | 'error';
     message: string;
-    // Some native message severities supply a heading without an alert body.
+    // Some message severities supply a heading without an alert body.
     // The admitted presenter selects that shape without changing notice lifetimes.
     displayMessage?: boolean;
     transient?: boolean;
     renewal?: unknown;
-    // Recoverable admission reads can keep this native Error/Home layout while
+    // Recoverable admission reads can keep this Error/Home layout while
     // the same notice owns their safe diagnostic and server retry deadline.
     retryAt?: number;
     readError?: Error | null;
-    action?: PilotNoticeAction;
+    action?: FrontendNoticeAction;
     // Common document messages return Home to the landing page. Existing feature
     // outcomes retain their established Overview destination unless explicitly supplied.
     homeUrl?: string;
-}>(), {transient: true, displayMessage: true, homeUrl: '/frontend-pilot'});
+}>(), {transient: true, displayMessage: true, homeUrl: '/'});
 const emit = defineEmits<{action: [source: MouseEvent]}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const route = useRoute();
 const documentUrl = computed(() => frontendDocumentUrl(route.fullPath));
 // Document visits and explicit outcome receipts own renewal. Translated message
@@ -36,7 +36,7 @@ const title = computed(() => messages.value.t(props.kind === 'info' ? 'common.in
     : props.kind === 'success' ? 'common.successTitle'
         : props.kind === 'warning' ? 'common.warningTitle' : 'common.errorTitle'));
 
-// Native full message pages expire their alert body, while the heading and Home remain.
+// Full message pages expire their alert body, while the heading and Home remain.
 // Expiry is presentation only: never clear a command receipt or restart token admission.
 // Callers explicitly preserve unresolved read warnings; no translated key determines policy.
 watch(messageReceipt, revealMessage);
@@ -48,7 +48,7 @@ function dismissMessage(): void { messageVisible.value = false; }
 <template>
     <!-- Admitted full-page outcomes share the heading, message and Home layout.
          Their content notice uses the common renderer and receipt lifetime. -->
-    <section class="pilot-page-message card bg-dark text-white mb-3">
+    <section class="frontend-page-message card bg-dark text-white mb-3">
         <h1 class="card-header text-center bg-dark text-light">
             <i class="bi me-2" :class="kind === 'error' ? 'bi-exclamation-triangle-fill'
                 : kind === 'success' ? 'bi-check-circle-fill'
@@ -59,7 +59,7 @@ function dismissMessage(): void { messageVisible.value = false; }
                 :retry-at="retryAt" :read-error="readError" :action="action" @action="emit('action', $event)"
                 :transient="transient" :renewal="messageReceipt" @dismiss="dismissMessage">{{ message }}</StatusNotice>
             <slot />
-            <div class="pilot-action-row justify-content-center gap-3 mt-4">
+            <div class="frontend-action-row justify-content-center gap-3 mt-4">
                 <RouterLink class="btn btn-primary" :to="homeUrl">
                     <i class="bi bi-house-door-fill me-1" aria-hidden="true"></i>{{ messages.t('app.home') }}
                 </RouterLink>

@@ -8,7 +8,7 @@ withDefaults(defineProps<{
     icon?: string;
     alignEnd?: boolean;
     navigation?: boolean;
-    // Menu markup follows the caller's native presentation independently of whether
+    // Menu markup follows the caller's presentation independently of whether
     // this disclosure belongs to navigation, a card, or an ordinary filter form.
     menuTag?: 'ul' | 'div';
     triggerClass?: string;
@@ -19,9 +19,9 @@ const open = ref(false);
 const initialized = useClientInitialization();
 const {dropdownStyle, updatePlacement} = useDropdownPlacement(element);
 
-// Header links/native form controls and card actions share disclosure behavior. Reka's
+// Header links/form controls and card actions share disclosure behavior. Reka's
 // public menu adds registered/roving/hover-focused items; its Popover adds dialog semantics.
-// Neither replaces this mixed native content unchanged, and DismissableLayer is internal-only.
+// Neither replaces this mixed content unchanged, and DismissableLayer is internal-only.
 // Keep native DOM/Tab semantics here, without competing Bootstrap plugin ownership.
 /** Dismissal retains the outside destination's focus; Escape alone restores the trigger. */
 function close(restoreFocus = false): void {
@@ -36,7 +36,7 @@ function outside(event: Event): void {
     if (initialized.value && element.value?.open && !element.value.contains(event.target as Node)) close();
 }
 
-/** Native links/actions dismiss the menu; clicking or submitting contained fields does not. */
+/** Links/actions dismiss the menu; clicking or submitting contained fields does not. */
 function follow(event: MouseEvent): void {
     if (initialized.value && (event.target as Element).closest('a, button.dropdown-item')) close();
 }
@@ -101,15 +101,15 @@ onBeforeUnmount(() => {
 
 <template>
     <component :is="navigation ? 'li' : 'div'" :class="navigation ? 'nav-item dropdown' : 'd-inline-block'">
-        <details ref="element" class="pilot-dropdown" :class="navigation ? 'pilot-nav-dropdown' : 'position-relative'"
+        <details ref="element" class="frontend-dropdown" :class="navigation ? 'frontend-nav-dropdown' : 'position-relative'"
                  @toggle="synchronizeOpen" @keydown="navigate">
-            <!-- Native header links and card/filter buttons expose the button role.
+            <!-- Header links and card/filter buttons expose the button role.
                  Preserve that role while details retains disclosure keyboard/open-state ownership. -->
             <summary role="button" :class="[navigation ? 'nav-link dropdown-toggle' : triggerClass, {show: navigation && open}]"
                      :aria-expanded="initialized ? open : undefined" :aria-label="triggerLabel">
                 <slot name="trigger"><i v-if="icon" class="bi me-1" :class="icon" aria-hidden="true"></i>{{ label }}</slot>
             </summary>
-            <!-- The native ul/li navigation and card div/button structures remain separate
+            <!-- The ul/li navigation and card div/button structures remain separate
                  presentation choices; dismissal and keyboard policy have one owner. -->
             <component :is="menuTag ?? (navigation ? 'ul' : 'div')" class="dropdown-menu"
                        :class="{'dropdown-menu-end': alignEnd, show: !navigation}" :style="dropdownStyle" @click="follow"><slot /></component>

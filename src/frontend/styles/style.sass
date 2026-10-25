@@ -371,7 +371,8 @@
     th:last-child
       width: 20%
 
-[data-share-details-content]
+// Saved payer names and audit notes must wrap inside the current Finance dialogs.
+.finance-dialog .modal-body
   overflow-wrap: anywhere
 
 .share-ledger-controls > *, .pool-preview-summary > *
@@ -879,7 +880,7 @@
 
 /* Recommendations visual enhancements - parent background colors */
 
-// The Vue schedule keeps the copied native geometry through its repeated table
+// The schedule applies its geometry through a repeated table
 // hook. An attribute selector applies to every week without duplicate DOM IDs.
 [data-recommendations-schedule]
   .slot

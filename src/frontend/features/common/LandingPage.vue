@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import {computed} from 'vue';
 import {RouterLink, useRoute} from 'vue-router';
-import type {FrontendLandingQuickCreate} from '../../../types/FrontendPilotTypes';
-import {usePilot} from '../../app/context';
+import type {FrontendLandingQuickCreate} from '../../../types/FrontendTypes';
+import {useFrontend} from '../../app/context';
 import {usePageTitle} from '../../composables/pageTitle';
 import {frontendOverviewPath} from '../../../modules/lib/frontendIdentity';
 
-const context = usePilot();
+const context = useFrontend();
 const {messages, session} = context;
 const route = useRoute();
 
@@ -17,16 +17,16 @@ const quickCreateTypes = ['survey', 'event', 'activity', 'packing', 'drivers'] a
 const quickCreate = initialDocument?.landing?.quickCreate
     ?? (initialDocument || !context.browser ? 'survey' : chooseQuickCreate());
 const creationTargets = {
-    survey: {url: '/frontend-pilot/survey/create', icon: 'bi-bar-chart-steps'},
-    event: {url: '/frontend-pilot/event/create', icon: 'bi-calendar-event'},
-    activity: {url: '/frontend-pilot/activity/create', icon: 'bi-clock-history'},
-    packing: {url: '/frontend-pilot/packing/create', icon: 'bi-bag-fill'},
-    drivers: {url: '/frontend-pilot/drivers/create', icon: 'bi-car-front-fill'},
+    survey: {url: '/survey/create', icon: 'bi-bar-chart-steps'},
+    event: {url: '/event/create', icon: 'bi-calendar-event'},
+    activity: {url: '/activity/create', icon: 'bi-clock-history'},
+    packing: {url: '/packing/create', icon: 'bi-bag-fill'},
+    drivers: {url: '/drivers/create', icon: 'bi-car-front-fill'},
 } as const;
 const quickTarget = creationTargets[quickCreate];
 
-const loginUrl = computed(() => '/frontend-pilot/users/login?next=' + encodeURIComponent(route.fullPath));
-const registerUrl = computed(() => '/frontend-pilot/users/register?next=' + encodeURIComponent(route.fullPath));
+const loginUrl = computed(() => '/users/login?next=' + encodeURIComponent(route.fullPath));
+const registerUrl = computed(() => '/users/register?next=' + encodeURIComponent(route.fullPath));
 const signedInPoints = ['landing.signedOverview', 'landing.signedCreate', 'landing.signedPacking', 'landing.signedRights'] as const;
 const publicPoints = ['landing.plan', 'landing.share', 'landing.link', 'landing.dashboard'] as const;
 // Account/guest admission changes the copy and actions, not the welcome layout.
@@ -35,7 +35,7 @@ const welcomePoints = computed(() => session.value?.activeProfile ? signedInPoin
 const welcomeText = computed(() => session.value?.activeProfile
     ? messages.value.t('landing.welcome', {name: session.value.activeProfile.name}) : messages.value.t('landing.intro'));
 
-// Preserve the native three-card/two-card rows. This is static feature copy, not a
+// Preserve the three-card/two-card rows. This is static feature copy, not a
 // permission or route registry; each creation link uses the shared Vue router.
 const featureRows = [
     {classes: 'row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4 mb-4', features: [
@@ -79,7 +79,7 @@ const featureRows = [
 
 usePageTitle(() => messages.value.t('landing.documentTitle'), true);
 
-/** A warm landing visit keeps the native random quick-create suggestion without
+/** A warm landing visit keeps the random quick-create suggestion without
  * any request, persisted preference or subsequent presentation-driven reselection. */
 function chooseQuickCreate(): FrontendLandingQuickCreate {
     return quickCreateTypes[Math.floor(Math.random() * quickCreateTypes.length)]!;
@@ -92,7 +92,7 @@ function chooseQuickCreate(): FrontendLandingQuickCreate {
             <i class="bi bi-diagram-3 me-2" aria-hidden="true"></i>{{ messages.t('app.title') }}
         </h1>
         <div class="card-body">
-            <!-- Account and guest profiles share the native welcome presentation.
+            <!-- Account and guest profiles share the welcome presentation.
                  Identity remains application-owned; no private profile copy is retained here. -->
             <div class="text-center mb-4">
                 <p class="lead mb-2">{{ welcomeText }}</p>
@@ -103,7 +103,7 @@ function chooseQuickCreate(): FrontendLandingQuickCreate {
                 </ul>
             </div>
             <template v-if="session?.activeProfile">
-                <div class="pilot-action-row justify-content-center mb-4">
+                <div class="frontend-action-row justify-content-center mb-4">
                     <RouterLink class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2" :to="frontendOverviewPath">
                         <i class="bi bi-speedometer2" aria-hidden="true"></i>{{ messages.t('landing.openDashboard') }}
                     </RouterLink>
@@ -114,7 +114,7 @@ function chooseQuickCreate(): FrontendLandingQuickCreate {
                 </div>
             </template>
             <template v-else>
-                <div class="pilot-action-row justify-content-center mb-3">
+                <div class="frontend-action-row justify-content-center mb-3">
                     <RouterLink class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2" :to="registerUrl">
                         <i class="bi bi-person-plus" aria-hidden="true"></i>{{ messages.t('auth.createAccount') }}
                     </RouterLink>
@@ -131,7 +131,7 @@ function chooseQuickCreate(): FrontendLandingQuickCreate {
                     {{ messages.t('landing.whatYouCanCreate') }}
                 </span>
             </div>
-            <!-- Translated text remains escaped data. Native card order and responsive
+            <!-- Translated text remains escaped data. Card order and responsive
                  geometry are retained instead of introducing another card/control system. -->
             <div v-for="(row, index) in featureRows" :key="index" :class="row.classes">
                 <div v-for="feature in row.features" :key="feature.type" class="col">

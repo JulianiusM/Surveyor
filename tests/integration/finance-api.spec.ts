@@ -22,8 +22,6 @@ import {PERM} from '../../src/modules/lib/permissions';
 import {AppDataSource} from '../../src/modules/database/dataSource';
 import settings from '../../src/modules/settings';
 import eventRouter from '../../src/routes/api/v1/events';
-import nativeEventRouter from '../../src/routes/api/event';
-import {wrapErrorApi} from '../../src/middleware/validationErrorHandler';
 import {handleApiProblem} from '../../src/modules/api/problem';
 import {createTranslator} from '../../src/modules/localization/translator';
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
@@ -172,50 +170,6 @@ describe('versioned finance shared ownership and private saved projections', () 
         expect(personal.pools[0].summary).toBeNull();
         expect(personal.pools[0].canRollback).toBeUndefined();
         expect(JSON.stringify(personal)).not.toContain(other.user!.email);
-    });
-
-    it('preserves the existing native public management methods independently of profile-required invoice actions', async () => {
-        const {id, event, poolId} = await fixture();
-        const invoice = await submit(event, poolId, participant, 'Native public review baseline');
-        await adminService.updatePerms('event', id, {public: PERM.MANAGE_ASSIGNMENTS});
-        const app = express();
-        app.use(express.json());
-        app.use(session({secret: 'native-public-finance-baseline', resave: false, saveUninitialized: false}));
-        // Mount the unchanged real native API, including its actual parameter
-        // loader and permission middleware. No fixture grants a request actor.
-        app.use('/api/event', nativeEventRouter);
-        app.use(wrapErrorApi);
-        const server = http.createServer(app);
-        await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-        const address = server.address();
-        if (!address || typeof address === 'string') throw new Error('Missing native public-finance listener');
-        const endpoint = `http://127.0.0.1:${address.port}/api/event/${id}/invoice-pools`;
-        try {
-            const created = await fetch(endpoint, {method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({name: 'Native anonymous management baseline', distribution: 'EQUAL', assignAll: true})});
-            expect(created.status).toBe(200);
-            const settings = await fetch(`${endpoint}/${poolId}`, {method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({description: 'Native anonymous saved setting', distribution: 'NIGHTS'})});
-            expect(settings.status).toBe(200);
-            const approved = await fetch(`${endpoint}/${poolId}/invoices/${invoice.id}/approve`, {method: 'POST',
-                headers: {'Content-Type': 'application/json'}, body: JSON.stringify({correctedAmount: 30})});
-            expect(approved.status).toBe(200);
-            expect((await fetch(`${endpoint}/${poolId}/invoices/${invoice.id}/close`, {method: 'POST'})).status).toBe(200);
-            const stored = (await invoiceService.getPoolWithInvoices(poolId))!;
-            expect(stored).toMatchObject({description: 'Native anonymous saved setting', distributionMethod: 'NIGHTS'});
-            expect(stored.invoices.find(row => row.id === invoice.id)).toMatchObject({amount: '40.00', correctedAmount: '30.00', status: 'CLOSED'});
-            expect((await invoiceService.listPools(id)).map(row => row.name)).toContain('Native anonymous management baseline');
-            // Native entry and retroactive review explicitly require a profile;
-            // public management cannot fabricate an audit recorder.
-            expect((await fetch(`${endpoint}/${poolId}/invoices/organizer`, {method: 'POST'})).status).toBe(401);
-            expect((await fetch(`${endpoint}/${poolId}/invoices/${invoice.id}/revise`, {method: 'POST'})).status).toBe(401);
-            expect(await eventService.getRegistrationFor(owner.id, id)).toBeNull();
-        } finally {
-            await new Promise<void>((resolve, reject) => {
-                server.close(error => error ? reject(error) : resolve());
-                server.closeAllConnections();
-            });
-        }
     });
 
     it('uses generated closed command shapes, CSRF admission and optional proof bytes through the actual organizer HTTP adapter', async () => {

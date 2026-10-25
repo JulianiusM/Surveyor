@@ -4,7 +4,7 @@ import {RovingFocusGroup, RovingFocusItem} from 'reka-ui';
 /** The shared keyboard owner retains Bootstrap's tab behavior; Reka owns the roving tab stop.
  * Feature pages own their mounted panels.
  * Keeping panel visibility in the page preserves dirty editors when another tab is selected.
- * A pending owner disables both native activation and registration in the focus sequence. */
+ * A pending owner disables both activation and registration in the focus sequence. */
 const props = withDefaults(defineProps<{
     modelValue: string;
     tabs: readonly {key: string; label: string; id: string; controls: string; icon?: string}[];
@@ -21,7 +21,7 @@ function selectTab(key: string): void {
 
 /** Bootstrap activates on six navigation keys, including modified keys, without
  * scrolling the page. Capture before Reka: its broader PageUp/PageDown behavior
- * and default focus scrolling would change the native comparator's contract. */
+ * and default focus scrolling would change the tab list's focus contract. */
 function moveFocus(event: KeyboardEvent): void {
     if (!(event.target instanceof HTMLButtonElement)) return;
     // Retain browser Page scrolling without Reka's additional tab activation.
@@ -33,7 +33,7 @@ function moveFocus(event: KeyboardEvent): void {
     event.stopPropagation();
     event.preventDefault();
     if (props.disabled || !(event.currentTarget instanceof HTMLElement)) return;
-    // Native order and wrapping include every enabled tab, independent of layout.
+    // Order and wrapping include every enabled tab, independent of layout.
     const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
         .filter(button => !button.disabled);
     if (!buttons.length) return;

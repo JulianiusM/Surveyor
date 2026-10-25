@@ -30,7 +30,7 @@ export interface PermissionFieldRule {
     parent?: PermType | PermType[];
 }
 
-/** Normalized administrator intent shared by native and versioned controller adapters. */
+/** Normalized administrator intent shared by direct and versioned controller adapters. */
 export type EntityAdministratorCommand = {
     kind: 'add' | 'update';
     mask?: number;
@@ -104,9 +104,9 @@ export interface EntityPermissionQueryScope {
 }
 
 export type SaveOpts = {
-    /** Optional caller-owned transaction; omitted by all existing native callers. */
+    /** Optional caller-owned transaction; omitted by all existing direct callers. */
     manager?: EntityManager;
-    /** Native collectors post permission keys; validated versioned commands supply numeric masks. */
+    /** Form collectors post permission keys; validated versioned commands supply numeric masks. */
     inputFormat?: 'permissionKeys' | 'masks';
     /** Name of the root field in the form body (default: "defaultPerms") */
     fieldBase?: string;
@@ -145,7 +145,7 @@ export type PermMetaBundle = {
     presets: PermPreset[],
 }
 
-/** View model used by Pug */
+/** Evaluated grants shared by feature controllers and permission bundles. */
 export type PermView = {
     mask: number;
     parentMask: number;

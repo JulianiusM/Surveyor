@@ -1,5 +1,5 @@
 import type {components} from './api/v1';
-import type {PilotRequestScope} from './FrontendPilotUiTypes';
+import type {FrontendRequestScope} from './FrontendUiTypes';
 import type {MessageKey} from './LocalizationTypes';
 
 /** A feature owns admission, query identity and canonical destination. The shared
@@ -9,9 +9,9 @@ export interface FrontendGuestEntryProps {
     resourceId: string;
     destination: string;
     titleKey: MessageKey;
-    /** Select native contextual guidance and confirmation; features still own admission and commands. */
+    /** Select contextual guidance and confirmation; features still own admission and commands. */
     presentation?: 'generic' | 'event';
     queryKey: readonly unknown[];
-    readEntry: (scope: PilotRequestScope, signal?: AbortSignal) => Promise<components['schemas']['GuestEntry']>;
-    registerGuest: (input: components['schemas']['GuestRegistrationInput'], scope: PilotRequestScope) => Promise<components['schemas']['IdentityResult']>;
+    readEntry: (scope: FrontendRequestScope, signal?: AbortSignal) => Promise<components['schemas']['GuestEntry']>;
+    registerGuest: (input: components['schemas']['GuestRegistrationInput'], scope: FrontendRequestScope) => Promise<components['schemas']['IdentityResult']>;
 }

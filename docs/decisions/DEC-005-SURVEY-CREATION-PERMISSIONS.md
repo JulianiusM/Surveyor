@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: editorial dependency disposition against the backlog and advisory documentation policy; original technical decision retained without new runtime verification
-source-anchors: src/routes/survey.ts; src/controller/surveyController.ts; src/views/surveyor/survey-create.pug; src/middleware/guestFlowFactory.ts; src/modules/lib/permissions.ts; docs/backlog/documentation-remediation.yml; docs/policies/DOCUMENTATION_POLICY.md
+source-anchors: src/controller/surveyController.ts; src/modules/lib/permissions.ts; docs/backlog/documentation-remediation.yml; docs/policies/DOCUMENTATION_POLICY.md; src/frontend/; src/routes/api/v1/
 next-review: survey-permission-or-access-model-change
 -->
 
@@ -26,9 +26,9 @@ This record changes documentation state only. It does not modify the survey impl
 
 The survey feature follows its own participation and access flow:
 
-- `src/views/surveyor/survey-create.pug` contains the survey fields and date-combination controls, but no permission matrix.
+- `survey-create.pug` (the retired native owner) contains the survey fields and date-combination controls, but no permission matrix.
 - `src/controller/surveyController.ts` creates the survey and combinations without saving general audience permissions.
-- `src/routes/survey.ts` exposes survey-specific participation actions such as voting and adding combinations.
+- `survey.ts` (the retired native owner) exposes survey-specific participation actions such as voting and adding combinations.
 - The shared creation router may provide permission-related view metadata, but a feature participates in the permission
   system only when its view, controller, routes, and persistence model consume that capability.
 
@@ -76,3 +76,9 @@ block application delivery. The survey permission exception and its technical de
 
 This decision is reopened only if surveys intentionally adopt the general permission system or their feature-specific
 access model is redesigned.
+
+## P11 evidence reconciliation (2026-10-25)
+
+The explicitly requested cutover retires the native template/route owners identified in the original implementation
+evidence. Their source remains in Git history. The decision itself is unchanged; current component and versioned
+adapter consumers reuse the same controller/domain policy. Source anchors above identify retained owners.

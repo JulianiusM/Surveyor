@@ -26,7 +26,7 @@ export type DriversItemAssignee = {
     profileId: string,
     name: string,
 }
-/** Native routes and versioned commands share the Drivers controller's method
+/** Controller operations and versioned commands share the Drivers controller's method
  * policy. Page admission remains independent of each command's authority. */
 export type DriversMethod = 'selfAssignment' | 'addItem' | 'reorderItems' | 'editDescription'
     | 'editHeader' | 'changeEvent' | 'managePermissions' | 'duplicate'

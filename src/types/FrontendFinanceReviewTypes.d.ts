@@ -1,5 +1,5 @@
 import type {components} from './api/v1';
-import type {PilotPlainMessageKey, PilotRequestScope} from './FrontendPilotUiTypes';
+import type {FrontendPlainMessageKey, FrontendRequestScope} from './FrontendUiTypes';
 
 /** One reviewed submission-access intent; later reads cannot retarget its command. */
 export interface FinanceSubmissionAccessReview {
@@ -8,7 +8,7 @@ export interface FinanceSubmissionAccessReview {
     readonly poolName: string;
     readonly status: 'OPEN' | 'ORGANIZER_ONLY';
     readonly expectedRevision: number;
-    readonly scope: PilotRequestScope;
+    readonly scope: FrontendRequestScope;
 }
 
 /** Only the selected saved identity and visible operation context are retained. */
@@ -18,7 +18,7 @@ export interface FinanceAdjustmentRemovalReview {
     readonly adjustmentId: string;
     readonly name: string;
     readonly rebate: boolean;
-    readonly scope: PilotRequestScope;
+    readonly scope: FrontendRequestScope;
 }
 
 /** Explicit admitted inputs shared by the invoice row and review dialog. */
@@ -38,7 +38,7 @@ export interface FinanceInvoiceReviewInput {
 
 export interface FinanceInvoiceReviewCallbacks {
     close: () => void;
-    saved: (notice: PilotPlainMessageKey) => void;
+    saved: (notice: FrontendPlainMessageKey) => void;
 }
 
 /** The same feature owner is passed explicitly; neither renderer copies it. */

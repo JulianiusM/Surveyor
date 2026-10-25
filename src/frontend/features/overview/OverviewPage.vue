@@ -2,18 +2,18 @@
 import {computed, onBeforeUnmount, ref, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
 import type {LocationQuery} from 'vue-router';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {usePageTitle} from '../../composables/pageTitle';
 import {isOrdinaryNavigation, navigatePageEntry} from '../../composables/pageEntry';
 import type {components} from '../../../types/api/v1';
-import type {PilotOverviewCountRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import type {FrontendOverviewCountRead, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import {overviewKeys} from '../../app/queryKeys';
 import {overviewQueryParameters} from './api';
 import {frontendOverviewPath, frontendOverviewPageEntry} from '../../../modules/lib/frontendIdentity';
 import OverviewRegion from './OverviewRegion.vue';
 import AppAccordionButton from '../../components/AppAccordionButton.vue';
 import RefreshButton from '../../components/RefreshButton.vue';
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const route = useRoute();
 const router = useRouter();
@@ -38,7 +38,7 @@ const open = ref<Record<string, boolean>>({participant: true, owner: true});
 type Region = components['schemas']['OverviewRegion'];
 // Retain only admission receipts. Numeric membership remains owned by QueryClient,
 // so denial/eviction cannot leave a second server snapshot alive in the parent.
-const countSources = ref<Partial<Record<Region['collection'], Partial<Record<Region['region'], PilotOverviewCountRead>>>>>({});
+const countSources = ref<Partial<Record<Region['collection'], Partial<Record<Region['region'], FrontendOverviewCountRead>>>>>({});
 const cacheRevision = ref(0);
 const stopCountCache = context.queryClient.getQueryCache().subscribe(refreshCountCache);
 onBeforeUnmount(stopCountCache);
@@ -76,7 +76,7 @@ function collectionCounts(): Partial<Record<Region['collection'], {total: number
     cacheRevision.value;
     const result: Partial<Record<Region['collection'], {total: number; hidden: number}>> = {};
     for (const collection of ['participant', 'owner'] as const) {
-        let newest: PilotOverviewCountRead | undefined;
+        let newest: FrontendOverviewCountRead | undefined;
         let projection: Region | undefined;
         for (const source of Object.values(countSources.value[collection] ?? {})) {
             if (!context.isCurrent(source.scope, true) || newest && newest.updatedAt > source.updatedAt) continue;
@@ -108,7 +108,7 @@ function receiveHiddenNavigation(query: LocationQuery): void {
 /** Accept only the current region's admitted read or denial. A late old actor/locale
  * cannot remove a new receipt, and retiring one region preserves sibling authority. */
 function updateCounts(collection: Region['collection'], region: Region['region'],
-                      source: PilotOverviewCountRead | null, scope: PilotRequestScope): void {
+                      source: FrontendOverviewCountRead | null, scope: FrontendRequestScope): void {
     if (!context.isCurrent(scope, true)) return;
     // Store a reference to source authority, never the server's numeric membership.
     const sources = countSources.value[collection] ?? {};
@@ -123,7 +123,7 @@ async function toggleHidden(event: MouseEvent, collection: string): Promise<void
     await router.push({query: hiddenQuery(collection)});
 }
 
-/** Saved hrefs and enhanced toggles share the native hidden-region reset. Filters remain
+/** Saved hrefs and enhanced toggles share the hidden-region reset. Filters remain
  * usable on reopening, while the selected parent and its obsolete child pager are discarded. */
 function hiddenQuery(collection: string) {
     const query = {...route.query};
@@ -141,7 +141,7 @@ function hiddenHref(collection: string): string {
 </script>
 <template>
     <section v-if="entry?.kind === 'render'" class="card bg-dark text-white mb-3">
-        <!-- Native dashboard.pug keeps the greeting inside this italic wrapper. Its
+        <!-- The greeting belongs inside this italic wrapper. Its
              trailing margin belongs after the greeting, rather than between icon/text. -->
         <h1 class="card-header text-center">
             <i class="bi bi-house-door-fill me-2">{{
@@ -150,10 +150,10 @@ function hiddenHref(collection: string): string {
         </h1>
         <div class="card-body">
             <p v-if="!context.session.value?.activeProfile" class="text-center">
-                <RouterLink class="btn btn-primary" to="/frontend-pilot/users/login">{{
+                <RouterLink class="btn btn-primary" to="/users/login">{{
                     messages.t('app.login')
                 }}</RouterLink
-                ><RouterLink class="btn btn-outline-light ms-2" to="/frontend-pilot/users/register">{{
+                ><RouterLink class="btn btn-outline-light ms-2" to="/users/register">{{
                     messages.t('app.register')
                 }}</RouterLink>
             </p>
@@ -162,7 +162,7 @@ function hiddenHref(collection: string): string {
                     v-for="collection in ['participant', 'owner'] as const"
                     :key="collection"
                 >
-                    <!-- The shared accordion owns the native collection spacing; adding
+                    <!-- The shared accordion owns the collection spacing; adding
                          another section margin would change the dashboard layout rhythm. -->
                     <h2 class="text-center">
                         <i
@@ -196,7 +196,7 @@ function hiddenHref(collection: string): string {
                                 @counts="(source, scope) => updateCounts(collection, 'main', source, scope)"
                             >
                                 <template #header="{refreshAction, refresh}">
-                                    <h2 class="accordion-header pilot-accordion-heading d-flex align-items-center">
+                                    <h2 class="accordion-header frontend-accordion-heading d-flex align-items-center">
                                         <AppAccordionButton
                                             :expanded="open[collection]"
                                             :controls="'overview-' + collection"
@@ -230,7 +230,7 @@ function hiddenHref(collection: string): string {
                                 </template>
                                 <template #default>
                                     <!-- An explicitly opened hidden region may start before main-region
-                                         counts arrive. Confirmed membership retains the native empty rule. -->
+                                         counts arrive. Confirmed membership retains the empty rule. -->
                                     <div v-if="counts[collection]?.total || (!counts[collection] && hidden[collection])" class="mt-4">
                                         <h3 class="h5">
                                             <a

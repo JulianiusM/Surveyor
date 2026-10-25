@@ -1,8 +1,8 @@
-import type {PilotMetadataFieldPolicy, PilotMetadataSnapshot, PilotRead, PilotRequestScope} from './FrontendPilotUiTypes';
+import type {FrontendMetadataFieldPolicy, FrontendMetadataSnapshot, FrontendRead, FrontendRequestScope} from './FrontendUiTypes';
 
 /** Scalar presentation drafts; feature-generated declarations retain wire authority. */
 export type EntityMetadataValues = Record<string, string | number | boolean | null | undefined>;
-export type EntityMetadataSnapshot = PilotMetadataSnapshot<EntityMetadataValues>;
+export type EntityMetadataSnapshot = FrontendMetadataSnapshot<EntityMetadataValues>;
 
 /** Mounted metadata workflow shared by feature adapters and their settings host.
  * Values are Vue's unwrapped public flags; the editor remains their only owner. */
@@ -27,11 +27,11 @@ export interface EntityMetadataEditorProps {
     busy?: boolean;
     active?: boolean;
     queryKey: readonly unknown[];
-    fieldPolicy?: PilotMetadataFieldPolicy<EntityMetadataValues>;
+    fieldPolicy?: FrontendMetadataFieldPolicy<EntityMetadataValues>;
     preparePatch?: (patch: EntityMetadataValues, values: EntityMetadataValues) => EntityMetadataValues;
     fieldLabel: (field: string) => string;
-    read: (id: string, scope: PilotRequestScope, signal?: AbortSignal,
-        previous?: PilotRead<EntityMetadataSnapshot>) => Promise<PilotRead<EntityMetadataSnapshot>>;
+    read: (id: string, scope: FrontendRequestScope, signal?: AbortSignal,
+        previous?: FrontendRead<EntityMetadataSnapshot>) => Promise<FrontendRead<EntityMetadataSnapshot>>;
     save: (id: string, patch: EntityMetadataValues, token: string,
-        scope: PilotRequestScope) => Promise<PilotRead<EntityMetadataSnapshot>>;
+        scope: FrontendRequestScope) => Promise<FrontendRead<EntityMetadataSnapshot>>;
 }

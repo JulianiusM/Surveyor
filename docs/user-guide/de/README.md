@@ -8,7 +8,7 @@ last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
 heading-anchors: 1:surveyor-user-guide; 2:find-help-quickly; 2:start-here; 3:create-or-use-a-full-account; 3:join-as-a-guest; 3:use-the-correct-profile; 2:feature-guides; 2:permissions-and-sharing; 2:common-controls; 2:guide-index
-source-anchors: src/controller/helpController.ts; src/views/layout.pug; src/locales/de.json; src/frontend/components/AppHeader.vue; docs/user-guide/de/assets/navigation-at-a-glance.png; scripts/generate-help-visuals.mjs; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/help/; src/locales/
+source-anchors: src/controller/helpController.ts; src/locales/de.json; src/frontend/components/AppHeader.vue; docs/user-guide/de/assets/navigation-at-a-glance.png; scripts/generate-help-visuals.mjs; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/help/; src/locales/; src/frontend/
 next-review: help-source-or-visible-UI-change
 production-reference: 2dfa257 native business comparator with current German migrated controls and approved exceptions; not an installed production commit
 -->

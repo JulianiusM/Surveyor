@@ -2,7 +2,7 @@
 import {computed, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {FinanceHistoryProps} from '../../../types/FrontendFinanceReviewTypes';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {invoiceStatus, invoiceStatusClass} from './presentation';
 import FormField from '../../components/FormField.vue';
 import FinanceLedgerFooter from './FinanceLedgerFooter.vue';
@@ -14,7 +14,7 @@ type Invoice = components['schemas']['FinanceInvoice'];
 const props = defineProps<FinanceHistoryProps>();
 const emit = defineEmits<{retract: [invoice: Invoice]; closeInvoice: [invoice: Invoice]; refresh: [];
     review: [invoice: Invoice, action: 'approve' | 'decline' | 'revise' | 'reject' | 'close']}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const id = useId();
 const search = ref('');
@@ -34,7 +34,7 @@ watch([search, status, pageSize], () => {page.value = 0;});
 watch(pages, value => {page.value = Math.min(page.value, value - 1);});
 
 /** Match saved original, corrected and attribution evidence without interpreting
- * its text as markup; newest invoice rows retain the native history ordering. */
+ * its text as markup; newest invoice rows retain the history ordering. */
 function filteredInvoices(): Invoice[] {
     const needle = search.value.trim().toLocaleLowerCase();
     // Presentation searches all admitted records before paging, including audit
@@ -54,7 +54,7 @@ function orderedInvoices(): Invoice[] {
 function newestInvoiceFirst(left: Invoice, right: Invoice): number {
     return (Date.parse(right.createdAt ?? '') || 0) - (Date.parse(left.createdAt ?? '') || 0);
 }
-/** Retain the native recorder fallback even when a historic organizer's saved
+/** Retain the recorder fallback even when a historic organizer's saved
  * name is absent; paid-by attribution remains a separate invoice field. */
 function recorderName(invoice: Invoice): string {
     return invoice.recordedByName || messages.value.t('finance.organizer');
@@ -62,7 +62,7 @@ function recorderName(invoice: Invoice): string {
 </script>
 
 <template>
-    <!-- A genuinely empty admitted history has the native audience-specific
+    <!-- A genuinely empty admitted history has the audience-specific
          message alone. Keep its ledger mounted so fresh snapshots retain the
          same filter controls and local input, including filtered-empty views. -->
     <section v-show="invoices.length > 0" class="invoice-ledger border border-secondary-subtle rounded-3 bg-black p-3 mt-3" data-finance-history>

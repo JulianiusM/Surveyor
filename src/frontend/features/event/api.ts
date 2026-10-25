@@ -4,9 +4,9 @@ import {validateEventRegistrationLinkInput} from '../../../../.generated/api/v1/
 import {validateEventRegistrationDates} from '../../../../.generated/api/v1/browser/validateEventRegistrationDates.mjs';
 import {validateEventRegistrationInput} from '../../../../.generated/api/v1/browser/validateEventRegistrationInput.mjs';
 import type {components} from '../../../types/api/v1';
-import type {PilotContext, PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
-import type {PilotApi} from '../../app/api';
-import type {PilotInputField} from '../../../types/FrontendFeedbackTypes';
+import type {FrontendContext, FrontendRead, FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import type {FrontendApi} from '../../app/api';
+import type {FrontendInputField} from '../../../types/FrontendFeedbackTypes';
 import {createMultipartForm, generatedInputError} from '../../app/transport';
 import {validateEventCreateEntry} from '../../../../.generated/api/v1/browser/validateEventCreateEntry.mjs';
 import {validateEventCreateInput} from '../../../../.generated/api/v1/browser/validateEventCreateInput.mjs';
@@ -27,15 +27,15 @@ type Metadata = components['schemas']['EventMetadata'];
 
 /** Events select generated operations while the existing transport owns captured actor admission. */
 export class EventApi {
-    constructor(private transport: PilotApi) {}
+    constructor(private transport: FrontendApi) {}
 
     /** Obtain permitted root fields and usable comparison evidence together.
      * Missing/malformed ETags cannot authorize an editor, even when the body
      * passed its generated shape validator or a previous snapshot is available. */
-    async metadata(eventId: string, scope: PilotRequestScope, signal?: AbortSignal,
-                   previous?: PilotRead<Metadata>): Promise<PilotRead<Metadata>> {
+    async metadata(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal,
+                   previous?: FrontendRead<Metadata>): Promise<FrontendRead<Metadata>> {
         const transport = this.transport;
-        async function readMetadata(): Promise<PilotRead<Metadata>> {
+        async function readMetadata(): Promise<FrontendRead<Metadata>> {
             const response = await transport.client.GET('/events/{eventId}/metadata', {
                 params: {path: {eventId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
             });
@@ -50,7 +50,7 @@ export class EventApi {
      * A confirmed response must include newly admitted header evidence as well as
      * valid field data; neither the previous token nor saved values renew authority. */
     async saveMetadata(eventId: string, patch: components['schemas']['EventMetadataPatch'], etag: string,
-                       scope: PilotRequestScope): Promise<PilotRead<Metadata>> {
+                       scope: FrontendRequestScope): Promise<FrontendRead<Metadata>> {
         // Structural validation precedes transport; business/field checks remain server-owned.
         if (!validateEventMetadataPatch(patch)) throw generatedInputError(validateEventMetadataPatch.errors, eventInputField);
 
@@ -65,7 +65,7 @@ export class EventApi {
     /** Settings are a separately authorized projection, not authority inherited
      * from detail or metadata. Preserve cancellation and the settings read's own
      * cooldown while its generated validator checks the permitted panels/tokens. */
-    async settings(eventId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['EventSettings']> {
+    async settings(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['EventSettings']> {
         const transport = this.transport;
         async function readSettings(): Promise<components['schemas']['EventSettings']> {
             const response = await transport.client.GET('/events/{eventId}/settings', {
@@ -78,7 +78,7 @@ export class EventApi {
 
     /** Creation admission is distinct from the public duplication projection. The caller supplies
      * its exact return destination; the server owns account admission and bounded destination policy. */
-    async createEntry(scope: PilotRequestScope, signal?: AbortSignal,
+    async createEntry(scope: FrontendRequestScope, signal?: AbortSignal,
                       returnTo?: string): Promise<components['schemas']['EventCreateEntry']> {
         const transport = this.transport;
         async function readCreationEntry(): Promise<components['schemas']['EventCreateEntry']> {
@@ -90,10 +90,10 @@ export class EventApi {
         return transport.allowedRead('event/create-entry/' + (returnTo ?? ''), scope, readCreationEntry, signal);
     }
 
-    /** Adapt the generated Event draft to multipart without changing its native
+    /** Adapt the generated Event draft to multipart without changing its form-shaped
      * parsing/order. Only the declared JSON receipt confirms this creation. */
     async createEvent(input: components['schemas']['EventCreateInput'], image: File | null,
-                      scope: PilotRequestScope): Promise<components['schemas']['EventCreated']> {
+                      scope: FrontendRequestScope): Promise<components['schemas']['EventCreated']> {
         if (!validateEventCreateInput(input)) throw generatedInputError(validateEventCreateInput.errors, eventInputField);
         const form = createMultipartForm(input, image);
 
@@ -104,9 +104,9 @@ export class EventApi {
         }), validateEventCreated, scope).data;
     }
 
-    /** Detail and explicit guest routes deliberately have different native admission. Never
+    /** Detail and explicit guest routes deliberately have different admission. Never
      * infer either route from session presence or from permissions on the other projection. */
-    async resourceEntry(eventId: string, view: 'detail' | 'guest' | 'admin', scope: PilotRequestScope,
+    async resourceEntry(eventId: string, view: 'detail' | 'guest' | 'admin', scope: FrontendRequestScope,
                         signal?: AbortSignal, regToken?: string): Promise<components['schemas']['EventResourceEntry']> {
         const transport = this.transport;
         async function readResourceEntry(): Promise<components['schemas']['EventResourceEntry']> {
@@ -121,7 +121,7 @@ export class EventApi {
     /** Read only the server's permitted duplication surface. Destination selection
      * is independently admitted and part of this read's key. Source assignments,
      * administrator grants and files stay excluded; copied values grant no creation permission. */
-    async duplicate(eventId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['EventDuplicate']> {
+    async duplicate(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['EventDuplicate']> {
         const transport = this.transport;
         async function readDuplicate(): Promise<components['schemas']['EventDuplicate']> {
             const response = await transport.client.GET('/events/{eventId}/duplicate', {
@@ -132,7 +132,7 @@ export class EventApi {
         return transport.allowedRead(`event/${eventId}/duplicate`, scope, readDuplicate, signal);
     }
 
-    async setDefaults(eventId: string, defaults: components['schemas']['PermissionDefaultsPatch'], token: string, scope: PilotRequestScope) {
+    async setDefaults(eventId: string, defaults: components['schemas']['PermissionDefaultsPatch'], token: string, scope: FrontendRequestScope) {
         return this.transport.read('updateEventDefaults', await this.transport.client.PUT('/events/{eventId}/default-permissions', {
             params: {path: {eventId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: defaults, cache: 'no-store',
         }), validateMutationResult, scope).data;
@@ -141,7 +141,7 @@ export class EventApi {
     /** Discover account-profile options under this list's management grant.
      * Keep result shape, cancellation and rate-limit recovery with the existing
      * transport; a displayed username never becomes the acting identity. */
-    async profiles(eventId: string, q: string, scope: PilotRequestScope, signal?: AbortSignal) {
+    async profiles(eventId: string, q: string, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
         async function readProfileOptions(): Promise<components['schemas']['PackingProfileOptions']> {
             const response = await transport.client.GET('/events/{eventId}/profiles', {
@@ -152,25 +152,25 @@ export class EventApi {
         return transport.allowedRead(`event/${eventId}/profiles/${q}`, scope, readProfileOptions, signal);
     }
 
-    async addAdmin(eventId: string, input: components['schemas']['PackingAdminInput'], token: string, scope: PilotRequestScope) {
+    async addAdmin(eventId: string, input: components['schemas']['PackingAdminInput'], token: string, scope: FrontendRequestScope) {
         return this.transport.read('addEventAdmin', await this.transport.client.POST('/events/{eventId}/admins', {
             params: {path: {eventId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: input, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
-    async updateAdmin(eventId: string, profileId: string, mask: number, token: string, scope: PilotRequestScope) {
+    async updateAdmin(eventId: string, profileId: string, mask: number, token: string, scope: FrontendRequestScope) {
         return this.transport.read('updateEventAdmin', await this.transport.client.PATCH('/events/{eventId}/admins/{profileId}', {
             params: {path: {eventId, profileId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: {mask}, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
-    async removeAdmin(eventId: string, profileId: string, token: string, scope: PilotRequestScope) {
+    async removeAdmin(eventId: string, profileId: string, token: string, scope: FrontendRequestScope) {
         return this.transport.read('deleteEventAdmin', await this.transport.client.DELETE('/events/{eventId}/admins/{profileId}', {
             params: {path: {eventId, profileId}, header: {...this.transport.headers(scope), 'If-Match': token}}, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
-    async header(eventId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<Blob> {
+    async header(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<Blob> {
         const transport = this.transport;
 
         /** openapi-fetch uses blob decoding only for success. Error bodies retain its
@@ -191,7 +191,7 @@ export class EventApi {
      * Multipart serialization transports bytes while generated operation metadata still
      * identifies the request. The controller owns image admission, locked comparison and
      * committed cleanup; this adapter confirms only a validated mutation receipt. */
-    async uploadHeader(eventId: string, image: File, token: string, scope: PilotRequestScope) {
+    async uploadHeader(eventId: string, image: File, token: string, scope: FrontendRequestScope) {
         // Keep the chosen bytes separate from their generated filename placeholder.
         // The serializer supplies the actual multipart body without copying upload policy.
         const form = createMultipartForm(null, image);
@@ -203,26 +203,26 @@ export class EventApi {
         }), validateMutationResult, scope).data;
     }
 
-    async removeHeader(eventId: string, token: string, scope: PilotRequestScope) {
+    async removeHeader(eventId: string, token: string, scope: FrontendRequestScope) {
         return this.transport.read('deleteEventHeader', await this.transport.client.DELETE('/events/{eventId}/header', {
             params: {path: {eventId}, header: {...this.transport.headers(scope), 'If-Match': token}}, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
-    async archive(eventId: string, restore: boolean, scope: PilotRequestScope) {
+    async archive(eventId: string, restore: boolean, scope: FrontendRequestScope) {
         const options = {params: {path: {eventId}, header: this.transport.headers(scope)}, cache: 'no-store' as const};
         return this.transport.read(restore ? 'restoreEvent' : 'archiveEvent', restore ? await this.transport.client.POST('/events/{eventId}/restore', options)
             : await this.transport.client.POST('/events/{eventId}/archive', options), validateMutationResult, scope).data;
     }
 
-    async deleteEvent(eventId: string, scope: PilotRequestScope) {
+    async deleteEvent(eventId: string, scope: FrontendRequestScope) {
         return this.transport.read('deleteEvent', await this.transport.client.DELETE('/events/{eventId}', {
             params: {path: {eventId}, header: this.transport.headers(scope)}, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
     /** Read this independently admitted Event projection without broadening sibling access. */
-    async event(eventId: string, scope: PilotRequestScope, signal?: AbortSignal, admin = false): Promise<components['schemas']['EventView']> {
+    async event(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal, admin = false): Promise<components['schemas']['EventView']> {
         const transport = this.transport;
         async function readProjection(): Promise<components['schemas']['EventView']> {
             const response = await transport.client.GET('/events/{eventId}', {
@@ -234,7 +234,7 @@ export class EventApi {
     }
 
     /** Read this independently admitted Event projection without broadening sibling access. */
-    async participants(eventId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['EventParticipants']> {
+    async participants(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['EventParticipants']> {
         const transport = this.transport;
         async function readProjection(): Promise<components['schemas']['EventParticipants']> {
             const response = await transport.client.GET('/events/{eventId}/participants', {
@@ -246,7 +246,7 @@ export class EventApi {
     }
 
     /** Read this independently admitted Event projection without broadening sibling access. */
-    async links(eventId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['EventRegistrationLinks']> {
+    async links(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['EventRegistrationLinks']> {
         const transport = this.transport;
         async function readProjection(): Promise<components['schemas']['EventRegistrationLinks']> {
             const response = await transport.client.GET('/events/{eventId}/links', {
@@ -258,7 +258,7 @@ export class EventApi {
     }
 
     /** Read this independently admitted Event projection without broadening sibling access. */
-    async thingsToDo(eventId: string, scope: PilotRequestScope, signal?: AbortSignal, admin = false): Promise<components['schemas']['EventThingsToDo']> {
+    async thingsToDo(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal, admin = false): Promise<components['schemas']['EventThingsToDo']> {
         const transport = this.transport;
         async function readProjection(): Promise<components['schemas']['EventThingsToDo']> {
             const response = await transport.client.GET('/events/{eventId}/things-to-do', {
@@ -270,7 +270,7 @@ export class EventApi {
     }
 
     /** Dispatch one deliberate shared operation; an unconfirmed delivery never replays. */
-    async saveRegistration(eventId: string, input: components['schemas']['EventRegistrationInput'], scope: PilotRequestScope): Promise<components['schemas']['MutationResult']> {
+    async saveRegistration(eventId: string, input: components['schemas']['EventRegistrationInput'], scope: FrontendRequestScope): Promise<components['schemas']['MutationResult']> {
         if (!validateEventRegistrationInput(input)) throw generatedInputError(validateEventRegistrationInput.errors, () => undefined);
         // The captured actor/CSRF headers remain identical through response classification.
         const result = await this.transport.client.PUT('/events/{eventId}/registration', {
@@ -280,7 +280,7 @@ export class EventApi {
     }
 
     /** Dispatch one deliberate shared operation; an unconfirmed delivery never replays. */
-    async cancelRegistration(eventId: string, scope: PilotRequestScope): Promise<components['schemas']['MutationResult']> {
+    async cancelRegistration(eventId: string, scope: FrontendRequestScope): Promise<components['schemas']['MutationResult']> {
         // The captured actor/CSRF headers remain identical through response classification.
         const result = await this.transport.client.DELETE('/events/{eventId}/registration', {
             params: {path: {eventId}, header: this.transport.headers(scope)}, cache: 'no-store',
@@ -289,7 +289,7 @@ export class EventApi {
     }
 
     /** Dispatch one deliberate shared operation; an unconfirmed delivery never replays. */
-    async updateRegistrationDates(eventId: string, registrationId: string, input: components['schemas']['EventRegistrationDates'], scope: PilotRequestScope): Promise<components['schemas']['MutationResult']> {
+    async updateRegistrationDates(eventId: string, registrationId: string, input: components['schemas']['EventRegistrationDates'], scope: FrontendRequestScope): Promise<components['schemas']['MutationResult']> {
         if (!validateEventRegistrationDates(input)) throw generatedInputError(validateEventRegistrationDates.errors, () => undefined);
         // The captured actor/CSRF headers remain identical through response classification.
         const result = await this.transport.client.PATCH('/events/{eventId}/registrations/{registrationId}', {
@@ -299,7 +299,7 @@ export class EventApi {
     }
 
     /** Dispatch one deliberate shared operation; an unconfirmed delivery never replays. */
-    async removeRegistration(eventId: string, registrationId: string, scope: PilotRequestScope): Promise<components['schemas']['MutationResult']> {
+    async removeRegistration(eventId: string, registrationId: string, scope: FrontendRequestScope): Promise<components['schemas']['MutationResult']> {
         // The captured actor/CSRF headers remain identical through response classification.
         const result = await this.transport.client.DELETE('/events/{eventId}/registrations/{registrationId}', {
             params: {path: {eventId, registrationId}, header: this.transport.headers(scope)}, cache: 'no-store',
@@ -308,7 +308,7 @@ export class EventApi {
     }
 
     /** Dispatch one deliberate shared operation; an unconfirmed delivery never replays. */
-    async createLink(eventId: string, input: components['schemas']['EventRegistrationLinkInput'], scope: PilotRequestScope): Promise<components['schemas']['EventCreatedRegistrationLink']> {
+    async createLink(eventId: string, input: components['schemas']['EventRegistrationLinkInput'], scope: FrontendRequestScope): Promise<components['schemas']['EventCreatedRegistrationLink']> {
         if (!validateEventRegistrationLinkInput(input)) throw generatedInputError(validateEventRegistrationLinkInput.errors, () => undefined);
         // The captured actor/CSRF headers remain identical through response classification.
         const result = await this.transport.client.POST('/events/{eventId}/links', {
@@ -318,7 +318,7 @@ export class EventApi {
     }
 
     /** Dispatch one deliberate shared operation; an unconfirmed delivery never replays. */
-    async revokeLink(eventId: string, linkId: string, scope: PilotRequestScope): Promise<components['schemas']['MutationResult']> {
+    async revokeLink(eventId: string, linkId: string, scope: FrontendRequestScope): Promise<components['schemas']['MutationResult']> {
         // The captured actor/CSRF headers remain identical through response classification.
         const result = await this.transport.client.DELETE('/events/{eventId}/links/{linkId}', {
             params: {path: {eventId, linkId}, header: this.transport.headers(scope)}, cache: 'no-store',
@@ -328,7 +328,7 @@ export class EventApi {
 
     /** Public guest presentation carries a token only into its canonical destination.
      * Reading or prefetching this boundary never spends a registration bypass use. */
-    async guestEntry(eventId: string, scope: PilotRequestScope, signal?: AbortSignal, regToken?: string) {
+    async guestEntry(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal, regToken?: string) {
         const transport = this.transport;
         async function readGuestEntry(): Promise<components['schemas']['GuestEntry']> {
             const response = await transport.client.GET('/events/{eventId}/guest', {
@@ -340,14 +340,14 @@ export class EventApi {
     }
 
     /** Identity completion is shared; the token remains an unconsumed registration input. */
-    async registerGuest(eventId: string, input: components['schemas']['GuestRegistrationInput'], scope: PilotRequestScope, regToken?: string) {
+    async registerGuest(eventId: string, input: components['schemas']['GuestRegistrationInput'], scope: FrontendRequestScope, regToken?: string) {
         return this.transport.identity('registerEventGuest', await this.transport.client.POST('/events/{eventId}/guest', {
             params: {path: {eventId}, query: {regToken}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
         }), scope);
     }
 
     /** Event automatic archival is independent from direct archive and permanent deletion. */
-    async automate(eventId: string, paused: boolean, scope: PilotRequestScope) {
+    async automate(eventId: string, paused: boolean, scope: FrontendRequestScope) {
         const result = await this.transport.client.PUT('/events/{eventId}/automatic-archive', {
             params: {path: {eventId}, header: this.transport.headers(scope)}, body: {paused}, cache: 'no-store',
         });
@@ -356,7 +356,7 @@ export class EventApi {
 
     /** Child lifecycle commands use the current Event view intent and existing shared operation. */
     async archiveChild(eventId: string, entityType: 'packing' | 'activity' | 'drivers', entityId: string,
-                       restore: boolean, scope: PilotRequestScope, admin = false) {
+                       restore: boolean, scope: FrontendRequestScope, admin = false) {
         const options = {params: {path: {eventId, entityType, entityId}, query: {view: admin ? 'admin' as const : 'detail' as const},
             header: this.transport.headers(scope)}, cache: 'no-store' as const};
         const result = restore ? await this.transport.client.POST('/events/{eventId}/things-to-do/{entityType}/{entityId}/restore', options)
@@ -367,7 +367,7 @@ export class EventApi {
     /** Delete an owner-managed child only within its admitted parent/type scope.
      * The existing feature operation owns deletion and best-effort file cleanup. */
     async deleteChild(eventId: string, entityType: 'packing' | 'activity' | 'drivers', entityId: string,
-                      scope: PilotRequestScope, admin = false): Promise<components['schemas']['MutationResult']> {
+                      scope: FrontendRequestScope, admin = false): Promise<components['schemas']['MutationResult']> {
         const result = await this.transport.client.DELETE('/events/{eventId}/things-to-do/{entityType}/{entityId}', {
             params: {path: {eventId, entityType, entityId}, query: {view: admin ? 'admin' : 'detail'},
                 header: this.transport.headers(scope)}, cache: 'no-store',
@@ -377,7 +377,7 @@ export class EventApi {
 
     /** Pausing/resuming preserves shared archival state rather than editing personal placement. */
     async automateChild(eventId: string, entityType: 'packing' | 'activity' | 'drivers', entityId: string,
-                        paused: boolean, scope: PilotRequestScope, admin = false) {
+                        paused: boolean, scope: FrontendRequestScope, admin = false) {
         const result = await this.transport.client.PUT('/events/{eventId}/things-to-do/{entityType}/{entityId}/automatic-archive', {
             params: {path: {eventId, entityType, entityId}, query: {view: admin ? 'admin' : 'detail'}, header: this.transport.headers(scope)},
             body: {paused}, cache: 'no-store',
@@ -388,7 +388,7 @@ export class EventApi {
 
 /** Creation and metadata controls expose the same named Event fields. Their
  * distinct generated contracts remain authoritative for admitted wire values. */
-function eventInputField(path: string): PilotInputField | undefined {
+function eventInputField(path: string): FrontendInputField | undefined {
     const field = path.slice(1);
     const label = field === 'title' ? 'event.title' : field === 'description' ? 'event.description'
         : field === 'location' ? 'event.locationLabel' : field === 'startDate' ? 'event.startDateLabel'
@@ -399,10 +399,10 @@ function eventInputField(path: string): PilotInputField | undefined {
     return undefined;
 }
 
-const owners = new WeakMap<PilotApi, EventApi>();
+const owners = new WeakMap<FrontendApi, EventApi>();
 
 /** Keep one feature adapter per application-local transport, without sharing actors. */
-export function useEventApi(context: PilotContext): EventApi {
+export function useEventApi(context: FrontendContext): EventApi {
     let owner = owners.get(context.api);
     if (!owner) {
         owner = new EventApi(context.api);

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, reactive, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
-import {useActionState, usePilot} from '../../app/context';
+import {useActionState, useFrontend} from '../../app/context';
 import {eventKeys} from '../../app/queryKeys';
 import {useCommand} from '../../composables/command';
 import {useEventApi} from './api';
@@ -23,7 +23,7 @@ type DetailsSelection = {kind: 'summary'} | {kind: 'participant'; id: string};
 // Page admission and roster access remain separate. Only the organizer caller
 // enables management, and every write still uses its existing server operation.
 const props = withDefaults(defineProps<{eventId: string; startDate: string; endDate: string; manageRegistrations?: boolean; active?: boolean}>(), {active: true});
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const api = useEventApi(context);
 const id = useId();
@@ -51,12 +51,12 @@ const dateTotals = computed(() => (section.data.value?.dateTotals ?? []).map(tot
 const hasSummary = computed(() => !!section.data.value?.allergies.length || !!section.data.value?.comments.length);
 const details = computed(currentDetails);
 
-/** Native roster search matches names, email and dietary tokens locally while
+/** Roster search matches names, email and dietary tokens locally while
  * totals continue to describe the complete admitted participant projection. */
 function filteredRows(): Participant[] {
     const needle = filter.value.trim().toLowerCase();
     const matches: Participant[] = [];
-    // Keep native machine tokens searchable alongside their localized badges.
+    // Keep machine tokens searchable alongside their localized badges.
     // Filtering never requests another projection or recomputes server totals.
     for (const row of section.data.value?.participants ?? []) {
         const terms = [row.name, row.email ?? ''];
@@ -106,7 +106,7 @@ function currentDetails(): {allergies: string[]; comments: string[]} | null {
     return {allergies: participantNotes(row, 'ALLERGIES'), comments: participantNotes(row, 'COMMENT')};
 }
 
-/** Match native per-person semicolon splitting and ordering without retaining
+/** Match per-person semicolon splitting and ordering without retaining
  * a second copy of the participant projection behind the selected dialog. */
 function participantNotes(row: Participant, choice: 'ALLERGIES' | 'COMMENT'): string[] {
     const notes: string[] = [];
@@ -159,7 +159,7 @@ async function saveDates(event: Event): Promise<void> {
     if (!management.isAvailable()) return;
     const form = event.target as HTMLFormElement;
     if (!form.reportValidity()) return;
-    // Native date controls constrain each bound; the shared server checks their order.
+    // Date controls constrain each bound; the shared server checks their order.
     const registrationId = edit.id;
     const dates = {arrivalDate: edit.arrivalDate, departureDate: edit.departureDate};
     const result = await command.run(scope => api.updateRegistrationDates(props.eventId, registrationId, dates, scope),
@@ -240,7 +240,7 @@ async function refresh(): Promise<void> {
                                         :disabled="available.disabled.value" />
                                 </div>
                             </div>
-                            <div class="pilot-action-row mb-2">
+                            <div class="frontend-action-row mb-2">
                                 <div class="js-totals small text-secondary">
                                     <EventTotals :entries="section.data.value.totals" />
                                 </div>
@@ -364,7 +364,7 @@ async function refresh(): Promise<void> {
             </form>
             <template #footer>
                 <small class="text-secondary">{{ messages.t('event.organizer.eventWindow') }}</small>
-                <div class="pilot-action-row">
+                <div class="frontend-action-row">
                     <ActionButton variant="outline-secondary"
                         :disabled="command.pending.value || command.recovering.value" @click="closeDates">{{ messages.t('common.cancel') }}</ActionButton>
                     <ActionButton type="submit" :form="`${id}-date-form`" :state="management"

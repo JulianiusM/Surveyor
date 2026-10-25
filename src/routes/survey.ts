@@ -1,92 +1,51 @@
-/*
- * Copyright 2026 Julian Malovanij
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import {Router} from 'express';
+import type {Request, Response} from 'express';
+import {asyncHandler} from '../modules/lib/asyncHandler';
+import {captureApiActor} from '../modules/api/session';
+import {renderFrontend} from '../modules/frontendRenderer';
+import {readSurveyCreateEntry, readSurveyDuplicate, readSurveyResourceEntry} from '../controller/surveyController';
+import {bootstrap, applyPageEntry} from './frontend';
+import {createHeaderHandler} from './outputs';
+import {readSurveyHeaderPath} from '../controller/surveyController';
 
-import express, {Request, Response} from 'express';
-import controller from "../controller/surveyController";
-import {createGuestFlowRouter} from "../middleware/guestFlowFactory";
-import * as surveyService from "../modules/database/services/SurveyService";
-import {asyncHandler} from "../modules/lib/asyncHandler";
-import {ENTITIES, ENTITY_ITEMS, getResource} from "../modules/lib/util";
-import type {EntityType} from "../types/UtilTypes";
-
-const app = express.Router();
-
-const entityName: EntityType = ENTITIES.SURVEY;
-
-const resFct = (req: Request) => getResource(req, entityName);
-
-// Helper to DRY up flash + redirect logic
-function handleAction(actionFn: (req: Request) => Promise<void>, successMsg: string) {
-    return asyncHandler(async (req: Request, res: Response) => {
-        const surveyId = resFct(req).id;
-        try {
-            // Execute the provided controller action
-            await actionFn(req);
-            req.flash('success', successMsg);
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
-            req.flash('error', message);
-        }
-        res.redirect(`/survey/${surveyId}`);
-    });
+const router = Router();
+router.get('/create', asyncHandler(renderCreation));
+router.get('/:surveyId/duplicate', asyncHandler(renderDuplicate));
+for (const [path, intent] of [['/:surveyId', 'detail'], ['/:surveyId/guest', 'guest']] as const) {
+    /** The registered detail/guest route owns admission regardless of the
+     * equivalent URL spelling accepted by Express. */
+    router.get(path, asyncHandler(async function renderSurvey(req, res) {
+        const state = await bootstrap(req);
+        // Keep controller authorization and original return URL unchanged;
+        // selecting this presentation never creates a guest identity.
+        const result = await readSurveyResourceEntry(String(req.params.surveyId), intent, await captureApiActor(req));
+        if (await applyPageEntry(req, res, state, result.entry)) return;
+        state.guestEntry = result.guest ?? undefined;
+        await renderFrontend(res, req.originalUrl, state);
+    }));
 }
 
-app.use('/', createGuestFlowRouter({
-    addToEvent: true,
-    entityType: entityName,
-    entityItemType: ENTITY_ITEMS.SURVEY,
-    db: {
-        getById: surveyService.getSurveyById,
-        getItems: surveyService.getCombinationsBySurveyId,
-    },
-    templates: {
-        create: 'surveyor/survey-create',
-        view: 'surveyor/survey-vote',
-    },
-    buildRedirect: (id: any) => `/survey/${id}`,
-    preprocessCreate: controller.preprocessCreate,
-    createEntity: controller.createEntity,
-    afterCreateItems: controller.afterCreateItems,
-    fetchForView: controller.fetchForView,
-    fetchForDuplicate: controller.fetchForDuplicate,
-    deleteEntity: controller.deleteEntity,
-}));
+/** Preserve account-only creation and the exact login return destination. */
+async function renderCreation(req: Request, res: Response): Promise<void> {
+    const state = await bootstrap(req);
+    const form = await readSurveyCreateEntry(await captureApiActor(req), req.originalUrl);
+    if (await applyPageEntry(req, res, state, form.entry)) return;
+    state.surveyCreateContext = form.context ?? undefined;
+    await renderFrontend(res, req.originalUrl, state);
+}
 
-/**
- * POST /survey/:id/add-combination
- * Add a weekday/nth combination to the survey
- */
-app.post(
-    '/:id/add-combination',
-    handleAction(
-        (req: Request) => controller.addCombination(resFct(req), req.body.weekday, req.body.nthWeek),
-        'Combination successfully added'
-    )
-);
+/** A copy is an editable form seed, never a write or a copied ballot/image. */
+async function renderDuplicate(req: Request, res: Response): Promise<void> {
+    const state = await bootstrap(req);
+    const actor = await captureApiActor(req);
+    // Existing duplication admits the current owner independently of account
+    // creation. A guest owner may inspect the copy; submission separately
+    // follows the established account-only creation journey.
+    state.surveyDuplicate = await readSurveyDuplicate(String(req.params.surveyId), actor);
+    state.pageEntry = {kind: 'render'};
+    await renderFrontend(res, req.originalUrl, state);
+}
 
-/**
- * POST /survey/:id/submit
- * Submit or update responses for the survey
- */
-app.post(
-    '/:id/submit',
-    handleAction(
-        (req: Request) => controller.submitResponses(resFct(req), req.session, req.body),
-        'Answers updated'
-    )
-);
+router.get('/:headerId/header', createHeaderHandler(readSurveyHeaderPath));
 
-export default app;
+export default router;

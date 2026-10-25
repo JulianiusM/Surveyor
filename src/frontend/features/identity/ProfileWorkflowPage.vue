@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import {computed, onBeforeUnmount, ref, shallowRef, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
-import {useActionState, usePilot} from '../../app/context';
+import {useActionState, useFrontend} from '../../app/context';
 import {identityAdministrationKeys} from '../../app/queryKeys';
 import {ObsoleteRequestError} from '../../app/transport';
 import {useCommand} from '../../composables/command';
 import {completeIdentityEntry, useConfirmedNavigation, usePageEntry} from '../../composables/pageEntry';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {usePageTitle} from '../../composables/pageTitle';
-import type {FrontendCommonPage, FrontendProfileWorkflow} from '../../../types/FrontendPilotTypes';
-import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import type {FrontendCommonPage, FrontendProfileWorkflow} from '../../../types/FrontendTypes';
+import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {components, operations} from '../../../types/api/v1';
 import {frontendDocumentUrl} from '../../../modules/lib/frontendIdentity';
 import {IdentityAdministrationApi} from './administrationApi';
@@ -25,7 +25,7 @@ import CommonPage from '../common/CommonPage.vue';
 
 type WorkflowKind = operations['getProfileWorkflowEntry']['parameters']['query']['kind'];
 type Presentation = FrontendProfileWorkflow | components['schemas']['ProfileMigrationPreview'];
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const route = useRoute();
 const router = useRouter();
@@ -92,15 +92,15 @@ const field = computed(() => kind.value === 'entry'
 const submitLabel = computed(() => messages.value.t(kind.value === 'entry' ? 'profile.showMigrationProfile'
     : kind.value === 'preview' ? 'profile.executeMigration'
         : kind.value === 'deactivate' ? 'profile.executeDeactivation' : 'profile.executeAccountDeletion'));
-const back = computed(() => kind.value === 'deactivate' ? '/frontend-pilot/users/profile'
-    : kind.value === 'delete-account' ? '/frontend-pilot' : '/frontend-pilot/users/profile/manage');
+const back = computed(() => kind.value === 'deactivate' ? '/users/profile'
+    : kind.value === 'delete-account' ? '/' : '/users/profile/manage');
 usePageTitle(title);
 watch([documentUrl, context.epoch], retireVisit, {flush: 'sync'});
 watch([() => admission.outcome.value?.kind, context.readsReady, context.hydrated], issueRequestedToken, {immediate: true});
 onBeforeUnmount(retirePreviewRead);
 
 /** Query owns read-only admission; it never issues tokens or runs a legacy mutation. */
-function readWorkflowEntry(scope: PilotRequestScope, signal: AbortSignal) {
+function readWorkflowEntry(scope: FrontendRequestScope, signal: AbortSignal) {
     return api.workflowEntry(routeKind.value, route.fullPath, scope, signal);
 }
 
@@ -194,7 +194,7 @@ async function submitWorkflow(event: Event): Promise<void> {
     const submitted = workflow.value;
     const submittedKind = submitted?.kind;
     const submittedValue = submitted?.kind === 'preview' ? submitted.token : value.value;
-    async function performWorkflow(scope: PilotRequestScope) {
+    async function performWorkflow(scope: FrontendRequestScope) {
         if (submittedKind === 'preview') return api.transfer(submittedValue ?? '', scope);
         if (submittedKind === 'deactivate') return api.deactivate(submittedValue ?? '', scope);
         return api.deleteAccount(submittedValue ?? '', scope);
@@ -271,7 +271,7 @@ async function requestPreview(): Promise<void> {
         }
     }
 }
-function ownsPreviewRead(scope: PilotRequestScope, controller: AbortController, origin: string): boolean {
+function ownsPreviewRead(scope: FrontendRequestScope, controller: AbortController, origin: string): boolean {
     return active && !controller.signal.aborted && previewController === controller && context.isCurrent(scope)
         && documentUrl.value === origin && routeKind.value === 'entry';
 }
@@ -324,7 +324,7 @@ function ownsPreviewRead(scope: PilotRequestScope, controller: AbortController, 
                     <template v-else-if="workflow.kind === 'preview'">
                         <p class="lead text-center">{{ messages.t('profile.previewIntro') }}</p>
                         <p class="text-center">{{ messages.t('profile.previewOwnerWarning') }}</p>
-                        <!-- The token holder sees exactly the native explicit owner
+                        <!-- The token holder sees exactly the explicit owner
                              projection. Plain interpolation escapes every supplied field. -->
                         <div class="row gy-3 justify-content-center">
                             <div class="col-md-6"><h4>{{ messages.t('profile.previewName') }}</h4><p>{{ workflow.profile.name }}</p></div>
@@ -339,7 +339,7 @@ function ownsPreviewRead(scope: PilotRequestScope, controller: AbortController, 
                         </div>
                     </template>
                     <p v-else class="lead text-center mb-4"><i class="bi bi-exclamation-diamond-fill me-1" aria-hidden="true"></i>{{ messages.t(workflow.kind === 'deactivate' ? 'profile.deactivateIntro' : 'profile.deleteAccountIntro') }}</p>
-                    <!-- Native field names and layout remain; JSON commands retain the same mounted document. -->
+                    <!-- Field names and layout stay mounted; JSON commands retain the same mounted document. -->
                     <form id="forgotForm" class="row gy-3 justify-content-center" @submit="submitWorkflow">
                         <div v-if="workflow.kind === 'preview'" class="col-md-6">
                             <input id="token" class="form-control text-bg-dark" type="text" name="token" :value="workflow.token" hidden />

@@ -7,7 +7,7 @@ import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import type {components} from '../../src/types/api/v1';
-import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
+import {createFrontendContext, observeInitialDocument, frontendContextKey} from '../../src/frontend/app/context';
 import {activityKeys} from '../../src/frontend/app/queryKeys';
 import ActivityPage from '../../src/frontend/features/activity/ActivityPage.vue';
 import ActivityCreatePage from '../../src/frontend/features/activity/ActivityCreatePage.vue';
@@ -61,20 +61,20 @@ function json(value: unknown, status = 200): Response {
 /** Mount production components and generated transport; only HTTP delivery is
  * substituted. Persistence and native/built parity have their own integration layers. */
 async function mounted(component: Component, handler: (request: Request) => Promise<Response>,
-    path = `/frontend-pilot/activity/${planId}`, stubs: Record<string, boolean> = {}, detailStatus: 'success' | 'error' = 'success') {
+    path = `/activity/${planId}`, stubs: Record<string, boolean> = {}, detailStatus: 'success' | 'error' = 'success') {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
-    const context = createPilotContext({session}, true, request);
+    const context = createFrontendContext({session}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/frontend-pilot/activity/create', component}, {path: '/frontend-pilot/activity/:planId/duplicate', component},
-        {path: '/frontend-pilot/activity/:planId', component: component === ActivityPage ? component : defineComponent({template: '<p>Created plan</p>'})},
-        {path: '/frontend-pilot', component: defineComponent({template: '<p>Overview</p>'})},
+        {path: '/activity/create', component}, {path: '/activity/:planId/duplicate', component},
+        {path: '/activity/:planId', component: component === ActivityPage ? component : defineComponent({template: '<p>Created plan</p>'})},
+        {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
     ]});
     await router.push(path);
     const stopInitial = observeInitialDocument(context, router);
     const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[pilotContextKey as symbol]: context},
+        provide: {[frontendContextKey as symbol]: context},
         stubs,
     }});
     await flushPromises();
@@ -103,21 +103,21 @@ describe('Activity production frontend consumers', () => {
         expect(writes).toEqual([]);
         await moving.trigger('dragstart');
         await otherDay.trigger('dragover', {clientY: 150});
-        expect(otherDay.classes()).not.toContain('pilot-reorder-after');
+        expect(otherDay.classes()).not.toContain('frontend-reorder-after');
         await otherDay.trigger('drop');
         expect(writes).toEqual([]);
 
         await moving.trigger('dragstart');
         await target.trigger('dragover', {clientY: 110});
-        expect(target.classes()).toContain('pilot-reorder-before');
+        expect(target.classes()).toContain('frontend-reorder-before');
         await target.trigger('dragover', {clientY: 150});
-        expect(target.classes()).toContain('pilot-reorder-after');
-        expect(target.classes()).not.toContain('pilot-reorder-before');
+        expect(target.classes()).toContain('frontend-reorder-after');
+        expect(target.classes()).not.toContain('frontend-reorder-before');
         expect(writes).toEqual([]);
         await target.trigger('drop');
         await flushPromises();
         expect(writes).toEqual([{order: [{slotId: planId, position: 0}, {slotId, position: 1}]}]);
-        expect(wrapper.find('.pilot-reorder-before, .pilot-reorder-after, .pilot-reorder-dragging').exists()).toBe(false);
+        expect(wrapper.find('.frontend-reorder-before, .frontend-reorder-after, .frontend-reorder-dragging').exists()).toBe(false);
     });
 
     it.each([429, 503])('recovers cold detail through Refresh after its server deadline without replacing later drafts (%s)', async status => {
@@ -177,7 +177,7 @@ describe('Activity production frontend consumers', () => {
         expect(draft.element.value).toBe('Unsaved recovered activity notes');
         expect(request).toHaveBeenCalledTimes(3);
         expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
-        expect(router.currentRoute.value.fullPath).toBe(`/frontend-pilot/activity/${planId}`);
+        expect(router.currentRoute.value.fullPath).toBe(`/activity/${planId}`);
     });
 
     it.each([403, 404])('keeps Refresh absent after validated cold detail retirement (%s)', async status => {
@@ -358,7 +358,7 @@ describe('Activity production frontend consumers', () => {
         expect(wrapper.find('a[href*="#tab-rules"]').exists()).toBe(false);
         await rules.trigger('click');
         expect(wrapper.get('#tab-rules').isVisible()).toBe(true);
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/activity/' + planId);
+        expect(router.currentRoute.value.path).toBe('/activity/' + planId);
 
         // A normal detail refresh preserves tab selection and cannot invoke a
         // method that this admitted actor does not hold.
@@ -457,7 +457,7 @@ describe('Activity production frontend consumers', () => {
         await flushPromises();
         const retained = wrapper.get(`[data-slotid="${slotId}"] small[tabindex="0"] input`);
         expect((retained.element as HTMLInputElement).value).toBe('My unsaved description');
-        expect(wrapper.find(`[data-slotid="${slotId}"] .pilot-inline-conflict`).exists()).toBe(true);
+        expect(wrapper.find(`[data-slotid="${slotId}"] .frontend-inline-conflict`).exists()).toBe(true);
     });
 
     it('retains opening slot fields and blocks partial saves after a live field grant is revoked', async () => {
@@ -499,10 +499,10 @@ describe('Activity production frontend consumers', () => {
         expect(dateGroup?.querySelector('summary')?.textContent).toBe('Dates and time');
         expect(dateGroup?.hasAttribute('open')).toBe(true);
         expect(dateGroup?.querySelectorAll('.col-md-6')).toHaveLength(2);
-        (document.querySelector('#pilot-settings-tab-actions') as HTMLButtonElement).click();
+        (document.querySelector('#frontend-settings-tab-actions') as HTMLButtonElement).click();
         await flushPromises();
-        expect(document.querySelector('#pilot-settings-actions')?.textContent).toContain('Pause automatic archival');
-        const link = document.querySelector<HTMLAnchorElement>('#pilot-settings-actions a[target="_blank"]');
+        expect(document.querySelector('#frontend-settings-actions')?.textContent).toContain('Pause automatic archival');
+        const link = document.querySelector<HTMLAnchorElement>('#frontend-settings-actions a[target="_blank"]');
         expect(link?.getAttribute('href')).toBe('/activity/' + planId + '/export/schedule');
         expect(link?.textContent).toBe('Export schedule');
     });
@@ -686,7 +686,7 @@ describe('Activity production frontend consumers', () => {
         await flushPromises();
         const feedback = document.querySelector('.alert-danger')!;
         expect(feedback.textContent).toContain('Role: Use no more than 255 characters.');
-        expect(feedback.classList.contains('pilot-notification')).toBe(true);
+        expect(feedback.classList.contains('frontend-notification')).toBe(true);
         expect(document.querySelector('#slotEditorRoleInput')).toBe(search);
         expect(search.value).toBe('x'.repeat(256));
         expect(document.querySelector('#slotEditorForm')).not.toBeNull();
@@ -712,7 +712,7 @@ describe('Activity production frontend consumers', () => {
         const feedback = document.querySelector('.alert-danger')!;
         expect(feedback.textContent).toContain('Title: Enter at least one non-space character.');
         expect(document.querySelectorAll('.alert-danger')).toHaveLength(1);
-        expect(feedback.classList.contains('pilot-notification')).toBe(true);
+        expect(feedback.classList.contains('frontend-notification')).toBe(true);
         expect(title.value).toBe('   ');
         expect(text.value).toBe('Keep these instructions exactly.');
         expect(document.querySelector('#textFieldTitle')).toBe(title);
@@ -773,7 +773,7 @@ describe('Activity production frontend consumers', () => {
         const {wrapper, context, request} = await mounted(ActivityCreatePage, async request => {
             return new URL(request.url).pathname.endsWith('/events') ? json({items: [], nextCursor: null, previousCursor: null})
                 : json({entry: {kind: 'render'}, context: definitions, selectedEvent: null});
-        }, '/frontend-pilot/activity/create');
+        }, '/activity/create');
         await wrapper.get('#startDate').setValue('2030-06-01');
         await flushPromises();
         expect(wrapper.get<HTMLInputElement>('#endDate').element.value).toBe('2030-06-01');
@@ -833,7 +833,7 @@ describe('Activity production frontend consumers', () => {
         const {wrapper, context, request} = await mounted(ActivityCreatePage, async request => {
             return new URL(request.url).pathname.endsWith('/events') ? json({items: [], nextCursor: null, previousCursor: null})
                 : json({entry: {kind: 'render'}, context: definitions, selectedEvent: null});
-        }, '/frontend-pilot/activity/create');
+        }, '/activity/create');
         await wrapper.get('#title').setValue('Weekend duties');
         await wrapper.get('#startDate').setValue('2030-06-01');
         await wrapper.get('#endDate').setValue('2030-06-02');
@@ -859,7 +859,7 @@ describe('Activity production frontend consumers', () => {
         await flushPromises();
         const feedback = wrapper.get('.alert-danger');
         expect(feedback.text()).toBe(label + ': ' + reason);
-        expect(feedback.classes()).toContain('pilot-notification');
+        expect(feedback.classes()).toContain('frontend-notification');
         expect(retained.isConnected).toBe(true);
         expect(retained.value).toBe(value);
         expect(document.activeElement).toBe(retained);
@@ -879,7 +879,7 @@ describe('Activity production frontend consumers', () => {
             if (request.method === 'POST') return new Promise<Response>(resolve => { settle = resolve; });
             return new URL(request.url).pathname.endsWith('/events') ? json({items: [], nextCursor: null, previousCursor: null})
                 : json({entry: {kind: 'render'}, context: definitions, selectedEvent: null});
-        }, '/frontend-pilot/activity/create');
+        }, '/activity/create');
         await wrapper.get('#title').setValue('Pending creation');
         await wrapper.get('#startDate').setValue('2030-06-01');
         await flushPromises();
@@ -918,7 +918,7 @@ describe('Activity production frontend consumers', () => {
         expect(progress.classes()).toEqual(expect.arrayContaining(['status-notice', 'alert-warning', 'mb-3']));
         expect(progress.attributes('role')).toBeUndefined();
         expect(progress.find('.btn-close').exists()).toBe(false);
-        expect(progress.classes()).not.toContain('pilot-notification');
+        expect(progress.classes()).not.toContain('frontend-notification');
         await wrapper.findAll('[role="tab"]').find(button => button.text() === 'Participants')!.trigger('click');
         expect(wrapper.get('#participant-status-overview').text()).toContain('2030-06-01 – 2030-06-02');
         await wrapper.get('[data-participant-filter="needs-more"]').trigger('click');
@@ -1013,7 +1013,7 @@ describe('Activity production frontend consumers', () => {
             const form = await request.formData();
             submitted = JSON.parse(String(form.get('data')));
             return json({id: otherId}, 201);
-        }, `/frontend-pilot/activity/${planId}/duplicate`);
+        }, `/activity/${planId}/duplicate`);
         await vi.waitFor(() => expect(wrapper.find('#title').exists()).toBe(true));
         expect(wrapper.get<HTMLInputElement>('#title').element.value).toBe('Copied duties');
         expect(wrapper.get<HTMLInputElement>('.slot input').element.value).toBe('Breakfast help');
@@ -1022,7 +1022,7 @@ describe('Activity production frontend consumers', () => {
         expect(submitted).toMatchObject({title: 'Copied duties', startDate: view.startDate, endDate: view.endDate,
             slots: [{title: 'Breakfast help', position: 0, day: slot.day, maxAssignees: 2}]});
         expect(submitted).not.toHaveProperty('assignments');
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/activity/' + otherId);
+        expect(router.currentRoute.value.path).toBe('/activity/' + otherId);
     });
 
     it('groups partial weeks and leap-day dates without changing stored civil days', () => {
@@ -1048,7 +1048,7 @@ describe('Activity production frontend consumers', () => {
 
         const creating = await mounted(ActivityCreatePage, async request => new URL(request.url).pathname.endsWith('/events')
             ? json({items: [], nextCursor: null, previousCursor: null})
-            : json({entry: {kind: 'render'}, context: definitions, selectedEvent: null}), '/frontend-pilot/activity/create');
+            : json({entry: {kind: 'render'}, context: definitions, selectedEvent: null}), '/activity/create');
         await vi.waitFor(() => expect(creating.wrapper.find('#startDate').exists()).toBe(true));
         await creating.wrapper.get('#startDate').setValue('2027-03-27');
         await creating.wrapper.get('#endDate').setValue('2027-03-30');

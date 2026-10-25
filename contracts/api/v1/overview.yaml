@@ -25,7 +25,7 @@ schemas:
       archived: {type: boolean}
       inheritedArchived: {type: boolean}
       automation:
-        description: Optional schedule context for Event Things to do, or native schedule-management controls admitted on personal Overview cards.
+        description: Optional schedule context for Event Things to do, or schedule-management controls admitted on personal Overview cards.
         type: object
         additionalProperties: false
         required: [paused, canManage]

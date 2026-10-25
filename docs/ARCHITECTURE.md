@@ -4,14 +4,17 @@ documentation-metadata
 audience: maintainers; developers; AI agents
 owner: architecture maintainers
 status: current
-last-verified: 2026-10-04
+last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Native runtime, domain, controller/DBAL, identity, lifecycle, UI, build and test boundaries; completed design contracts consolidated editorially without pilot behavior claims.
-source-anchors: tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/modules/archive/policy.ts; src/modules/entityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoice/retention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/features/help/HELP_VISUALS.md
+verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
+source-anchors: package.json; src/app.ts; src/frontend/; src/routes/; src/controller/; src/modules/database/; src/modules/api/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: architecture-or-help-delivery-change
 -->
 
-Surveyor is a TypeScript monolith that serves HTML and JSON from one Express process. MariaDB stores application records and sessions; the filesystem stores uploaded header images and invoice proofs. Pug renders the primary UI, with focused browser-side TypeScript enhancing interactive pages.
+Surveyor is a TypeScript monolith that serves HTML and JSON from one Express process. MariaDB stores application
+records and sessions; the filesystem stores uploaded header images and invoice proofs. Vue supplies request-local
+server rendering and browser interaction. Express retains routing, sessions, authorization and deployment ownership;
+the same existing controllers and database services serve every transport.
 
 This document defines the current technical shape of the repository. Configuration, database operation, production deployment, and recovery procedures are maintained separately in [Configuration](CONFIGURATION.md), [Database and Migrations](DATABASE.md), [Production Operations](OPERATIONS.md), and [Upgrading and Rolling Back](UPGRADING.md).
 
@@ -25,8 +28,9 @@ Reverse proxy / TLS endpoint
   |
   v
 Express 5 application
-  |-- Pug HTML and static assets
-  |-- JSON API under /api
+  |-- request-local Vue HTML and static assets
+  |-- generated versioned JSON/multipart API
+  |-- explicit document adapters for provider, token, print and download boundaries
   |-- database-backed session middleware
   |-- local-account, guest, and OIDC identity flows
   |-- permission and shared feature-flow middleware
@@ -48,11 +52,13 @@ The lockfile is authoritative for exact installed dependency versions. The impor
 | Runtime | Node.js; CI and release workflows use 24.15.0 |
 | Language | TypeScript targeting ES2024 |
 | Web framework | Express 5.2.x |
-| Templates and UI | Pug 3, Bootstrap 5.3, Sass, browser TypeScript |
-| Browser build | esbuild |
+| Component UI | Vue 3/TypeScript, Bootstrap-compatible presentation, native controls and suitable Reka UI primitives |
+| Routing and server snapshots | Vue Router and TanStack Vue Query; feature-owned drafts remain separate |
+| Browser/SSR build | Vite with separate client and SSR outputs; Sass compiles the standalone print stylesheet |
+| Shared localization | i18next with i18next-vue, generated typed keys/parameters and shared catalogs |
 | Persistence | TypeORM 1.1.x with MariaDB/MySQL driver support; MariaDB 10.11 is the tested workflow baseline |
 | Sessions | `express-session` with `connect-typeorm` and the `Session` entity |
-| Input validation | Joi and `express-validator`, according to the route or workflow |
+| Input validation | Authored OpenAPI with generated declarations/Ajv standalone validators; existing Joi/express-validator adapters retain operation-specific decoding |
 | Authentication | Local username/password, guest links, and direct `openid-client` OIDC integration |
 | Email | Nodemailer SMTP |
 | Tests | Vitest for unit/frontend/integration; Playwright for focused E2E |
@@ -88,21 +94,27 @@ The runtime `DataSource` reads the initialized settings store. TypeORM command-l
 
 1. Disable the `X-Powered-By` header.
 2. Configure Pug views under the compiled `views` directory.
-3. Install request logging, JSON and URL-encoded parsing, cookies, and static-file serving.
-4. Create a one-day database-backed session with secure cookies in production and `SameSite=Lax`.
-5. Enable one trusted proxy hop so secure cookies work behind the documented reverse proxy.
+3. Install request logging, JSON and URL-encoded parsing, cookies, development middleware and static-file serving.
+4. Enable one trusted proxy hop so secure cookies work behind the documented reverse proxy.
+5. Create a one-day database-backed session with secure cookies in production and `SameSite=Lax`.
 6. Install flash messages.
-7. Validate the stored user/guest/profile session on every request; invalid sessions are logged out.
-8. Populate common Pug locals, including the active profile, authentication state, version, selected public settings, and return URL.
-9. Mount page and API routers.
-10. Expose `GET /healthz`, then the 404 and generic error handlers.
+7. Mount `/api/v1`, which owns structured session admission and `ApiProblem` responses, then expose `GET /healthz`.
+8. Admit document requests through the shared actor and presentation helpers.
+9. Mount the Home, Users, Survey, Packing, Activity, Drivers, Event, Help and Guest domain routers in explicit order; each owns its document and output routes.
+10. Reject unmatched routes with 404, classify versioned parsing errors and render other errors through the shared document owner.
 
-Top-level mounts are explicit in `src/app.ts`:
+Document admission and versioned API admission share the captured-actor owner while retaining their different response
+contracts. APIs and standalone outputs keep their explicit response owners. Missing compiled `/app` assets return
+an uncached plain-text 404 before session or document handling so a loaded client can detect failed chunk delivery.
+
+
+The explicit document router and versioned API expose these public route families:
 
 ```text
 /          home
-/api       JSON/API actions
+/api/v1    generated-contract API
 /users     account, profile, dashboard, and OIDC routes
+
 /survey    surveys
 /packing   packing lists
 /activity  activity plans
@@ -112,7 +124,16 @@ Top-level mounts are explicit in `src/app.ts`:
 /guest     guest recovery and guest-account actions
 ```
 
-Feature routers are not auto-discovered. A new top-level router must be imported and mounted deliberately. API subrouters are mounted separately in `src/routes/api.ts`.
+Feature routers are not auto-discovered. Versioned adapters are mounted by `src/routes/api/v1.ts`.
+`src/app.ts` mounts the domain routers explicitly. Each domain owns its document routes, parameter loaders and
+exports. `src/routes/frontend.ts` contains shared admission, bootstrap, feedback and error helpers, without route
+registrations; `src/routes/outputs.ts` shares authorized header-file delivery. Specific creation and capability
+routes precede resource parameters, and the application 404 follows every domain mount.
+
+Client route records use the same domain organization under `src/frontend/routes/`. Its index composes those
+records explicitly, with the catch-all last. Application initialization imports that route owner rather than
+mixing domain declarations with Router lifecycle and recovery code.
+
 
 ## Application layers
 
@@ -120,11 +141,18 @@ The codebase uses practical layers rather than a framework-enforced domain archi
 
 ### Routes
 
-`src/routes/` defines URL shape, middleware order, request validation, controller invocation, redirects, and response selection. Page routes use `express.Router`; API routes live under `src/routes/api/` and are mounted by `src/routes/api.ts`.
+`src/routes/` defines URL shape, middleware order, request validation, controller invocation, redirects, and response
+selection. Explicit document routes and versioned API routes use the owners described above. Protected print, PDF and
+proof downloads retain controller authorization at their owning domain routes. Proof links use the Event domain;
+the versioned API keeps its separate context-protected download operation.
+
 
 Asynchronous handlers are wrapped with `asyncHandler` or `asyncParamHandler` from `src/modules/lib/asyncHandler.ts`, allowing the centralized error chain to handle rejected promises.
 
-Several entity types use `createGuestFlowRouter` from `src/middleware/guestFlowFactory.ts` for their common create, view, duplicate, delete, header-image, guest-entry, and event-linking flow. Surveys deliberately reuse that navigation flow without joining the general permission system.
+Canonical document routes admit each feature through its shared controller entry operation. Versioned feature
+routers expose creation, duplication projections, guest entry and lifecycle commands through the same controller
+owners. Standalone header images and exports retain their document output adapters. Surveys keep their own
+participation/ownership model without joining the general permission system.
 
 ### Controllers
 
@@ -133,7 +161,7 @@ Several entity types use `createGuestFlowRouter` from `src/middleware/guestFlowF
 - normalize or validate posted values;
 - enforce business rules and authorization, including checks against locked database snapshots, delegating complex feature logic to existing feature modules;
 - call one or more service functions;
-- build data for a Pug view or API response;
+- build authorized page/SSR or API projections;
 - choose flash messages, redirects, or expected errors; and
 - coordinate file replacement or other cross-service actions.
 
@@ -179,23 +207,23 @@ TypeORM entities are under `src/modules/database/entities/`, migrations under `s
 
 `scripts/genTypeormIdx.ts` discovers these classes and generates `src/modules/database/__index__.ts`. That generated file is ignored by Git and consumed by both runtime and migration datasources. `npm run generate` runs before builds and the principal Vitest commands, but it must be run explicitly before standalone TypeORM commands on a clean clone.
 
-The production datasource always uses `synchronize: false`. Schema synchronization is reserved for empty disposable development databases and the guarded test/E2E setup. Production schema evolution uses reviewed migrations.
+The production datasource always uses `synchronize: false`. Empty disposable development databases and guarded
+test/E2E setup retain their schema-synchronization workflows. For a confirmed empty production database that has
+never held Surveyor data, follow the one-time [Database initialization procedure](DATABASE.md#initialize-a-new-empty-database).
+Existing production schema evolution uses reviewed migrations; synchronization is not an upgrade tool.
 
 ### Middleware and error handling
 
-Current authentication and authorization middleware is implemented in `src/middleware/permissionMiddleware.ts`. Important functions include:
+Document and API admission use the captured-actor/session owner, followed by feature-owned page, method and private
+projection checks. Shared permission middleware remains available for standalone outputs; each controller continues
+to authorize its own operation. Versioned adapters validate generated inputs and encode structured `ApiProblem`
+responses without exposing parser details or private submitted values.
 
-- `isAuthenticated` for full user accounts;
-- `isGuest` for guest-backed sessions;
-- `isLoggedIn` for either authenticated form;
-- `requireOwner` for entity ownership;
-- `requireEventParticipant` for event-registration admission;
-- `requirePermission` and `requireItemPermission` for entity or item actions; and
-- optional/API variants and permission-bundle attachment helpers for rendering and JSON routes.
-
-Shared assignment behavior is assembled by `src/middleware/assignFlowFactory.ts`. Entity administration is assembled by `src/middleware/adminApiFactory.ts` and related controllers.
-
-Expected workflow failures use the custom errors in `src/modules/lib/errors.ts`. `ValidationError` can re-render a form with data; `ExpectedError` represents a user-facing failure; `APIError` carries structured API status/data. Page requests terminate in `handleGenericError`; API requests use the validation and wrapping chain mounted by `src/routes/api.ts`.
+Expected workflow failures keep their existing error contracts in `src/modules/lib/errors.ts`.
+The canonical frontend router renders ordinary page errors as request-local Vue documents. The generic error
+handler is a localized plain-text fallback that needs neither rendering nor a session and remains private/no-store;
+API parse errors retain their JSON boundary. Controller operations, not route visibility or components, enforce
+business policy.
 
 ## Identity and session architecture
 
@@ -238,7 +266,7 @@ individual | public | authenticated | guest | participant
 
 There are no deny records and no override hierarchy. Owners receive the complete permission mask. Item checks may include explicit parent-entity fallback permissions. Page admission, action permission, entity ownership, item ownership, event participation, and delegated administration are related but distinct checks.
 
-The complete bit, preset, default, audience, persistence, and evaluation contracts are maintained in [Permission-System Reference](PERMISSIONS_REFERENCE.md). User-facing recipes are in [Permissions and Sharing](user-guide/PERMISSIONS.md).
+The complete bit, preset, default, audience, persistence, and evaluation contracts are maintained in [Permission-System Reference](PERMISSIONS_REFERENCE.md). User-facing recipes are in [Permissions and Sharing](user-guide/en/PERMISSIONS.md).
 
 ## Domain architecture
 
@@ -265,7 +293,8 @@ the pool lock. These transitions retain costs and allocation inputs without calc
 the existing **Close pool & calculate** workflow to become CLOSED. A calculated CLOSED pool never reopens through
 submission-access controls. Organizer costs and invoice review remain available in all three states.
 
-`wording.ts` and its locale catalog own the feature's complete messages. `presentation.ts` supplies the common
+`wording.ts` and its locale catalog own shared email/PDF/export messages and the English source for generated Finance interface wording.
+Vue interface projections use the shared generated translator. `presentation.ts` supplies the common
 settlement-status rule. The primary saved **Calculated balance** stays visible after payment or refund. The compact
 **Payment due**, **Refund due**, **Paid**, **Refunded**, and **No payment** statuses identify the named payer's situation.
 Unsettled amounts determine aggregate unpaid transfers independently from the primary calculated balance.
@@ -414,33 +443,279 @@ without those options retain their established message layout.
 
 ## Frontend architecture
 
-### Server-rendered pages
+### Request-local rendering and initialization
 
-Pug templates under `src/views/` render the primary HTML. Shared layout and module templates provide navigation, entity headers, permissions, cards, forms, and administration controls.
+`src/frontend/app/createApp.ts` constructs the same Vue tree for server rendering and browser hydration.
+`src/modules/frontendRenderer.ts` is the existing Express renderer owner; it supplies authorized bootstrap data
+and coherent built manifest assets without making HTTP calls to its own application. Each request owns its app,
+router, QueryClient, locale instance and bootstrap. Private state never lives in a module singleton or persisted cache.
 
-Page rendering uses `src/modules/renderer.ts` to pass consistent status, message, and data objects. Flash messages cover redirect-based workflows.
+Public Home is `/` (`/home` remains an alias); personal Overview is `/users/dashboard`. Shell links, identity fallback and confirmed-removal delivery share the Overview
+destination constant. Home renders its existing request-captured suggestion without reading personal collections.
+Dashboard document and warm navigation share the native account-or-guest/profile Login journey. Missing authoritative
+identity does not manufacture anonymous admission. Resource guest/admin intent follows canonical Router records and
+explicit Express operation declarations, independently of equivalent case or trailing-slash URL spelling. Help route
+metadata identifies article readiness and locale-URL synchronization without classifying unmatched paths as articles.
 
-The shared layout always loads `notifications.ts`, including pages with their own script blocks. Transient alerts are
-observed centrally and expire ten seconds after insertion or renewal. Persistent warnings and active progress use
-status semantics and remain visible. Pool actions lock relevant controls during a request, report a delayed status
-after five seconds, and change the displayed saved state only after server confirmation.
-Payment feedback sits outside the filtered share rows; detailed saved share components open in a separate dialog.
-Takeover summaries use name badges and a button opening a searchable Bootstrap dialog for the complete coverage list.
-Confirmed participant submissions clear invoice-specific inputs and refresh the page to reopened history, retaining
-the available pool selection for the next upload. Inputs remain locked during the refresh; pending and uncertain
-uploads remain protected against duplicate submission.
+`serializeBootstrap.ts` escapes inert script-element JSON; `decodeBootstrap` validates every declared field before
+reactive state is created. Feature validators load with their view. Shared type-only contracts remain `.d.ts` files.
+Interactive initial content shows a shared page-family skeleton until client initialization succeeds. Route metadata
+selects its decorative composition; scoped missing-data regions reuse the same field/card/table primitives inside
+their existing layout. Presentation never reads private data, admits a command or invents actual record counts.
+Readable results and Help retain genuinely functional static HTML, GET search, links and anchors. JavaScript-dependent
+shell controls wait for initialization; an independent localized notice covers disabled, missing or failed JavaScript. Initial Vue error
+capture covers setup, mount and the first readiness render; later feature failures retain their existing owners.
+
+`mountPreservingDrafts` retains early edits on original admitted controls, with explicit opt-in for non-text/file
+inputs. Startup protection exists before route loading and transfers to mounted owners after restoration. Automatic
+reload additionally requires explicitly eligible dynamic route/content, clean state and a working loop marker.
+Overview, Packing/Drivers/Survey/Activity detail and Event detail/admin opt in. Creation, duplication, user-management, Help and
+static admitted errors/completions remain excluded. Route metadata and the existing content classifier feed the shared update owner without copied
+field policy. The context consumes actor/visit-bound static predicates from mounted `usePageEntry` owners without
+mirroring query data. Initial-bootstrap retirement does not retire a visible denial; fresh admission restores dynamic
+eligibility, and owner/actor disposal releases classification. App, SSR and automatic recovery share this result.
+Deliberate recovery retains draft consent and pending/unknown guards on every page. Recovery never
+persists secrets/files or replays writes. Session/security revalidation and scoped reads remain separate.
+
+### Shared contracts, state and commands
+
+`contracts/api/v1/` owns wire schemas and operation policy. Generation emits declaration contracts and standalone
+runtime validators; no second handwritten wire schema or runtime schema compilation exists. Transport adapters decode
+and present around the same controller business owners. Page admission, method grants and private projections remain
+separate; reusable controls never grant authority.
+
+Generated local-input failures flow through the existing transport/command/feedback owners. Features supply visible
+field and optional row/day labels; shared typed diagnostics retain only safe generated rule metadata and translate
+at render time. Constraints remain in authored schemas and business checks in controllers. Matching creation and
+duplicate permission matrices use `CreationPermissions`, a closed-by-default disclosure that keeps controls and
+drafts mounted while the existing form retains submission and admission.
+
+Express's ordinary `req.session` is the single request Session. Admission checks current stored generation without
+adopting another snapshot; its plain hydrated actor captures identity for the operation. Initial session projection
+and public rendering without feedback create no anonymous row/cookie and return null context/CSRF where none exists.
+Existing authenticated records can project bounded legacy metadata without a write; explicit identity transitions retain their existing
+completion owner. Browser claims/epochs/capabilities never grant authority. Controllers and stored server identity
+remain authoritative, including public grant-only methods without an invented anonymous principal. An intentional
+account-required document redirect retains native anonymous Session/flash persistence and one-time consumption,
+without a URL notice or metadata initialization. Ordinary saves and native expiry/provider effects retain their
+owners. The [Development guidance](DEVELOPMENT.md#backend-and-method-policy-contracts) describes these boundaries.
+
+The [Development contract guidance](DEVELOPMENT.md#contract-authoring-and-generated-consumers) owns supported
+schema/transport styles, strict generated validation and released-version compatibility. The shared translator and
+catalogs currently serve UI/API text and reviewed Help; language preference is a browser cookie. Grammar supports
+plain text/cardinal plurals and declared, validated component placeholders through the shared RichMessage owner;
+scalar values stay escaped text and catalogs cannot supply HTML. Principal-language persistence and full localization
+of email, PDF and other invoice output remain intended
+future decisions in [DEC-006](decisions/DEC-006-FRONTEND-FRAMEWORK.md#deferred-localization-and-domain-integration-targets),
+without an implemented production capability.
+
+TanStack Query owns authorized snapshots; feature or shared interaction drafts own original/local/current values and Router owns URL state.
+`app/queryKeys.ts` names actor/resource/filter families, adding locale only for translated representations.
+`app/context.ts` coordinates identity generations, session admission, language and updates without another data store.
+Ordinary session recovery pauses dispatch while readable content/drafts remain; actual actor retirement and validated
+resource denial retire protected state. `useQueryAdmission` keeps each observer's eligibility bound to its logical key.
+A canceled refetch or manual cache alias is not a fresh receipt; shared fresh-read helpers distinguish actual success.
+`EntityEntryPage` dispatches denial retirement through that shared cache owner. Packing, Event, Drivers, Survey and Activity select
+the affected query families; inactive copies retire without discarding a live creation draft. The producing admission family
+survives inactive-family removal even when initialization or session revalidation pauses its observer, because that
+query still owns the displayed denial. The shared component infers no feature permissions or query-key positions.
+
+Healthy active shared reads use 30-second polling and bounded recovery, honoring Retry-After, hidden tabs and disposal.
+Closed regions do not poll. Locale changes retire translated families only. `MetadataDraft` applies feature normalization
+to dirty comparison and sparse submission; touched-current-value comparisons occur under existing locks. Finance
+revisions and recommendation fingerprints retain their separate semantics. Confirmation acknowledges submitted values;
+only a fresh admitted read restores tokens/grants. Failed follow-up remains saved; unknown delivery retains input and
+explicit review without automatic replay.
+A same-actor read pause does not retire a confirmed command. Preserve its returned result and failed-refresh warning
+so the feature can release completed input; actual captured-actor retirement still retires the result.
+
+Overview additionally derives the current Query's actual invalidation state through the shared query-cache owner.
+Its region/card consumers pause archive, restore, automation, personal visibility and Delete controls/dispatch while
+retaining readable cards and existing navigation/filter/paging/expansion/Refresh admission. This write-only boundary
+also applies to failed background reads and locale invalidation, including prolonged recovery, without another
+freshness store or deleted-entity registry.
+
+`command.ts`, `pageEntry.ts` and `feedback.ts` share status, departure protection, canonical delivery and receipt-owned
+messages. Pending/unknown status may outlive an editor without retaining its fields. Confirmed navigation retries
+only its required reads and destination delivery, never the confirmed command. The frontend feedback owner manages
+transient notice scheduling/cancellation; persistent conditions remain visible.
+
+`useEntityRemoval` retains original whole-page discard approval only through the first delivery attempt. Later Retry
+or another departure consults the same root draft guard again, including newer sibling edits or earlier unchanged
+drafts. A failed delivery retains the confirmed result and selected-read/navigation receipt independently of consent.
+
+`observePageNavigation` shares router subscriptions, latest pending destination and disposal across App, Header,
+Overview and page-entry/confirmed-transition consumers, retaining each caller's URL boundary and callbacks.
+The same navigation module coordinates Router scrolling with a mounted page's reactive render readiness. Help
+exposes its existing admitted read/error and destination; Router remains the only anchor/history scroll owner.
+This registration holds no article payload, query state or saved-position copy and cannot trigger a read.
+Controls and feature drafts share an explicit value lifetime, including file release after confirmation.
+`CommandFeedback` shares command receipt presentation across actual identity, Packing, Event, Drivers, Survey, Activity and Overview consumers;
+`StatusNotice` presents actions with optional injected state and emits actions. Omitting state retains shared
+`ActionButton` initialization and caller-handler guards. Features retain wording and recovery operations; durable
+conditions remain in their meaningful context and transient notifications use the common page/dialog scope below.
+These controls introduce no second receipt, query or draft owner.
+`command.reconcileSafely` is the deliberate UI recovery boundary; causal command dependencies retain rejecting
+fresh reads. `useSettingsAccessRetirement` shares selected editor-cache retirement and scoped recovery across all
+five detail Settings consumers. Event admission/detail share one intent-specific denial-family selection, preserving
+independent method grants and the producing observer's error/recovery state. Existing API transport functions share
+upload completion, multipart decoding and confined stored-binary delivery across the five feature adapters; feature
+admission, parser policy, cleanup and business operations remain with their existing owners.
+
+Transient command notifications share page/dialog hosts supplied by `App` and `AppDialog`. Their sticky host
+reserves the visible stack's natural height and releases it when empty, without scripted focus or scrolling.
+The injected `noticeTargetKey` is a read-only presentation reference, not query, draft or authority state.
+`CommandFeedback` chooses shared notification presentation; `StatusNotice` owns rendering, expiry, renewal,
+dismissal and diagnostics. Durable validation/recovery stays contextual. Features do not recreate notice placement.
+`composables/entityLifecycle.ts` supplies `createEntityLifecycle` to Settings, Overview and Event Things to do through
+their existing API, command and current translator. It shares archive/restore confirmation, desired-state dispatch and
+success wording. Settings, Overview and the Event child adapter share its pause/resume operation where the admitted
+projection exposes an independent schedule; linked Activity has no independent automatic controls. Pause is immediate,
+and resume asks for the existing elapsed-schedule confirmation. Callers retain eligibility, wording and refresh
+lifetimes; the helper adds no state or backend business policy.
+
+Event, Packing, Drivers, Survey and Activity detail adopt one displayed `EntityHeader`. Features supply the admitted title/icon, optional parent
+URL, image operation/version/query key and settings availability. The header preserves the 250px cover image and
+responsive parent tracks; Event's dashboard heading remains separate. It composes `useAuthorizedImage` and actual
+successful query receipts. Receipt recovery waits for current props after rendering and checks the same resource/key
+before consulting the image owner, so an admitted removal cannot recover old bytes. Parent destinations and feature
+authority remain unchanged. Image upload editing remains the distinct `EntityHeaderEditor` responsibility.
+
+`FormField` owns matching text/textarea labels and native controls. `FileField` composes its label/control slot for
+creation and header-editing choosers, while the feature retains selected bytes, admission and command lifetime.
+`EntityDescription` renders escaped read-only lines for Packing, Drivers, Surveys, Event and Activity. Explicit paragraph
+hooks/classes and the optional native divider preserve list geometry; Event keeps its own labeled column and ordinary
+paragraph margins. `EntityQuickAdd` shares Packing/Drivers card, description/capacity controls and submit layout while
+features supply their distinct title controls, values and commands. The installed native number directive retains
+coercion and DOM updates, including leading-zero normalization on change/rerender; feature drafts still hold a number
+or remaining input text. No shared control stores another draft or grants authority.
+`FormField` preserves native composition/caret handling, with an explicit lexical-number path for string drafts
+and the existing native directive for intentional numeric normalization. Feature-owned parsing, constraints,
+readonly state and explicit label content retain their existing meaning. The transport's
+`createMultipartForm` shares creation/header serialization across all five entity features and the same Finance
+proof envelope with an explicitly named binary part. It selects no operation, validates no second schema and
+copies no file lifetime; required versus optional images/proofs remain with the feature.
+The existing `usePageTitle` owner accepts catalog-owned complete journey titles when native prefixes or branding
+differ from visible headings. SSR, initial hydration, warm navigation and locale changes consume that same owner.
+
+Packing, Event, Drivers, Survey and Activity adopt `EntityEntryPage` for admission presentation, `EntitySettingsDialog` for settings composition
+and `EntityMetadataEditor` for metadata draft/command reconciliation. Packing, Event, Drivers and Activity additionally adopt
+`EntityAccessEditor` for audience/administrator interaction; standalone Surveys supply no Access operations.
+Generated feature APIs, query families, field controls and normalization remain injected. Lower controls
+and declaration contracts retain explicit data/events rather than infer feature authority. The shared identity
+`GuestEntryPage` owns name/email, advisory lookup and confirmed/unknown identity completion for all five resource types;
+each feature supplies its read, registration operation and exact return destination.
+Their metadata field adapters expose the same mounted editor through `useMetadataEditorHandle`; its derived
+flags and methods retain one underlying draft/command owner. Their nullable text fields use the existing
+`metadataDraft.ts` normalizer, while Event capacity and deadline semantics remain feature-owned.
+
+Event reads separate detail/admin intent, participant roster, link management, metadata and settings projections under
+their existing grants. Detail includes own attendance and counts, with only a bounded invoice-presence flag; it does
+not disclose a roster or finance aggregate. Registration alone spends a supplied bypass token. Event creation and
+duplication use the ordinary generated multipart command and shared Vue creation/navigation owners, preserving
+native preprocessing, upload, creation and permission initialization in their existing order. Event creation and the
+`EntityListCreation` used by Packing, Drivers and Activity adopt `useCreationCommand`; Settings, Overview and Event-child deletion
+adopt `useEntityRemoval`. Packing/Drivers also share `BasicEntityMetadataFields`, `useListDetail`, `useListReorder`,
+`EntityAssignees` and `EntityAssignmentActions`, retaining Packing's checklist/Everyone behavior and Drivers' distinct
+driver/passenger meanings in their feature owners. Activity also adopts `EntityAssignees`; its remove-control slot
+preserves native spacing and data hooks under the shared disclosed-identity guard. `AppTabList` shares native tab
+keyboard behavior and Reka focus ownership across Settings and Activity, while feature panels retain their lifetimes.
+`AppAccordionButton` shares trigger presentation and initialized activation across matching Event, Overview and
+administrator disclosures without owning open panels or reads. These shared Vue owners compose existing
+command/consent/confirmed-navigation lifetimes, while features retain their fields and
+generated operations. Packing/Drivers/Survey/Activity compose `useListCommands` from the existing detail-read owner for
+cooldowns, explicit stale recovery, guarded post-command refresh and deliberate unknown-creation review. Features
+inject their actual fresh read and dirty policy, including Survey's ballot merge; Packing/Drivers/Activity opt into their
+common permission wording and shared denial notifications. The composition keeps no second snapshot/draft and never repeats a mutation.
+`EntityListCounters` shares Packing/Drivers' admitted counter panel; `RefreshButton` supplies integrated Refresh
+in the owning heading for entity details, Event administration, Finance, Help and profile workflows through each existing read owner.
+`PageHeading` keeps entity and profile titles centered with independent parent navigation and actions.
+Features retain admitted projections, cooldown and dirty-value policy; creation/static content invents no read.
+`EntityDetailReadState` shares the list details' denied/stale/cold fragment and skeleton through explicit
+state/timestamp props and optional contextual recovery; it owns no query or authority. `CommandFeedback`'s optional creation
+review descriptor shares the unknown-creation paragraph/button while features retain eligibility, wording, margins
+and the existing review operation.
+
+Activity's basic components own dated slot drafts, local filters and warning-review intent. Existing `InlineCell`
+owns inline values, comparison and conflict recovery; optional tag/multiline inputs change presentation only.
+Its Enter/Ctrl+Enter handler leaves active text composition to the browser before preventing any default or saving.
+Activity's distinct role input applies that same composition boundary before selecting/creating a role. Ordinary
+shortcuts, blur and mouse actions retain their existing owners. This approved composition behavior supersedes
+the historical native reference.
+Active description flags retain that same editor through a remote empty value, and slot modals retain opening fields
+while current permission loss disables submission. Client admission remains separate from server method grants.
+The schedule badge derives the complete saved-slot total independently of local filters. One pure browser-safe
+`civilDate.ts` owner supplies Activity creation and versioned detail weeks, plus matching Event/Activity date-only
+display. Its structural declaration lives under `src/types/`; UTC calendar stepping and explicit UTC formatting
+preserve the saved day while the selected locale controls wording. This approved presentation correction replaces
+the original separate native browser/server algorithms without changing persistence, business calculations,
+printable output or instant/deadline ownership.
+
+`ActivityRequirements` owns its lexical settings draft and saved calculation context. It composes the existing
+`ActivityParticipants` presentation with unsaved results from the shared pure requirements engine; ordinary reads
+cannot overwrite dirty controls. Engine inputs are structural values, and the shared `RoundingMode` declaration
+keeps browser compilation independent of ORM entity metadata without changing the database column or algorithm.
+`ActivityRecommendations` owns local review rows, exact submitted batches and domain-job identity. Its schedule
+and manual editor share feature presentation, while `ActivityWarnings` and the established dialog/command owners
+retain warning acknowledgement, pending locks and recovery. Server snapshots remain in Query.
+
+Recommendation entry, explicit Reload, explicit generation completion and confirmed application retain the existing
+controller maintenance invocations through a deliberate command. Recovery uses a pure snapshot; job polling observes only
+the captured domain job. Neither read path maintains rows or enqueues work. The existing Activity controller and
+engines retain eligibility, provenance, reciprocal moves, collision privacy, application and inherited completion
+behavior. Versioned projections select scalars, including former-participant override labels, and omit raw job diagnostics.
+
+Versioned reads and guest identity completion cannot create an Event; the adapter does not strengthen inherited multi-step creation
+finality. Ordinary profile workflow and Event child-deletion commands follow the same SPA transport boundary,
+without importing their excluded backend repairs. Router owns ordinary migrated links; true provider/capability
+arrivals and outputs retain explicit document ownership. Token issuance is deliberate
+command work, never Query, prefetch or history restoration; private output stays in its admitted mounted lifetime.
+Transfer/deactivation branches expose the same typed former-owner cleanup facts to native wording and generated
+catalog notices. Account/guest deletion uses that notice path too. Vue retains message keys through the
+existing completion/navigation/notice owners, so a visible confirmation reacts to language changes. No adapter
+parses prose or repeats a cleanup decision; native wording and operation sequencing remain unchanged.
+The controller's capacity predicate serves display and registration admission; its child-eligibility
+predicate serves related projections and scoped lifecycle rechecks. DBAL supplies counts, rows, locks and
+persistence rather than deciding either rule. Optional-session method declarations describe the existing public
+grant boundary; they do not change runtime authentication or widen profile-required operations.
+
+Participant notes dialogs retain only a summary or participant-ID selection. Displayed notes derive from the full
+current admitted roster, independently of local search; removed sources close the selection. Organizer attendance
+dates are genuine local drafts and remain separate from those read-only notes and background replacements.
+
+Finance composes the admitted Event page with distinct participant/organizer projections, shared saved history,
+totals, ledgers, coverage and lazy protected explanations. Independent pool, invoice-review, enrollment, factor,
+adjustment and coverage forms retain their own lexical drafts and confirmed saved-field baselines through sibling
+saves and failed follow-up reads. Matching controls use the shared `FormField` lexical-number option and the existing
+finance wheel guard; intentionally normalized numeric consumers keep their existing binding. One Finance palette
+supplies readable secondary text in the admitted region and shared dialogs, including dialogs rendered outside
+their feature subtree.
+
+Financial command money uses decimal strings retaining accepted precision; saved money uses the existing shared
+fixed-two-decimal presenter. Factors and numeric identifiers retain their canonical decimal-string contracts.
+Existing controller normalization, calculations and DBAL remain shared; Vue performs no replacement arithmetic.
+Locale-owned Finance reads retire through the same query-family owner as Help and Overview without invalidating
+untranslated Event snapshots. Pending uploads distinguish transferred bytes from saved confirmation; an unknown
+outcome requires fresh history inspection and explicit acknowledgement without replay. Confirmed submission clears
+completed invoice fields while retaining an eligible pool. Calculation, settlement and output operations keep their
+existing domain boundaries and independent reviewed evidence.
 
 ### Entity settings
 
-The five root views and event dashboard use `module_entity_properties.pug`. The existing
-`entityAdminController` builds `data.entityProperties` from the same field policy used to authorize property writes.
+The existing `entityAdminController` supplies root field/method policy and authorized settings projections.
 Feature controllers normalize input, and their existing services persist each property patch atomically.
-The browser dialog hosts the existing image, permission, administrator, and archival commands through shared UI
-helpers. Each section has its own draft and save boundary; pending writes freeze controls and successful writes
-refresh server-rendered permissions and context. General, Linked event, Access, and Actions tabs appear only when
+App-owned components/composables host image, permission, administrator and archival commands through explicit
+props/events and injected operations. Each section has its own draft and save boundary; pending writes freeze controls
+and successful writes obtain fresh permissions/context. General, Linked event, Access, and Actions tabs appear only when
 usable. Property families expand individually, and Access shows one audience or administrator editor at a time.
-Inline event, time-zone, and administrator controls avoid nested modals; time-zone search, common choices, browser
-detection, and UTC offsets remain shared between inline and standalone hosts.
+Feature composites remain separate where domain semantics differ. Packing, Event, Drivers, Survey and Activity use
+`EntitySettingsDialog` for matching settings reads, independent drafts and captured tokens. It composes
+`EntityMetadataEditor`, `EntityHeaderEditor` and `EntityLifecycleActions`; Packing, Event, Drivers and Activity additionally
+supply `EntityAccessEditor` operations. Standalone Surveys supply neither Access nor event-association operations.
+Features inject operations, query families, field policy and native wording; Packing, Drivers and Activity supply their
+`EntityEventEditor` operations. Reka supplies dialog/tab focus behavior.
+Mixed navigation uses the shared disclosure owner without competing Bootstrap DOM ownership. Shared timezone
+controls retain feature-owned deadline meaning, including omission of unchanged instants.
 
 Creation and later event linking use the actual submitted destination and the cumulative permission engine.
 The permission engine supplies query scope for event discovery. `EventService` applies those supplied predicates
@@ -465,24 +740,29 @@ combined set before returning card data. Counts distinguish underlying entities 
 snapshot for archival presentation and batches permission checks for actions and optional fallback parent context.
 Only an event's `ACCESS_VIEW` grant allows new parent context on a child card.
 
-`/users/dashboard` and `GET /api/users/overview` share controller normalization and these service reads. The API
-returns Pug-rendered region HTML in the established JSON envelope, with private, noncacheable responses. Ordinary
-links and search forms retain full-page navigation. Each loaded region renders at most one page or one enclosing
-event card plus a child page; hidden regions load when opened. Browser navigation replaces that region's content,
-preserves namespaced URL state, and rejects stale responses. Shared event **Things to do** retains its existing local
-filtering and ungrouped cards.
+Existing Overview adapters share controller normalization and these service reads. The versioned projection supplies
+independent regions to `OverviewRegion`, `OverviewItems` and `OverviewCard`. Each loaded region renders at most one
+page or enclosing event plus a child page; hidden regions load on opening. Enhanced navigation reads before history
+commit, merges only its region into the latest URL and adopts server clamping. Failure preserves cards, URL and focus;
+validated denial retires private cards and source-owned totals. Ordinary modified clicks retain their href.
+Shared event **Things to do** retains its local filtering and ungrouped membership semantics.
 
-### Browser TypeScript
+### Browser builds and shared assets
 
-Browser code lives under `src/public/js/`:
+Vue application code lives under `src/frontend/`. Feature `api.ts` owners consume generated operations/validators
+through `app/transport.ts`; app-owned controls receive explicit values, capabilities, events and injected operations.
+Application presentation helpers and styles belong under `src/frontend/`, shared by their actual consumers.
+The client entry and development renderer reference the same authored `styles/application.sass` root. It owns the
+cascade once: base `style.sass`, `help.sass`, then `frontend.css`. `style.sass` owns its accordion/timezone imports,
+including the installed Bootstrap layer. Vite emits separate client/SSR artifacts; the existing renderer uses that
+source stylesheet link in development and the client manifest in installed releases, including styled
+server-rendered/static content before JavaScript initialization. Preserve the
+effective stylesheet order, CDN/compiled Bootstrap layers and styled pre-JavaScript content. Responsive overrides
+belong in the shared authored presentation owner; generated output is never an authored source.
 
-- `core/` contains shared HTTP, form, navigation, permission, and DOM helpers;
-- `shared/` contains reusable page behaviors; and
-- feature modules/page entry files implement survey, event, activity, packing, drivers, and account interactions.
-
-`esbuild.client.js` discovers every `.ts` file recursively and emits a corresponding `.gen.js` ES module while preserving the directory layout. Development output is written beside the source and ignored by Git; production output goes to `dist/public/js/`. Relative extensionless imports are rewritten to generated module names.
-
-Sass sources under `src/public/style/` compile to ignored CSS before production assets are copied to `dist/public/`. Pug templates and image/style assets are copied as part of `npm run build`.
+The frontend feedback owner supplies notice lifetime; existing backend/domain/catalog owners remain shared.
+Logo/favicon image assets and third-party Bootstrap/icons retain their real consumers independently of application
+presentation code. Express-hosted Vite middleware supplies development HMR; production uses coherent built artifacts.
 
 ## Persistence and lifecycle boundaries
 
@@ -497,14 +777,14 @@ The implementation keeps these responsibilities separate:
 | `modules/archive/policy.ts` | Pure UTC cutoff, effective-state, and personal-placement rules. |
 | `database/services/EntityLifecycleService.ts` | Root and parent reads, coherent raw snapshots, lifecycle writes, conditional automatic updates, and transaction locks. |
 | Existing `database/services/UserService.ts` and feature services | Visibility preference persistence, membership queries, and bounded overview queries; feature services own the shared SQL membership predicates. |
-| Existing `controller/entityAdminController.ts` and `middleware/adminApiFactory.ts` | Lifecycle validation and authorization, effective-state and scheduling projection, presentation capabilities, and API registration. |
+| Existing `controller/entityAdminController.ts` and versioned adapters | Lifecycle validation and authorization, effective-state and scheduling projection, presentation capabilities and generated API transport. |
 | Existing `controller/userController.ts` | Personal visibility validation and membership decisions under the service-managed lock, overview navigation normalization, and bounded presentation. |
 | `modules/entityArchival.ts` | Independent startup/hourly scheduling and local overlap prevention. |
-| Shared archive/card Pug mixins and browser modules | Server-calculated state, bounded overview/sub-view navigation, explicit commands, and refresh after success. |
+| App-owned lifecycle/card controls and feature query owners | Server-calculated state, bounded navigation, explicit commands and authorized refresh after success. |
 
 Overview membership is discovered before archival placement. Direct and parent state are resolved once per distinct reference in a `REPEATABLE READ` snapshot and reused across participation/administration cards. Personal `hidden` and `shown` overrides belong to the active profile; no preference means default placement. They never enter shared entity serialization or the event's **Things to do** filtering. Creation and settings event pickers include authorized historical and archived events by default, with explicit date, archive, period, and registration-deadline filters.
 
-Optional lifecycle notices travel with the renderer's page data and explicit Pug mixin arguments. Shared contracts
+Optional lifecycle presentation travels through explicit component data/events and the owning controller projection. Shared contracts
 live in `types/ArchiveTypes.d.ts`; repository dispatch and lock implementation stay inside the persistence boundary.
 These responsibilities extend the existing administration and user modules instead of adding parallel controller or
 preference-service layers.
@@ -545,10 +825,13 @@ The fixed help source is `docs/user-guide/`, packaged with each release. It is t
 
 `npm run build` performs four groups of work:
 
-1. Compile Sass.
-2. Generate the TypeORM index and compile server TypeScript to `dist/`.
-3. Compile browser TypeScript to `dist/public/js/`.
-4. Copy static image/style assets and Pug views into `dist/`.
+1. Clean the repository-owned `dist/` output so retired assets cannot remain in a release.
+
+2. Generate the TypeORM index, API contracts and locale consumers, then compile server TypeScript to `dist/`.
+3. Compile Vite client/SSR output with separate Vue-aware compiler scopes, then compile the standalone print stylesheet.
+
+4. Copy shared images, the print stylesheet and the two standalone Pug print templates into `dist/`.
+
 
 The manual release workflow first invokes full CI on the selected ref. It then validates and commits the requested version, creates a tag, builds, and produces a tar archive containing:
 
@@ -565,9 +848,15 @@ The runtime archive does not include TypeScript source or migration tooling and 
 
 ## Testing architecture
 
-Vitest discovers `tests/unit/`, `tests/frontend/`, and `tests/integration/`. It runs them in the Node environment with file-level parallelism disabled because integration suites share a guarded disposable MariaDB schema.
+Vitest discovers unit, frontend and integration files. Its database-free project uses bounded workers for isolated
+logic/client checks and scoped server-component integration. The database-backed integration project
+remains serialized because it rebuilds one guarded disposable MariaDB schema. Test layer describes the exercised
+production boundary; the database-free runner selection does not turn a real server-component integration into a
+unit/client test. The [Testing Guide](TESTING_GUIDE.md#vitest-configuration) owns exact selection and commands.
 
-Playwright discovers `tests/e2e/`, runs Chromium, initializes the E2E database, and starts the built server through its managed `webServer` command. Factories under `tests/factories/` build production-shaped inputs; reusable workflow/assertion helpers live under `tests/keywords/`; runner and database setup live under `tests/support/`.
+Playwright E2E initializes its database and owns the built server without existing-server reuse. Isolated built-browser
+checks use `playwright.frontend.config.ts`; source-server/persistence checks use the integration runner. Factories under
+`tests/factories/` supply production-shaped data, with workflows in `tests/keywords/` and setup in `tests/support/`.
 
 The layer contracts, setup files, database safeguards, command matrix, and examples are canonical in [Testing Guide](TESTING_GUIDE.md). Do not maintain test counts in architecture prose; the repository tree and runner configurations are the source of truth.
 
@@ -581,7 +870,7 @@ Before merging a change, trace it across the boundaries it affects:
 4. **Identity:** account versus profile identifier, guest behavior, session invalidation.
 5. **Authorization:** page admission, action permission, ownership, item fallback, survey exception.
 6. **Files:** database record and filesystem operation remain consistent on success and failure.
-7. **Frontend:** Pug label/control, browser module, generated asset, no-JavaScript behavior where applicable.
+7. **Frontend:** component/control, scoped query, separate draft, generated asset, SSR/initialization and static behavior.
 8. **Tests:** cheapest stable layer plus integration/E2E coverage for cross-boundary behavior.
 9. **Documentation:** user, maintainer, operator, and AI instructions remain aligned with the implemented contract.
 
@@ -589,14 +878,18 @@ Before merging a change, trace it across the boundaries it affects:
 
 The in-app help subsystem is intentionally separate from mutable application data:
 
-1. `src/controller/helpController.ts` discovers Markdown only in `docs/user-guide/` and images only in `docs/user-guide/assets/`.
+1. `src/controller/helpController.ts` selects reviewed articles and adjacent assets inside the fixed `docs/user-guide/` tree, using the shared catalog's supported corpus mapping.
 2. A fixed task-group map orders the guides. The same catalog drives the sidebar and server-side search.
 3. Markdown is checked against the DEC-004 authoring contract, converted with Marked, given stable heading IDs, and returned with a level-two/level-three table of contents.
-4. Internal guide links become `/help/<guide>` routes, and maintained images become `/help/assets/<file>` routes. Path-containment and filename checks prevent request-controlled traversal.
+4. Existing Help adapters map logical topics and assets to their declared routes. Path-containment and filename checks prevent request-controlled traversal; requests never choose a filesystem root.
 5. Application requests receive a contextual `helpUrl`; the navbar therefore opens the guide for the current feature while retaining `/help` as the fallback.
 6. The release workflow attempts to copy and compare the entire user-guide tree, including images, in a separate advisory step. A mismatch or missing documentation is reported without blocking release.
 
-The renderer inserts validated, release-shipped HTML into the Pug view. This is a trusted-content boundary rather than a generic sanitization service. Changing the source model requires reopening DEC-004.
+The renderer inserts validated, release-shipped HTML into the Help component. Prefer complete localized articles;
+missing corpora/articles/required figures select the complete reviewed English article and its own assets, with visible
+fallback and actual content-language disclosure. Never mix translated prose with English figures; invalid existing
+source fails rather than hiding behind fallback. This trusted-content boundary is not a generic sanitization service.
+Changing the source model requires reopening DEC-004.
 
 ### Documentation reporting is outside application delivery
 

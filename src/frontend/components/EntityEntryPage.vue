@@ -2,8 +2,8 @@
 import {computed} from 'vue';
 import {useRoute} from 'vue-router';
 import type {EntityEntryPageProps} from '../../types/FrontendEntityEntryTypes';
-import type {PilotRequestScope} from '../../types/FrontendPilotUiTypes';
-import {usePilot} from '../app/context';
+import type {FrontendRequestScope} from '../../types/FrontendUiTypes';
+import {useFrontend} from '../app/context';
 import {evictQueryFamilies} from '../app/queryCache';
 import {usePageEntry} from '../composables/pageEntry';
 import {usePageTitle} from '../composables/pageTitle';
@@ -13,10 +13,10 @@ import PageMessage from './PageMessage.vue';
 import LoadingSkeleton from './LoadingSkeleton.vue';
 import StatusNotice from './StatusNotice.vue';
 
-// A feature supplies its actual native admission and dependent invalidation.
+// A feature supplies its actual admission and dependent invalidation.
 // Matching resources share one recovery/feedback lifetime and admitted subtree.
 const props = defineProps<EntityEntryPageProps>();
-const context = usePilot();
+const context = useFrontend();
 const route = useRoute();
 const admission = usePageEntry({key: computed(() => props.queryKey), initial: props.initial,
     read: props.read, onDenied: retireDeniedProjections});
@@ -28,7 +28,7 @@ usePageTitle(() => admissionError.value ? context.messages.value.t('common.error
 /** Admission and feature data have separate observers. Retire the feature-selected
  * projections before exposing denial, even when the detail subtree has unmounted.
  * Inactive creation copies retire separately so a live draft retains its values. */
-async function retireDeniedProjections(entry: {readonly status: number}, scope: PilotRequestScope): Promise<void> {
+async function retireDeniedProjections(entry: {readonly status: number}, scope: FrontendRequestScope): Promise<void> {
     const producingFamily = [...props.queryKey];
     const selection = props.deniedQueries(entry, scope);
     const retirements = [evictQueryFamilies(context.queryClient, selection.families)];
@@ -41,7 +41,7 @@ async function retireDeniedProjections(entry: {readonly status: number}, scope: 
     await Promise.all(retirements);
 }
 
-/** A validated denial owns its native message. Temporary read failures retain
+/** A validated denial owns its message. Temporary read failures retain
  * an admitted subtree and its draft; unreadable delivery never creates authority. */
 function admissionErrorText(): string | undefined {
     const entry = admission.outcome.value;

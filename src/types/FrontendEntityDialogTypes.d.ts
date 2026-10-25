@@ -2,7 +2,7 @@ import type {Component} from 'vue';
 import type {components} from './api/v1';
 import type {EntityAccessOperations} from './FrontendEntityAccessTypes';
 import type {EntityAutomationMessages, EntityLifecycleOperations} from './FrontendEntitySettingsTypes';
-import type {PilotEventPickerSource, PilotPlainMessageKey, PilotRequestScope} from './FrontendPilotUiTypes';
+import type {FrontendEventPickerSource, FrontendPlainMessageKey, FrontendRequestScope} from './FrontendUiTypes';
 
 /** Shared root settings presentation; standalone roots have no parent selector. */
 export type EntitySettingsProjection = Omit<components['schemas']['PackingSettings'], 'currentEvent' | 'capabilities' | 'editableFields' | 'archive'> & {
@@ -14,13 +14,13 @@ export type EntitySettingsProjection = Omit<components['schemas']['PackingSettin
 
 /** Existing feature adapters retain generated operation and endpoint selection. */
 export interface EntitySettingsOperations extends Partial<EntityAccessOperations>, EntityLifecycleOperations {
-    settings(id: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<EntitySettingsProjection>;
-    uploadHeader(id: string, image: File, token: string, scope: PilotRequestScope): Promise<unknown>;
-    removeHeader(id: string, token: string, scope: PilotRequestScope): Promise<unknown>;
-    deleteResource(id: string, scope: PilotRequestScope): Promise<unknown>;
-    eventPicker?: PilotEventPickerSource;
+    settings(id: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<EntitySettingsProjection>;
+    uploadHeader(id: string, image: File, token: string, scope: FrontendRequestScope): Promise<unknown>;
+    removeHeader(id: string, token: string, scope: FrontendRequestScope): Promise<unknown>;
+    deleteResource(id: string, scope: FrontendRequestScope): Promise<unknown>;
+    eventPicker?: FrontendEventPickerSource;
     linkEvent?: (id: string, input: components['schemas']['PackingEventChange'], token: string,
-        scope: PilotRequestScope) => Promise<components['schemas']['PackingEventChanged']>;
+        scope: FrontendRequestScope) => Promise<components['schemas']['PackingEventChanged']>;
 }
 
 /** Feature-owned catalog wording for an admitted automatic archival schedule. */
@@ -43,9 +43,9 @@ export interface EntitySettingsDialogProps {
     profileKey?: (query: string) => readonly unknown[];
     profileFamily?: readonly unknown[];
     duplicateTo: string;
-    deletedKey: PilotPlainMessageKey;
-    restoreConfirmation?: PilotPlainMessageKey;
-    archiveConfirmation?: PilotPlainMessageKey;
+    deletedKey: FrontendPlainMessageKey;
+    restoreConfirmation?: FrontendPlainMessageKey;
+    archiveConfirmation?: FrontendPlainMessageKey;
     automationLabels?: EntityAutomationLabels;
     eventExtraHint?: string;
     linkedEventArchiveHint?: string;

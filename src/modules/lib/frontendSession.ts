@@ -18,7 +18,7 @@ export function sameFrontendSessionIdentity(left: Partial<SessionData>, right: P
 
 /**
  * Project transport metadata without initializing or saving the Session. Callers
- * validate stored identity/ownership before using legacy authenticated fallback.
+ * validate stored identity/ownership before deriving absent transport metadata.
  * Anonymous visitors receive no invented per-visitor session or authority.
  */
 export function readFrontendSessionMetadata(session: Partial<SessionData>, sessionId: string): FrontendSessionMetadata {
@@ -30,8 +30,8 @@ export function readFrontendSessionMetadata(session: Partial<SessionData>, sessi
     const principal = session.auth?.user ?? session.auth?.guest;
     if (!principal) return {context: null, csrfToken: null};
 
-    // A native authenticated session can predate pilot fields. Bind its fallback
-    // to server-only SID, canonical identity/profile and any known generation;
+    // An authenticated session may lack explicit generation fields. Bind derived
+    // metadata to server-only SID, canonical identity/profile and any known generation;
     // separate labels prevent a public context from serving as its CSRF token.
     const binding = ['surveyor.frontend.legacy.v1', session.auth?.user ? 'account' : 'guest',
         String(principal.id), session.profile?.id ?? null, sessionId, session.frontendContext ?? null];

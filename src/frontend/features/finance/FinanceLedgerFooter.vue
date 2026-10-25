@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import ActionButton from '../../components/ActionButton.vue';
 
 // Matching histories and share ledgers retain their own filtering/paging state.
@@ -7,11 +7,11 @@ import ActionButton from '../../components/ActionButton.vue';
 withDefaults(defineProps<{page: number; size: number; total: number; pages: number;
     invoices?: boolean; coverage?: boolean; refreshable?: boolean; refreshNeeded?: boolean; disabled?: boolean; pending?: boolean}>(), {refreshable: true});
 const emit = defineEmits<{previous: []; next: []; refresh: []}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 </script>
 
 <template>
-    <div class="pilot-action-row justify-content-between mt-3">
+    <div class="frontend-action-row justify-content-between mt-3">
         <small class="text-secondary" role="status">
             {{ messages.t('finance.pageSummary', {
             start: total ? page * size + 1 : 0, end: Math.min((page + 1) * size, total), total,

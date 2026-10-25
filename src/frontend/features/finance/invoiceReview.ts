@@ -1,8 +1,8 @@
 import {computed, reactive, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
-import type {PilotPlainMessageKey, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import type {FrontendPlainMessageKey, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {FinanceInvoiceReviewInput, FinanceInvoiceReviewCallbacks} from '../../../types/FrontendFinanceReviewTypes';
-import {useActionState, usePilot} from '../../app/context';
+import {useActionState, useFrontend} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
 import {financeDecimal} from './numbers';
@@ -13,7 +13,7 @@ import {financeDecimal} from './numbers';
 export function useFinanceInvoiceReview(props: FinanceInvoiceReviewInput, callbacks: FinanceInvoiceReviewCallbacks) {
     // Keep the existing command/admission/feedback collaborators scoped to this
     // mounted invoice. Filtering can hide its row without creating another owner.
-    const context = usePilot();
+    const context = useFrontend();
     const api = useFinanceApi(context);
     const id = useId();
     const form = ref<HTMLFormElement | null>(null);
@@ -97,8 +97,8 @@ export function useFinanceInvoiceReview(props: FinanceInvoiceReviewInput, callba
         callbacks.close();
     }
 
-    /** Capture the native NEW row's relevant values before its final gate.
-     * Missing rejection text stops here; approval retains its native optional
+    /** Capture the NEW row's relevant values before its final gate.
+     * Missing rejection text stops here; approval retains its optional
      * positive-number validation in the existing transport/controller owners. */
     function beginInline(selected: 'approve' | 'decline'): boolean {
         if (!props.inline || !actionState.isAvailable()) return false;
@@ -123,7 +123,7 @@ export function useFinanceInvoiceReview(props: FinanceInvoiceReviewInput, callba
     async function submit(): Promise<void> {
         if (!actionState.isAvailable() || !form.value) return;
         if (props.inline && !capturedNew.value) return;
-        // Native NEW acceptance reads optional numeric corrections from a row's
+        // NEW acceptance reads optional numeric corrections from a row's
         // button, without HTML step/min validation. Preserve its positive-number
         // contract; generated validation and the shared controller decide admission.
         if (!props.inline && operation.value !== 'approve' && !form.value.reportValidity()) return;
@@ -179,7 +179,7 @@ export function useFinanceInvoiceReview(props: FinanceInvoiceReviewInput, callba
         }
 
         /** Select one authored transport operation from the captured review. */
-        function dispatch(scope: PilotRequestScope) {
+        function dispatch(scope: FrontendRequestScope) {
             // Every branch receives only the fields admitted for its reviewed action.
             if (props.participant) return api.close(props.eventId, row.poolId, row.id, scope);
             if (selected === 'approve') return api.approve(props.eventId, row.poolId, row.id, acceptance, scope);
@@ -192,7 +192,7 @@ export function useFinanceInvoiceReview(props: FinanceInvoiceReviewInput, callba
 
     /** Report the existing action-specific receipt, including the closed-pool
      * distinction that changing source inputs leaves saved shares unchanged. */
-    function successNotice(action: typeof props.action): PilotPlainMessageKey {
+    function successNotice(action: typeof props.action): FrontendPlainMessageKey {
         if (action === 'approve') return 'finance.invoiceAccepted2';
         if (action === 'decline') return 'finance.invoiceRejected2';
         if (action === 'close') return 'finance.invoiceClosed2';

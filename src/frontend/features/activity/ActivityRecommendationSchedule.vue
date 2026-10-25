@@ -2,7 +2,7 @@
 import RichMessage from '../../components/RichMessage.vue';
 import type {components} from '../../../types/api/v1';
 import type {ActivityRecommendationDraftRow} from '../../../types/FrontendActivityRecommendationTypes';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {activityDateLabel, activityDayLabel, activityParticipantName, activityWarningLabel} from './presentation';
 import {recommendationPartners, recommendationWarnings} from './recommendationDraft';
 import ActionButton from '../../components/ActionButton.vue';
@@ -14,7 +14,7 @@ const props = defineProps<{view: components['schemas']['ActivityView']; workspac
     rows: ActivityRecommendationDraftRow[]; warnings: components['schemas']['ActivityRecommendationPreview']['warnings']; disabled: boolean}>();
 const emit = defineEmits<{status: [row: ActivityRecommendationDraftRow, status: 'PENDING' | 'APPROVED' | 'REJECTED'];
     remove: [row: ActivityRecommendationDraftRow]; add: [slotId: string]; unassign: [slotId: string, profileId: string]}>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 const legend = [
     {label: 'confirmed', detail: 'existing', color: 'bg-success'}, {label: 'pending', detail: 'new', color: 'bg-warning'},
     {label: 'rejected', detail: 'declined', color: 'bg-danger'}, {label: 'reassignment', detail: 'moves', color: 'bg-info text-dark'},
@@ -25,7 +25,7 @@ function isSwap(row: ActivityRecommendationDraftRow): boolean { return recommend
 function rowClass(row: ActivityRecommendationDraftRow): string {
     return row.value.status === 'APPROVED' ? 'border-success' : row.value.status === 'REJECTED' ? 'border-danger' : 'border-warning';
 }
-/** Preserve native status priority while distinguishing moves and unassignments. */
+/** Preserve status priority while distinguishing moves and unassignments. */
 function rowIcon(row: ActivityRecommendationDraftRow): string {
     // Rejection overrides the operation icon; other states retain its meaning.
     if (row.value.status === 'REJECTED') return 'bi-x-circle-fill text-danger';

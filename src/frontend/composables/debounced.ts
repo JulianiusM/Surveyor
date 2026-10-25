@@ -1,6 +1,6 @@
 import {onBeforeUnmount, ref, watch, type Ref} from 'vue';
 
-/** Match the native picker delay without delaying explicit selection or pagination. The owner
+/** Match the picker delay without delaying explicit selection or pagination. The owner
  * disposes its timer, so a closed or replaced picker cannot issue a late search. A settlement
  * callback also observes edits returning to the original value, where the result ref is unchanged. */
 export function useDebouncedValue(source: Ref<string>, delay = 200, settled?: (value: string) => void): Ref<string> {

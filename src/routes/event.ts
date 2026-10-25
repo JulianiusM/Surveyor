@@ -1,86 +1,102 @@
-/*
- * Copyright 2026 Julian Malovanij
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-import express, {Request, Response} from 'express';
-import {getEntityPropertyPresentation} from '../controller/entityAdminController';
-import controller, {eventMethodPermission} from '../controller/eventController';
-import invoiceController from '../controller/eventPoolController';
-import {createGuestFlowRouter} from '../middleware/guestFlowFactory';
-import {queryHandler} from "../middleware/paramHandler";
-import {isLoggedIn, requirePermission} from "../middleware/permissionMiddleware";
+import {Router} from 'express';
+import type {Request, Response} from 'express';
+import eventController, {eventMethodPermission, readEventCreateEntry, readEventDuplicate,
+    readEventResourceEntry, readEventHeaderPath} from '../controller/eventController';
+import invoiceController, {readEventInvoiceProof} from '../controller/eventPoolController';
+import {paramHandler} from '../middleware/paramHandler';
+import {isLoggedIn, requirePermission} from '../middleware/permissionMiddleware';
 import * as eventService from '../modules/database/services/EventService';
-import {asyncHandler} from "../modules/lib/asyncHandler";
-import { createParticipantsPdf} from "../modules/lib/pdf";
+import {createParticipantsPdf} from '../modules/lib/pdf';
 import {createInvoiceSharesPdf} from '../modules/invoice/exports';
-import {ENTITIES, getResource} from "../modules/lib/util";
-import renderer from "../modules/renderer";
-import type {EntityDescriptor} from "../types/PermissionTypes";
-import type {EntityType} from "../types/UtilTypes";
+import {getResource} from '../modules/lib/util';
+import type {EntityDescriptor} from '../types/PermissionTypes';
+import {asyncHandler} from '../modules/lib/asyncHandler';
+import {captureApiActor} from '../modules/api/session';
+import {handleApiProblem} from '../modules/api/problem';
+import {renderFrontend} from '../modules/frontendRenderer';
+import {bootstrap, applyPageEntry} from './frontend';
+import {createHeaderHandler} from './outputs';
 
-const app = express.Router();
-const entityName: EntityType = ENTITIES.EVENT;
-const resFct = (req: Request) => getResource(req, entityName);
-const permFct = (req: Request): EntityDescriptor => {
-    const resource = getResource(req, entityName);
-    return {entityType: entityName, entityId: resource.id, ownerId: resource.ownerId, eventId: resource.id};
+const router = Router();
+
+// Export parameters have their own loader; page and header reads retain their
+// controller-owned admission without an extra parent lookup.
+paramHandler('id', router, eventService.getEventById, 'event');
+
+router.get('/create', asyncHandler(renderCreation));
+router.get('/:eventId/duplicate', asyncHandler(renderDuplicate));
+for (const [path, view] of [['/:eventId', 'detail'], ['/:eventId/guest', 'guest'], ['/:eventId/admin', 'admin']] as const) {
+    /** Detail, guest and administration retain their registered intent even
+     * when Express accepts a different case or trailing-slash spelling. */
+    router.get(path, asyncHandler(async function renderEvent(req, res) {
+        const state = await bootstrap(req);
+        // Controller admission remains independent for every view. Query
+        // capabilities are forwarded unchanged and never select the view.
+        const token = typeof req.query.regToken === 'string' ? req.query.regToken : undefined;
+        const entry = await readEventResourceEntry(String(req.params.eventId), view, await captureApiActor(req), token);
+        state.eventEntry = entry;
+        if (await applyPageEntry(req, res, state, entry.entry)) return;
+        await renderFrontend(res, req.originalUrl, state);
+    }));
 }
 
-queryHandler("regToken", app, (id) => id, 'regToken');
+/** Existing account-only creation carries its exact return URL through login. */
+async function renderCreation(req: Request, res: Response): Promise<void> {
+    const state = await bootstrap(req);
+    const form = readEventCreateEntry(await captureApiActor(req), req.originalUrl);
+    if (await applyPageEntry(req, res, state, form.entry)) return;
+    if (form.context) state.eventCreateContext = form.context;
+    await renderFrontend(res, req.originalUrl, state);
+}
 
-app.use("/", createGuestFlowRouter({
-    addToEvent: false,
-    entityType: entityName,
-    db: {getById: eventService.getEventById, getItems: async (id): Promise<any[]> => []},
-    templates: {create: 'event/event-create', view: 'event/event-view'},
-    buildRedirect: (id: any) => `/event/${id}`,
-    preprocessCreate: controller.preprocessCreate,
-    createEntity: controller.createEntity,
-    afterCreateItems: controller.afterCreateItems,
-    fetchForView: controller.fetchForView,
-    fetchForDuplicate: controller.fetchForDuplicate,
-    deleteEntity: controller.deleteEntity,
-}));
+/** Duplication reads only source form values under its independent grant. */
+async function renderDuplicate(req: Request, res: Response): Promise<void> {
+    const state = await bootstrap(req);
+    state.eventDuplicate = await readEventDuplicate(String(req.params.eventId), await captureApiActor(req));
+    state.pageEntry = {kind: 'render'};
+    await renderFrontend(res, req.originalUrl, state);
+}
 
-// convenience alias
-app.get('/:id/register', (req: Request, res: Response) => res.redirect(`/event/${req.params.id}`));
+router.get('/:headerId/header', createHeaderHandler(readEventHeaderPath));
 
-app.get('/:id/admin', requirePermission(permFct, eventMethodPermission('admin')), asyncHandler(async (req: Request, res: Response) => {
-    // Reuse the event view projection, including its shared archive snapshot and decorated
-    // child cards. The dashboard passes that page data explicitly to its archival mixins;
-    // entering administration does not require a separate feature-state middleware or locals.
-    const data = await controller.fetchForView(resFct(req), req);
-    const entityProperties = await getEntityPropertyPresentation('event', resFct(req), req.session);
-    renderer.renderWithData(res, 'event/event-dashboard', {...data, entityProperties});
-}));
+/** Open saved proofs as ordinary document links. The controller owns current
+ * actor, pool and invoice admission before resolving the confined stored file. */
+router.get('/:eventId/invoice-pools/:poolId/invoices/:invoiceId/proof',
+    asyncHandler(async function downloadInvoiceProof(req, res) {
+        const actor = await captureApiActor(req);
+        const file = await readEventInvoiceProof(String(req.params.eventId), String(req.params.poolId), String(req.params.invoiceId), actor);
+        // Proof contents remain private and are never retained by shared caches.
+        res.set('Cache-Control', 'private, no-store').sendFile(file);
+    }), handleApiProblem);
 
-app.get("/:id/export/participants", requirePermission(permFct, eventMethodPermission('exportParticipants')), asyncHandler(async (req: Request, res: Response) => {
-    const data = await controller.getParticipantsExtended(resFct(req));
-    //renderer.renderWithData(res, 'event/export/participants', data);
-    res.contentType('application/pdf');
-    res.send(await createParticipantsPdf(data).getBuffer());
-}));
+// Event outputs retain document guest admission before their method grants.
+router.use('/:id/export', function admitEventOutput(req, res, next) {
+    if (req.session.profile) return next();
+    res.redirect(`/event/${encodeURIComponent(String(req.params.id))}/guest`);
+});
 
-app.get('/:id/export/invoice-pools/:poolId/shares', isLoggedIn, requirePermission(permFct, eventMethodPermission('manageAssignments')), asyncHandler(async (req: Request, res: Response) => {
-    // The invoice controller orchestrates saved data and export policy; the route handles HTTP transport only.
-    const data = await invoiceController.getInvoiceSharesPdfData(resFct(req), String(req.params.poolId), req.query);
-    // Both downloads use the same authorized snapshot; only the optional example's visibility differs.
-    const pdf = createInvoiceSharesPdf(data, data.pdfOptions);
-    res.set('Cache-Control', 'no-store');
-    res.attachment(`invoice-pool-${data.pool.id}-shares.pdf`);
-    res.send(await pdf.getBuffer());
-}));
+/** Resolve output permission from the same loaded resource as the original
+ * document adapter. Permission middleware remains the grant owner. */
+function eventPermission(req: Request): EntityDescriptor {
+    const resource = getResource(req, 'event');
+    return {entityType: 'event', entityId: resource.id, ownerId: resource.ownerId, eventId: resource.id};
+}
 
-export default app;
+router.get('/:id/export/participants', requirePermission(eventPermission, eventMethodPermission('exportParticipants')),
+    asyncHandler(async function exportParticipants(req, res) {
+        // Read the existing projection; exporting never changes registrations.
+        const data = await eventController.getParticipantsExtended(getResource(req, 'event'));
+        res.contentType('application/pdf').send(await createParticipantsPdf(data).getBuffer());
+    }));
+
+router.get('/:id/export/invoice-pools/:poolId/shares', isLoggedIn,
+    requirePermission(eventPermission, eventMethodPermission('manageAssignments')),
+    asyncHandler(async function exportInvoiceShares(req, res) {
+        // Reuse the complete saved ledger regardless of browser display filters.
+        const data = await invoiceController.getInvoiceSharesPdfData(getResource(req, 'event'), String(req.params.poolId), req.query);
+        const pdf = createInvoiceSharesPdf(data, data.pdfOptions);
+        res.set('Cache-Control', 'no-store').attachment(`invoice-pool-${data.pool.id}-shares.pdf`);
+        res.send(await pdf.getBuffer());
+    }));
+
+export default router;

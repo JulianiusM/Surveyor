@@ -6,8 +6,8 @@
  */
 
 /**
- * Native route adapters, versioned commands and capability projections consult the
- * Packing controller's named methods. The names describe command authority; native
+ * Direct controller calls, versioned commands and capability projections consult the
+ * Packing controller's named methods. The names describe command authority;
  * display-only title/capacity grants remain a separate presentation contract.
  */
 export type PackingMethod = 'selfAssignment' | 'addItem' | 'reorderItems' | 'editDescription'

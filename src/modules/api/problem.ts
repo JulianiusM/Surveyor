@@ -7,7 +7,7 @@ import {createTranslator, resolveLocale, resolvePreferredLocale} from '../locali
 import {apiContract, contractValidator, problemContract} from './contracts';
 import {formatFieldDiagnostic} from '../localization/inputValidation';
 
-/** Stable machine errors remain compatible with the legacy APIError transport during coexistence. */
+/** Stable machine errors classify shared controller errors at the API boundary. */
 export class ApiProblem extends APIError {
     readonly code: ApiProblemCode;
     readonly params: ApiProblemParameters<ApiProblemCode>;
@@ -48,9 +48,9 @@ export function isVersionedApiRequest(req: Request): boolean {
     return requestPath === '/api/v1' || requestPath.startsWith('/api/v1/');
 }
 
-/** Preserve an explicitly annotated native rejection through the authored API
+/** Preserve an explicitly annotated controller rejection through the authored API
  * contract. A trusted application error, exact status and closed empty parameter
- * declaration are all required; arbitrary causes, native prose and renderer data
+ * declaration are all required; arbitrary causes, controller prose and renderer data
  * never become public messages. The manifest remains the sole code/key mapping. */
 export function declaredApiProblem(error: unknown): ApiProblem | null {
     if (!(error instanceof APIError || error instanceof ExpectedError || error instanceof ValidationError)
@@ -58,7 +58,7 @@ export function declaredApiProblem(error: unknown): ApiProblem | null {
 
     // Domain owners annotate only stable, parameter-free causes. Verify those
     // identities against the generated contract before constructing any reply.
-    // Native form ValidationError has no HTTP status; its existing API fallback
+    // Form ValidationError has no HTTP status; its existing API fallback
     // is 400. Higher-status identity causes retain their explicit mapping below.
     const status = error instanceof ValidationError ? 400 : error.status;
     const declaration = apiContract.problems.find(candidate => candidate.code === error.cause && candidate.status === status);
@@ -69,7 +69,7 @@ export function declaredApiProblem(error: unknown): ApiProblem | null {
 }
 
 /** Map only recognized controller outcomes and bounded transport failures.
- * Native prose/renderer data, arbitrary causes and untrusted status-shaped objects
+ * Controller prose/renderer data, arbitrary causes and untrusted status-shaped objects
  * never become versioned response data; unknown failures use the internal problem.
  */
 export function classifyApiError(error: unknown): ApiProblem {
@@ -81,7 +81,7 @@ export function classifyApiError(error: unknown): ApiProblem {
     if (declared) return declared;
 
     // Event business owners annotate only recognized rejection identities. Keep
-    // native prose/data private and preserve the original action-specific status;
+    // controller prose/data private and preserve the original action-specific status;
     // a string-shaped external exception never enters this trusted cause mapping.
     if (error instanceof APIError) {
         switch (error.cause) {
@@ -104,7 +104,7 @@ export function classifyApiError(error: unknown): ApiProblem {
         }
     }
 
-    // Controllers retain their native renderer errors, but explicitly annotate stable identity
+    // Controllers retain their operation-specific errors, but explicitly annotate stable identity
     // outcomes. Never interpret prose, arbitrary exception causes, or database error details.
     if (error instanceof ValidationError || error instanceof ExpectedError) {
         switch (error.cause) {
@@ -119,7 +119,7 @@ export function classifyApiError(error: unknown): ApiProblem {
     }
 
     // Recognized application errors preserve status distinctions without borrowing
-    // their text. This includes the shared native search limiter's bounded 429.
+    // their text. This includes the shared search limiter's bounded 429.
     if (error instanceof APIError || error instanceof ExpectedError) {
         if (error.status === 401) return new ApiProblem('AUTH_REQUIRED');
         if (error.status === 403) return new ApiProblem('FORBIDDEN');

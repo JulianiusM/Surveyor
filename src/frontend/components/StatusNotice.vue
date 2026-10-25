@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import {computed, inject, ref} from 'vue';
 import type {MessageKey} from '../../types/LocalizationTypes';
-import type {PilotNoticeAction} from '../../types/FrontendFeedbackTypes';
+import type {FrontendNoticeAction} from '../../types/FrontendFeedbackTypes';
 import {createTranslator, formatReadTime} from '../../modules/localization/translator';
-import {pilotContextKey, useClientInitialization, usePilot} from '../app/context';
+import {frontendContextKey, useClientInitialization, useFrontend} from '../app/context';
 import {isElementVisible, noticeTargetKey, readFailureMessage, useTransientNotice} from '../composables/feedback';
 import {useNoticePresentation} from '../composables/noticePresentation';
 import ActionButton from './ActionButton.vue';
@@ -37,23 +37,23 @@ const props = withDefaults(defineProps<{
     role?: 'alert' | 'status' | null;
     // The caller retains dispatch, admission and cooldown. Only the repeated
     // in-notice action layout belongs here, before the read diagnostics below.
-    action?: PilotNoticeAction;
+    action?: FrontendNoticeAction;
 }>(), {kind: 'info', noMargin: false, marginBottom: 3, transient: false, placement: 'content', disabled: false});
 const emit = defineEmits<{dismiss: []; action: [source: MouseEvent]}>();
 const element = ref<HTMLElement | null>(null);
 // The nearest shared dialog overrides the page host. No feature captures DOM
 // invokers or moves focus/scroll when an asynchronous result arrives.
 const notificationTarget = inject(noticeTargetKey, null);
-// Standalone flashes do not require an application context. Mounted pilot notices
+// Standalone flashes do not require an application context. Mounted frontend notices
 // localize Close, read diagnostics and timestamps; standalone callers retain the
-// catalog's native English fallback without a second literal owner.
-const context = inject(pilotContextKey, null);
+// catalog's English fallback without a second literal owner.
+const context = inject(frontendContextKey, null);
 const initialized = useClientInitialization();
 // Contextual notices use the same selected Vue binding as every feature. Its
 // resource-event dependency updates cached labels/diagnostics during catalog HMR;
 // the raw fixed translator would react only to a language change. Standalone
-// native flashes retain their no-context fallback without a second adapter.
-const messages = context ? usePilot().messages : computed(() => createTranslator('en'));
+// flashes retain their no-context fallback without a second adapter.
+const messages = context ? useFrontend().messages : computed(() => createTranslator('en'));
 const dismissLabel = computed(() => messages.value.t('common.dismissNotification'));
 const lastRefresh = computed(() => readTime(props.lastUpdatedAt ?? readPresentation.value?.lastUpdatedAt(), 'state.lastSuccessfulRefresh'));
 const retryDeadline = computed(() => readTime(props.retryAt ?? readPresentation.value?.retryAt(), 'state.retryAvailableAt'));
@@ -105,15 +105,15 @@ function dismiss(): void {
     <!-- Before the scope host mounts, SSR/first hydration reserve notice height
          locally. The shared host retains that natural space after relocation.
          Ordinary durable/content notices keep display:contents at this boundary. -->
-    <div class="pilot-notice-origin" :class="{'pilot-notice-region': placement === 'notification' && notification && !notificationTarget}">
+    <div class="frontend-notice-origin" :class="{'frontend-notice-region': placement === 'notification' && notification && !notificationTarget}">
         <Teleport :to="notificationTarget ?? 'body'" :disabled="!notification || placement === 'hosted' || !notificationTarget">
             <div v-if="!duplicate" v-bind="$attrs" ref="element" :class="[transientNotice ? 'alert' : 'status-notice', `alert-${noticeKind}`, `mb-${noMargin ? 0 : marginBottom}`,
-                 {'pilot-notification': notification, 'alert-dismissible': dismissibleNotification,
-                     'pilot-notice-with-action': !!action || !!$slots.actions, fade: dismissibleNotification, show: dismissibleNotification}]"
+                 {'frontend-notification': notification, 'alert-dismissible': dismissibleNotification,
+                     'frontend-notice-with-action': !!action || !!$slots.actions, fade: dismissibleNotification, show: dismissibleNotification}]"
                  :role="role === null ? undefined : role ?? (transientNotice || noticeKind === 'danger' ? 'alert' : 'status')">
                 <!-- Text and diagnostics share one flexible column. The action's
                      own column cannot interrupt wrapping or squeeze a long label. -->
-                <div class="pilot-notice-body">
+                <div class="frontend-notice-body">
                     <slot />
                     <div v-if="readIssue" class="mt-2" data-read-issue>{{ readIssue }}</div>
                     <!-- This is the last successful read, not the time of the failed retry.
@@ -127,7 +127,7 @@ function dismiss(): void {
                         <time :datetime="retryDeadline.datetime">{{ retryDeadline.label }}</time>
                     </div>
                 </div>
-                <div v-if="action || $slots.actions" class="pilot-notice-actions">
+                <div v-if="action || $slots.actions" class="frontend-notice-actions">
                     <ActionButton v-if="action" :class="action.class ?? 'btn-sm'" variant="outline-light"
                         :state="action.state" @click="emit('action', $event)">{{ action.label }}</ActionButton>
                     <slot name="actions" />

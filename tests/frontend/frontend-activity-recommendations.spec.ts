@@ -8,7 +8,7 @@ import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import type {components} from '../../src/types/api/v1';
 import type {ActivityRecommendationDraftRow} from '../../src/types/FrontendActivityRecommendationTypes';
-import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
+import {createFrontendContext, observeInitialDocument, frontendContextKey} from '../../src/frontend/app/context';
 import {activityKeys} from '../../src/frontend/app/queryKeys';
 import ActivityRecommendations from '../../src/frontend/features/activity/ActivityRecommendations.vue';
 import {manualRecommendationRows, pairRecommendationRows, reconcileRecommendationRows, recommendationIdentity,
@@ -87,21 +87,21 @@ afterEach(async () => {
  * delivery is substituted; persistence and built presentation have separate tests. */
 async function mounted(handler: (request: Request) => Promise<Response>) {
     const requests: Request[] = [];
-    const context = createPilotContext({session}, true, (input: RequestInfo | URL) => {
+    const context = createFrontendContext({session}, true, (input: RequestInfo | URL) => {
         requests.push(input as Request);
         return handler(input as Request);
     });
     context.hydrated.value = true;
     const currentView = shallowRef(view());
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/frontend-pilot/activity/:planId', component: ActivityRecommendations, props: () => ({planId, view: currentView.value})},
-        {path: '/frontend-pilot', component: defineComponent({template: '<p>Overview</p>'})},
+        {path: '/activity/:planId', component: ActivityRecommendations, props: () => ({planId, view: currentView.value})},
+        {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
     ]});
-    await router.push('/frontend-pilot/activity/' + planId);
+    await router.push('/activity/' + planId);
     const stopInitial = observeInitialDocument(context, router);
     const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[pilotContextKey as symbol]: context},
+        provide: {[frontendContextKey as symbol]: context},
     }});
     cleanups.push(async () => {root.unmount(); stopInitial(); await context.queryClient.cancelQueries(); context.queryClient.clear();});
     await vi.waitFor(() => expect(root.find('[data-recommendations-schedule]').exists()).toBe(true));

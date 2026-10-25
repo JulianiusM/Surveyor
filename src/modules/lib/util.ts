@@ -17,21 +17,10 @@
 import {Request} from "express";
 import crypto from 'node:crypto';
 import {v4 as uuidv4} from 'uuid';
-import type {
-    EntityDescriptor,
-    EntityGetter,
-    GetAdditional,
-    GetResource,
-    ItemDescriptor,
-    ItemGetter,
-    ItemSubject,
-    ItemWithParentGetter
-} from "../../types/PermissionTypes";
 import type {DashboardEntities, Entity, EntityBase} from "../../types/UserTypes";
 import type {EntityItemType, EntityType} from "../../types/UtilTypes";
 import settings from "../settings";
 
-import {APIError} from "./errors";
 
 // Generic currency helpers for invoice math
 export function toAmount(val: string | number | undefined | null): number {
@@ -190,19 +179,8 @@ export function maskEmail(email?: string | null) {
     return `${u}@${d}`;
 }
 
-export async function performAPIAction(req: Request, action: (body: any, profileId: string) => Promise<void>) {
-    const profileId = req.session.profile?.id;
-    if (profileId) await action(req.body, profileId);
-    else throw new APIError('Unknown user', {}, 401);
-}
-
 export function getResource(req: Request, entityName: string) {
     return req.resource ? req.resource[entityName] : undefined;
-}
-
-export function getAdditional(req: Request, entityName: string, appendList: any[] = []) {
-    appendList.push(req.resource ? req.resource[entityName] : undefined);
-    return appendList;
 }
 
 export function isWithinWindow(start: string | Date, end: string | Date, a: string | Date, d: string | Date) {
@@ -272,99 +250,6 @@ export async function ignoreException(fct: () => any) {
         return await fct();
     } catch (err) {
         console.warn(err);
-    }
-}
-
-export function getPermFct(resFct: GetResource, entityName: EntityType): EntityGetter {
-    const permFct = (req: Request): EntityDescriptor => {
-        const resource = resFct(req);
-        return {
-            entityType: entityName,
-            entityId: resource?.id,
-            ownerId: resource?.ownerId,
-            eventId: entityName === "event" ? resource?.id : resource?.eventId,
-        };
-    }
-    return permFct;
-}
-
-export function getPermFctItems(resFct: GetResource, resFctItems: GetAdditional, entityName: EntityType, additionalName: EntityItemType): ItemWithParentGetter {
-    const permFctItems = (req: Request): ItemSubject => {
-        const param: any = req.params.itemId || req.params.slotId;
-        const resource = resFctItems(req).find(r => r?.id === param);
-        const parent = resFct(req);
-        enforceChildResourceScope(parent?.id, resource?.entityId, param);
-        const result: ItemSubject = {
-            item: {
-                entityType: additionalName,
-                entityId: resource?.id,
-                ownerId: resource?.ownerId ?? resource?.profileId,
-                eventId: parent?.eventId,
-            },
-            parent: {
-                entityType: entityName,
-                entityId: resource?.entityId ?? parent?.id,
-                ownerId: parent?.ownerId,
-                eventId: parent?.eventId,
-            }
-        };
-        return result;
-    }
-    return permFctItems;
-}
-
-export function getPermFctAssign(resFct: GetResource, resFctItems: GetAdditional, entityName: EntityType, additionalName: EntityItemType): ItemWithParentGetter {
-    const permFctItems = (req: Request): ItemSubject => {
-        const param: number = Number.parseInt(req.params.assignId as string);
-        const assign = resFctItems(req).find(r => r?.id === param);
-        const resource = assign?.item || assign?.slot;
-        const parent = resFct(req);
-        enforceChildResourceScope(parent?.id, assign?.entityId ?? resource?.entityId, param);
-        const result: ItemSubject = {
-            item: {
-                entityType: additionalName,
-                entityId: resource?.id,
-                ownerId: resource?.ownerId ?? resource?.profileId,
-                eventId: parent?.eventId,
-            },
-            parent: {
-                entityType: entityName,
-                entityId: resource?.entityId ?? parent?.id,
-                ownerId: parent?.ownerId,
-                eventId: parent?.eventId,
-            }
-        };
-        return result;
-    }
-    return permFctItems;
-}
-
-export function enforceChildResourceScope(
-    routeEntityId: string | undefined,
-    childEntityId: string | undefined,
-    childId: string | number,
-) {
-    if (!routeEntityId || !childEntityId || childEntityId !== routeEntityId) {
-        throw new APIError('Item not found in this resource', {childId}, 404);
-    }
-}
-
-export function getItemFromEntityPermFct(getItems: (id: string) => Promise<any[]>, resFct: GetResource, entityItemType?: EntityItemType): ItemGetter {
-    return async (req: Request) => {
-        if (!entityItemType) return [];
-
-        const resource = resFct(req);
-        const items = await getItems(resource?.id) ?? [];
-        const res: ItemDescriptor[] = [];
-        for (let item of items) {
-            res.push({
-                entityType: entityItemType,
-                entityId: item.id,
-                ownerId: item.ownerId ?? item.profileId,
-                eventId: item.eventId ?? resource?.eventId,
-            })
-        }
-        return res;
     }
 }
 

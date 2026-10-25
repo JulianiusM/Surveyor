@@ -486,30 +486,30 @@ describe('complete versioned packing management', () => {
     it('rejects stale versioned edits after native writes while retaining original native overwrite and property-context behavior', async () => {
         const id = await fixture();
         await adminService.updatePerms('packing', id, {public: PERM.ACCESS_VIEW | PERM.ITEM_EDIT_DESC});
-        const pilotBaseline = (await packing.readPackingList(id, actor(editor))).data.items[0];
-        await packingController.updateItemDescription(pilotBaseline.id, {description: 'Native edit'});
-        await expect(packing.updatePackingItem(id, pilotBaseline.id, {description: 'Stale pilot edit'}, pilotBaseline.editToken, actor(editor)))
+        const frontendBaseline = (await packing.readPackingList(id, actor(editor))).data.items[0];
+        await packingController.updateItemDescription(frontendBaseline.id, {description: 'Native edit'});
+        await expect(packing.updatePackingItem(id, frontendBaseline.id, {description: 'Stale frontend edit'}, frontendBaseline.editToken, actor(editor)))
             .rejects.toMatchObject({status: 412});
         const current = (await packing.readPackingList(id, actor(editor))).data.items[0];
-        await packing.updatePackingItem(id, current.id, {description: 'Pilot edit'}, current.editToken, actor(editor));
+        await packing.updatePackingItem(id, current.id, {description: 'Frontend edit'}, current.editToken, actor(editor));
         // Legacy item endpoints ignore extra expectedValue fields. A versioned
         // token must protect the API without silently adding native preconditions.
         await packingController.updateItemDescription(current.id, {description: 'Stale native edit', expectedValue: current.description});
         expect((await packingService.getPackingItemById(current.id))!.description).toBe('Stale native edit');
-        await expect(packing.updatePackingItem(id, current.id, {description: 'Stale pilot edit'}, current.editToken, actor(editor)))
+        await expect(packing.updatePackingItem(id, current.id, {description: 'Stale frontend edit'}, current.editToken, actor(editor)))
             .rejects.toMatchObject({status: 412});
         await packingController.updateItemAttr(current.id, {field: 'title', value: 'Updated item'});
         expect((await packingService.getPackingItemById(current.id))!.title).toBe('Updated item');
 
         const entity = (await packingService.getPackingListById(id))!;
         const metadata = await packing.readPackingMetadata(id, actor(owner));
-        await packing.patchPackingMetadata(id, {title: 'Pilot setup edit'}, metadata.etag, actor(owner));
+        await packing.patchPackingMetadata(id, {title: 'Frontend setup edit'}, metadata.etag, actor(owner));
         // Unlike item endpoints, original native properties reject unsupported
         // body keys through Joi. Their unchanged error is validation, not a new412.
         await expect(packingController.updateProperties(entity, {title: 'Stale native setup', expectedValues: {title: entity.title}}))
             .rejects.toMatchObject({status: 400});
         await packingController.updateProperties(entity, {description: 'Independent native setup'});
-        expect(await packingService.getPackingListById(id)).toMatchObject({title: 'Pilot setup edit', description: 'Independent native setup'});
+        expect(await packingService.getPackingListById(id)).toMatchObject({title: 'Frontend setup edit', description: 'Independent native setup'});
 
         // A relink after native route discovery supersedes that route's permission
         // context. The original native root transaction rejects that stale captured
@@ -519,7 +519,7 @@ describe('complete versioned packing management', () => {
         await packing.changePackingEvent(id, {eventId, expectedEventId: null}, actor(owner), settings.settingsToken);
         const conflict = {status: 409, message: 'The linked event changed. Reload and try again.'};
         await expect(packingController.updateProperties(entity, {title: 'Retired native context'})).rejects.toMatchObject(conflict);
-        expect(await packingService.getPackingListById(id)).toMatchObject({title: 'Pilot setup edit', eventId});
+        expect(await packingService.getPackingListById(id)).toMatchObject({title: 'Frontend setup edit', eventId});
     });
 
     it('keeps native persistence hooks independent of versioned linked-page admission', async () => {
@@ -851,7 +851,7 @@ describe('complete versioned packing management', () => {
     });
 });
 
-describe('pilot mixed overview projection', () => {
+describe('frontend mixed overview projection', () => {
     it.each(['account', 'guest'] as const)('keeps native owner-card actions for a persisted %s profile while administrators remain nonowners', async identity => {
         let session: SessionLike;
         if (identity === 'guest') {
@@ -952,7 +952,7 @@ describe('pilot mixed overview projection', () => {
         // as the main Overview; child membership and private placement stay independent.
         expect(contractValidator('OverviewRegion')(children)).toBe(true);
         expect(children.parent).toMatchObject({id: eventId, type: 'event', title: 'Container for packing',
-            description: 'A production-shaped integration workflow', url: `/frontend-pilot/event/${eventId}`,
+            description: 'A production-shaped integration workflow', url: `/event/${eventId}`,
             visibility: 'default', overviewHidden: false, children: {total: 1, matching: 1},
             capabilities: {archive: true, restore: false, duplicate: true, remove: true}});
         expect(children).toMatchObject({totalChildren: 1, childPage: 1, hasPrevious: false, hasNext: false});
@@ -960,7 +960,7 @@ describe('pilot mixed overview projection', () => {
         expect((await readOverview({collection: 'owner', region: 'main', eventId}, session)).parent)
             .toMatchObject({id: eventId, visibility: 'shown', overviewHidden: false});
         expect(children.items.map(card => card.id)).toEqual([id]);
-        expect(children.items[0].url).toBe(`/frontend-pilot/packing/${id}`);
+        expect(children.items[0].url).toBe(`/packing/${id}`);
         expect(children.items[0].capabilities).toEqual({archive: true, restore: false, duplicate: true, remove: true});
         const item = (await packing.readPackingList(id, session)).data.items[0];
         await packing.setPackingSelfAssignment(id, item.id, true, participantSession);
@@ -1004,9 +1004,9 @@ describe('pilot mixed overview projection', () => {
         expect(contractValidator('OverviewRegion')(surveyOnly)).toBe(true);
         expect(surveyOnly).toMatchObject({type: 'all', availableTypes: ['survey'], totalEntities: 1,
             matchingEntities: 1, totalCards: 1});
-        // P4 Survey and P5 Activity destinations stay inside the pilot even
+        // P4 Survey and P5 Activity destinations stay inside the frontend even
         // when discovered through the mixed Overview or its Event children.
-        expect(surveyOnly.items).toMatchObject([{id: surveyId, type: 'survey', url: `/frontend-pilot/survey/${surveyId}`}]);
+        expect(surveyOnly.items).toMatchObject([{id: surveyId, type: 'survey', url: `/survey/${surveyId}`}]);
 
         const eventId = await createIntegrationEvent(isolatedOwner.id, 'Mixed trip');
         const activityId = await createEventActivityPlan(isolatedOwner.id, eventId);
@@ -1019,8 +1019,8 @@ describe('pilot mixed overview projection', () => {
         const children = await readOverview({collection: 'owner', region: 'main', eventId}, session);
         expect(children.parent?.children).toEqual({total: 2, matching: 2});
         expect(new Set(children.items.map(card => card.id))).toEqual(new Set([activityId, packingId]));
-        expect(children.items.find(card => card.id === activityId)?.url).toBe(`/frontend-pilot/activity/${activityId}`);
-        expect(children.items.find(card => card.id === packingId)?.url).toBe(`/frontend-pilot/packing/${packingId}`);
+        expect(children.items.find(card => card.id === activityId)?.url).toBe(`/activity/${activityId}`);
+        expect(children.items.find(card => card.id === packingId)?.url).toBe(`/packing/${packingId}`);
 
         const filtered = await readOverview({collection: 'owner', region: 'main', type: 'activity'}, session);
         expect(filtered).toMatchObject({type: 'activity', totalEntities: 4, matchingEntities: 1, totalCards: 1});

@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: active trusted-content decision and original enforcement history retained; selected reviewed corpora and complete English fallback aligned with shared Help owner; no runtime change
-source-anchors: src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; .github/workflows/release.yml; tests/integration/controller-smoke-workflows.spec.ts; tests/e2e/public-availability.spec.ts; docs/policies/DOCUMENTATION_POLICY.md; docs/backlog/documentation-remediation.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
+source-anchors: src/controller/helpController.ts; .github/workflows/release.yml; tests/integration/controller-smoke-workflows.spec.ts; tests/e2e/public-availability.spec.ts; docs/policies/DOCUMENTATION_POLICY.md; docs/backlog/documentation-remediation.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; src/frontend/; src/routes/api/v1/
 next-review: help-source-or-trust-boundary-change
 -->
 
@@ -31,7 +31,7 @@ The current help path is fixed and release-controlled:
 1. `src/controller/helpController.ts` resolves the help base directory to `docs/user-guide/` relative to the application.
 2. The help controller selects reviewed article corpora and adjacent assets within that fixed tree.
 3. A requested document is resolved inside the selected corpus and must exist as a regular file.
-4. `src/routes/help.ts` exposes read-only `GET` routes. It provides no authoring, upload, import, or persistence endpoint.
+4. The canonical document and versioned Help routes expose read-only `GET` operations. They provide no authoring, upload, import, or persistence endpoint.
 5. Markdown is validated and converted to HTML; internal links remain within the selected Help corpus. The shared
    controller supplies rendered content to its admitted view consumer.
 6. `.github/workflows/release.yml` copies `docs/` into the release artifact alongside the built application.
@@ -127,3 +127,11 @@ assets; the original flat English layout is not a permanent source requirement. 
 figure selects only a complete reviewed English article with its own assets. Direct assets never independently
 fall back across languages. The [Documentation Policy](../policies/DOCUMENTATION_POLICY.md#localized-help)
 owns authoring and fallback rules; existing unsafe or unreadable sources retain their rejection boundary.
+
+## Cutover source reconciliation (2026-10-25)
+
+The explicitly requested P11 retirement removes the flat native comparison corpus. Every reader now selects a
+reviewed language directory inside the same canonical `docs/user-guide/` parent; an omitted locale selects English.
+The existing strict file, authored-content and complete-article fallback rules apply to those defaults as well.
+The trust decision and release ownership remain unchanged. Original template/route evidence above records its
+historical implementation rather than a continuing native frontend requirement.

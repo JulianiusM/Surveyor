@@ -18,31 +18,25 @@ import cookieParser from 'cookie-parser';
 import express, {NextFunction, Request, Response} from 'express';
 import flash from 'express-flash';
 import session from 'express-session';
-import createError from 'http-errors';
 import logger from 'morgan';
 import path from 'node:path';
-import {version} from '../package.json';
-import {logoutUserOidc, validateSession} from "./controller/userController";
 import {handleGenericError} from './middleware/genericErrorHandler';
-import {resolveContextualHelpUrl} from './modules/lib/helpNavigation';
 import {AppDataSource} from "./modules/database/dataSource";
 import {createSessionStore} from './modules/lib/session';
-import {asyncHandler} from "./modules/lib/asyncHandler";
 import settings from './modules/settings';
 import {frontendDevelopmentMiddleware} from './modules/frontendDevelopment';
-import indexRouter from './routes';
-import activityRouter from './routes/activity';
-import apiRouter from './routes/api';
 import apiV1Router from './routes/api/v1';
-import frontendPilotRouter from './routes/frontendPilot';
-import {handleApiProblem, isVersionedApiRequest} from './modules/api/problem';
+import indexRouter from './routes';
+import usersRouter from './routes/users';
+import surveyRouter from './routes/survey';
+import packingRouter from './routes/packing';
+import activityRouter from './routes/activity';
 import driversRouter from './routes/drivers';
 import eventRouter from './routes/event';
-import guestsRouter from './routes/guests';
 import helpRouter from './routes/help';
-import packingRouter from './routes/packing';
-import surveyRouter from './routes/survey';
-import usersRouter from './routes/users';
+import guestsRouter from './routes/guests';
+import {admitFrontendDocument, renderFrontendError} from './routes/frontend';
+import {ApiProblem, handleApiProblem, isVersionedApiRequest} from './modules/api/problem';
 
 const app = express();
 app.disable("x-powered-by");
@@ -58,8 +52,13 @@ app.use(express.urlencoded({extended: true, limit: '1mb'}));
 app.use(cookieParser());
 app.use(frontendDevelopmentMiddleware);
 app.use(express.static(path.join(__dirname, 'public')));
-// The development server runs source TS, while both pilot builds share their normal dist outputs.
+// The development server runs source TS, while both frontend builds share their normal dist outputs.
 app.use('/app', express.static(path.resolve(__dirname, '../dist/public/app')));
+// An old document may request a chunk removed by a release. Keep missing assets
+// outside document rendering so its recovery can observe the real failed load.
+app.use('/app', function missingFrontendAsset(_req, res) {
+    res.status(404).set('Cache-Control', 'no-store').type('text/plain').send('Not found');
+});
 
 // ensure dataSource is initialized before this
 const sessionStore = createSessionStore(AppDataSource.manager);
@@ -84,42 +83,15 @@ app.use(
 
 app.use(flash());
 
-// v1 owns structured expiry/errors before the legacy HTML/OIDC redirect can intercept it.
+// The API owns structured expiry/errors; document admission uses the same actor
+// owner before the domain routers without adding a second session lifecycle.
 app.use('/api/v1', apiV1Router);
-app.use('/frontend-pilot', frontendPilotRouter);
+app.get('/healthz', (_req, res) => res.status(200).send('ok'));
 
-// Validate session on each request
-app.use(asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-    if (!await validateSession(req.session)) {
-        // Session is not valid anymore --> force logout
-        req.flash("error", "Session has expired");
-        res.redirect(await logoutUserOidc(req.session));
-        return;
-    }
-    next();
-}));
-
-app.use(function (req: Request, res: Response, next: NextFunction) {
-    res.locals.profile = req.session.profile;
-    res.locals.auth = req.session.auth;
-    res.locals.version = version;
-    res.locals.settings = {
-        localLoginEnabled: settings.value.localLoginEnabled,
-        oidcEnabled: settings.value.oidcEnabled,
-        oidcName: settings.value.oidcName,
-        rootUrl: settings.value.rootUrl,
-        imprintUrl: settings.value.imprintUrl,
-        privacyPolicyUrl: settings.value.privacyPolicyUrl,
-    };
-    const currentPath = req.baseUrl + req.path;
-    res.locals.currentPath = currentPath;
-    res.locals.helpUrl = resolveContextualHelpUrl(currentPath);
-    res.locals.nxtUrl = req.query.next ?? currentPath;
-    next();
-});
-
+// Admit documents once before the established domain branches. Each router owns
+// its own entry, parameter loading and output ordering; none consumes siblings.
+app.use(admitFrontendDocument);
 app.use('/', indexRouter);
-app.use('/api', apiRouter);
 app.use('/users', usersRouter);
 app.use('/survey', surveyRouter);
 app.use('/packing', packingRouter);
@@ -129,11 +101,9 @@ app.use('/event', eventRouter);
 app.use('/help', helpRouter);
 app.use('/guest', guestsRouter);
 
-app.get('/healthz', (_req, res) => res.status(200).send('ok'));
-
 // catch 404 and forward to error handler
 app.use(function (req: Request, res: Response, next: NextFunction) {
-    next(createError(404));
+    next(new ApiProblem('NOT_FOUND'));
 });
 
 // error handler
@@ -142,6 +112,7 @@ app.use(function routeApiParsingError(error: unknown, req: Request, res: Respons
     if (isVersionedApiRequest(req)) return handleApiProblem(error, req, res, next);
     next(error);
 });
+app.use(renderFrontendError);
 app.use(handleGenericError);
 
 export default app;

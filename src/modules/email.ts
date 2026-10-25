@@ -386,12 +386,12 @@ export function createMailOptions(to: EmailRecipient, subject: string, content: 
 }
 
 /**
- * Share actual SMTP delivery while retaining native error handling. Only the
+ * Share SMTP delivery while retaining immediate-send error handling. Only the
  * committed registration workflow opts into a bounded acceptance/failure receipt;
  * neither receipt value promises that the recipient's inbox received the mail.
  */
 async function sendMailOptions(mailOptions: MailOptions, reportDelivery = false, preparedTransport?: Transporter): Promise<boolean> {
-    // Native initialization errors retain their existing rejection behavior.
+    // SMTP initialization errors retain their rejection behavior.
     // A committed registration cannot fail creation because SMTP init failed.
     if (!reportDelivery && !preparedTransport) init();
     try {
@@ -419,7 +419,7 @@ export async function sendEmail(to: EmailRecipient, subject: string, content: Em
     await sendMailOptions(mailOptions);
 }
 
-/** Native dispatch and atomic registration preparation share the activation message. */
+/** Immediate dispatch and atomic registration preparation share the activation message. */
 function activationContent(activationLink: string): StructuredEmailContent {
     return {
         eyebrow: 'Account setup',
@@ -440,7 +440,7 @@ export function prepareActivationEmail(userEmail: EmailRecipient, activationLink
     return prepareIdentityDelivery(createMailOptions(userEmail, ACTIVATION_EMAIL_SUBJECT, activationContent(activationLink)));
 }
 
-/** Keep native dispatch and precommit reset-mail preparation on one unchanged message definition. */
+/** Keep immediate dispatch and precommit reset-mail preparation on one message definition. */
 function passwordResetContent(resetLink: string): StructuredEmailContent {
     return {
         eyebrow: 'Account security',
@@ -467,7 +467,7 @@ export function preparePasswordResetEmail(userEmail: EmailRecipient, resetLink: 
     return prepareIdentityDelivery(options, transporter!, false);
 }
 
-/** The native sender and transactional preparation share the exact personal-link message. */
+/** Immediate sending and transactional preparation share the personal-link message. */
 function personalLinkContent(surveyLink: string): StructuredEmailContent {
     return {
         eyebrow: 'Personal access',

@@ -31,7 +31,7 @@ export type ActivitySimpleMutationOperation = 'updateActivityDefaults'
     | 'updateActivityTextField'
     | 'deleteActivityTextField';
 
-/** Optional v1 checks join the existing property transaction; native callers omit this context. */
+/** Optional v1 checks join the existing property transaction; direct callers omit this context. */
 export interface ActivityPropertyTransportContext {
     session: SessionLike;
     token?: string;

@@ -3,15 +3,14 @@ import {randomUUID} from 'node:crypto';
 import {writeFile} from 'node:fs/promises';
 import type {components} from '../../src/types/api/v1';
 import {createE2EDriversList} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, expectVisiblePresentation, openModalForE2E, readVisiblePresentation, expectUsableFrontendLayout} from './e2eCoreKeywords';
+import {createResourceViaForm, readVisiblePresentation, expectUsableFrontendLayout} from './e2eCoreKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from './frontendEventE2EKeywords';
-import {waitForPilotHydration} from './frontendDynamicKeywords';
+import {waitForFrontendHydration} from './frontendDynamicKeywords';
 
 type SettingsSurface = 'General' | 'General with image controls' | 'Linked event' | 'Access' | 'Administrators' | 'Actions';
 type Presentation = Awaited<ReturnType<typeof readVisiblePresentation>>;
 
-/** Seed through the existing native application. Comparisons read the exact
- * same persisted root, actor and optional parent through both frontends. */
+/** Seed the persisted root and optional parent through current built commands. */
 export async function createDriversSettingsFixture(page: Page, attached = false) {
     const event = await createFrontendEventFixture(page.request);
     const input = createE2EDriversList();
@@ -25,17 +24,15 @@ export async function createDriversSettingsFixture(page: Page, attached = false)
     return {event, resource: await createResourceViaForm(page.request, input)};
 }
 
-/** Open this actor's real settings after native/Vue page admission. Narrowly
+/** Open this actor's real settings after canonical document admission. Narrowly
  * delegated editors can omit title/actions; their caller supplies the field
  * whose independently authorized metadata read must have completed. */
-export async function openDriversSettingsForE2E(page: Page, path: string, pilot: boolean, field = 'title'): Promise<Locator> {
-    await page.goto(`${pilot ? '/frontend-pilot' : ''}${path}?locale=en`, {waitUntil: 'domcontentloaded'});
-    if (pilot) await waitForPilotHydration(page);
+export async function openDriversSettingsForE2E(page: Page, path: string, field = 'title'): Promise<Locator> {
+    await page.goto(`${path}?locale=en`, {waitUntil: 'domcontentloaded'});
+    await waitForFrontendHydration(page);
     const opener = page.getByRole('button', {name: 'Entity settings', exact: true});
-    const nativeModal = page.locator('#entityPropertiesModal');
-    if (pilot) await opener.click();
-    else await openModalForE2E(nativeModal, opener);
-    const dialog = pilot ? page.getByRole('dialog', {name: 'Entity settings', exact: true}) : nativeModal.locator('.modal-content');
+    await opener.click();
+    const dialog = page.getByRole('dialog', {name: 'Entity settings', exact: true});
     await expect(dialog.locator(`[name="${field}"]`)).toBeVisible();
     // Metadata and settings are independent reads. A title field alone must not
     // let the owner's screenshot race the still-loading permitted settings panels.
@@ -63,7 +60,7 @@ export async function selectDriversSettingsSurface(dialog: Locator, page: Page, 
         const searchReply = page.waitForResponse(function matchEventSearch(response) {
             const url = new URL(response.url());
             return response.request().method() === 'GET' && url.searchParams.get('q') === event.title
-                && ['/api/event/link-options', '/api/v1/drivers-lists/events'].includes(url.pathname);
+                && url.pathname === '/api/v1/drivers-lists/events';
         });
         await dialog.getByLabel('Search events', {exact: true}).fill(event.title);
         const searched = await searchReply;
@@ -82,7 +79,7 @@ export async function selectDriversSettingsSurface(dialog: Locator, page: Page, 
     if (surface === 'Actions') await expect(dialog.getByRole('button', {name: 'Archive for everyone', exact: true})).toBeVisible();
 
     // Settle fonts and focus without modifying application data or styles.
-    if (new URL(page.url()).pathname.startsWith('/frontend-pilot')) await expectUsableFrontendLayout(dialog);
+    await expectUsableFrontendLayout(dialog);
     await page.evaluate(() => document.fonts.ready);
     await page.evaluate(function releaseFocus() {
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -102,12 +99,6 @@ export async function captureDriversSettingsPresentation(page: Page, info: TestI
     await writeFile(info.outputPath(name + '-presentation.json'), JSON.stringify(result, null, 2));
     await info.attach(name + '-presentation', {body: JSON.stringify(result, null, 2), contentType: 'application/json'});
     return result;
-}
-
-/** Settings preserve visible actions and command constraints across semantic DOM.
- * A direct SPA button and a native submit wrapper need no compatibility adapter. */
-export function expectDriversSettingsPresentation(native: Presentation, pilot: Presentation, _actions = false): void {
-    expectVisiblePresentation(native, pilot);
 }
 
 /** Read admitted settings through the real versioned boundary for persistence

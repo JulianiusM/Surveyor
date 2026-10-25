@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type {FinanceInvoiceReviewInput, FinanceInvoiceReviewOwner} from '../../../types/FrontendFinanceReviewTypes';
-import type {PilotPlainMessageKey} from '../../../types/FrontendPilotUiTypes';
-import {usePilot} from '../../app/context';
+import type {FrontendPlainMessageKey} from '../../../types/FrontendUiTypes';
+import {useFrontend} from '../../app/context';
 import {financeMoney} from './presentation';
 import {protectFinanceNumberFromScroll} from './numbers';
 import {useFinanceInvoiceReview} from './invoiceReview';
@@ -14,8 +14,8 @@ import FormField from '../../components/FormField.vue';
 // An inline row supplies its existing feature owner. Standalone retroactive
 // dialogs create that same owner once for their captured selection instead.
 const props = defineProps<FinanceInvoiceReviewInput & {owner?: FinanceInvoiceReviewOwner}>();
-const emit = defineEmits<{close: []; saved: [notice: PilotPlainMessageKey]}>();
-const {messages, locale} = usePilot();
+const emit = defineEmits<{close: []; saved: [notice: FrontendPlainMessageKey]}>();
+const {messages, locale} = useFrontend();
 const owner = props.owner ?? useFinanceInvoiceReview(props, {
     close: () => emit('close'), saved: notice => emit('saved', notice),
 });
@@ -46,7 +46,7 @@ const {id, form, invoice, closedPool, operation, reviewing, inspected, completed
         <p v-else class="fw-semibold">{{ messages.t('finance.countedInvoiceDetails', {invoiceId: invoice.id,
             amount: financeMoney(invoice.correctedAmount ?? invoice.amount, locale)}) }}</p>
         <p v-if="!inline && !retroactive && operation !== 'close'" class="small invoice-description">{{ invoice.description || messages.t('finance.noDescription') }}</p>
-        <!-- Native confirmation keeps an entered correction's lexical spelling;
+        <!-- Confirmation keeps an entered correction's lexical spelling;
              its untouched/rejected subject uses the displayed localized amount. -->
         <p v-if="inline">{{ messages.t(operation === 'approve' ? 'finance.confirmAcceptInvoice' : 'finance.confirmRejectInvoice', {
             amount: capturedNew?.action === 'approve' && capturedNew.amount ? capturedNew.amount : financeMoney(invoice.amount, locale),
@@ -77,7 +77,7 @@ const {id, form, invoice, closedPool, operation, reviewing, inspected, completed
                         :label="messages.t('finance.rejectionReason')" :max-length="4000" required :required-marker="false"
                         :pending="command.pending.value" />
                 </template>
-                <!-- Native own-history Close supplies no amount to this question.
+                <!-- Own-history Close supplies no amount to this question.
                      Keep that inherited presentation separate from organizer Close;
                      the unchanged submitted/effective evidence stays in its row. -->
                 <p v-if="operation === 'approve' || operation === 'decline' || operation === 'close'">

@@ -368,7 +368,7 @@ describe('versioned Event projections and native operation adoption', () => {
         await eventService.updateEventProperties(id, {bindingDeadline: '2000-01-01T00:00:00Z'});
         const link = await eventApi.addEventRegistrationLink(id, {maxUses: 5}, sessionFor(owner));
         expect((await eventApi.readEventResourceEntry(id, 'detail', {}, link.token)).entry)
-            .toMatchObject({kind: 'redirect', url: `/frontend-pilot/event/${id}/guest?regToken=${link.token}`});
+            .toMatchObject({kind: 'redirect', url: `/event/${id}/guest?regToken=${link.token}`});
         expect((await eventApi.readEventResourceEntry(id, 'guest', {}, link.token)).guest).toEqual({id, title: 'Token continuity'});
         expect(await eventApi.canBypassDeadlineWithToken(id, link.token)).toEqual({ok: true, linkId: link.id});
         const nativeLink = (await eventService.listDeadlineBypassLinks(id))[0];

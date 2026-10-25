@@ -17,7 +17,7 @@ function region(collection: 'owner' | 'participant', visibility: 'main' | 'hidde
         eventId: null, pageSize: 24, totalEntities: 2, hiddenEntities: 1, regionEntities: 1, matchingEntities: 1,
         totalCards: 1, totalChildren: 0, hasPrevious: false, hasNext: false, parent: null,
         items: [{id: entityId, type: 'packing', title: `${collection} ${visibility} packing list`, description: null,
-            url: `/frontend-pilot/packing/${entityId}`, headerUrl: null, headerVersion: null, eventContext: null,
+            url: `/packing/${entityId}`, headerUrl: null, headerVersion: null, eventContext: null,
             visibility: 'default', overviewHidden: visibility === 'hidden', archived: false, inheritedArchived: false,
             capabilities: {archive: false, restore: false, duplicate: false, remove: false}, children: null}]};
 }
@@ -40,18 +40,18 @@ describe('admitted initial document delivery', () => {
 
     it('renders one localized startup notice beneath the shared header in the same SSR tree', async () => {
         for (const locale of ['en', 'de']) {
-            const result = await render('/frontend-pilot/help', {session: {...session, locale}, help: {
+            const result = await render('/help', {session: {...session, locale}, help: {
                 locale, title: 'Synthetic Help', content: '<p>Readable task.</p>', currentDoc: 'fixture.md',
                 docsList: [], docsGroups: [], toc: []}});
             const document = new DOMParser().parseFromString(result.html, 'text/html');
-            const notice = document.querySelector('#surveyor-pilot-javascript-required')!;
-            expect(document.querySelectorAll('#surveyor-pilot-javascript-required')).toHaveLength(1);
-            expect(notice.previousElementSibling?.matches('.pilot-app-header')).toBe(true);
-            expect(notice.nextElementSibling?.id).toBe('pilot-main');
+            const notice = document.querySelector('#surveyor-frontend-javascript-required')!;
+            expect(document.querySelectorAll('#surveyor-frontend-javascript-required')).toHaveLength(1);
+            expect(notice.previousElementSibling?.matches('.frontend-app-header')).toBe(true);
+            expect(notice.nextElementSibling?.id).toBe('frontend-main');
             expect(notice.textContent).toContain(locale === 'de'
                 ? 'Interaktive Funktionen dieser Website benötigen JavaScript.' : 'Interactive features on this site require JavaScript.');
-            expect(notice.querySelector('a')?.getAttribute('href')).toBe(`/frontend-pilot/help?locale=${locale}`);
-            expect(notice.querySelector('[data-pilot-startup-reload]')?.getAttribute('type')).toBe('button');
+            expect(notice.querySelector('a')?.getAttribute('href')).toBe(`/help?locale=${locale}`);
+            expect(notice.querySelector('[data-frontend-startup-reload]')?.getAttribute('type')).toBe('button');
             expect(notice.querySelector('form')).toBeNull();
         }
     });
@@ -65,7 +65,7 @@ describe('admitted initial document delivery', () => {
 
         // Public content stays server-rendered. A null pair describes absence of
         // stored evidence, rather than a missing bootstrap or an unreadable shell.
-        const publicResult = await render('/frontend-pilot/help', {session: initial, help});
+        const publicResult = await render('/help', {session: initial, help});
         const publicDocument = new DOMParser().parseFromString(publicResult.html, 'text/html');
         expect(publicDocument.querySelector('main article')?.textContent).toContain('Read this task.');
         expect(JSON.parse(publicResult.state).session).toMatchObject({context: null, csrfToken: null});
@@ -73,9 +73,9 @@ describe('admitted initial document delivery', () => {
 
         // Identity input retains its existing initialization disclosure; no new
         // frontend bootstrap or anonymous session is required before showing it.
-        const loginResult = await render('/frontend-pilot/users/login', {session: initial});
+        const loginResult = await render('/users/login', {session: initial});
         const loginDocument = new DOMParser().parseFromString(loginResult.html, 'text/html');
-        expect(loginDocument.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+        expect(loginDocument.querySelector('[data-frontend-initial-loading]')).not.toBeNull();
         expect(loginDocument.querySelector('main form')).toBeNull();
         expect(JSON.parse(loginResult.state).session).toMatchObject({context: null, csrfToken: null});
         expect(loginResult.javascriptRequired).toBe(true);
@@ -88,13 +88,13 @@ describe('admitted initial document delivery', () => {
         const option: components['schemas']['EventPickerOption'] = {id: entityId, title: 'Admitted initial event',
             description: null, startDate: '2026-10-07', endDate: '2026-10-08', archived: false, deadlinePassed: false};
         for (const selectedEvent of [option, null]) {
-            const result = await render(`/frontend-pilot/packing/create?eventId=${entityId}`, {
+            const result = await render(`/packing/create?eventId=${entityId}`, {
                 session: {...session, kind: 'account', activeProfile: {id: profileId, name: 'Account owner'}},
                 pageEntry: {kind: 'render'}, packingSelectedEvent: selectedEvent,
                 packingCreateContext: {defaults: {public: 0, guest: 0, authenticated: 0, participant: 0}, permissions: [], presets: []},
             });
             const document = new DOMParser().parseFromString(result.html, 'text/html');
-            expect(document.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+            expect(document.querySelector('[data-frontend-initial-loading]')).not.toBeNull();
             expect(document.querySelector('#create-event-button')).toBeNull();
             expect(JSON.parse(result.state).packingSelectedEvent).toEqual(selectedEvent);
         }
@@ -106,7 +106,7 @@ describe('admitted initial document delivery', () => {
         vi.stubGlobal('fetch', fetch);
         for (const locale of ['en', 'de']) {
             for (const suffix of ['', '/guest', '/duplicate']) {
-                const result = await render(`/frontend-pilot/packing/${entityId}${suffix}`, {
+                const result = await render(`/packing/${entityId}${suffix}`, {
                     session: {...session, locale}, packingError: 'packing.notFound',
                 });
                 const document = new DOMParser().parseFromString(result.html, 'text/html');
@@ -115,7 +115,7 @@ describe('admitted initial document delivery', () => {
                 );
                 const card = document.querySelector('main section.card')!;
                 expect(card.querySelector('h1.card-header')?.textContent).toBe(locale === 'de' ? 'Fehler' : 'Error');
-                expect(card.querySelector('a.btn-primary')?.getAttribute('href')).toBe('/frontend-pilot');
+                expect(card.querySelector('a.btn-primary')?.getAttribute('href')).toBe('/');
                 expect(card.querySelector('a.btn-primary')?.textContent).toBe(locale === 'de' ? 'Startseite' : 'Home');
                 expect(document.querySelector('main form')).toBeNull();
                 expect(result.javascriptRequired).toBe(false);
@@ -128,14 +128,14 @@ describe('admitted initial document delivery', () => {
     it('retains an admitted public copy projection without exposing a duplicate form or calling HTTP during SSR', async () => {
         const fetch = vi.fn(() => {throw new Error('SSR must use its admitted copy projection');});
         vi.stubGlobal('fetch', fetch);
-        const result = await render(`/frontend-pilot/packing/${entityId}/duplicate`, {session,
+        const result = await render(`/packing/${entityId}/duplicate`, {session,
             packingDuplicate: {title: 'Public copy', description: 'Copied description', eventId: null,
                 items: [{title: 'Camping stove', description: null, maxAssignees: null, requiredByAll: true}],
                 defaultPermissions: {public: 0, guest: 0, authenticated: 0, participant: 0},
                 formContext: {defaults: {public: 0, guest: 0, authenticated: 0, participant: 0}, permissions: [], presets: []}},
         });
         const document = new DOMParser().parseFromString(result.html, 'text/html');
-        expect(document.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+        expect(document.querySelector('[data-frontend-initial-loading]')).not.toBeNull();
         expect(document.querySelector('main form')).toBeNull();
         expect(JSON.parse(result.state).packingDuplicate).toMatchObject({title: 'Public copy', description: 'Copied description'});
         expect(result.javascriptRequired).toBe(true);
@@ -144,9 +144,9 @@ describe('admitted initial document delivery', () => {
 
     it('withholds local identity forms while retaining session admission in both languages', async () => {
         for (const locale of ['en', 'de']) {
-            const result = await render('/frontend-pilot/users/register', {session: {...session, locale}});
+            const result = await render('/users/register', {session: {...session, locale}});
             const document = new DOMParser().parseFromString(result.html, 'text/html');
-            expect(document.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+            expect(document.querySelector('[data-frontend-initial-loading]')).not.toBeNull();
             expect(document.querySelector('main form')).toBeNull();
             const bootstrap = JSON.parse(result.state);
             expect(bootstrap.session).toMatchObject({context: session.context, csrfToken: session.csrfToken, locale});
@@ -157,15 +157,15 @@ describe('admitted initial document delivery', () => {
     });
 
     it('withholds reset and guest forms while retaining their initial admission', async () => {
-        const reset = await render('/frontend-pilot/users/reset-password/fixture-token', {session, passwordReset: {valid: true}});
+        const reset = await render('/users/reset-password/fixture-token', {session, passwordReset: {valid: true}});
         const resetDoc = new DOMParser().parseFromString(reset.html, 'text/html');
-        expect(resetDoc.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+        expect(resetDoc.querySelector('[data-frontend-initial-loading]')).not.toBeNull();
         expect(resetDoc.querySelector('main form')).toBeNull();
         expect(JSON.parse(reset.state).passwordReset).toEqual({valid: true});
-        const guest = await render(`/frontend-pilot/packing/${entityId}/guest`, {session,
+        const guest = await render(`/packing/${entityId}/guest`, {session,
             guestEntry: {id: entityId, title: 'Guest entry fixture'}});
         const guestDoc = new DOMParser().parseFromString(guest.html, 'text/html');
-        expect(guestDoc.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+        expect(guestDoc.querySelector('[data-frontend-initial-loading]')).not.toBeNull();
         expect(guestDoc.querySelector('main form')).toBeNull();
         expect(JSON.parse(guest.state).guestEntry).toEqual({id: entityId, title: 'Guest entry fixture'});
         expect(guest.javascriptRequired).toBe(true);
@@ -176,12 +176,12 @@ describe('admitted initial document delivery', () => {
         vi.stubGlobal('fetch', fetch);
         const account: components['schemas']['SessionView'] = {...session, kind: 'account',
             activeProfile: {id: profileId, name: 'Account fixture'}, profiles: [{id: profileId, name: 'Account fixture'}], logoutUrl: '/users/logout'};
-        const url = '/frontend-pilot/users/dashboard?participant_hidden_open=1&owner_main_q=equipment';
+        const url = '/users/dashboard?participant_hidden_open=1&owner_main_q=equipment';
         const overview = [region('participant', 'main'), region('participant', 'hidden'), region('owner', 'main'), region('owner', 'hidden')];
         overview[2].q = 'equipment';
         const result = await render(url, {session: account, overview});
         const document = new DOMParser().parseFromString(result.html, 'text/html');
-        expect(document.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+        expect(document.querySelector('[data-frontend-initial-loading]')).not.toBeNull();
         expect(document.querySelector('main form')).toBeNull();
         expect(document.querySelector('[data-collection]')).toBeNull();
         const bootstrap = JSON.parse(result.state);

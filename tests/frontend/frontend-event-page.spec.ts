@@ -205,7 +205,7 @@ describe('Event page read dependencies', () => {
         const link: components['schemas']['EventRegistrationLink'] = {id: childId, token: 'retained-token',
             createdAt: '2026-10-16T00:00:00Z', expiresAt: null, revokedAt: null, used: false, profileId: null, status: 'active'};
         const child: components['schemas']['OverviewCard'] = {id: childId, type: 'packing', title: 'Child list',
-            description: null, url: `/frontend-pilot/packing/${childId}`, headerUrl: null, headerVersion: null,
+            description: null, url: `/packing/${childId}`, headerUrl: null, headerVersion: null,
             eventContext: null, visibility: 'shown', overviewHidden: false, archived: false, inheritedArchived: false,
             capabilities: {archive: false, restore: false, duplicate: false, remove: false}, children: null,
             automation: {paused: false, canManage: false}};
@@ -226,8 +226,8 @@ describe('Event page read dependencies', () => {
         }, {});
         cleanups.push(mounted.dispose);
         if (admin) {
-            mounted.router.addRoute({path: '/frontend-pilot/event/:eventId/admin', component: EventPage});
-            await mounted.router.push(`/frontend-pilot/event/${frontendEventId}/admin`);
+            mounted.router.addRoute({path: '/event/:eventId/admin', component: EventPage});
+            await mounted.router.push(`/event/${frontendEventId}/admin`);
             await flushPromises();
         }
         const roster = mounted.wrapper.get('.event-participants');
@@ -306,8 +306,8 @@ describe('Event page read dependencies', () => {
             {status, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': createFrontendEventSession().context}})
             : json(view), {});
         cleanups.push(mounted.dispose);
-        mounted.router.addRoute({path: '/frontend-pilot/event/:eventId/admin', component: EventPage});
-        await mounted.router.push(`/frontend-pilot/event/${frontendEventId}/admin`);
+        mounted.router.addRoute({path: '/event/:eventId/admin', component: EventPage});
+        await mounted.router.push(`/event/${frontendEventId}/admin`);
         await flushPromises();
         const actor = mounted.context.session.value?.context;
         const detail = eventKeys.detail(actor, frontendEventId, true);

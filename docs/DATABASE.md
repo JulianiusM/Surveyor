@@ -5,11 +5,11 @@ documentation-metadata
 audience: database administrators; operators; site reliability engineers; maintainers
 owner: application operators
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: Native schema, migration/rollback safety, archival state and coherent persistence boundaries.
-source-anchors: src/migrations/1789862400000-AddEntityArchival.ts; src/modules/database/entities/archive/EntityVisibilityPreference.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; src/modules/database/entities/session/Session.ts; src/migrations; package.json; .github/workflows/ci.yml
-next-review: D04V
+verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
+source-anchors: src/migrations/1789862400000-AddEntityArchival.ts; src/modules/database/entities/archive/EntityVisibilityPreference.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; src/controller/packingController.ts; src/modules/database/services/PackingService.ts; src/modules/api/contracts.ts; src/modules/database/entities/session/Session.ts; src/migrations; package.json; .github/workflows/ci.yml
+next-review: database-schema-or-targeting-change
 -->
 
 Surveyor uses TypeORM with MariaDB for application data and server-side sessions. The application opens the database
@@ -62,7 +62,9 @@ npm run generate
 ```
 
 `npm run generate` rebuilds `src/modules/database/__index__.ts`, the entity/migration/subscriber index consumed by the
-migration datasource. Run it before every schema command in a fresh checkout.
+migration datasource, followed by the generated API contracts, validators and language catalogs. Generation does not
+connect to MariaDB or change its schema. `npm run generate:db-index` prepares only the TypeORM index. Run generation
+before every schema command in a fresh checkout.
 
 Use the service's protected settings file for every command:
 
@@ -195,8 +197,11 @@ pre-upgrade database and persistent-file backup as one set and restart the match
 ## Free-text storage
 
 Descriptions on activities, roles, packing items, driver entries, and survey combinations use `TEXT`, matching
-the existing entity descriptions and activity text fields. Description editors and activity text fields allow
-16,000 characters. Allergy details and dietary comments use nullable `VARCHAR(4000)` columns and accept
+the existing entity descriptions and activity text fields. Validation limits belong to each operation: metadata
+description editors and activity text fields allow 16,000 characters, while Packing creation, Quick Add and general
+item updates retain separate existing bounds. Inspect the actual controls and authored API operation rather than
+infer a universal character limit from the database's byte-limited `TEXT` type.
+Allergy details and dietary comments use nullable `VARCHAR(4000)` columns and accept
 4,000 characters. Invoice notes and review explanations retain their existing 4,000-character validation.
 Titles, names, locations, identifiers, and file metadata retain their existing column sizes.
 The HTTP JSON and URL-encoded form parsers accept requests up to 1 MB so Unicode encoding and collections
@@ -256,6 +261,19 @@ lifetime. This has several operational consequences:
 - Restoring session rows while keeping the same `SESSION_SECRET` can make restored sessions valid again until they
   expire; rotate the secret when that is not acceptable.
 - The session table must be included in schema migration, monitoring, and storage-capacity planning.
+
+## Frontend contracts and persistence
+
+Generated API contracts, validators and language catalogs are application build inputs. They do not replace entity
+definitions, reviewed database migrations or the settings-aware database commands above.
+
+Packing edit comparisons use the current relevant values inside existing locked transactions, without an edit-history
+table or Packing revision column. A value changed away and back can match an earlier comparison. Financial calculation
+revisions and saved settlement history retain their own persistence contracts.
+
+Controllers own authorization and business decisions against the locked evidence supplied by database services.
+The services own queries, locks, transactions and persistence. Diagnose conflicting writes through the actual application
+operations and database logs; do not bypass the checks or change transaction isolation as an operational workaround.
 
 ## Database backup
 

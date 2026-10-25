@@ -1,11 +1,11 @@
 import {nextTick, watch} from 'vue';
 import type {NavigationFailure, RouteLocationNormalized} from 'vue-router';
 import {decodeBootstrap} from './serializeBootstrap';
-import {createPilotApp, initializePilotApp} from './createApp';
+import {createFrontendApp, initializeFrontendApp} from './createApp';
 import {hasHydrationDrafts} from './mountPreservingDrafts';
 import {createTranslator, localeManifest} from '../../modules/localization/translator';
 import type {Locale} from '../../types/LocalizationTypes';
-import type {PilotContext} from '../../types/FrontendPilotUiTypes';
+import type {FrontendContext} from '../../types/FrontendUiTypes';
 // Client loading and SSR links consume one frontend-owned cascade composition.
 import '../styles/application.sass';
 
@@ -24,23 +24,23 @@ function updateDocumentLanguage(locale: Locale): void {
 function showStartupRecovery(container: Element, recover: () => void): void {
     // Static Help inputs and any partially mounted owners keep their original
     // nodes. Attach the guarded action before making that capability visible.
-    const button = container.querySelector<HTMLButtonElement>('[data-pilot-startup-reload]');
+    const button = container.querySelector<HTMLButtonElement>('[data-frontend-startup-reload]');
     if (!button) return;
     button.addEventListener('click', recover);
-    container.setAttribute('data-pilot-startup-recovery-ready', 'true');
+    container.setAttribute('data-frontend-startup-recovery-ready', 'true');
 }
 
 /** Protect initial DOM drafts before Router starts loading, validate bootstrap,
  * and restore the same controls before handing protection to mounted owners.
  * Initial route/decoder failure retains those nodes and offers localized recovery. */
 async function start(): Promise<void> {
-    const container = document.getElementById('surveyor-pilot');
+    const container = document.getElementById('surveyor-frontend');
     if (!container) {
-        console.error('The pilot application container is missing.');
+        console.error('The frontend application container is missing.');
         return;
     }
     const messages = createTranslator(document.documentElement.lang);
-    let context: PilotContext | undefined;
+    let context: FrontendContext | undefined;
     let discardApproved = false;
 
     /** Reuse hydration's exact editable-field rules without keeping a second draft. */
@@ -84,18 +84,18 @@ async function start(): Promise<void> {
     try {
         // Bootstrap must validate before any private application owner exists.
         // Its own lazy validator can fail before Router/context construction.
-        const node = document.getElementById('surveyor-pilot-state');
+        const node = document.getElementById('surveyor-frontend-state');
         const value: unknown = JSON.parse(node?.textContent ?? 'null');
         const bootstrap = await decodeBootstrap(value);
-        const application = createPilotApp(bootstrap, true, mayReloadInitialDocument);
+        const application = createFrontendApp(bootstrap, true, mayReloadInitialDocument);
         const {router} = application;
         context = application.context;
         await router.isReady();
         watch(context.locale, updateDocumentLanguage, {immediate: true});
-        const stop = await initializePilotApp(application, container);
+        const stop = await initializeFrontendApp(application, container);
         // Mounted guards now protect the restored models. Only after that handoff
         // may the temporary DOM guard and its beforeunload listener retire.
-        container.setAttribute('data-pilot-hydrated', 'true');
+        container.setAttribute('data-frontend-hydrated', 'true');
         // The same success marker dismisses the safe-default notice even when
         // the independent inline monitor could not execute. Vue owns no hidden prop.
         application.releaseInitialReloadGuard();
@@ -116,14 +116,14 @@ async function start(): Promise<void> {
             if (failure || to.path === from.path) return;
             await nextTick();
             if (router.currentRoute.value.fullPath !== to.fullPath) return;
-            document.getElementById('pilot-main')?.focus({preventScroll: true});
+            document.getElementById('frontend-main')?.focus({preventScroll: true});
         }
         router.afterEach(focusDestination);
     } catch (error) {
         // Keep available initial controls and surface recovery even when no component
         // mounted. Existing partial command owners, if any, retain their guards.
         showStartupRecovery(container, recoverStartup);
-        container.setAttribute('data-pilot-startup-failed', 'true');
+        container.setAttribute('data-frontend-startup-failed', 'true');
         console.error('Frontend startup failed.', error);
     }
 }

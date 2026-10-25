@@ -2,8 +2,8 @@
 import {computed, onBeforeUnmount, reactive, ref, shallowRef, watch} from 'vue';
 import {useQuery} from '@tanstack/vue-query';
 import type {QueryFunctionContext} from '@tanstack/vue-query';
-import type {PilotEventPickerOption, PilotEventPickerQuery, PilotEventPickerSelection, PilotEventPickerSource} from '../../types/FrontendPilotUiTypes';
-import {useActionState, usePilot, refreshInterval} from '../app/context';
+import type {FrontendEventPickerOption, FrontendEventPickerQuery, FrontendEventPickerSelection, FrontendEventPickerSource} from '../../types/FrontendUiTypes';
+import {useActionState, useFrontend, refreshInterval} from '../app/context';
 import {isReadDenial, ObsoleteRequestError} from '../app/transport';
 import {retireQueryFamily, useQueryAdmission} from '../app/queryCache';
 import {useDebouncedValue} from '../composables/debounced';
@@ -15,15 +15,15 @@ import StatusNotice from './StatusNotice.vue';
 
 const props = withDefaults(defineProps<{
     modelValue: string | null;
-    current?: PilotEventPickerSelection | null;
-    source: PilotEventPickerSource;
+    current?: FrontendEventPickerSelection | null;
+    source: FrontendEventPickerSource;
     disabled?: boolean;
     prefix: string;
     inline?: boolean;
     active?: boolean;
 }>(), {active: true});
 const emit = defineEmits<{'update:modelValue': [value: string | null]}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const open = ref(false);
 // Cursor history describes confirmed visits only. A failed Next/Previous request keeps
@@ -37,12 +37,12 @@ const filters = reactive({q: '', from: '', to: '', period: 'all', archive: 'all'
 const searchPending = ref(false);
 const search = useDebouncedValue(computed(() => filters.q), 200, finishTypedSearch);
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
-const selected = ref<PilotEventPickerSelection | null>(
+const selected = ref<FrontendEventPickerSelection | null>(
     props.current ?? null,
 );
 const resolvedSelection = ref(props.current?.id === props.modelValue ? props.modelValue : null);
-type Query = PilotEventPickerQuery;
-type Options = Awaited<ReturnType<PilotEventPickerSource['search']>>;
+type Query = FrontendEventPickerQuery;
+type Options = Awaited<ReturnType<FrontendEventPickerSource['search']>>;
 let readGeneration = 0;
 // Admission still blocks every paging action during discovery. Only an explicit
 // initiating control owns its spinner/focus; filters and polling claim none.
@@ -130,9 +130,9 @@ function retireDeniedOptions(failure: Error | null): void {
 }
 
 /** Discovery can repeat an ID within a bounded batch. Render one choice per ID, matching
- * native selection, without mutating the shared authoritative response in the query cache. */
-function uniqueOptions(): PilotEventPickerOption[] {
-    const result: PilotEventPickerOption[] = [];
+ * selection, without mutating the shared authoritative response in the query cache. */
+function uniqueOptions(): FrontendEventPickerOption[] {
+    const result: FrontendEventPickerOption[] = [];
     const seen = new Set<string>();
     for (const option of displayed.value?.items ?? []) {
         if (seen.has(option.id)) continue;
@@ -247,7 +247,7 @@ const selectionTitle = computed(() =>
         ? selection.value?.title || messages.value.t('eventPicker.currentEvent')
         : messages.value.t('eventPicker.noEvent'),
 );
-function choose(value: PilotEventPickerOption | null): void {
+function choose(value: FrontendEventPickerOption | null): void {
     if (props.disabled) return;
     selected.value = value;
     resolvedSelection.value = value?.id ?? null;
@@ -300,7 +300,7 @@ function reset(): void {
 /** Describe only the admitted option using its civil dates and server flags.
  * The UTC date comparison affects the visible period label; it never decides
  * event eligibility, archival authority or whether a relationship can be saved. */
-function details(event: PilotEventPickerOption): string {
+function details(event: FrontendEventPickerOption): string {
     const today = new Date().toISOString().slice(0, 10);
     const period =
         event.startDate > today
@@ -531,7 +531,7 @@ function details(event: PilotEventPickerOption): string {
                         )
                     }}</template>
                 </p>
-                <div class="pilot-action-row">
+                <div class="frontend-action-row">
                     <ActionButton
                         v-if="history.length > 1"
                         class="btn-sm"

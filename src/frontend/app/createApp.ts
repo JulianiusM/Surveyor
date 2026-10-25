@@ -1,123 +1,15 @@
 import {createSSRApp, nextTick} from 'vue';
-import {createMemoryHistory, createRouter, createWebHistory, type RouteRecordRaw} from 'vue-router';
+import {createMemoryHistory, createRouter, createWebHistory} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
-import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
-import type {PilotLoadingSkeleton} from '../../types/FrontendPilotUiTypes';
-import {frontendDocumentUrl, frontendOverviewPath} from '../../modules/lib/frontendIdentity';
-import {resolvePilotHelpQuery} from '../../modules/lib/helpNavigation';
-import {createPilotContext, observeInitialDocument, pilotContextKey} from './context';
+import type {FrontendBootstrap} from '../../types/FrontendTypes';
+import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
+import {resolveFrontendHelpQuery} from '../../modules/lib/helpNavigation';
+import {createFrontendContext, observeInitialDocument, frontendContextKey} from './context';
 import App from './App.vue';
-// The shell also renders admitted common outcomes, so this shared view is
-// already part of the entry bundle rather than an independent route chunk.
-import CommonPage from '../features/common/CommonPage.vue';
 import {mountPreservingDrafts} from './mountPreservingDrafts';
 import {createPageReadiness, pageReadinessKey} from '../composables/pageNavigation';
-
-// Route chunks own their feature validators and views. The initial shell remains
-// small, and a later feature migration does not enlarge every visitor's entry bundle.
-const PackingEntry = () => import('../features/packing/PackingEntry.vue');
-const IdentityPage = () => import('../features/identity/IdentityPage.vue');
-const PackingCreatePage = () => import('../features/packing/PackingCreatePage.vue');
-const OverviewPage = () => import('../features/overview/OverviewPage.vue');
-const HelpPage = () => import('../features/help/HelpPage.vue');
-const ProfileAdministrationPage = () => import('../features/identity/ProfileAdministrationPage.vue');
-const ProfileWorkflowPage = () => import('../features/identity/ProfileWorkflowPage.vue');
-const LandingPage = () => import('../features/common/LandingPage.vue');
-const EventEntry = () => import('../features/event/EventEntry.vue');
-const EventCreatePage = () => import('../features/event/EventCreatePage.vue');
-const DriversEntry = () => import('../features/drivers/DriversEntry.vue');
-const DriversCreatePage = () => import('../features/drivers/DriversCreatePage.vue');
-const SurveyEntry = () => import('../features/surveys/SurveyEntry.vue');
-const SurveyCreatePage = () => import('../features/surveys/SurveyCreatePage.vue');
-const ActivityEntry = () => import('../features/activity/ActivityEntry.vue');
-const ActivityCreatePage = () => import('../features/activity/ActivityCreatePage.vue');
-
-// One route declaration drives the initial skeleton for every interactive page.
-// Readable admitted errors/completions are classified by the shared context owner.
-function javascriptPage(loadingSkeleton: PilotLoadingSkeleton) {
-    return {javascriptRequired: true, loadingSkeleton};
-}
-
-// Presentation declarations contain only static geometry. Matching cold reads
-// consume this same metadata after initialization; they cannot grant admission.
-const overviewPage = javascriptPage({variant: 'overview'});
-const packingPage = javascriptPage({variant: 'list-detail', rows: 4, columns: 6});
-const driversPage = javascriptPage({variant: 'list-detail', rows: 4, columns: 5});
-const surveyPage = javascriptPage({variant: 'survey', rows: 2, columns: 4});
-const surveyCreatePage = javascriptPage({variant: 'survey-create'});
-const activityPage = javascriptPage({variant: 'activity', rows: 2, columns: 7});
-const activityCreatePage = javascriptPage({variant: 'activity-create', footer: 'full'});
-const listCreatePage = javascriptPage({variant: 'list-create'});
-const packingCreatePage = javascriptPage({variant: 'packing-create'});
-const eventPage = javascriptPage({variant: 'event'});
-const eventAdminPage = javascriptPage({variant: 'event-admin'});
-const eventCreatePage = javascriptPage({variant: 'event-create'});
-const guestPage = javascriptPage({variant: 'guest', rows: 2});
-const profilePage = javascriptPage({variant: 'profile', rows: 1, balancedHeader: true, headerActions: true});
-const profileCreatePage = javascriptPage({variant: 'profile', rows: 1, balancedHeader: true});
-const profileRosterPage = javascriptPage({variant: 'roster', rows: 3, balancedHeader: true, headerActions: true});
-const workflowPage = javascriptPage({variant: 'workflow', balancedHeader: true, headerActions: true});
-const loginPage = javascriptPage({variant: 'login', rows: 2});
-const registerPage = javascriptPage({variant: 'identity', rows: 5});
-const identityMessagePage = javascriptPage({variant: 'workflow'});
-const forgotPage = javascriptPage({variant: 'identity', rows: 1, footer: 'full'});
-const resetPage = javascriptPage({variant: 'identity', rows: 2, footer: 'full'});
-
-/** Static page declarations are shared by application initialization and
- * component fixtures; reading layout metadata never constructs an application. */
-export const pilotRoutes: readonly RouteRecordRaw[] = [
-    // Only shared content which another actor can change opts into
-    // automatic document replacement. New routes default to explicit recovery.
-    {path: '/frontend-pilot', alias: '/frontend-pilot/home', component: LandingPage},
-    {path: frontendOverviewPath, component: OverviewPage, meta: {...overviewPage, dynamicContent: true}},
-    {path: '/frontend-pilot/message', component: CommonPage},
-    {path: '/frontend-pilot/users/profile', component: ProfileAdministrationPage, meta: {...profilePage, profileMode: 'edit'}},
-    {path: '/frontend-pilot/users/profile/manage', component: ProfileAdministrationPage, meta: {...profileRosterPage, profileMode: 'manage'}},
-    {path: '/frontend-pilot/users/profile/create', component: ProfileAdministrationPage, meta: {...profileCreatePage, profileMode: 'create'}},
-    // Warm workflow visits share read-only admission and command lifecycles.
-    // Explicit issuance/confirmation never belongs to Query or route refresh.
-    {path: '/frontend-pilot/users/profile/migrate/request', component: ProfileWorkflowPage, meta: {...workflowPage, profileWorkflow: 'token'}},
-    {path: '/frontend-pilot/users/profile/migrate/show', component: ProfileWorkflowPage,
-        meta: {...workflowPage, profileWorkflow: 'entry', profilePreviewHash: '#migration-preview'}},
-    {path: '/frontend-pilot/users/profile/delete', component: ProfileWorkflowPage, meta: {...workflowPage, profileWorkflow: 'deactivate'}},
-    {path: '/frontend-pilot/users/account/delete', component: ProfileWorkflowPage, meta: {...workflowPage, profileWorkflow: 'delete-account'}},
-    {path: '/frontend-pilot/packing/create', component: PackingCreatePage, meta: packingCreatePage},
-    {path: '/frontend-pilot/packing/:listId/duplicate', component: PackingCreatePage, meta: packingCreatePage},
-    {path: '/frontend-pilot/packing/:listId/guest', component: PackingEntry, meta: guestPage},
-    {path: '/frontend-pilot/packing/:listId', component: PackingEntry, meta: {...packingPage, dynamicContent: true}},
-    {path: '/frontend-pilot/event/create', component: EventCreatePage, meta: eventCreatePage},
-    {path: '/frontend-pilot/event/:eventId/duplicate', component: EventCreatePage, meta: eventCreatePage},
-    {path: '/frontend-pilot/event/:eventId/guest', component: EventEntry, meta: guestPage},
-    {path: '/frontend-pilot/event/:eventId/admin', component: EventEntry, meta: {...eventAdminPage, dynamicContent: true}},
-    {path: '/frontend-pilot/event/:eventId', component: EventEntry, meta: {...eventPage, dynamicContent: true}},
-    {path: '/frontend-pilot/drivers/create', component: DriversCreatePage, meta: listCreatePage},
-    {path: '/frontend-pilot/drivers/:listId/duplicate', component: DriversCreatePage, meta: listCreatePage},
-    {path: '/frontend-pilot/drivers/:listId/guest', component: DriversEntry, meta: guestPage},
-    {path: '/frontend-pilot/drivers/:listId', component: DriversEntry, meta: {...driversPage, dynamicContent: true}},
-    {path: '/frontend-pilot/survey/create', component: SurveyCreatePage, meta: surveyCreatePage},
-    {path: '/frontend-pilot/survey/:surveyId/duplicate', component: SurveyCreatePage, meta: surveyCreatePage},
-    {path: '/frontend-pilot/survey/:surveyId/guest', component: SurveyEntry, meta: guestPage},
-    {path: '/frontend-pilot/survey/:surveyId', component: SurveyEntry, meta: {...surveyPage, dynamicContent: true}},
-    {path: '/frontend-pilot/activity/create', component: ActivityCreatePage, meta: activityCreatePage},
-    {path: '/frontend-pilot/activity/:planId/duplicate', component: ActivityCreatePage, meta: activityCreatePage},
-    {path: '/frontend-pilot/activity/:planId/guest', component: ActivityEntry, meta: guestPage},
-    {path: '/frontend-pilot/activity/:planId', component: ActivityEntry, meta: {...activityPage, dynamicContent: true}},
-    {path: '/frontend-pilot/users/login', component: IdentityPage, meta: {...loginPage, identityMode: 'login'}},
-    {path: '/frontend-pilot/users/register', component: IdentityPage, meta: {...registerPage, identityMode: 'register'}},
-    {path: '/frontend-pilot/users/oidc/login', component: IdentityPage, meta: {...identityMessagePage, identityMode: 'oidc'}},
-    {path: '/frontend-pilot/users/forgot-password', component: IdentityPage, meta: {...forgotPage, identityMode: 'forgot'}},
-    {path: '/frontend-pilot/users/reset-password/:token', component: IdentityPage, meta: {...resetPage, identityMode: 'reset'}},
-    {path: '/frontend-pilot/users/activate/:token', component: IdentityPage, meta: {...identityMessagePage, identityMode: 'activate'}},
-    {path: '/frontend-pilot/guest/:guestId/login/:token', component: IdentityPage, meta: {...identityMessagePage, identityMode: 'guest-login'}},
-    {path: '/frontend-pilot/guest/recovery', component: IdentityPage, meta: {...guestPage, identityMode: 'recovery'}},
-    {path: '/frontend-pilot/help', component: HelpPage, meta: {helpPage: true}},
-    {path: '/frontend-pilot/help/:doc', component: HelpPage, meta: {helpPage: true}},
-    // Unknown opt-in destinations retain a readable 404 presentation;
-    // Express owns the corresponding HTTP status on document requests.
-    {path: '/frontend-pilot/:pathMatch(.*)*', component: CommonPage},
-
-];
+import {frontendRoutes} from '../routes';
 
 /** Browsers report retired module URLs differently. Recognize their load failures
  * specifically, so an ordinary component bug does not suggest a release reload. */
@@ -126,19 +18,19 @@ function isRouteModuleLoadFailure(error: unknown): boolean {
 }
 
 /** Server and browser construct the same component tree with separate application-owned state. */
-export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boolean,
+export function createFrontendApp(bootstrap: FrontendBootstrap, browser: boolean,
                                initialReloadGuard?: () => boolean) {
-    const context = createPilotContext(bootstrap, browser, undefined, mayReloadAutomatically);
+    const context = createFrontendContext(bootstrap, browser, undefined, mayReloadAutomatically);
     // Register initial DOM protection before Router can start a failing import.
     // The browser entry releases it only after mounted draft restoration finishes.
     const releaseInitialReloadGuard = initialReloadGuard
         ? context.updates.registerGuard(initialReloadGuard) : () => {};
     const app = createSSRApp(App);
     // Identity, Overview, Help and every entity family share this router.
-    // Default routing retains its separately authorized cutover.
+    // Domain declarations share this application-owned navigation lifecycle.
     const router = createRouter({
         history: browser ? createWebHistory() : createMemoryHistory(),
-        routes: pilotRoutes,
+        routes: frontendRoutes,
         /** Browser history owns saved positions. Local query/preview changes
          * preserve the viewport; deliberate anchors and new pages retain navigation. */
         async scrollBehavior(to, from, saved) {
@@ -149,8 +41,8 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             // records have an article readiness owner; catch-all errors do not.
             if (to.meta.helpPage && (saved || to.hash)
                 && (saved || to.path !== from.path || to.hash !== from.hash
-                    || JSON.stringify(resolvePilotHelpQuery(to.params.doc, to.query))
-                        !== JSON.stringify(resolvePilotHelpQuery(from.params.doc, from.query)))) {
+                    || JSON.stringify(resolveFrontendHelpQuery(to.params.doc, to.query))
+                        !== JSON.stringify(resolveFrontendHelpQuery(from.params.doc, from.query)))) {
                 if (!await pageReadiness.wait(to)) return false;
                 await nextTick();
                 if (router.currentRoute.value !== to) return false;
@@ -167,15 +59,15 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             // selected locale. Only a different normalized document starts at top;
             // a locale-only URL synchronization must retain the reader's position.
             if (to.path === from.path && to.meta.helpPage
-                && JSON.stringify(resolvePilotHelpQuery(to.params.doc, to.query))
-                    !== JSON.stringify(resolvePilotHelpQuery(from.params.doc, from.query))) {
+                && JSON.stringify(resolveFrontendHelpQuery(to.params.doc, to.query))
+                    !== JSON.stringify(resolveFrontendHelpQuery(from.params.doc, from.query))) {
                 return to.hash ? false : {top: 0};
             }
             // Locale synchronization, filters and read results are SPA state,
-            // not new documents that need the native submit/reload jump.
+            // not new documents that require a submit/reload jump.
             if (to.path === from.path && to.hash === from.hash) return false;
             // This fragment records a local preview visit, not a DOM anchor.
-            // Loading or retiring a receipt must not imitate native POST scrolling.
+            // Loading or retiring a receipt must preserve the current scroll position.
             const previewHash = to.meta.profilePreviewHash;
             if (to.path === from.path && typeof previewHash === 'string'
                 && (to.hash === previewHash || from.hash === previewHash)) return false;
@@ -207,7 +99,7 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
     }
 
     observeInitialDocument(context, router);
-    app.provide(pilotContextKey, context);
+    app.provide(frontendContextKey, context);
     app.provide(pageReadinessKey, pageReadiness);
     app.onUnmount(pageReadiness.dispose);
     app.use(I18NextVue, {i18next: context.i18next});
@@ -229,7 +121,7 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
  * interval explicitly. It covers errors Vue reports through the initial mount
  * and first readiness render, not arbitrary later asynchronous feature work;
  * later feature/API failures keep their existing owners. */
-export async function initializePilotApp(application: ReturnType<typeof createPilotApp>, container: Element): Promise<() => void> {
+export async function initializeFrontendApp(application: ReturnType<typeof createFrontendApp>, container: Element): Promise<() => void> {
     const {app, context} = application;
     const previousErrorHandler = app.config.errorHandler;
     let failed = false;

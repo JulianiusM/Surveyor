@@ -5,7 +5,7 @@ import type {components} from '../../src/types/api/v1';
 import {createE2EPackingList} from '../factories/e2eCoreFactory';
 import {createResourceViaForm, expectEmbeddedFrontendRefresh, expectUsableFrontendLayout} from '../keywords/e2eCoreKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
-import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
+import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
 
 /** Measure the displayed shared responsibility, including visible icons, text,
  * controls and image geometry. Whole-page shell/flash differences are excluded. */
@@ -38,80 +38,43 @@ async function measureHeader(surface: Locator) {
     });
 }
 
-/** Compare the same entity and actor through both built application frontends. */
-async function compareHeader(page: Page, info: TestInfo, path: string, name: string,
+/** Inspect each canonical header with its persisted title, exact parent target,
+ * built image and shared controls. Recorded native originals remain separate
+ * visual-review evidence after the live comparator is retired. */
+async function compareHeader(page: Page, info: TestInfo, resource: {path: string; title: string}, name: string,
                              parent?: {path: string; title: string}): Promise<void> {
-    let native: Awaited<ReturnType<typeof measureHeader>> | undefined;
-    const parentPath = parent?.path;
-    for (const pilot of [false, true]) {
-        await page.goto(`${pilot ? '/frontend-pilot' : ''}${path}?locale=en`, {waitUntil: 'domcontentloaded'});
-        if (pilot) await waitForPilotHydration(page);
-        const surface = page.locator('.card-header').filter({has: page.locator('h1')}).first();
-        // Client initialization precedes its independent admitted detail read.
-        // A skeleton's placeholder title is not the migrated header to compare.
-        if (pilot) await expect(surface.locator('h1')).toHaveText(native!.title);
-        if (parentPath) {
-            // The admitted Event keeps its exact native route suffix, while the
-            // Vue consumer must target the migrated family rather than leave it.
-            await expect(surface.getByRole('link', {name: 'Go to event', exact: true}))
-                .toHaveAttribute('href', `${pilot ? '/frontend-pilot' : ''}${parentPath}`);
-        }
-        const image = surface.locator('img');
-        if (name.endsWith('image')) {
-            await expect(image).toBeVisible();
-            await expect(image).toHaveJSProperty('naturalWidth', 200);
-        }
-        await page.evaluate(() => document.fonts.ready);
-        const measurement = await measureHeader(surface);
-        await info.attach(`${name}-${pilot ? 'pilot' : 'native'}-metrics`, {
-            body: JSON.stringify(measurement, null, 2), contentType: 'application/json',
-        });
-        const imagePath = info.outputPath(`${name}-${pilot ? 'pilot' : 'native'}.png`);
-        await surface.screenshot({path: imagePath, animations: 'disabled'});
-        await info.attach(`${name}-${pilot ? 'pilot' : 'native'}`, {path: imagePath, contentType: 'image/png'});
-        if (pilot) {
-            await expectUsableFrontendLayout(surface);
-            await expectEmbeddedFrontendRefresh(surface);
-            // The dated approved header addition is independently asserted above.
-            // Retain raw metrics/screenshots, excluding exactly that labelled
-            // control and its one asserted icon from the native meaning oracle.
-            expect(measurement.controls.filter(control => control.label === 'Refresh')).toHaveLength(1);
-            const compared = {...measurement, icons: measurement.icons.filter(icon => icon !== 'bi-arrow-clockwise'),
-                controls: measurement.controls.filter(control => control.label !== 'Refresh').map(function compareParent(control) {
-                return parentPath && control.href === '/frontend-pilot' + parentPath ? {...control, href: parentPath} : control;
-            })};
-            expect(headerMeaning(compared)).toEqual(headerMeaning(native!));
-            if (parent) {
-                await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'entity-header-parent';});
-                const documentRequests: string[] = [];
-                function observeNavigation(request: Request): void {
-                    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documentRequests.push(request.url());
-                }
-                page.on('request', observeNavigation);
-                try {
-                    await surface.getByRole('link', {name: 'Go to event', exact: true}).click();
-                    await expect(page).toHaveURL('/frontend-pilot' + parent.path);
-                    await expect(page.locator('.card-header h1')).toHaveText(parent.title);
-                    expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('entity-header-parent');
-                    expect(documentRequests).toEqual([]);
-                } finally {
-                    page.off('request', observeNavigation);
-                }
-            }
-        } else native = measurement;
+    await page.goto(resource.path + '?locale=en', {waitUntil: 'domcontentloaded'});
+    await waitForFrontendHydration(page);
+    const surface = page.locator('.card-header').filter({has: page.locator('h1')}).first();
+    await expect(surface.locator('h1')).toHaveText(resource.title);
+    if (parent) await expect(surface.getByRole('link', {name: 'Go to event', exact: true})).toHaveAttribute('href', parent.path);
+    if (name.endsWith('image')) {
+        await expect(surface.locator('img')).toBeVisible();
+        await expect(surface.locator('img')).toHaveJSProperty('naturalWidth', 200);
     }
-}
-
-/** Preserve the heading hierarchy, action meaning and image identity without
- * prescribing native rectangles, icon class names or framework wrappers. */
-function headerMeaning(header: Awaited<ReturnType<typeof measureHeader>>) {
-    return {title: header.title, font: header.font, weight: header.weight, color: header.color,
-        iconCount: header.icons.length,
-        controls: header.controls.map(control => ({text: control.text, color: control.color,
-            background: control.background, border: control.border, font: control.font,
-            href: control.href, disabled: control.disabled})),
-        image: header.image ? {naturalWidth: header.image.naturalWidth, naturalHeight: header.image.naturalHeight,
-            alt: header.image.alt, fit: header.image.fit} : null};
+    await page.evaluate(() => document.fonts.ready);
+    const measurement = await measureHeader(surface);
+    await info.attach(name + '-metrics', {body: JSON.stringify(measurement, null, 2), contentType: 'application/json'});
+    const imagePath = info.outputPath(name + '.png');
+    await surface.screenshot({path: imagePath, animations: 'disabled'});
+    await info.attach(name, {path: imagePath, contentType: 'image/png'});
+    await expectUsableFrontendLayout(surface);
+    await expectEmbeddedFrontendRefresh(surface);
+    if (parent) {
+        await page.evaluate(() => {document.documentElement.dataset.frontendDocument = 'entity-header-parent';});
+        const documentRequests: string[] = [];
+        function observeNavigation(request: Request): void {
+            if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documentRequests.push(request.url());
+        }
+        page.on('request', observeNavigation);
+        try {
+            await surface.getByRole('link', {name: 'Go to event', exact: true}).click();
+            await expect(page).toHaveURL(parent.path);
+            await expect(page.locator('.card-header h1')).toHaveText(parent.title);
+            expect(await page.evaluate(() => document.documentElement.dataset.frontendDocument)).toBe('entity-header-parent');
+            expect(documentRequests).toEqual([]);
+        } finally { page.off('request', observeNavigation); }
+    }
 }
 
 /** Existing upload admission/token owners prepare a real image for both readers. */
@@ -148,8 +111,8 @@ async function expectReachable(control: Locator, page: Page): Promise<void> {
  * German labels have no English wording comparator; both locales must retain
  * the same visible capabilities and usable responsive interaction contracts. */
 async function inspectGermanSettings(page: Page, info: TestInfo, path: string, kind: 'event' | 'packing'): Promise<void> {
-    await page.goto(`/frontend-pilot${path}?locale=de`, {waitUntil: 'domcontentloaded'});
-    await waitForPilotHydration(page);
+    await page.goto(`${path}?locale=de`, {waitUntil: 'domcontentloaded'});
+    await waitForFrontendHydration(page);
     await expect(page.locator('html')).toHaveAttribute('lang', 'de');
     const header = page.locator('.card-header').filter({has: page.locator('h1')}).first();
     const opener = header.getByRole('button', {name: 'Entitätseinstellungen', exact: true});
@@ -228,13 +191,13 @@ for (const width of [1280, 390]) {
                 Object.assign(input.form, {event_id: event.id});
             }
             const packing = await createResourceViaForm(page.request, input);
-            await compareHeader(page, info, packing.path, linked ? 'linked-empty' : 'standalone-empty', linked ? event : undefined);
+            await compareHeader(page, info, packing, linked ? 'linked-empty' : 'standalone-empty', linked ? event : undefined);
             await uploadHeader(page.request, 'packing', packing.id);
-            await compareHeader(page, info, packing.path, linked ? 'linked-image' : 'standalone-image', linked ? event : undefined);
+            await compareHeader(page, info, packing, linked ? 'linked-image' : 'standalone-image', linked ? event : undefined);
         }
-        await compareHeader(page, info, event.path, 'event-empty');
+        await compareHeader(page, info, event, 'event-empty');
         await uploadHeader(page.request, 'event', event.id);
-        await compareHeader(page, info, event.path, 'event-image');
+        await compareHeader(page, info, event, 'event-image');
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
     });
 }

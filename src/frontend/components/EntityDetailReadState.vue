@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type {PilotLoadingSkeleton} from '../../types/FrontendPilotUiTypes';
-import {usePilot} from '../app/context';
+import type {FrontendLoadingSkeleton} from '../../types/FrontendUiTypes';
+import {useFrontend} from '../app/context';
 import LoadingSkeleton from './LoadingSkeleton.vue';
 import StatusNotice from './StatusNotice.vue';
 
@@ -14,9 +14,9 @@ defineProps<{
     pending: boolean;
     lastUpdatedAt?: number;
     retryAt?: number;
-    skeleton?: PilotLoadingSkeleton;
+    skeleton?: FrontendLoadingSkeleton;
 }>();
-const {messages} = usePilot();
+const {messages} = useFrontend();
 </script>
 
 <template>

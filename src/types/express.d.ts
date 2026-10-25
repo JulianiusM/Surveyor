@@ -16,19 +16,15 @@
 
 import "express";
 import type {TokenEndpointResponse} from "openid-client";
-import type {EntityAdminAssignment} from "../modules/database/entities/permissions/EntityAdminAssignment";
 import type {Guest} from "../modules/database/entities/user/Guest";
 import type {Profile} from "../modules/database/entities/user/Profile";
 import type {User} from "../modules/database/entities/user/User";
-import type {Settings} from "../modules/settings";
-import type {PermBundle, PermMetaBundle} from "./PermissionTypes";
 import type {ApiActor} from './ApiTypes';
 
 declare module "express" {
     // Inject additional properties on express.Request
     interface Request {
         resource?: Record<string, any>;
-        additional?: Record<string, any>[];
     }
 }
 
@@ -37,19 +33,6 @@ declare module "express-serve-static-core" {
         apiActor?: ApiActor;
         /** Admission observed an existing server record; disappearance cannot become a new-session candidate. */
         apiSessionStored?: boolean;
-    }
-    interface Locals {
-        data?: any,
-        auth?: {
-            user?: User | null,
-            guest?: Guest | null,
-        },
-        profile?: Profile | null,
-        version: string,
-        settings?: Partial<Settings>,
-        permData?: PermBundle,
-        perms?: PermMetaBundle,
-        admins?: EntityAdminAssignment[],
     }
 }
 

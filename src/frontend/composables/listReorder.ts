@@ -53,12 +53,12 @@ export function useListReorder(source: FrontendListReorderSource) {
 
     /** One shared class contract paints table rows and Activity cards alike. */
     function classes(id: string): Record<string, boolean> {
-        return {'pilot-reorder-dragging': dragged.value?.id === id,
-            'pilot-reorder-before': target.value?.id === id && !target.value.after,
-            'pilot-reorder-after': target.value?.id === id && target.value.after};
+        return {'frontend-reorder-dragging': dragged.value?.id === id,
+            'frontend-reorder-before': target.value?.id === id && !target.value.after,
+            'frontend-reorder-after': target.value?.id === id && target.value.after};
     }
 
-    /** Submit the original membership and token after one native placement step.
+    /** Submit the original membership and token after one placement step.
      * Concurrent row changes remain a server comparison, never silently adopted. */
     async function drop(id: string, event: DragEvent): Promise<void> {
         event.preventDefault();

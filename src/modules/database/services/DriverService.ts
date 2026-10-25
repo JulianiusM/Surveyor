@@ -26,7 +26,7 @@ import {DriversList} from '../entities/drivers/DriversList';
 import {Event} from '../entities/event/Event';
 import * as entityAdminService from "./EntityAdminService";
 
-/** Persist a controller-approved root through the supplied manager. Native
+/** Persist a controller-approved root through the supplied manager. Direct
  * creation retains its existing standalone write; v1 supplies its transaction. */
 export async function createDriversList(
     ownerId: string,
@@ -142,7 +142,7 @@ export async function deleteDriversItem(itemId: string, manager: EntityManager =
     await manager.getRepository(DriversItem).delete({id: itemId});
 }
 
-/** Preserve the native scoped per-row order writes. A versioned caller supplies
+/** Preserve the scoped per-row order writes. A versioned caller supplies
  * its transaction after reviewing the complete current order in the controller. */
 export async function reorderDriversItems(listId: string, orders: Array<{ itemId: string; position: number }>, manager: EntityManager = AppDataSource.manager) {
     const repo = manager.getRepository(DriversItem);
@@ -177,7 +177,7 @@ export async function getDriversItems(listId: string): Promise<EnrichedDriversIt
     });
 }
 
-/** Preserve the native enriched lookup and ORM missing-row diagnostic. Versioned
+/** Preserve the enriched lookup and ORM missing-row diagnostic. Versioned
  * method baselines use the separate nullable snapshot evidence below. */
 export async function getDriversItemById(itemId: string): Promise<EnrichedDriversItem> {
     const repo = AppDataSource.getRepository(DriversItem);
@@ -257,7 +257,7 @@ export async function assignDriversItem(itemId: string, profileId: string, manag
     await repo.save(repo.create({item: {id: itemId}, profile: {id: profileId}, entity: {id: item.entityId}}));
 }
 
-/** Delete all historical memberships for this profile/ride. Native callers ignore
+/** Delete all historical memberships for this profile/ride. Direct callers ignore
  * affected-row evidence; the versioned receipt uses it inside its locked snapshot. */
 export async function unassignDriversItem(itemId: string, profileId: string, manager: EntityManager = AppDataSource.manager): Promise<number> {
     const result = await manager.getRepository(DriversAssignment).delete({
@@ -339,7 +339,7 @@ export async function getDriversSnapshotRoot(manager: EntityManager, id: string)
     return manager.getRepository(DriversList).findOne({where: {id}, relations: {event: true}});
 }
 
-/** Read nullable item evidence for a method-only baseline. The native enriched
+/** Read nullable item evidence for a method-only baseline. The enriched
  * lookup keeps its original ORM missing-row diagnostic and driver/count joins. */
 export async function getDriversSnapshotItem(manager: EntityManager, itemId: string): Promise<DriversItem | null> {
     return manager.getRepository(DriversItem).findOneBy({id: itemId});
@@ -391,7 +391,7 @@ export async function getLockedDriversAssignment(manager: EntityManager, itemId:
 }
 
 /** Hold a selected parent while the new adapter's root/default writes and receipt
- * are prepared. Native creation retains its existing standalone call order. */
+ * are prepared. Standalone creation retains its call order. */
 export async function withDriversCreationTransaction<T>(eventId: string | null, action: (manager: EntityManager, event: Event | null) => Promise<T>): Promise<T> {
     async function createLocked(manager: EntityManager): Promise<T> {
         // Parent-before-root ordering matches the shared relationship operation;

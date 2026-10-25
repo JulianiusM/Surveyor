@@ -133,7 +133,7 @@ schemas:
       formContext:
         $ref: "#/schemas/EventCreateContext"
   EventMetadataValues:
-    description: Only the fields permitted by the independently granted native Event metadata method.
+    description: Only the fields permitted by the independently granted Event metadata method.
     type: object
     additionalProperties: false
     properties:
@@ -402,7 +402,7 @@ schemas:
         $ref: ./packing.yaml#/schemas/PackingArchive
       hasInvoicePools:
         type: boolean
-        description: Only own registered profiles receive pool existence for the existing native finance destination; no finance
+        description: Only own registered profiles receive pool existence for the finance destination; no finance
           aggregate.
   EventSettings:
     type: object

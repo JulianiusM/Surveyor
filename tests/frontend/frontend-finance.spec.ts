@@ -552,6 +552,66 @@ describe('P7 finance saved reads and participant invoices', () => {
         expect(request.mock.calls.filter(([req]) => new URL((req as Request).url).pathname.includes('/shares/'))).toHaveLength(2);
     });
 
+    it('pages 180 personal pools without changing saved status and opens only one lazy concrete breakdown', async () => {
+        const pools = Array.from({length: 180}, (_, index) => ({...pool,
+            id: `22222222-2222-4222-8222-${String(index + 1).padStart(12, '0')}`,
+            name: `Pool ${String(index).padStart(3, '0')}`, status: 'CLOSED' as const, canSubmit: false}));
+        const shares: components['schemas']['FinanceShare'][] = pools.map((savedPool, index) => ({...share,
+            id: String(index + 1), poolId: savedPool.id, poolName: savedPool.name, payerName: 'Returning participant',
+            amount: (((index + 1) / 100) * (index % 3 === 1 ? -1 : 1)).toFixed(2),
+            isPaid: index % 3 === 2, status: index % 3 === 2 ? 'settled' : index % 3 === 1 ? 'refund' : 'due',
+            statusLabel: index % 3 === 2 ? 'Paid' : index % 3 === 1 ? 'Refund due' : 'Payment due',
+            needsRecalculation: false, notes: [`Receipt ${String(index).padStart(3, '0')}`]}));
+        const saved: components['schemas']['FinanceView'] = {...snapshot, pools, shares, invoices: []};
+        const original = structuredClone(saved);
+        const detail = {...breakdown, needsRecalculation: false, statusLabel: 'Paid', notes: ['Receipt 089'],
+            components: [{key: 'shareAmount', label: 'Calculated balance', amount: '0.90'}],
+            calculation: {title: 'Saved calculation', sections: [{key: 'balance', title: 'Calculated balance for Returning participant',
+                metrics: [{label: 'Calculated balance', value: '0.90'}]}]}};
+        const {wrapper, request} = await mountFinance(async request => {
+            const path = new URL(request.url).pathname;
+            if (path.includes('/shares/')) {
+                expect(path).toBe(`/api/v1/events/${eventId}/finance/pools/${pools[89]!.id}/shares/90`);
+                return json(detail);
+            }
+            return json(saved);
+        });
+        await button(wrapper, 'Invoice pools & payments').trigger('click');
+        const ledger = wrapper.get('[data-finance-shares]');
+        expect(ledger.findAll('[data-finance-share]')).toHaveLength(25);
+        expect(ledger.find('[data-finance-settle]').exists()).toBe(false);
+        expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(0);
+        expect(wrapper.find('[data-calculation-display]').exists()).toBe(false);
+        const initialReads = request.mock.calls.length;
+        await ledger.get('select[id$="-size"]').setValue('100');
+        expect(ledger.findAll('[data-finance-share]')).toHaveLength(100);
+        await button(ledger, 'Next').trigger('click');
+        expect(ledger.findAll('[data-finance-share]')).toHaveLength(80);
+        expect(ledger.get('[role="status"]').text()).toBe('101–180 of 180');
+        await ledger.get('select[id$="-status"]').setValue('due');
+        expect(ledger.findAll('[data-finance-share]')).toHaveLength(60);
+        await ledger.get('select[id$="-sort"]').setValue('amount-desc');
+        expect(ledger.findAll('[data-finance-share]')[0]!.text()).toContain('1.78');
+        await ledger.get('input[type="search"]').setValue('Pool 090');
+        expect(ledger.findAll('[data-finance-share]')).toHaveLength(1);
+        expect(ledger.get('[data-finance-share]').text()).toContain('Pool 090');
+        await ledger.get('select[id$="-status"]').setValue('');
+        await ledger.get('input[type="search"]').setValue('Receipt 089');
+        expect(ledger.findAll('[data-finance-share]')).toHaveLength(1);
+        expect(ledger.get('[data-finance-share] .badge').text()).toBe('Paid');
+        expect(request).toHaveBeenCalledTimes(initialReads);
+        await button(ledger, 'View breakdown').trigger('click');
+        await flushPromises();
+        expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+        const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
+        expect(dialog.text()).toContain('Calculated balance for Returning participant');
+        expect(dialog.text()).not.toContain('Participant A');
+        expect(dialog.findAll('[data-calculation-display]')).toHaveLength(1);
+        expect(request).toHaveBeenCalledTimes(initialReads + 1);
+        expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+        expect(saved).toEqual(original);
+    });
+
     it.each(['section', 'ledger'] as const)('keeps only %s Refresh pending through its selected breakdown read and rejects overlap', async source => {
         let holdBreakdown = false;
         let finishBreakdown: (() => void) | undefined;

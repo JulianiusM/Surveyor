@@ -1,6 +1,6 @@
 import {describe, expect, it, vi} from 'vitest';
 import {FinanceApi} from '../../src/frontend/features/finance/api';
-import {PilotApi} from '../../src/frontend/app/api';
+import {FrontendApi} from '../../src/frontend/app/api';
 import {InvalidInputError} from '../../src/frontend/app/transport';
 import {financeDecimal} from '../../src/frontend/features/finance/numbers';
 import {contractValidator, operationContract} from '../../src/modules/api/contracts';
@@ -10,7 +10,7 @@ import {createTranslator} from '../../src/modules/localization/translator';
 describe('finance decimal transport preserves existing business inputs', () => {
     it.each(['calculation', 'settlement', 'retraction'] as const)('explains an invalid generated %s field before any request', async kind => {
         const request = vi.fn(async () => new Response('{}'));
-        const api = new FinanceApi(new PilotApi(() => true, vi.fn(), request));
+        const api = new FinanceApi(new FrontendApi(() => true, vi.fn(), request));
         const scope = {context: null, csrfToken: null, epoch: 0, locale: 'en'};
         // These malformed internal drafts exercise the actual generated gates;
         // no request, validator or feature transport is replaced by the test.

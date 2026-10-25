@@ -15,44 +15,28 @@
  */
 
 import {NextFunction, Request, Response, Router} from "express";
-import {asyncHandler, asyncParamHandler} from "../modules/lib/asyncHandler";
-import {APIError, ExpectedError} from "../modules/lib/errors";
-import type {GuestFlowDb} from "../types/UserTypes";
+import {asyncParamHandler} from "../modules/lib/asyncHandler";
+import {ExpectedError} from "../modules/lib/errors";
+import type {ResourceLoader} from "../types/UtilTypes";
 
-export function apiParamHandler(param: string, router: Router, getById: GuestFlowDb['getById'], entityType: string) {
-    handleParam(param, router, getById, entityType, new APIError(`${entityType} not found`, {}, 404));
-}
-
-export function paramHandler(param: string, router: Router, getById: GuestFlowDb['getById'], entityType: string) {
+export function paramHandler(param: string, router: Router, getById: ResourceLoader, entityType: string) {
     handleParam(param, router, getById, entityType, new ExpectedError(`${entityType} not found`, 'error', 404));
 }
 
-export function queryHandler(param: string, router: Router, getById: GuestFlowDb['getById'], entityName: string, error?: Error) {
-    router.use(asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-        await handle(req.query[param], getById, entityName, req, res, next, error)
-    }));
-}
-
-export function createPathQueryHandler(param: string, router: Router, getById: GuestFlowDb['getById'], entityName: string, error?: Error) {
-    router.use(asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-            if (!req.path.endsWith("/create") && !req.path.endsWith("/duplicate")) {
-                return next();
-            }
-
-            return await handle(req.query[param], getById, entityName, req, res, next, error)
-        }
-    ));
-}
-
-export function handleParam(param: string, router: Router, getById: GuestFlowDb['getById'], entityName: string, error?: Error) {
+/** Register the lookup for an Express-matched path parameter. The async wrapper
+ * forwards lookup and missing-resource errors before the route consumes the result. */
+function handleParam(param: string, router: Router, getById: ResourceLoader, entityName: string, error?: Error) {
     router.param(param, asyncParamHandler(async (req: Request, res: Response, next: NextFunction, id: any) =>
         await handle(id, getById, entityName, req, res, next, error)
     ));
 }
 
+/** Attach the loaded root and its linked Event for later page/output admission.
+ * Loading does not grant access; downstream handlers retain their own permission
+ * checks. A missing root uses the caller's error, or passes on when optional. */
 async function handle(
     id: any,
-    getById: GuestFlowDb['getById'],
+    getById: ResourceLoader,
     entityName: string,
     req: Request,
     res: Response,

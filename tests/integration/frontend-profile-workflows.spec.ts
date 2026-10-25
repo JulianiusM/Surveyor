@@ -10,11 +10,12 @@ import * as userService from '../../src/modules/database/services/UserService';
 import mailer from '../../src/modules/email';
 import settings from '../../src/modules/settings';
 import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
-import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
+import type {FrontendBootstrap} from '../../src/types/FrontendTypes';
 import type {components, operations} from '../../src/types/api/v1';
 import {registerLocalAccount} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 import {contractValidator} from '../../src/modules/api/contracts';
+import {createTranslator} from '../../src/modules/localization/translator';
 
 interface DocumentResponse {status: number; headers: Headers; text: string}
 interface HttpSubmission {
@@ -40,7 +41,7 @@ let origin = '';
 function createHttpActor() {
     let cookie = '';
 
-    async function dispatch(method: 'GET' | 'POST' | 'DELETE', target: string, submission?: HttpSubmission): Promise<DocumentResponse> {
+    async function dispatch(method: 'GET' | 'POST' | 'PUT' | 'DELETE', target: string, submission?: HttpSubmission): Promise<DocumentResponse> {
         const headers = new Headers({Connection: 'close', ...submission?.headers});
         if (cookie) headers.set('Cookie', cookie);
         if (method !== 'GET') {
@@ -67,6 +68,9 @@ function createHttpActor() {
     function deleteJson(target: string, fields: Record<string, string>, headers: Record<string, string>): Promise<DocumentResponse> {
         return dispatch('DELETE', target, {fields, headers, format: 'json'});
     }
+    function putJson(target: string, fields: Record<string, string>, headers: Record<string, string>): Promise<DocumentResponse> {
+        return dispatch('PUT', target, {fields, headers, format: 'json'});
+    }
     function postEmpty(target: string, headers: Record<string, string>): Promise<DocumentResponse> {
         return dispatch('POST', target, {headers});
     }
@@ -78,7 +82,7 @@ function createHttpActor() {
         if (!signed.startsWith('s:') || signed.lastIndexOf('.') < 3) throw new Error('The actor has no signed server session cookie.');
         return signed.slice(2, signed.lastIndexOf('.'));
     }
-    return {get, post, postJson, deleteJson, postEmpty, sessionId};
+    return {get, post, postJson, putJson, deleteJson, postEmpty, sessionId};
 }
 
 beforeAll(async function prepareRealApplication() {
@@ -105,12 +109,14 @@ afterAll(async function retireRealApplication() {
     await closeIntegrationDatabase();
 });
 
-/** Admit a production account through native login and its actual persisted cookie. */
+/** Admit a production account through generated login and its actual persisted cookie. */
 async function accountActor(): Promise<Actor> {
     const user = await registerLocalAccount('p1-workflow');
     await userService.activateUser(user.id);
     const agent = createHttpActor();
-    expect((await agent.post('/users/login', {username: user.username, password: 'initial-secret'})).status).toBe(302);
+    const anonymous = JSON.parse((await agent.get('/api/v1/session')).text) as components['schemas']['SessionView'];
+    expect((await agent.postJson('/api/v1/auth/login', {username: user.username, password: 'initial-secret'},
+        {'X-Surveyor-Api-Compatibility': anonymous.deployment.apiCompatibility})).status).toBe(200);
     const profiles = await userService.getProfilesForUser(user.id);
     if (!profiles[0]) throw new Error('The registered account has no profile.');
     return {agent, username: user.username, userId: user.id, profileId: profiles[0].id};
@@ -125,27 +131,27 @@ async function guestActor(name = `P1 guest ${randomUUID().slice(0, 8)}`): Promis
 }
 
 /** Decode the emitted document through the real exhaustive browser admission codec. */
-async function documentState(html: string): Promise<FrontendPilotBootstrap> {
-    const value = /<script id="surveyor-pilot-state" type="application\/json">([^<]+)<\/script>/u.exec(html)?.[1];
+async function documentState(html: string): Promise<FrontendBootstrap> {
+    const value = /<script id="surveyor-frontend-state" type="application\/json">([^<]+)<\/script>/u.exec(html)?.[1];
     if (!value) throw new Error('The workflow document did not emit bootstrap state.');
     return decodeBootstrap(JSON.parse(value));
 }
 
 async function workflowDocument(actor: Actor, suffix: string) {
-    const response = await actor.agent.get('/frontend-pilot/users/' + suffix + '?locale=en');
+    const response = await actor.agent.get('/users/' + suffix + '?locale=en');
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     return {response, state: await documentState(response.text)};
 }
 
 /** JSON commands carry the same actual session evidence returned to the browser. */
-function apiReceipt(state: FrontendPilotBootstrap): Record<string, string> {
+function apiReceipt(state: FrontendBootstrap): Record<string, string> {
     if (!state.session.context || !state.session.csrfToken) throw new Error('A private workflow needs admitted session evidence.');
     return {'X-Surveyor-Context': state.session.context, 'X-CSRF-Token': state.session.csrfToken,
         'X-Surveyor-Api-Compatibility': state.session.deployment.apiCompatibility, 'X-Surveyor-Locale': state.session.locale};
 }
 
-async function postWorkflow(actor: Actor, suffix: string, state: FrontendPilotBootstrap, fields: Record<string, string>, expectedStatus = 200) {
+async function postWorkflow(actor: Actor, suffix: string, state: FrontendBootstrap, fields: Record<string, string>, expectedStatus = 200) {
     const response = suffix === 'account/delete'
         ? await actor.agent.deleteJson('/api/v1/account', fields, apiReceipt(state))
         : await actor.agent.postJson(suffix === 'profile/delete' ? '/api/v1/profiles/current/deactivate' : '/api/v1/profiles/migration/execute',
@@ -155,11 +161,11 @@ async function postWorkflow(actor: Actor, suffix: string, state: FrontendPilotBo
 }
 
 /** Preview is a generated read-only operation; the existing business check still owns its limited result. */
-function previewRequest(actor: Actor, state: FrontendPilotBootstrap, token: string): Promise<DocumentResponse> {
+function previewRequest(actor: Actor, state: FrontendBootstrap, token: string): Promise<DocumentResponse> {
     return actor.agent.postJson('/api/v1/profiles/migration/preview', {token}, apiReceipt(state));
 }
 
-async function previewMigration(actor: Actor, state: FrontendPilotBootstrap, token: string) {
+async function previewMigration(actor: Actor, state: FrontendBootstrap, token: string) {
     const response = await previewRequest(actor, state, token);
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('private, no-store');
@@ -172,18 +178,12 @@ async function sessionOf(actor: Actor): Promise<components['schemas']['SessionVi
     return JSON.parse(response.text);
 }
 
-/** Read the native alert's unchanged text bytes, including an empty cleanup
- * suffix's trailing space. The route and Pug owner provide the actual wording. */
-function nativeSuccessNotice(response: DocumentResponse): string | undefined {
-    return /<div[^>]*class="alert alert-success"[^>]*>([^<]*)<\/div>/u.exec(response.text)?.[1];
-}
-
 describe('shared profile workflows through versioned SPA commands and initial document entry', () => {
     it.each(['account', 'guest'] as const)('keeps warm %s admission read-only and issues only on the explicit token command', async function issuesOnlyOnCommand(kind) {
         const actor = kind === 'account' ? await accountActor() : await guestActor();
         const document = await workflowDocument(actor, 'account/delete');
         const previous = (await userService.getProfileById(actor.profileId))!.migrationToken;
-        const admission = await actor.agent.get('/api/v1/profiles/workflow-entry?kind=token&returnTo=%2Ffrontend-pilot%2Fusers%2Fprofile%2Fmigrate%2Frequest',
+        const admission = await actor.agent.get('/api/v1/profiles/workflow-entry?kind=token&returnTo=%2Fusers%2Fprofile%2Fmigrate%2Frequest',
             {'X-Surveyor-Context': document.state.session.context!});
         expect(admission.status).toBe(200);
         expect(JSON.parse(admission.text)).toEqual({entry: {kind: 'render'}});
@@ -229,7 +229,7 @@ describe('shared profile workflows through versioned SPA commands and initial do
         const entry = await workflowDocument(recipient, 'profile/migrate/show');
         expect(entry.state.profileWorkflow).toEqual({kind: 'entry'});
         const {preview} = await previewMigration(recipient, entry.state, token);
-        expect((await recipient.agent.post('/frontend-pilot/users/profile/migrate/show', {token})).status).toBe(404);
+        expect((await recipient.agent.post('/users/profile/migrate/show', {token})).status).toBe(404);
 
         // Native preview may disclose these fields to a token holder. The adapter
         // must not broaden that projection to credentials or nested ORM relations.
@@ -249,9 +249,9 @@ describe('shared profile workflows through versioned SPA commands and initial do
         const entry = await workflowDocument(recipient, 'profile/migrate/show');
         const invalid = await previewMigration(recipient, entry.state, 'invalid-migration-token');
         expect(invalid.preview).toEqual({kind: 'denied', status: 401, messageKey: 'profile.invalidMigrationToken'});
-        const response = await guest.agent.get('/frontend-pilot/users/profile/migrate/show');
+        const response = await guest.agent.get('/users/profile/migrate/show');
         expect(response.status).toBe(302);
-        expect(response.headers.get('location')).toContain('/frontend-pilot/users/login?next=');
+        expect(response.headers.get('location')).toContain('/users/login?next=');
         const guestDocument = await workflowDocument(guest, 'account/delete');
         expect((await previewRequest(guest, guestDocument.state, 'invalid-migration-token')).status).toBe(403);
         expect((await sessionOf(guest)).kind).toBe('guest');
@@ -259,9 +259,9 @@ describe('shared profile workflows through versioned SPA commands and initial do
     });
 
     it.each([
-        {owner: 'guest', key: 'profile.migrationCompletedGuestDeleted'},
-        {owner: 'account-deleted', key: 'profile.migrationCompletedAccountDeleted'},
-        {owner: 'account-retained', key: 'profile.migrationCompleted'},
+        {owner: 'guest', key: 'profile.migrationCompletedGuestDeleted', suffix: 'Previous guest account permanently deleted!'},
+        {owner: 'account-deleted', key: 'profile.migrationCompletedAccountDeleted', suffix: 'Previous user account permanently deleted!'},
+        {owner: 'account-retained', key: 'profile.migrationCompleted', suffix: ''},
     ] as const)('executes the existing $owner transfer and reports its exact semantic cleanup notice', async function executesTransfer(candidate) {
         const source = candidate.owner === 'guest' ? await guestActor() : await accountActor();
         if (candidate.owner === 'account-retained') await userService.createProfile(source.userId!, 'Remaining source profile');
@@ -276,9 +276,13 @@ describe('shared profile workflows through versioned SPA commands and initial do
 
         // This is the original controller's transfer and previous-owner cleanup.
         // The native token check is preserved; this test does not certify races.
-        expect(JSON.parse(response.text)).toMatchObject({destination: '/frontend-pilot/users/profile/manage',
+        const completion = JSON.parse(response.text) as components['schemas']['ProfileWorkflowCompletion'];
+        expect(completion).toMatchObject({destination: '/users/profile/manage',
             resultingContext: entry.state.session.context, notice: {kind: 'success', messageKey: candidate.key}, redirect: null});
-        expect(JSON.parse(response.text)).not.toHaveProperty('message');
+        expect(completion).not.toHaveProperty('message');
+        // Retain the complete original notice, including the empty cleanup
+        // suffix, through the key actually selected by the integrated command.
+        expect(createTranslator('en').t(candidate.key)).toBe(`Migration successful. ${candidate.suffix}`);
         expect(await userService.getProfileById(source.profileId)).toMatchObject({userId: recipient.userId,
             guestId: null, migrationToken: null, migrationTokenExpiration: null, defaultForOwner: false});
         if (candidate.owner === 'guest') expect(await AppDataSource.getRepository(Guest).findOneBy({id: source.guestId!})).toBeNull();
@@ -291,28 +295,6 @@ describe('shared profile workflows through versioned SPA commands and initial do
         const invalid = await postWorkflow(recipient, 'profile/migrate/execute', entry.state, {token}, 401);
         expect(JSON.parse(invalid.text)).toMatchObject({status: 401, code: 'TOKEN_INVALID'});
         expect((await sessionOf(recipient)).activeProfile?.id).toBe(recipient.profileId);
-    });
-
-    it.each([
-        {owner: 'guest', suffix: 'Previous guest account permanently deleted!'},
-        {owner: 'account-deleted', suffix: 'Previous user account permanently deleted!'},
-        {owner: 'account-retained', suffix: ''},
-    ] as const)('retains the exact native $owner transfer notice through the unchanged route', async function preservesNativeTransferNotice(candidate) {
-        const source = candidate.owner === 'guest' ? await guestActor() : await accountActor();
-        if (candidate.owner === 'account-retained') await userService.createProfile(source.userId!, 'Remaining native source profile');
-        const recipient = await accountActor();
-        const issued = await workflowDocument(source, 'profile/migrate/request');
-        if (issued.state.profileWorkflow?.kind !== 'token') throw new Error('Expected the issued migration token.');
-
-        // Consume setup login feedback before the actual native operation. The
-        // existing route, flash owner and rendered alert are the string oracle.
-        expect((await recipient.agent.get('/users/profile/manage')).status).toBe(200);
-        const response = await recipient.agent.post('/users/profile/migrate/execute', {token: issued.state.profileWorkflow.token});
-        expect(response.status).toBe(302);
-        expect(response.headers.get('location')).toBe('/users/profile/manage');
-        const destination = await recipient.agent.get('/users/profile/manage');
-        expect(nativeSuccessNotice(destination)).toBe(`Migration successful. ${candidate.suffix}`);
-        expect(await userService.getProfileById(source.profileId)).toMatchObject({userId: recipient.userId, guestId: null});
     });
 
     it('confirms transfer in the admitted derived context when a stored legacy metadata pair is partial', async function preservesLegacyCompletionScope() {
@@ -378,7 +360,8 @@ describe('shared profile workflows through versioned SPA commands and initial do
             if (boundary === 'origin') requestOrigin = 'https://foreign.example.invalid';
             if (boundary === 'stored actor') {
                 const sibling = await userService.createProfile(actor.userId!, 'A newly selected profile');
-                expect((await actor.agent.get('/users/profile/change/' + sibling.id)).status).toBe(302);
+                expect((await actor.agent.putJson('/api/v1/auth/profile', {profileId: sibling.id},
+                    apiReceipt(document.state))).status).toBe(200);
             }
 
             // Use the same generated command body as the browser. Transport rejection
@@ -397,8 +380,6 @@ describe('shared profile workflows through versioned SPA commands and initial do
             const document = await workflowDocument(actor, suffix);
             const field = suffix === 'profile/delete' ? 'name' : 'username';
             const value = 'Incorrect confirmation';
-            const native = await actor.agent.post('/users/' + suffix, {[field]: value});
-            expect(native.status).toBe(500);
             const response = await postWorkflow(actor, suffix, document.state, {[field]: value}, 400);
             expect(JSON.parse(response.text)).toMatchObject({
                 code: suffix === 'profile/delete' ? 'PROFILE_DEACTIVATION_CONFIRMATION_INVALID' : 'ACCOUNT_DELETION_CONFIRMATION_INVALID',
@@ -408,37 +389,26 @@ describe('shared profile workflows through versioned SPA commands and initial do
                     : 'Enter your account username exactly to confirm account deletion.',
             });
             expect(response.text).not.toContain(value);
-            expect(native.text).toContain(`value="${value}"`);
             expect(await userService.getProfileById(actor.profileId)).toMatchObject({userId: actor.userId});
             expect(await AppDataSource.getRepository(User).findOneBy({id: actor.userId!})).not.toBeNull();
         });
 
-    it.each(['native', 'versioned'] as const)('deactivates the selected profile through %s and chooses the existing remaining default', async function selectsRemainingDefault(transport) {
+    it('deactivates the selected profile and chooses the existing remaining default', async function selectsRemainingDefault() {
         const actor = await accountActor();
         const sibling = await userService.createProfile(actor.userId!, 'Remaining default');
         await userService.updateProfileDefault(sibling.id, true);
         const document = await workflowDocument(actor, 'profile/delete');
-        // The native caller keeps the same string, including its empty cleanup
-        // suffix. Versioned presentation carries a catalog key for that outcome.
-        if (transport === 'native') expect((await actor.agent.get('/users/profile/manage')).status).toBe(200);
-        const response = transport === 'native'
-            ? await actor.agent.post('/users/profile/delete', {name: document.state.session.activeProfile!.name})
-            : await postWorkflow(actor, 'profile/delete', document.state, {name: document.state.session.activeProfile!.name});
+        const response = await postWorkflow(actor, 'profile/delete', document.state, {name: document.state.session.activeProfile!.name});
 
         // Profile records remain as shared participation history. Only ownership,
-        // personal default status and the active selection follow native deletion.
-        if (transport === 'native') {
-            expect(response.status).toBe(302);
-            const destination = await actor.agent.get('/users/profile/manage');
-            expect(nativeSuccessNotice(destination)).toBe('Profile successfully deactivated. ');
-        } else {
-            const completion = JSON.parse(response.text) as components['schemas']['ProfileWorkflowCompletion'];
-            expect(contractValidator('ProfileWorkflowCompletion')(completion)).toBe(true);
-            expect(completion).toMatchObject({destination: '/frontend-pilot/users/profile/manage', redirect: null,
-                notice: {kind: 'success', messageKey: 'profile.deactivationCompleted'}});
-            expect(completion).not.toHaveProperty('message');
-            expect(completion.resultingContext).not.toBe(document.state.session.context);
-        }
+        // personal default status and the active selection follow shared deletion.
+        const completion = JSON.parse(response.text) as components['schemas']['ProfileWorkflowCompletion'];
+        expect(contractValidator('ProfileWorkflowCompletion')(completion)).toBe(true);
+        expect(completion).toMatchObject({destination: '/users/profile/manage', redirect: null,
+            notice: {kind: 'success', messageKey: 'profile.deactivationCompleted'}});
+        expect(completion).not.toHaveProperty('message');
+        expect(completion.resultingContext).not.toBe(document.state.session.context);
+        expect(createTranslator('en').t('profile.deactivationCompleted')).toBe('Profile successfully deactivated. ');
         expect(await userService.getProfileById(actor.profileId)).toMatchObject({userId: null, defaultForOwner: false});
         expect((await sessionOf(actor)).activeProfile?.id).toBe(sibling.id);
         expect(await AppDataSource.getRepository(User).findOneBy({id: actor.userId!})).not.toBeNull();
@@ -470,7 +440,7 @@ describe('shared profile workflows through versioned SPA commands and initial do
             // mail-delivery guarantee is inferred from its local fixture result.
             const completion = JSON.parse(response.text) as components['schemas']['ProfileWorkflowCompletion'];
             expect(contractValidator('ProfileWorkflowCompletion')(completion)).toBe(true);
-            expect(completion).toMatchObject({destination: '/frontend-pilot', redirect: null,
+            expect(completion).toMatchObject({destination: '/', redirect: null,
                 notice: {kind: 'success', messageKey: 'profile.accountDeleted'}});
             expect(completion).not.toHaveProperty('message');
             expect(completion.resultingContext).not.toBe(document.state.session.context);

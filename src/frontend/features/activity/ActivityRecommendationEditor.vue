@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import {computed, onBeforeUnmount, reactive, ref, shallowRef, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
-import type {PilotPlainMessageKey} from '../../../types/FrontendPilotUiTypes';
+import type {FrontendPlainMessageKey} from '../../../types/FrontendUiTypes';
 import type {ActivityManualRecommendation, ActivityRecommendationDraftRow, ActivityRecommendationRow} from '../../../types/FrontendActivityRecommendationTypes';
-import {usePilot} from '../../app/context';
+import {useFrontend} from '../../app/context';
 import {useDraftProtection} from '../../composables/command';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
@@ -18,20 +18,20 @@ const props = defineProps<{slotId: string; workspace: components['schemas']['Act
     view: components['schemas']['ActivityView']; rows: ActivityRecommendationDraftRow[]; disabled: boolean;
     preview(rows: ActivityRecommendationRow[]): Promise<components['schemas']['ActivityWarning'][]>}>();
 const emit = defineEmits<{close: []; stage: [rows: ActivityRecommendationRow[]]}>();
-const context = usePilot();
+const context = useFrontend();
 const {messages} = context;
 const form = reactive<ActivityManualRecommendation>({targetSlotId: props.slotId, operation: 'ASSIGN', profileId: '', sourceItemId: '', swapProfileId: ''});
 const warnings = shallowRef<components['schemas']['ActivityWarning'][]>([]);
-const issue = ref<PilotPlainMessageKey | null>(null);
+const issue = ref<FrontendPlainMessageKey | null>(null);
 let active = true;
 let sequence = 0;
 onBeforeUnmount(() => { active = false; sequence++; });
 useDraftProtection({dirty: () => !!form.profileId || form.operation !== 'ASSIGN', unknownMessage: 'draft.leaveUnknown'});
 const target = computed(() => props.workspace.slots.find(slot => slot.id === props.slotId));
 const participants = computed(() => props.workspace.participantOptions.filter(isAvailableParticipant));
-/** Match native attendance/source option filtering without granting authority. */
+/** Match attendance/source option filtering without granting authority. */
 function isAvailableParticipant(person: components['schemas']['ActivityRecommendations']['participantOptions'][number]): boolean {
-    // Preserve the native option filter. Warning and submission decisions remain
+    // Preserve the option filter. Warning and submission decisions remain
     // server-owned, including its attendance and roleless-source checks.
     if (!person.profileId || props.workspace.existingAssignments.some(assignment => assignment.item.id === props.slotId && assignment.profile.id === person.profileId)) return false;
     const day = target.value?.day;
@@ -101,7 +101,7 @@ function stage(): void {
 }
 /** Append shared civil-day attendance labels to the admitted participant name. */
 function participantLabel(person: components['schemas']['ActivityRecommendations']['participantOptions'][number]): string {
-    // Missing bounds retain native start/end wording; the submitted profile ID
+    // Missing bounds retain start/end wording; the submitted profile ID
     // stays separate from this purely presentational label.
     const arrival = person.arrivalDate ? activityDateLabel(person.arrivalDate, messages.value.locale) : '';
     const departure = person.departureDate ? activityDateLabel(person.departureDate, messages.value.locale) : '';
