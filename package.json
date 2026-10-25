@@ -63,12 +63,12 @@
     "express-session": "^1.19.0",
     "express-validator": "^7.3.2",
     "http-errors": "^2.0.1",
-    "joi": "^18.2.3",
+    "joi": "^18.2.9",
     "marked": "^18.0.9",
-    "morgan": "^1.11.0",
-    "multer": "^2.2.0",
+    "morgan": "^1.12.1",
+    "multer": "^2.4.0",
     "mysql2": "^3.23.2",
-    "nodemailer": "^9.0.4",
+    "nodemailer": "^10.0.9",
     "openid-client": "^6.8.4",
     "pdfmake": "^0.3.11",
     "pug": "^3.0.4",
@@ -91,7 +91,7 @@
     "@types/select2": "^4.0.63",
     "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "^4.1.10",
-    "concurrently": "^10.0.4",
+    "concurrently": "^10.0.6",
     "cpx2": "^9.0.0",
     "cross-env": "^10.1.0",
     "esbuild": "^0.28.1",
@@ -100,6 +100,6 @@
     "sass": "^1.102.0",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.5"
   }
 }
