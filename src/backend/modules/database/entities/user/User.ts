@@ -63,9 +63,12 @@ export class User extends NumericBase {
     @OneToMany(() => Profile, (profile) => profile.user)
     profiles: Profile[];
 
+    /** Supply the existing username fallback when a persisted display name is empty. */
     @BeforeInsert()
     @BeforeUpdate()
     private ensureName() {
+        // Retain a nonempty explicit display name; this hook performs no trimming
+        // or account activation and does not update any profile's separate name.
         if (!this.name || this.name === "") {
             this.name = this.username;
         }

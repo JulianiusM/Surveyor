@@ -112,7 +112,10 @@ export async function getProfile(profileId: string, manager: EntityManager): Pro
     return manager.getRepository(Profile).findOne({where: {id: profileId}, relations: {user: true, guest: true}});
 }
 
+/** Replace a pool's controller-selected assignment rows on its existing transaction. */
 export async function replaceAssignments(poolId: string, values: {registrationId: number; isExempt: boolean; factor: number}[], manager: EntityManager): Promise<void> {
+    // Delete the previous collection before materializing the replacement, including
+    // the empty-input case; validation and factor policy remain with the caller.
     const repo = manager.getRepository(EventPoolAssignment);
     await repo.delete({pool: {id: poolId}});
     const rows = values.map(value => repo.create({
@@ -121,7 +124,10 @@ export async function replaceAssignments(poolId: string, values: {registrationId
     if (rows.length) await repo.save(rows);
 }
 
+/** Replace the admitted surcharge collection using the caller's transaction manager. */
 export async function replaceSurcharges(poolId: string, values: {registrationId: number; amount: number; note: string; subtractFromPool: boolean}[], manager: EntityManager): Promise<void> {
+    // Persist the already selected amounts in the existing decimal storage format;
+    // this replacement performs no settlement calculation or independent commit.
     const repo = manager.getRepository(EventInvoiceSurcharge);
     await repo.delete({pool: {id: poolId}});
     const rows = values.map(value => repo.create({
@@ -135,7 +141,10 @@ export async function deleteTakeovers(ids: number[], manager: EntityManager): Pr
     if (ids.length) await manager.getRepository(EventPoolTakeover).delete(ids);
 }
 
+/** Insert the supplied payer/beneficiary relationships without replacing other rows. */
 export async function insertTakeovers(poolId: string, values: {payerId: number; beneficiaryId: number}[], manager: EntityManager): Promise<void> {
+    // Translate admitted identifiers into ORM relations and avoid an empty save;
+    // graph validity and payment policy have already been decided by the caller.
     const repo = manager.getRepository(EventPoolTakeover);
     const rows = values.map(value => repo.create({
         pool: {id: poolId}, payerRegistration: {id: value.payerId}, beneficiaryRegistration: {id: value.beneficiaryId},
@@ -143,7 +152,10 @@ export async function insertTakeovers(poolId: string, values: {payerId: number; 
     if (rows.length) await repo.save(rows);
 }
 
+/** Replace one pool's takeover collection inside the supplied persistence unit. */
 export async function replaceTakeovers(poolId: string, values: {payerRegistrationId: number; beneficiaryRegistrationId: number}[], manager: EntityManager): Promise<void> {
+    // Removal and shared insertion use the same manager; an empty collection clears
+    // existing rows while leaving rollback/commit ownership with the caller.
     await manager.getRepository(EventPoolTakeover).delete({pool: {id: poolId}});
     const rows = values.map(value => ({payerId: value.payerRegistrationId, beneficiaryId: value.beneficiaryRegistrationId}));
     await insertTakeovers(poolId, rows, manager);

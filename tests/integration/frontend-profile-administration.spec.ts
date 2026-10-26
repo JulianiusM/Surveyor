@@ -60,7 +60,7 @@ async function applicationOrigin(rendererReady?: Promise<void>): Promise<string>
     // listener supplies only a local transport after database admission succeeded.
     // The runner's actual-module loader preserves the source module's default
     // export across its CJS/ESM interop without substituting any application owner.
-    application = (await vi.importActual<typeof import('../../src/backend/app')>('../../src/app')).default;
+    application = (await vi.importActual<typeof import('../../src/backend/app')>('../../src/backend/app')).default;
     // Normal startup prepares renderer code before listen. The suite additionally
     // prepares only its actual named lazy graphs; no request/private state is made.
     await (rendererReady ?? initializeFrontendRenderer());

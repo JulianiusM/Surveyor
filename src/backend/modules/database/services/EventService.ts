@@ -204,6 +204,8 @@ export async function getManagedEvents(profileId: string) {
 // Registrations (no validation — controller handles it)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Persist a registration, dietary rows and default-pool enrollment together,
+ * reusing a supplied manager or the established Event transaction. */
 export async function register(
     eventId: string,
     arrivalDate: string,
@@ -214,7 +216,10 @@ export async function register(
     dietComment?: string | null,
     manager?: EntityManager,
 ) {
+    /** Coordinate pool inputs before updating membership and its dependent records. */
     async function persistRegistration(manager: EntityManager) {
+        // Pool locks serialize enrollment/date changes with financial calculation;
+        // the existing registration row is reused when this profile already joined.
         await lockEventPools(manager, eventId);
         const repo = manager.getRepository(EventRegistration);
         let reg = await repo.findOneBy({event: {id: eventId}, profile: {id: profileId}});
@@ -231,6 +236,8 @@ export async function register(
             });
             reg = await repo.save(reg);
         }
+        // Dependent dietary/enrollment writes precede invalidation on the same
+        // manager, so the caller's commit exposes one coherent set of inputs.
         await replaceDietaryChoicesTx(manager, reg.id, dietaryChoices, dietaryAllergies, dietComment);
         await registerForDefaultPools(manager, reg);
         await invalidateEventPools(manager, eventId);
@@ -253,7 +260,10 @@ export async function getRegistrationsForEvent(eventId: string) {
     return await AppDataSource.getRepository(EventRegistration).findBy({event: {id: eventId}});
 }
 
+/** Read the ordered participant projection with profile/contact and dietary relations. */
 export async function getEventParticipants(eventId: string, manager: EntityManager = AppDataSource.manager): Promise<ParticipantRow[]> {
+    // Hydrate the existing relation set before applying the established name/contact
+    // fallbacks; this query does not decide which caller may disclose those fields.
     const repo = manager.getRepository(EventRegistration);
     const rows = await repo.find({
         where: {event: {id: eventId}},
@@ -277,7 +287,10 @@ export async function getEventParticipants(eventId: string, manager: EntityManag
     }));
 }
 
+/** Delete this profile's Event registration and stale affected pool calculations. */
 export async function deleteRegistrationFor(eventId: string, profileId: string) {
+    // Hold pool coordination before deletion and invalidate only when a row was
+    // actually removed, keeping the existing READ COMMITTED transaction boundary.
     await AppDataSource.transaction('READ COMMITTED', async (manager) => {
         await lockEventPools(manager, eventId);
         const result = await manager.getRepository(EventRegistration).delete({event: {id: eventId}, profile: {id: profileId}});
@@ -285,7 +298,8 @@ export async function deleteRegistrationFor(eventId: string, profileId: string) 
     });
 }
 
-// Replace all dietary rows for a registration
+/** Replace a registration's dietary rows on the supplied transaction, keeping
+ * distinct choices and their existing allergy-versus-comment text selection. */
 async function replaceDietaryChoicesTx(
     manager: EntityManager,
     registrationId: number,
@@ -293,6 +307,8 @@ async function replaceDietaryChoicesTx(
     allergyInfo?: string | null,
     dietComment?: string | null,
 ) {
+    // Empty input deliberately clears the previous collection. Otherwise insert
+    // one row per distinct choice after deletion using this same manager.
     const repo = manager.getRepository(EventRegistrationDietary);
     await repo.delete({registration: {id: registrationId}});
     if (!choices || !choices.length) return;
@@ -305,12 +321,15 @@ async function replaceDietaryChoicesTx(
     await repo.save(rows);
 }
 
+/** Replace a registration's dietary collection in its established standalone transaction. */
 export async function replaceDietaryChoices(
     registrationId: number,
     choices?: DIETARY[] | null,
     allergy?: string | null,
     comment?: string | null,
 ) {
+    // Delegate row normalization/replacement to the same helper used by registration;
+    // only this standalone entry point opens its own transaction.
     await AppDataSource.transaction('READ COMMITTED', async (manager) => {
         await replaceDietaryChoicesTx(manager, registrationId, choices, allergy, comment);
     });
@@ -340,7 +359,10 @@ export function getEventParticipationQuery(profileId: string, manager: EntityMan
             .andWhere('registration.profile_id = :profileId', {profileId}));
 }
 
+/** Delete an Event-scoped registration and report whether a stored row was removed. */
 export async function deleteRegistration(eventId: string, regId: string | number) {
+    // Serialize against pool calculations, scope deletion to this Event, then mark
+    // calculation inputs stale only after an effective delete in the same transaction.
     return AppDataSource.transaction('READ COMMITTED', async (manager) => {
         await lockEventPools(manager, eventId);
         const res = await manager.getRepository(EventRegistration).delete({id: Number(regId), event: {id: eventId}});
@@ -349,7 +371,10 @@ export async function deleteRegistration(eventId: string, regId: string | number
     });
 }
 
+/** Persist caller-validated dates and invalidate financial inputs on the same transaction. */
 export async function updateRegistrationDates(eventId: string, regId: number, arrivalDate: string, departureDate: string) {
+    // Take pool locks before reading/updating the Event-scoped registration; an
+    // absent row returns false without a write or recalculation invalidation.
     return AppDataSource.transaction('READ COMMITTED', async (manager) => {
         await lockEventPools(manager, eventId);
         const repo = manager.getRepository(EventRegistration);

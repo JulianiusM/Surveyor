@@ -113,7 +113,10 @@ export async function withLockedArchiveTarget<T>(
     action: (manager: EntityManager, context: LockedArchiveContext) => Promise<T>,
     additionalEventIds: string[] = [],
 ): Promise<T> {
+    /** Discover parents, lock them deterministically, then pass the locked root to policy. */
     async function lockAndRun(manager: EntityManager): Promise<T> {
+        // Parent discovery precedes every write lock. Re-reading the root afterward
+        // exposes a concurrent relink to the controller through initialEventId.
         const [initial] = await loadArchiveTargets(manager, ref.type, [ref.id]);
         const parentIds = new Set(additionalEventIds);
         if (initial?.eventId) parentIds.add(initial.eventId);

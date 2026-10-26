@@ -1,3 +1,5 @@
+import {getRecommendations} from '../../src/backend/modules/activity/recommendationOperations';
+import {getRequirements, updateRequirements} from '../../src/backend/modules/activity/requirementOperations';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {randomUUID} from 'node:crypto';
 import http from 'node:http';
@@ -199,7 +201,7 @@ describe('versioned Activity production operations', () => {
         expect(data.calculationContext.participants).toContainEqual(expect.objectContaining({profileId: participant.id}));
         expect(data.overrideTargets).toContainEqual(expect.objectContaining({profileId: participant.id,
             label: participant.name, nameIsFallback: false}));
-        const nativeRequirements = await nativeActivity.getRequirements(id);
+        const nativeRequirements = await getRequirements(id);
         expect(data.overrides[0].id).toBe(String(nativeRequirements.overrides[0].id));
         const nativeTarget = nativeRequirements.overrideTargets.find(target => target.profileId === participant.id);
         expect(nativeTarget).toMatchObject({label: participant.name});
@@ -248,7 +250,7 @@ describe('versioned Activity production operations', () => {
 
         const plan = (await activityService.getActivityPlanById(id))!;
         const nativeView = await nativeActivity.fetchForView(plan, {session: actor(owner)} as Request);
-        const nativeRecommendations = await nativeActivity.getRecommendations(id, actor(owner));
+        const nativeRecommendations = await getRecommendations(id, actor(owner));
         expect(nativeView.participantList).toContainEqual(expect.objectContaining({participantKey: 'profile:' + unnamed.id, name: 'Participant'}));
         expect(nativeRecommendations.participantOptions).toContainEqual(expect.objectContaining({profileId: unnamed.id, label: 'Profile #' + unnamed.id}));
         for (const row of [...nativeView.participantList, ...nativeRecommendations.participantOptions])
@@ -302,7 +304,7 @@ describe('versioned Activity production operations', () => {
         await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id);
         const {id} = await fixture(eventId);
         const second = await fixture(eventId);
-        await nativeActivity.updateRequirements(id, {assignmentMode: 'REQUIRED', bindingDeadline: '2020-01-01T00:00:00Z',
+        await updateRequirements(id, {assignmentMode: 'REQUIRED', bindingDeadline: '2020-01-01T00:00:00Z',
             stayRequirements: [{stayDays: 1, requiredShifts: 0}, {stayDays: 2, requiredShifts: 0}, {stayDays: 3, requiredShifts: 1}]});
         expect((await activity.readActivityRecommendations(id, actor(owner))).autoGenerationJob).toBeNull();
         const queued = await activity.generateActivityRecommendations(id, actor(owner));

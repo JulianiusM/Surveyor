@@ -133,7 +133,10 @@ export function addEntityPermissionCandidates<T extends ObjectLiteral>(query: Se
     defaults.andWhere(scope.profileId
         ? `(${audiencePredicate} OR (permissionDefault.audience = 'participant' AND EXISTS (${registrations.getQuery()})))`
         : audiencePredicate);
+    /** Group the engine-selected audiences with this profile's owner/direct grants. */
     function alternatives(where: WhereExpressionBuilder): void {
+        // Anonymous scopes have audience evidence only; profile-specific alternatives
+        // stay inside these brackets so subsequent filters apply to every branch.
         where.where(`EXISTS (${defaults.getQuery()})`);
         if (scope.profileId) {
             where.orWhere(`${alias}.owner_id = :permissionProfileId`);
@@ -303,7 +306,10 @@ export async function updatePerms(
     });
 }
 
+/** Read entity identifiers whose stored direct grant contains all requested bits. */
 export async function getIds(entityType: CombEntityType, profileId: string, mask: number = 0): Promise<Array<string>> {
+    // Keep the zero-mask query meaningful: it still selects only this profile's
+    // stored grant rows, rather than discovering additional roots or default grants.
     const repo = AppDataSource.getRepository(ACL);
     const ids = await repo.createQueryBuilder("e")
         .where('(e.perms & :mask) = :mask', {mask})

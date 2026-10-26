@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; security reviewers; advanced documentation contributors
 owner: permission-system maintainers
 status: current
-last-verified: 2026-10-25
+last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: P11 source-owner and Help-link reconciliation; existing domain behavior and decisions retained; no new execution claim
+verification-scope: approved R3/R4 administration search owner reconciliation; existing grant and selection semantics retained
 source-anchors: src/types/EntityPropertyTypes.d.ts; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/frontend-core.spec.ts; src/backend/controller/entityAdminController.ts; src/backend/modules/database/services/UserService.ts; src/backend/modules/lib/permissions.ts; src/backend/modules/permissionEngine.ts; src/types/PermissionTypes.d.ts; src/backend/middleware/permissionMiddleware.ts; src/backend/modules/database/services/EntityAdminService.ts; src/backend/modules/database/entities/permissions/EntityPermissions.ts; src/backend/modules/database/entities/permissions/EntityAdminAssignment.ts; src/frontend/components/EntityAccessEditor.vue; src/backend/routes/api/v1/
 next-review: D12,D14
 -->
@@ -98,7 +98,10 @@ Authoritative archival does not revoke existing access or create a read-only mod
 
 The UI calls these rows **Administrators**, but the row itself is only a profile-specific grant source. It does not imply `ACCESS_ADMIN`, `MANAGE_PERMISSIONS`, or any other capability. A zero-mask row still exists and can make the entity appear in **Administrable entities** because managed-entity discovery can query assignment presence with mask zero.
 
-The administrator picker uses `searchUsersSecure`, which inner-joins `Profile.user`; the current UI can select full-account profiles, not guest-only profiles.
+The administrator picker uses `entityAdminController.searchEntityProfiles` and its shared `searchUsers` policy.
+`UserService.queryUserProfiles` retains the `Profile.user` inner join, while the controller owns query admission,
+limits and masked display projection. The current picker selects full-account profiles; guest-only profiles remain
+outside that existing search.
 
 ## Generated permission-bit reference
 

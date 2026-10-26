@@ -94,7 +94,7 @@ async function prepareApplicationListener(rendererReady: Promise<void>): Promise
     // sessions and persistence remain intact, including native partial failures.
     vi.spyOn(mailer, 'sendMigrationEmail').mockResolvedValue();
     vi.spyOn(mailer, 'sendDeletionEmail').mockResolvedValue();
-    const application = (await vi.importActual<typeof import('../../src/backend/app')>('../../src/app')).default;
+    const application = (await vi.importActual<typeof import('../../src/backend/app')>('../../src/backend/app')).default;
     // Module preparation is independent of persistence. Its failure must prevent
     // HTTP readiness while the shared hook still awaits both preparation branches.
     await rendererReady;

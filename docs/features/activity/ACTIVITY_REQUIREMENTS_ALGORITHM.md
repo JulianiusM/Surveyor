@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; advanced activity-plan contributors
 owner: activity-plan maintainers
 status: current
-last-verified: 2026-10-25
+last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: P11 source-owner and Help-link reconciliation; existing domain behavior and decisions retained; no new execution claim
-source-anchors: src/types/ActivityTypes.d.ts; src/backend/modules/database/services/ActivityService.ts; tests/unit/activity-linked-recommendations.spec.ts; tests/integration/activity-plan-interlinking.spec.ts; tests/e2e/frontend-activity-advanced.spec.ts; src/common/activity/requirements.ts; src/backend/modules/activity/availability.ts; src/backend/modules/activity/fairAssignment.ts; src/backend/modules/activity/autoAssignment.ts; src/backend/modules/activity/recommendations.ts; src/backend/modules/activity/recommendationJobs.ts; src/backend/modules/database/services/ActivityRequirementService.ts; src/backend/modules/database/services/ActivityRecommendationService.ts; src/backend/controller/activityController.ts; tests/unit/activity-requirements.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/frontend/features/activity/; src/backend/routes/api/v1/activity.ts
+verification-scope: approved R3 Activity business/DBAL owner separation reconciled; existing algorithm behavior and decisions retained
+source-anchors: src/types/ActivityTypes.d.ts; src/backend/modules/database/services/ActivityService.ts; tests/unit/activity-linked-recommendations.spec.ts; tests/integration/activity-plan-interlinking.spec.ts; tests/e2e/frontend-activity-advanced.spec.ts; src/common/activity/requirements.ts; src/backend/modules/activity/context.ts; src/backend/modules/activity/requirementOperations.ts; src/backend/modules/activity/warningOperations.ts; src/backend/modules/activity/recommendationPersistence.ts; src/backend/modules/activity/recommendationExecution.ts; src/backend/modules/activity/recommendationOperations.ts; src/backend/modules/activity/availability.ts; src/backend/modules/activity/fairAssignment.ts; src/backend/modules/activity/autoAssignment.ts; src/backend/modules/activity/recommendations.ts; src/backend/modules/activity/recommendationJobs.ts; src/backend/modules/database/services/ActivityRequirementService.ts; src/backend/modules/database/services/ActivityRecommendationService.ts; src/backend/controller/activityController.ts; tests/unit/activity-requirements.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/frontend/features/activity/; src/backend/routes/api/v1/activity.ts
 next-review: implementation-change,D14
 -->
 
@@ -21,8 +21,11 @@ The implementation has four cooperating layers:
 
 1. `requirements.ts` calculates participant requirements, live coverage, hypothetical open-role coverage, and baseline suggestions.
 2. `fairAssignment.ts` proposes fair default-role assignments and permitted reassignments.
-3. `recommendationJobs.ts` runs generation through a bounded, coalescing job queue and rejects stale results.
-4. The controller and recommendation service persist review state, validate operations again, apply approved changes, and preserve rejection and audit history.
+3. `recommendationJobs.ts` runs the bounded, coalescing queue and rejects stale results; `recommendationExecution.ts` supplies its generation/context and guarded persistence callbacks.
+4. The requirement, warning and recommendation business modules validate and coordinate review/application. Database services own the queries, transactions and writes that preserve review, rejection and audit history.
+
+The controller retains request admission and delegates cohesive operations to these modules. Shared context and pure
+calculations sit below the business operations; none of those modules imports the controller.
 
 The browser imports the same pure requirement module used by the server. Unsaved requirement edits therefore use the same precedence and coverage calculations as persisted settings. The browser preview does not save anything; the organizer must explicitly save the requirement settings.
 
@@ -393,11 +396,17 @@ A change to this subsystem should review all of the following together:
 - Requirement and baseline calculations: `src/common/activity/requirements.ts`
 - Availability and warning rules: `src/backend/modules/activity/availability.ts`
 - Fair recommendation algorithm: `src/backend/modules/activity/fairAssignment.ts`
-- Context assembly: `src/backend/modules/activity/autoAssignment.ts`
+- Participant and linked-plan context: `src/backend/modules/activity/context.ts`
+- Algorithm input assembly and guarded recommendation writes: `src/backend/modules/activity/recommendationPersistence.ts`
+- Participant merging: `src/backend/modules/activity/autoAssignment.ts`
+- Requirement decoding/analysis and commands: `src/backend/modules/activity/requirementOperations.ts`
+- Warning admission and private projection: `src/backend/modules/activity/warningOperations.ts`
 - Batch warning calculation: `src/backend/modules/activity/recommendations.ts`
 - Job coordination: `src/backend/modules/activity/recommendationJobs.ts`
-- Requirement persistence: `src/backend/modules/database/services/ActivityRequirementService.ts`
-- Recommendation persistence: `src/backend/modules/database/services/ActivityRecommendationService.ts`
+- Generation/job integration: `src/backend/modules/activity/recommendationExecution.ts`
+- Recommendation review/application commands: `src/backend/modules/activity/recommendationOperations.ts`
+- Requirement DBAL: `src/backend/modules/database/services/ActivityRequirementService.ts`
+- Recommendation DBAL: `src/backend/modules/database/services/ActivityRecommendationService.ts`
 - Controller orchestration: `src/backend/controller/activityController.ts`
 - Browser requirement workflow: `src/frontend/features/activity/ActivityRequirements.vue`
 - Browser recommendation workflow: `src/frontend/features/activity/ActivityRecommendations.vue`

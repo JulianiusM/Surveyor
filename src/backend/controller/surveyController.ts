@@ -102,10 +102,13 @@ function preprocessCreate(body: any): Partial<Survey> & { combinations: Partial<
     };
 }
 
+/** Persist the preprocessed standalone Survey and its recurring combinations together. */
 async function createEntity(
     ownerId: string,
     p: Partial<Survey> & { combinations: Partial<SurveyCombination>[] },
 ) {
+    // Translate the controller's nthWeek spelling into the existing DBAL input;
+    // the service owns related inserts and no Event association is introduced here.
     return surveyService.createSurveyTx(
         ownerId,
         p.title!,

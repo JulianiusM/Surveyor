@@ -40,9 +40,12 @@ export class EventRegistrationDietary extends NumericBase {
     @JoinColumn([{name: "registration_id", referencedColumnName: "id"}])
     registration!: EventRegistration;
 
+    /** Normalize a non-null dietary enum before persistence and reject unknown choices. */
     @BeforeInsert()
     @BeforeUpdate()
     private normalizeChoice() {
+        // Keep free-form additional information separate; only the enum spelling
+        // is canonicalized by this storage hook.
         const v = this.choice;
         if (v != null) {
             const up = String(v).toUpperCase() as DIETARY;

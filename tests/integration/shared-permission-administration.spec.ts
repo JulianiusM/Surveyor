@@ -176,4 +176,34 @@ describe('shared permission administration through actual feature controllers', 
             .rejects.toBe(failure);
         expect(await adminService.getDefaultPerms('drivers', id)).toEqual(savedDefaults);
     });
+
+    it.each(features)('%s preserves root and profile spelling through absent, zero and removal administrator commands', async type => {
+        const id = await fixture(type);
+        const upperId = id.toUpperCase();
+        const upperProfileId = target.id.toUpperCase();
+        const session = actor(owner);
+        const absent = await readAdmin(type, id, target.id, session);
+        const upperAbsent = await readAdmin(type, upperId, upperProfileId, session);
+
+        // The root scope and persistence lookup are separate contracts. New-grant
+        // evidence contains no target ID, but keeps the feature's original root spelling.
+        const canonicalRoot = type === 'packing' || type === 'drivers';
+        expect(upperAbsent.editToken === absent.editToken).toBe(canonicalRoot || upperId === id);
+        await setAdmin(type, upperId, upperProfileId, 0, session, upperAbsent.editToken);
+        expect((await adminService.getAdminGrant(type, id, target.id))?.perms).toBe(0);
+
+        const zeroUpperProfile = await readAdmin(type, upperId, upperProfileId, session);
+        const zeroOriginalRoot = await readAdmin(type, id, upperProfileId, session);
+        expect(zeroUpperProfile.editToken === zeroOriginalRoot.editToken).toBe(canonicalRoot || upperId === id);
+        const zeroOriginalProfile = await readAdmin(type, upperId, target.id, session);
+        if (upperProfileId !== target.id) {
+            // Existing-grant evidence retains the requested profile spelling even
+            // when the database lookup resolved the same canonical profile row.
+            expect(zeroUpperProfile.editToken).not.toBe(zeroOriginalProfile.editToken);
+            await expect(setAdmin(type, upperId, upperProfileId, null, session, zeroOriginalProfile.editToken))
+                .rejects.toMatchObject({status: 412});
+        }
+        await setAdmin(type, upperId, upperProfileId, null, session, zeroUpperProfile.editToken);
+        expect(await adminService.getAdminGrant(type, id, target.id)).toBeNull();
+    });
 });

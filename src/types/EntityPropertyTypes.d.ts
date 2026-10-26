@@ -65,3 +65,14 @@ export interface EntityCommandHost {
     begin(control: HTMLButtonElement): EntityCommand | null;
     reportError(control: Element, error: unknown): void;
 }
+/** Compare under a stored resource identity while retaining the caller's original query/write identifier. */
+export interface EntityDefaultReviewOptions {
+    comparisonId?: string;
+    prepareToken?: () => Promise<string>;
+}
+
+/** Preserve the feature's original identifier spelling and profile/review validation order independently. */
+export interface EntityAdministratorReviewOptions {
+    comparisonId?: string;
+    reviewOrder?: 'profile-first' | 'review-first';
+}
