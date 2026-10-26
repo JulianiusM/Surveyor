@@ -1127,8 +1127,8 @@ export async function deleteDriversItem(id: string, itemId: string, session: Ses
 }
 
 /** Review one complete stored order under the exclusive root/item locks.
- * That root lock coordinates creation/removal and direct assignment consumers;
- * the direct reorder adapter retains its independent partial-order contract. */
+ * Versioned item/membership writers use the same root-first path. Legacy direct
+ * assignment keeps its separate lock order; direct reorder keeps its partial-order contract. */
 export async function reorderDriversItems(
     id: string,
     body: components['schemas']['DriversItemOrder'],

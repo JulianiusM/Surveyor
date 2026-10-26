@@ -1003,7 +1003,7 @@ export function readPackingCreateContext(session: SessionLike): components['sche
     return packingFormContext();
 }
 
-/** A multipart creation is one command: all rows/defaults commit together, never a half-created image step. */
+/** Commit the initial database rows/defaults together; request-image cleanup remains with the HTTP owner. */
 export async function createPackingList(
     body: components['schemas']['PackingCreateInput'],
     file: Express.Multer.File | undefined,

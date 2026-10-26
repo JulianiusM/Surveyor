@@ -9,7 +9,8 @@ import {prepareValidatedJson} from './transport';
 import * as userService from '../database/services/UserService';
 import {readFrontendSessionMetadata, sameFrontendSessionIdentity} from '../lib/frontendSession';
 import {readStoredSession} from '../lib/session';
-import {ApiProblem, requestLocale} from './problem';
+import {ApiProblem} from './problem';
+import {requestLocale} from '../lib/http';
 import settings from '../settings';
 import {compatibleApiClient, deploymentView} from './deployment';
 

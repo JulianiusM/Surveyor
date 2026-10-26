@@ -4,7 +4,7 @@ import type {NextFunction, Request, Response} from 'express';
 // declaration; this erased import keeps its standalone test compilation complete.
 import type {} from 'express-flash';
 import {searchLimiter} from '../../src/backend/middleware/adminApiFactory';
-import {classifyApiError, handleApiProblem, isVersionedApiRequest} from '../../src/backend/modules/api/problem';
+import {classifyApiError, handleApiProblem} from '../../src/backend/modules/api/problem';
 import {contractValidator} from '../../src/backend/modules/api/contracts';
 import {APIError} from '../../src/backend/modules/lib/errors';
 
@@ -92,12 +92,7 @@ describe('shared versioned administrator search rate limit', () => {
         }
     });
 
-    it('owns an exact v1 path boundary and classifies only recognized 429 error types', () => {
-        expect(isVersionedApiRequest(request('198.51.100.32', '/api/v1?hint=1'))).toBe(true);
-        expect(isVersionedApiRequest(request('198.51.100.32', '/api/v1/profiles'))).toBe(true);
-        for (const path of ['/api/v10/profiles', '/api/v1-other', '/api/packing/search?returnTo=/api/v1']) {
-            expect(isVersionedApiRequest(request('198.51.100.32', path))).toBe(false);
-        }
+    it('classifies only recognized 429 error types', () => {
         expect(classifyApiError(new APIError('Private limiter details', {}, 429))).toMatchObject({code: 'RATE_LIMITED', status: 429});
         expect(classifyApiError({status: 429, message: 'Untrusted shape'})).toMatchObject({code: 'INTERNAL_ERROR', status: 500});
     });

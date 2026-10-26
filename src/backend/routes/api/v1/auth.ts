@@ -1,11 +1,5 @@
 import {Router, type Request, type Response} from 'express';
 import * as userController from '../../../controller/userController';
-import {createGuestFlowGuestRouter} from '../../../middleware/guestFlowFactory';
-import {packingFlow} from '../../packingFlow';
-import {driversFlow} from '../../driversFlow';
-import {surveyFlow} from '../../surveyFlow';
-import {activityFlow} from '../../activityFlow';
-import {eventFlow} from '../../eventFlow';
 import {ApiProblem} from '../../../modules/api/problem';
 import {committedSessionView, prepareAccountRegistrationReplies, prepareIdentityReply, requireApiContext} from '../../../modules/api/session';
 import {prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
@@ -269,13 +263,5 @@ router.post('/profiles', asyncHandler(async function createIdentityProfile(req, 
     await userController.createProfile(req.body, user.id);
     sendPreparedJson(req, res, reply);
 }));
-
-// Retain the original identity-router order and error boundary. The configured
-// factory creates each endpoint and owns completion; these are only explicit mounts.
-router.use('/packing-lists', createGuestFlowGuestRouter(packingFlow));
-router.use('/drivers-lists', createGuestFlowGuestRouter(driversFlow));
-router.use('/surveys', createGuestFlowGuestRouter(surveyFlow));
-router.use('/activity-plans', createGuestFlowGuestRouter(activityFlow));
-router.use('/events', createGuestFlowGuestRouter(eventFlow));
 
 export default router;

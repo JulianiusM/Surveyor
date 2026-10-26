@@ -1,7 +1,7 @@
 import {Router} from 'express';
 import type {components} from '../../../../types/api/v1';
 import * as eventApi from '../../../controller/eventController';
-import {createGuestFlowApiRouter} from '../../../middleware/guestFlowFactory';
+import {createGuestFlowApiRouter, createGuestFlowGuestRouter} from '../../../middleware/guestFlowFactory';
 import {eventFlow} from '../../eventFlow';
 import {requireApiContext} from '../../../modules/api/session';
 import {prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
@@ -208,5 +208,7 @@ router.put('/:eventId/things-to-do/:entityType/:entityId/automatic-archive', asy
         String(req.params.entityId), req.body, actor, req.query.view as 'detail' | 'admin' | undefined);
     sendValidatedJson(req, res, 'setEventChildAutomaticArchival', 200, result);
 }));
+
+router.use(createGuestFlowGuestRouter(eventFlow));
 
 export default router;

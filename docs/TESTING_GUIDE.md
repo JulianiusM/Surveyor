@@ -39,6 +39,11 @@ uploads. These fixtures close their owned infrastructure. A mocked response alon
 that integration boundary. The [Development Policy](policies/DEVELOPMENT_POLICY.md#test-selection-and-evidence)
 owns this bounded classification; database-backed integration retains real ORM metadata and guarded schema setup.
 
+The API-routing fixture composes the actual API root, version selector and domain routers over Express/session
+HTTP. Anonymous reads and rejected inputs keep persistence outside the boundary; it checks protocol selection,
+early parser errors and generated admission without claiming authenticated workflows or database rollback.
+The isolated generic-error fixture separately exercises last-resort delivery when API projection or localization fails.
+
 The test file suffix is `*.spec.ts`. Runner configuration and the repository tree are the source of truth for inventory; do not hard-code test counts in documentation.
 
 ## Safety first

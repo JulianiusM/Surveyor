@@ -4,7 +4,7 @@ import {renderFrontend} from '../modules/frontendRenderer';
 import {createTranslator, isPlainMessageKey} from '../../common/localization/translator';
 import {ENTITIES} from '../modules/lib/util';
 import type {FrontendLandingQuickCreate} from '../../types/FrontendTypes';
-import {bootstrap} from './frontend';
+import {bootstrap} from '../middleware/frontendDocuments';
 
 const router = Router();
 

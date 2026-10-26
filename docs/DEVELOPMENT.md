@@ -155,6 +155,8 @@ src/backend/server.ts                      ordered process bootstrap
 src/backend/app.ts                         Express application and top-level route mounts
 src/backend/routes/                        canonical document routes and standalone output adapters
 src/backend/routes/api/v1/                 generated-contract feature API adapters
+src/backend/routes/api.ts                  API version selection and early-error dispatch
+src/backend/routes/api/v1.ts               version-specific domain composition
 src/backend/controller/                    request and response orchestration
 src/backend/middleware/                    shared request flows and authorization
 src/backend/modules/database/entities/     TypeORM entities
@@ -282,15 +284,20 @@ inside the module that owns them instead of exporting them merely to connect new
   admission, receipt-preparation and upload-ownership order. Domain routers add their distinct extensions.
 - Use `adminApiFactory` for the matching administrator, property, lifecycle and scoped profile-search routes;
   retain feature controller business operations and deliberate exceptions. Settings/default permissions and Event
-  metadata remain distinct handlers. The identity API mounts guest-registration subrouters before feature routers,
-  using the same domain flow configuration as document and core API routes. Guest failures reach the common API
-  problem handler without passing through feature-specific error handlers.
-- Keep shared document admission, bootstrap and error helpers in `src/backend/routes/frontend.ts`, without domain route registrations.
+  metadata remain distinct handlers. Each versioned entity domain mounts its guest-registration subrouter using the
+  same configuration as document/core routes. Mount it after a feature error adapter so identity errors retain the
+  common version error contract. The identity router must not import all entity configurations to compose their routes.
+- Keep shared document admission, bootstrap and error helpers in `src/backend/middleware/frontendDocuments.ts` and
+  header delivery in `entityHeaderDownloadHandler.ts`; shared middleware must not depend upward on route registries.
 - Declare client paths, lazy views and static metadata in the matching domain under `src/frontend/routes/`; its index composes the records with the catch-all last.
-- Mount versioned feature adapters in `src/backend/routes/api/v1.ts` and document routes in their existing domain modules.
-  `src/backend/app.ts` mounts the versioned API separately; each transport retains structured or document admission/errors.
+- Mount the API root at `/api` in `app.ts`; `routes/api.ts` owns version selection, and each version router composes
+  only its own domain routers. Keep endpoint implementations in those domain files. Wire early parser errors through
+  the same version inventory, with no version-specific dispatcher in the application root.
+  Document routes stay in their existing domain modules; each transport retains its admission/error boundary.
 
 - Keep middleware order visible in the route definition.
+- Reuse `modules/lib/http.requestLocale` for HTTP language negotiation. Generic last-resort delivery must remain
+  independent of generated API response validation, including when error projection or localization itself fails.
 - Wrap asynchronous request and parameter handlers with `asyncHandler` or `asyncParamHandler`.
 - Reuse the configured guest-flow entry composition and the feature controller's business operations from both
   document and versioned adapters.

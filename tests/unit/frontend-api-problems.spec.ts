@@ -1,6 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import type {NextFunction, Request, Response} from 'express';
-import {ApiProblem, handleApiProblem, requestLocale} from '../../src/backend/modules/api/problem';
+import {ApiProblem, handleApiProblem} from '../../src/backend/modules/api/problem';
+import {requestLocale} from '../../src/backend/modules/lib/http';
 import {contractValidator} from '../../src/backend/modules/api/contracts';
 import {createTranslator} from '../../src/common/localization/translator';
 import {ExpectedError, ValidationError} from '../../src/backend/modules/lib/errors';

@@ -320,8 +320,8 @@ establish authorization for those changes. At that rejection, shared-flow remedi
 the rejection, not approval of a replacement architecture or acceptance of the attempted implementation.
 
 The reiterated request restores the historical shared middleware responsibilities. All five domain configurations
-are consumed by `guestFlowFactory` for document and versioned core routes and by the identity API's guest-registration
-subrouters. `entityHeaderUpdateHandler`, `assignFlowFactory` and the four `adminApiFactory` composers create their
+are consumed by `guestFlowFactory` for document, versioned core and domain-owned guest-registration subrouters.
+`entityHeaderUpdateHandler`, `assignFlowFactory` and the four `adminApiFactory` composers create their
 matching current routes. Existing controller business/permission decisions,
 DBAL transactions, identity completion and feature-specific receipt/upload order remain their established owners.
 The rejected administration expansion is undone against its preceding source; its original deferred defect remains
@@ -333,6 +333,40 @@ The maintainer's additional baseline instruction identifies the last `ts-migrati
 owners with current safe-return and command lifecycles. The comparison distinguishes accepted Vue/versioned
 transport replacements from removed shared responsibilities; it does not reinstate retired native presentation
 or infer approval for controller business consolidation.
+
+The next maintainer correction rejects the completeness claim in `a985f0e`: application routing still skipped the
+API root, the version composer implemented Session/Help endpoints, and the identity router composed all entity
+guest routes. The direct instruction restores application → API root → version → domain ownership. Domain guest
+mounts now stay in their entity router, after Activity's feature error adapter where applicable. Shared document and
+header HTTP helpers move from route-named modules into actual middleware owners with direct imports; the unused
+document-hook declaration is removed. Early API errors use the same version registry as ordinary routing. Shared
+locale negotiation and last-resort HTTP delivery no longer depend on a versioned response validator.
+
+The subsequent independent review compares original backend function bodies, actual callers and responsibility
+boundaries with `3590f85`, then checks permitted deviations against pre-cutover `33dcf6f` policies and migration
+records. A phase label, current source, previous inventory review or agent-authored closure is not approval.
+Necessary Vue/JSON projections, generated decoding, coherent read snapshots and controller/DBAL completion hooks
+retain the existing business owners. Recorded exceptions remain narrow: Packing assignment lock order, bounded
+automatic archival locking, current-value comparisons and same-Event no-op, exact identity/session completion,
+specified Packing completion projections, explicit former-participant override removal, civil-date projections and
+bounded error causes. Deferred token/profile-finality, broad administrator and recommendation inference repairs
+remain deferred; this review does not reopen them.
+
+The maintainer's current instruction also permits retaining an existing change when independent review establishes
+a genuine improvement. The following retained differences use that authority; specific historical implementation
+approval was not recovered and is not inferred:
+
+| Retained difference | Independent technical reason and scope |
+|---|---|
+| Packing/Drivers creation transactions | Existing root/default writers share one DBAL transaction, avoiding a partially configured root after a defaults failure. Packing also joins its existing initial-item write; Drivers prepares its receipt before commit. Controller decisions remain in the original controller, and no filesystem or SMTP operation enters the transaction. Original direct callers retain their separate stages. |
+| Packing permission-write coordination | Existing ACL/default writers share the root lock used by versioned commands, preventing those grants from changing between locked admission and commit. Accepted masks and business decisions are unchanged. |
+| Four Activity role-dependent cascades | Existing plan/Event hard deletion can remove rows which cannot outlive their role, without another cleanup owner. No production standalone role-delete route exists; manual SQL role deletion consequently also deletes those dependent rows. General overrides without a role remain unaffected. |
+
+These are bounded source-review judgments, not universal finality or concurrency guarantees. Packing success
+serialization still follows commit; an ambiguous commit cannot establish image rollback. Existing financial/profile
+partial-failure behavior remains unchanged. Legacy direct Drivers assignment retains its separate item-first lock
+order; no active route using that mapping was found, and concurrent use with versioned root-first commands is not
+certified. No database execution is claimed for this independent review.
 
 The audit reproduced repository/private source and arbitrary dependency delivery through the development asset
 prefix. A single backend-owned public-file inventory now guards both development requests and the actual client

@@ -2,7 +2,8 @@ import {Router, type Request, type Response} from 'express';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {addNextQuery} from '../middleware/referrerUpdater';
 import {captureApiActor} from '../modules/api/session';
-import {classifyApiError, requestLocale, validatedProblemBody} from '../modules/api/problem';
+import {classifyApiError, validatedProblemBody} from '../modules/api/problem';
+import {requestLocale} from '../modules/lib/http';
 import {renderFrontend} from '../modules/frontendRenderer';
 import type {FrontendBootstrap, FrontendIdentityRedirect} from '../../types/FrontendTypes';
 import type {IdentityCompletionReceipt} from '../../types/IdentityTypes';
@@ -11,7 +12,7 @@ import {frontendIdentityPageEntry, frontendOverviewPageEntry, safeFrontendReturn
 import {persistSession} from '../modules/lib/session';
 import {ExpectedError} from '../modules/lib/errors';
 import settings from '../modules/settings';
-import {bootstrap, applyPageEntry, applyPresentationLocale, documentErrorStatus} from './frontend';
+import {bootstrap, applyPageEntry, applyPresentationLocale, documentErrorStatus} from '../middleware/frontendDocuments';
 
 const router = Router();
 

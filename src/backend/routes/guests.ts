@@ -5,7 +5,7 @@ import {renderFrontend} from '../modules/frontendRenderer';
 import type {IdentityCompletionReceipt} from '../../types/IdentityTypes';
 import * as userController from '../controller/userController';
 import {ExpectedError} from '../modules/lib/errors';
-import {bootstrap, applyPresentationLocale, flashPageNotice, frontendReturn} from './frontend';
+import {bootstrap, applyPresentationLocale, flashPageNotice, frontendReturn} from '../middleware/frontendDocuments';
 
 const router = Router();
 

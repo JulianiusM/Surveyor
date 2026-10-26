@@ -14,7 +14,7 @@ import {prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOpera
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import {createEntityAdminApiRouter, createEntityArchiveApiRouter, createEntityPropertyApiRouter,
     createUserSearchApiRouter} from '../../../middleware/adminApiFactory';
-import {createGuestFlowApiRouter} from '../../../middleware/guestFlowFactory';
+import {createGuestFlowApiRouter, createGuestFlowGuestRouter} from '../../../middleware/guestFlowFactory';
 import {activityFlow} from '../../activityFlow';
 import {createEntityHeaderUpdateRouter} from '../../../middleware/entityHeaderUpdateHandler';
 import {attachAssignRoleRoutes} from '../../../middleware/assignFlowFactory';
@@ -329,5 +329,10 @@ const activityConflict: ErrorRequestHandler = function activityConflict(error, _
         ? new ApiProblem('RESOURCE_CONFLICT') : error);
 };
 router.use(activityConflict);
+
+// Guest registration belongs to this domain but follows its business-error
+// adapter. Guest failures therefore reach the version's common Problem handler
+// without being reclassified as Activity command conflicts.
+router.use(createGuestFlowGuestRouter(activityFlow));
 
 export default router;

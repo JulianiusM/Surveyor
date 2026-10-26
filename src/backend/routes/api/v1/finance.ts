@@ -9,7 +9,8 @@ import invoiceController, {
     previewEventFinancePool, calculateEventFinancePool, rollbackEventFinancePool, notifyEventFinancePool, settleEventFinanceShare,
 } from '../../../controller/eventPoolController';
 import {requireApiContext} from '../../../modules/api/session';
-import {ApiProblem, declaredApiProblem, requestLocale} from '../../../modules/api/problem';
+import {ApiProblem, declaredApiProblem} from '../../../modules/api/problem';
+import {requestLocale} from '../../../modules/lib/http';
 import {
     decodeApiMultipartData, prepareValidatedJson, receiveApiUpload, sendPreparedJson,
     sendStoredApiBinary, sendValidatedJson, validateOperationRequest,

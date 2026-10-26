@@ -1,12 +1,12 @@
 import {Router, type Request, type Response} from 'express';
 import {asyncHandler} from '../modules/lib/asyncHandler';
-import {requestLocale} from '../modules/api/problem';
+import {requestLocale} from '../modules/lib/http';
 import {createTranslator} from '../../common/localization/translator';
 import {renderFrontend} from '../modules/frontendRenderer';
 import {fetchHelpDoc, fetchHelpIndex, fetchHelpSearch, resolveHelpAssetSource} from '../controller/helpController';
 import {ExpectedError} from '../modules/lib/errors';
 import {resolveFrontendHelpQuery} from '../../common/lib/helpNavigation';
-import {bootstrap} from './frontend';
+import {bootstrap} from '../middleware/frontendDocuments';
 
 const router = Router();
 

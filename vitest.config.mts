@@ -34,6 +34,7 @@ process.env.TZ = 'UTC';
 // Genuine server-component integration without persistence belongs to the
 // database-free project only. One inventory drives both project selections.
 const databaseFreeIntegrationFiles = [
+    'tests/integration/api-routing.spec.ts',
     'tests/integration/frontend-development-runtime.spec.ts',
     'tests/integration/frontend-session-admission.spec.ts',
     'tests/integration/shared-entity-routing.spec.ts',

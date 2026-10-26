@@ -3253,8 +3253,8 @@ implementation_defects:
       attempted resolution do not establish approval or closure. At that rejection, shared-flow remediation remained
       outstanding; the record grants no replacement architecture approval.
     current_remediation_2026_10_26: The reiterated request restores guestFlowFactory as the actual common document,
-      versioned core and guest-registration route owner through the same five domain configurations; the identity API
-      mounts the guest-registration subrouters. Header mutation, self-assignment and the four administration transport
+      versioned core and guest-registration route owner through the same five domain configurations; each entity domain
+      mounts its guest-registration subrouter. Header mutation, self-assignment and the four administration transport
       composers are restored with their existing controller/DBAL hooks. Misplaced guest/create helpers are removed
       from entityAdminController; account admission returns to userController. Feature business operations and their
       permission, transaction, identity, receipt and upload lifecycles retain their preceding behavior. Final scoped
@@ -3263,13 +3263,37 @@ implementation_defects:
       3590f85ffca4a933679f8393bf3d6bbbc3258650. Comparison also restores referrerUpdater at its original login,
       registration and logout callers and shared Packing/Drivers list-action orchestration. Retired native rendering
       and transport wrappers are distinguished from lost shared responsibilities; existing domain owners remain intact.
-    verification_2026_10_26: Root and independent nonauthor source reviews cover actual factory adoption, feature
+    historical_verification_a985f0e: Root and independent nonauthor source reviews cover actual factory adoption, feature
       exceptions, controller/DBAL ownership, identity and upload/receipt lifecycles, public serving and the baseline
       module inventory. Focused admission, real server-component routing/session/development-runtime fixtures, mounted
       list-command journeys and isolated return-navigation checks pass. Server, frontend and test typechecking, the
       full application build, development-policy check and whitespace check pass. No database-backed or E2E suite was
       run for this restoration. This scoped defect disposition records completed work under the direct request;
       it does not accept the rejected attempt or authorize the separately deferred IMP-070 controller refactor.
+    routing_review_rejection_2026_10_26: The maintainer rejects the subsequent completeness claim because app.ts still
+      skips the API root/version selection layer. The earlier inventory and passing checks missed that defect and
+      the identity router's cross-domain guest composition; they are historical evidence, not full architecture acceptance.
+    layered_restoration_2026_10_26: Application routing now mounts the API root, which selects the version before its
+      domain composer. Session/locale and Help implementations have version-specific domain owners; each entity
+      composes its own shared guest routes. Shared document/header delivery helpers move from routes into middleware,
+      request locale has a shared HTTP owner, common fallback delivery is independent of v1 validation, and Event
+      deletion again uses its original controller entry. The unused document-hook declaration is removed.
+    independent_backend_review_2026_10_26: Fresh function/caller review against 3590f85 and pre-cutover 33dcf6f separates
+      necessary frontend adapters, proven bounded exceptions and independently justified retained improvements.
+      DEC-006 records creation atomicity, Packing ACL coordination and Activity role cascades with unknown historical
+      approval distinguished from current retain authority, including their effects and limits. Deferred IMP-070 and
+      other excluded backend remedies remain deferred; no blanket finality, concurrency or persistence-test claim is made.
+    layered_verification_2026_10_26: Independent nonauthor review after routing restoration checks actual root/version/
+      domain composition, factory internals and configurations, shared HTTP owners, controller/DBAL boundaries,
+      session/file/receipt lifecycles, build separation and public serving. Focused real HTTP routing and isolated
+      error-delivery checks pass, as do retained admission/factory/limiter checks, server/frontend/test typechecking,
+      the full build, development-policy check and whitespace check. The advisory documentation report has only its
+      unregistered source-fingerprint finding. No database-backed, E2E or deployment validation was run. This records
+      completed scoped restoration and its limits, not maintainer acceptance or authority for other backend remedies.
+    inherited_review_limits_2026_10_26: Three type forwarding exports in activity/availability.ts,
+      activity/recommendations.ts and database/services/ActivityRecommendationService.ts match the original backend
+      baseline; they are inherited declaration debt rather than migration damage. Private stored-file alias targeting
+      remains recorded once under OPSV-004. These findings do not establish a new runtime defect or authorize a repair.
 findings:
   - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
     status: closed
@@ -3969,7 +3993,7 @@ findings:
       - src/backend/modules/lib/fileCommons.ts
       - src/backend/modules/invoice/retention.ts
       - src/backend/modules/settings.ts
-      - src/backend/routes/outputs.ts
+      - src/backend/middleware/entityHeaderDownloadHandler.ts
       - src/backend/modules/api/transport.ts
     deficiency: The release symlink layout and write permissions for header images and invoice proofs have not been
       exercised through restart, release switch, and retention processing. The historical module audit also observes

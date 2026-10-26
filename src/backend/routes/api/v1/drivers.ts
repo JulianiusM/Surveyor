@@ -9,7 +9,7 @@ import {Router, type Request, type Response} from 'express';
 import type {components} from '../../../../types/api/v1';
 import type {ApiOperationId, ApiResponseBody, ApiSuccessStatus, PreparedApiJsonResponse} from '../../../../types/ApiTransportTypes';
 import * as driversApi from '../../../controller/driversController';
-import {createGuestFlowApiRouter} from '../../../middleware/guestFlowFactory';
+import {createGuestFlowApiRouter, createGuestFlowGuestRouter} from '../../../middleware/guestFlowFactory';
 import {driversFlow} from '../../driversFlow';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import {requireApiContext} from '../../../modules/api/session';
@@ -233,5 +233,7 @@ createEntityArchiveApiRouter<'drivers'>(router, {
     restore: {operation: 'restoreDriversList', requireProfile: true, delivery: 'controller',
         async execute({id, actor}, prepare) { await driversApi.setDriversArchived(id, false, actor, prepare); }},
 });
+
+router.use(createGuestFlowGuestRouter(driversFlow));
 
 export default router;

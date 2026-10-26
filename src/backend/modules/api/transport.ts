@@ -3,7 +3,8 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import type {ApiOperationId, ApiSuccessStatus, ApiResponseBody, PreparedApiJsonResponse} from '../../../types/ApiTransportTypes';
 import {contractValidator, operationContract} from './contracts';
-import {ApiProblem, requestLocale} from './problem';
+import {ApiProblem} from './problem';
+import {requestLocale} from '../lib/http';
 import type {ErrorObject} from 'ajv';
 import {fieldDiagnostic} from '../../../common/localization/inputValidation';
 

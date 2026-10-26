@@ -1,9 +1,10 @@
 import {randomUUID} from 'node:crypto';
-import type {ErrorRequestHandler, Request} from 'express';
+import type {ErrorRequestHandler} from 'express';
 import type {components} from '../../../types/api/v1';
 import type {ApiProblemCode, ApiProblemParameters, ApiProblemArguments} from '../../../types/ApiTypes';
 import {APIError, ExpectedError, ValidationError} from '../lib/errors';
-import {createTranslator, resolveLocale, resolvePreferredLocale} from '../../../common/localization/translator';
+import {createTranslator} from '../../../common/localization/translator';
+import {requestLocale} from '../lib/http';
 import {apiContract, contractValidator, problemContract} from './contracts';
 import {formatFieldDiagnostic} from '../../../common/localization/inputValidation';
 
@@ -26,26 +27,6 @@ export class ApiProblem extends APIError {
 function translateProblem(key: string, params: unknown, locale: string): string {
     const translator = createTranslator(locale).t as (messageKey: string, values: unknown) => string;
     return translator(key, params);
-}
-
-/** Resolve response language through the shared catalog policy: explicit header,
- * then cookie, then quality-ordered accepted languages. Negotiation never changes
- * the captured actor or grants authority to any localized presentation. */
-export function requestLocale(req: Request): string {
-    const explicitLocale = req.get('X-Surveyor-Locale') ?? req.cookies?.surveyor_locale;
-    if (explicitLocale !== undefined && explicitLocale !== null) return resolveLocale(explicitLocale);
-
-    // Express orders accepted ranges by quality. Preserve that order and skip unsupported/invalid
-    // hints before choosing the application fallback; explicit header/cookie choices stay authoritative.
-    const languages = req.acceptsLanguages();
-    return resolvePreferredLocale(languages || []);
-}
-
-/** Mounted routers see a shortened req.path. Keep the protocol boundary owned
- * here and inspect the original path, excluding its optional query string. */
-export function isVersionedApiRequest(req: Request): boolean {
-    const requestPath = req.originalUrl?.split('?', 1)[0] || req.path;
-    return requestPath === '/api/v1' || requestPath.startsWith('/api/v1/');
 }
 
 /** Preserve an explicitly annotated controller rejection through the authored API

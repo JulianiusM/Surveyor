@@ -1345,7 +1345,9 @@ export async function removeEvent(id: string, session: SessionLike) {
     const profileId = requireSessionProfileId(session);
     const event = requireEvent(await eventService.getEventById(id));
     if (event.ownerId !== profileId) throw new ApiProblem('FORBIDDEN');
-    await eventService.deleteEvent(id);
+    // Reuse the original deletion operation after this adapter's owner check;
+    // header cleanup retains its established position after record deletion.
+    await deleteEntity(event, session as Request['session']);
     if (event.headerImg) removeImage(event.headerImg);
     return {changed: true};
 }

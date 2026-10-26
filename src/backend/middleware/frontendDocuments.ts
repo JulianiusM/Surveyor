@@ -1,7 +1,10 @@
+// Shared document admission and response preparation belong to middleware;
+// domain routers and composed entity middleware consume this same implementation.
 import type {NextFunction, Request, Response} from 'express';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {captureApiActor, sessionView} from '../modules/api/session';
-import {ApiProblem, classifyApiError, requestLocale, validatedProblemBody} from '../modules/api/problem';
+import {ApiProblem, classifyApiError, validatedProblemBody} from '../modules/api/problem';
+import {requestLocale} from '../modules/lib/http';
 import {isPlainMessageKey, localeManifest} from '../../common/localization/translator';
 import {renderFrontend} from '../modules/frontendRenderer';
 import type {FrontendBootstrap} from '../../types/FrontendTypes';

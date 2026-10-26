@@ -27,7 +27,7 @@ import settings from './modules/settings';
 import {frontendDevelopmentMiddleware} from './modules/frontendDevelopment';
 import {createFrontendAssets} from './modules/frontendAssets';
 import {createPublicAssets} from './modules/publicAssets';
-import apiV1Router from './routes/api/v1';
+import apiRouter, {handleApiError} from './routes/api';
 import indexRouter from './routes';
 import usersRouter from './routes/users';
 import surveyRouter from './routes/survey';
@@ -37,8 +37,8 @@ import driversRouter from './routes/drivers';
 import eventRouter from './routes/event';
 import helpRouter from './routes/help';
 import guestsRouter from './routes/guests';
-import {admitFrontendDocument, renderFrontendError} from './routes/frontend';
-import {ApiProblem, handleApiProblem, isVersionedApiRequest} from './modules/api/problem';
+import {admitFrontendDocument, renderFrontendError} from './middleware/frontendDocuments';
+import {APIError} from './modules/lib/errors';
 
 const app = express();
 app.disable("x-powered-by");
@@ -88,7 +88,7 @@ app.use(flash());
 
 // The API owns structured expiry/errors; document admission uses the same actor
 // owner before the domain routers without adding a second session lifecycle.
-app.use('/api/v1', apiV1Router);
+app.use('/api', apiRouter);
 app.get('/healthz', (_req, res) => res.status(200).send('ok'));
 
 // Admit documents once before the established domain branches. Each router owns
@@ -106,15 +106,12 @@ app.use('/guest', guestsRouter);
 
 // catch 404 and forward to error handler
 app.use(function (req: Request, res: Response, next: NextFunction) {
-    next(new ApiProblem('NOT_FOUND'));
+    next(new APIError('Not found', {}, 404));
 });
 
 // error handler
 // JSON parsing can fail before a request reaches the router or even the session middleware.
-app.use(function routeApiParsingError(error: unknown, req: Request, res: Response, next: NextFunction) {
-    if (isVersionedApiRequest(req)) return handleApiProblem(error, req, res, next);
-    next(error);
-});
+app.use('/api', handleApiError);
 app.use(renderFrontendError);
 app.use(handleGenericError);
 

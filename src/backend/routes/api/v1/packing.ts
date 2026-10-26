@@ -7,7 +7,7 @@
 
 import {Router} from 'express';
 import * as packingApi from '../../../controller/packingController';
-import {createGuestFlowApiRouter} from '../../../middleware/guestFlowFactory';
+import {createGuestFlowApiRouter, createGuestFlowGuestRouter} from '../../../middleware/guestFlowFactory';
 import {packingFlow} from '../../packingFlow';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import {requireApiContext} from '../../../modules/api/session';
@@ -183,5 +183,9 @@ createEntityArchiveApiRouter<'packing'>(router, {
     restore: {operation: 'restorePackingList', requireProfile: true, delivery: 'result',
         async execute({id, actor}) { return {data: await packingApi.setPackingArchived(id, false, actor)}; }},
 });
+
+// The entity domain owns guest route composition; the shared factory retains
+// identity completion and the version router retains its common error contract.
+router.use(createGuestFlowGuestRouter(packingFlow));
 
 export default router;

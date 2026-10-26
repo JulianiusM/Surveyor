@@ -7,7 +7,7 @@
 
 import {Router, type Request, type Response} from 'express';
 import * as surveyApi from '../../../controller/surveyController';
-import {createGuestFlowApiRouter} from '../../../middleware/guestFlowFactory';
+import {createGuestFlowApiRouter, createGuestFlowGuestRouter} from '../../../middleware/guestFlowFactory';
 import {surveyFlow} from '../../surveyFlow';
 import type {components} from '../../../../types/api/v1';
 import type {PreparedApiJsonResponse} from '../../../../types/ApiTransportTypes';
@@ -83,5 +83,7 @@ createEntityArchiveApiRouter<'survey'>(router, {
     restore: {operation: 'restoreSurvey', requireProfile: true, delivery: 'controller',
         async execute({id, actor}, prepare) { await surveyApi.setSurveyArchived(id, false, actor, prepare); }},
 });
+
+router.use(createGuestFlowGuestRouter(surveyFlow));
 
 export default router;

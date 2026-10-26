@@ -3,7 +3,7 @@ import {renderFrontend} from '../modules/frontendRenderer';
 import {ExpectedError} from '../modules/lib/errors';
 import {createGuestFlowHeaderRouter, createGuestFlowRouter} from '../middleware/guestFlowFactory';
 import {packingFlow} from './packingFlow';
-import {bootstrap} from './frontend';
+import {bootstrap} from '../middleware/frontendDocuments';
 
 const router = createGuestFlowRouter(packingFlow);
 

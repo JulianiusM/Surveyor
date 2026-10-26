@@ -1,3 +1,4 @@
+// Controller-admitted header delivery is reusable HTTP middleware, not a route registry.
 import type {RequestHandler} from 'express';
 import fs from 'node:fs/promises';
 import path from 'node:path';

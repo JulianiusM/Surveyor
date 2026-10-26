@@ -125,15 +125,27 @@ The explicit document router and versioned API expose these public route familie
 /guest     guest recovery and guest-account actions
 ```
 
-Feature routers are not auto-discovered. Versioned adapters are mounted by `src/backend/routes/api/v1.ts`.
+Feature routers are not auto-discovered. `src/backend/app.ts` mounts the API root at `/api`.
+`src/backend/routes/api.ts` selects the version, and `src/backend/routes/api/v1.ts` composes that version's domain
+routers. Session/locale, Help and each feature implement endpoints in their own version-specific files.
+The API root uses one version inventory for ordinary routing and errors raised before routing, such as malformed
+JSON. Unknown versions retain the application's existing missing-route behavior; they are not interpreted as v1.
+
+```text
+app.ts
+  /api → routes/api.ts
+           /v1 → routes/api/v1.ts → routes/api/v1/{domain}.ts
+  /packing, /drivers, … → routes/{domain}.ts
+```
+
 `src/backend/app.ts` mounts the domain routers explicitly. Each domain owns its document routes, parameter loaders and
 exports, configuring `guestFlowFactory` for common entity routes and adding its distinct outputs. Matching document,
 versioned API and guest-registration routers consume the same domain flow configuration.
-The versioned identity router mounts guest-registration subrouters before the feature API mounts. Their errors reach
-the common API problem handler without entering feature-specific error handlers. Event's finance router remains
-nested in its feature API router.
-`src/backend/routes/frontend.ts` contains shared admission, bootstrap, feedback and error helpers, without route
-registrations; `src/backend/routes/outputs.ts` shares authorized header-file delivery. Specific creation and capability
+Each entity's versioned domain router also mounts its guest-registration subrouter. Activity mounts it after the
+feature conflict adapter, so guest errors reach the common version error handler. The identity router contains no
+entity router registrations. Event's finance router remains nested in its feature API router.
+`src/backend/middleware/frontendDocuments.ts` owns shared admission, bootstrap, feedback and document error helpers;
+`src/backend/middleware/entityHeaderDownloadHandler.ts` owns authorized header-file delivery. Specific creation and capability
 routes precede resource parameters, and the application 404 follows every domain mount.
 
 Client route records use the same domain organization under `src/frontend/routes/`. Its index composes those
@@ -169,6 +181,10 @@ upload-cleanup timing rather than imposing another transaction. Standalone image
 document output adapters. Surveys keep their distinct participation/ownership model without joining the general
 permission system. `entityAdminController` retains its administration, property, permission and archival duties;
 ordinary guest and creation workflow composition does not belong there.
+
+Shared HTTP language negotiation lives in `src/backend/modules/lib/http.ts`, independently of API wire contracts. The final
+generic error middleware uses bounded HTTP statuses and the shared catalog without calling a versioned response
+validator; a failed document/API projection therefore cannot repeat that failure in the last-resort delivery owner.
 
 `adminApiFactory` composes the existing administrator, property, archive/restore and scoped profile-search routes.
 Its typed callbacks invoke the existing feature operations, retaining their admission, comparison tokens and response
