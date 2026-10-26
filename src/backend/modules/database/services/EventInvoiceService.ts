@@ -365,11 +365,6 @@ export async function refreshPoolTotals(manager: EntityManager, poolId: string) 
     await poolRepo.save(pool);
 }
 
-export async function getParticipantPools(eventId: string, registrationId: number) {
-    const pools = await listPools(eventId);
-    return pools.filter((p) => p.status === "OPEN" && (p.assignAll || p.assignments.some((a) => a.registrationId === registrationId)));
-}
-
 export async function getPoolWithInvoices(poolId: string) {
     return loadPool(poolId);
 }

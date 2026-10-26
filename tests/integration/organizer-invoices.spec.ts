@@ -13,6 +13,7 @@ import {EventInvoice} from '../../src/backend/modules/database/entities/event/Ev
 import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
 import * as invoiceService from '../../src/backend/modules/database/services/EventInvoiceService';
 import * as eventService from '../../src/backend/modules/database/services/EventService';
+import {isParticipantSubmissionPool} from '../../src/backend/modules/invoice/state';
 import mailer from '../../src/backend/modules/email';
 import settings from '../../src/backend/modules/settings';
 import {createPermissionBundle} from '../factories/frontendCoreDynamicFactory';
@@ -142,7 +143,7 @@ describe('organizer invoice entries without event attendance', () => {
         expect(created.closedAt).toBeNull();
         expect(created.calculationSnapshot).toBeNull();
         expect(created.shares).toEqual([]);
-        expect(await invoiceService.getParticipantPools(event.id, firstId)).toEqual([]);
+        expect((await invoiceService.listPools(event.id)).filter(pool => isParticipantSubmissionPool(pool, firstId))).toEqual([]);
         // Submission stays disabled from the first persisted state; no OPEN transition is part of this workflow.
         await expect(eventPoolController.submitInvoice(event, poolId, {amount: 10}, sessionFor(first)))
             .rejects.toMatchObject({status: 400});
@@ -180,7 +181,8 @@ describe('organizer invoice entries without event attendance', () => {
         expect(organizerOnly.shares).toEqual([]);
         expect(organizerOnly.closedAt).toBeNull();
         expect(organizerOnly.needsRecalculation).toBeFalsy();
-        expect(await invoiceService.getParticipantPools(event.id, firstId)).not.toContainEqual(expect.objectContaining({id: poolId}));
+        expect((await invoiceService.listPools(event.id)).filter(pool => isParticipantSubmissionPool(pool, firstId)))
+            .not.toContainEqual(expect.objectContaining({id: poolId}));
         // Both orchestration and the locked operation reject new participant invoices; organizers keep recording costs.
         await expect(eventPoolController.submitInvoice(event, poolId, {amount: 10}, sessionFor(first)))
             .rejects.toMatchObject({status: 400});
@@ -193,7 +195,8 @@ describe('organizer invoice entries without event attendance', () => {
             .rejects.toMatchObject({status: 409});
         await eventPoolController.changePoolSubmissionState(event, poolId, {status: 'OPEN', expectedRevision: withCost.calculationRevision});
         const reopened = (await invoiceService.getPoolWithInvoices(poolId))!;
-        expect(await invoiceService.getParticipantPools(event.id, firstId)).toContainEqual(expect.objectContaining({id: poolId}));
+        expect((await invoiceService.listPools(event.id)).filter(pool => isParticipantSubmissionPool(pool, firstId)))
+            .toContainEqual(expect.objectContaining({id: poolId}));
         await invoiceOperations.persistSubmittedInvoice(poolId, firstId, 15, 'Reopened participant cost');
         const afterSubmission = (await invoiceService.getPoolWithInvoices(poolId))!;
         expect(afterSubmission.invoices).toHaveLength(reopened.invoices.length + 1);

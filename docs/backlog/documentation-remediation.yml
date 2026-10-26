@@ -32,6 +32,30 @@ audit:
   archive_sha256: e5e07dd694d2af5520767d638934368c8566ed02c02f78ac2863b33db9f174b0
   extracted_source_fingerprint: 334a506602e67e869b4021567408890bb44a6ad91ede85d2e10db01b72b95cf6
   review_mode: static
+architecture_review_2026_10_26:
+  authorization: The maintainer requests an in-depth review of the complete application architecture and all reasonably
+    shareable duplication, with independent verification and policy-compliant recommendations. This authorizes review
+    and recording findings only; no runtime, test, design, policy or previously rejected refactor is approved.
+  scope: All application domains, shared backend infrastructure, frontend/common code, declarations, authored wire
+    contracts, persistence, migrations, rendering, files, configuration, generation, build and test architecture.
+  method: Repository-wide source/import and normalized-function-body inventories followed by source, caller, test and
+    decision tracing. Domain and frontend reviewers supplied findings; a separate nonauthor independently checked
+    every retained duplication and architectural claim, followed by root source review.
+  evidence: The engineering inventory contains 408 authored source files including 43 declarations and 11 DBAL modules.
+    The executable relative-import inventory contains 365 files and 1821 resolved edges. Expected ORM relationship
+    cycles, generated repetition and deliberate feature/transaction differences are excluded from defect claims.
+  checks: The ordinary development check reports zero findings with no changed readability operations. Its explicit
+    whole-source mode examines 1508 operations and reports 177 heuristic diagnostics, comprising 176 comment-contract
+    findings and one nested-anonymous-operation finding. These are review signals, not 177 independently confirmed
+    defects. Advisory documentation reports find one unregistered source fingerprint and clean Help authoring.
+  artifacts: Ignored artifacts/architecture-review-20261026/coverage.json and development-all.json retain the current
+    inventory and complete engineering diagnostics; artifacts/documentation/ retains advisory documentation evidence.
+  boundaries: No application source or tests changed; no application build, runtime, database-backed, browser, E2E,
+    SMTP, OIDC-provider or deployment validation was executed for this static review. Existing functional findings
+    retain their own evidence and disposition rather than being silently re-certified here.
+  disposition: IMP-136 through IMP-158 record new scoped findings. IMP-070 and ARCH-005 receive current corroboration;
+    the three previously recorded type-forwarding exports remain owned by IMP-135 inherited-review debt. Recommendations
+    are not implementation plans approved by the maintainer, and no existing rejection or exclusion is superseded.
 severity_definitions:
   critical: Likely to make a core task fail, create an incorrect access/security decision, or block safe operation.
   high: Materially misleading or missing for a common task, contributor workflow, or production responsibility.
@@ -1794,6 +1818,12 @@ implementation_defects:
       implementation. Independent source review confirmed the original profile, comparison and transaction order;
       this is rollback evidence, not acceptance of the attempted refactor. The original administration defect remains
       open and its separate-work deferral remains in effect.
+    architecture_review_2026_10_26: Independent source/caller comparison reconfirms repeated audience-mask projection,
+      selected-field comparison, administrator baseline and grant-outcome orchestration in Packing 1244-1353,
+      Drivers 1172-1287, Event and Activity 3115-3158. Shared adminApiFactory transport and applyEntityAdministrator
+      persistence orchestration are actually adopted; the remaining duplication is controller business orchestration.
+      Activity's legacy operation order, Event fields and Drivers precommit preparation are deliberate preservation
+      constraints. This review supplies no new implementation approval and does not reopen the rejected closure.
     documentation_contract: Native and Vue retain their existing shared backend operations and feature-specific
       method/private-projection boundaries. Bounded readability corrections do not establish a new common owner.
     closes_when:
@@ -3294,6 +3324,486 @@ implementation_defects:
       activity/recommendations.ts and database/services/ActivityRecommendationService.ts match the original backend
       baseline; they are inherited declaration debt rather than migration damage. Private stored-file alias targeting
       remains recorded once under OPSV-004. These findings do not establish a new runtime defect or authorize a repair.
+  - id: IMP-136
+    status: closed
+    closed_on: 2026-10-26
+    discovered_on: 2026-10-26
+    severity: medium
+    owner: Activity maintainers
+    package: architecture-activity-participant-identity
+    title: Activity printable participant aggregation uses nonunique display names as identity
+    evidence:
+      - src/backend/modules/database/services/ActivityService.ts 645-694 groups assignments by name, keys its map by
+        name and suppresses linked event participants when that name already exists; Profile.ts 25 has no name uniqueness.
+      - src/backend/controller/activityController.ts 557-563 and 653 consume this list for the participant counter;
+        src/backend/views/activity/export/schedule.pug 41 displays it. Interactive attendance uses profile identity.
+    impact: Two different profiles with the same name merge and the printed participant total is too small.
+    governing_contract: docs/ARCHITECTURE.md active-profile identity and controller-owned business/presentation rules.
+    independent_review: A separate reviewer confirmed the query, merge, nonunique column and complete live print caller chain.
+    original_review_disposition: Static defect evidence only; correction requires separate approval and must retain profile IDs through
+      aggregation, with participant-merging policy owned outside DBAL. No database reproduction was run.
+    approved_amendment_2026_10_26: The maintainer explicitly approves R1 to use profiles and their UUIDs and asks that
+      database aggregation be considered for performance. This bounded implementation follows that refinement with
+      one database UNION/count over controller-selected assignment and linked-event scopes, instead of the proposed
+      application-side merge. The existing detail projection, dates, access, wire shapes and schema remain unchanged.
+    disposition: The print owner consumes a scalar distinct-profile count; obsolete name-based aggregation and its
+      unused row contracts are removed. Nullable identity references contribute zero. Five focused real-ORM/controller
+      regressions pass on an owned MariaDB 10.11.14 disposable schema. All 119 tests across the five affected Activity,
+      Finance, organizer-invoice and Event integration files pass. Server/test compilation, development-policy and
+      whitespace checks pass; independent/root reviews confirm scope, actual adoption and UUID aggregation semantics.
+      No application build, browser/E2E, deployment or measured-latency claim is made. Current logs are retained in
+      ignored artifacts/architecture-review-20261026/; the original static-review evidence above remains historical.
+    closes_when:
+      - An approved correction preserves distinct same-name profiles and agrees with the intended participant contract.
+      - Real-persistence coverage checks same-name assigned and linked unassigned profiles and the print projection.
+  - id: IMP-137
+    status: open
+    discovered_on: 2026-10-26
+    severity: medium
+    owner: identity maintainers
+    package: architecture-oidc-policy-ownership
+    title: OIDC account-linking and provisioning decisions reside in the database abstraction layer
+    evidence:
+      - src/backend/modules/database/services/UserService.ts 354-422 chooses email linking and activation, fallback
+        usernames/emails and default-profile provisioning. src/backend/modules/oidc.ts 119 actively enables email linking.
+    impact: Identity policy changes require editing persistence code; the DBAL cannot be understood as queries,
+      transactions and storage alone. The no-request-error dependency check does not detect this semantic violation.
+    governing_contract: docs/policies/DEVELOPMENT_POLICY.md implementation principles and docs/ARCHITECTURE.md database services.
+    independent_review: Domain, root and independent reviewers traced the live provider callback and each policy branch.
+    disposition: Preserve existing linking, activation and provisioning behavior until separately approved. A cohesive
+      identity controller/business owner should choose policy; the existing service should own queries and persistence.
+      No claim about provider trust or an exploitable account-linking defect is made by this architectural finding.
+    closes_when:
+      - Separately approved policy/persistence separation adopts the actual OIDC caller without changing identity rules.
+      - Focused persistence/provider-boundary coverage protects linking, existing accounts and provisioning outcomes.
+  - id: IMP-138
+    status: open
+    discovered_on: 2026-10-26
+    severity: medium
+    owner: identity and administration maintainers
+    package: architecture-profile-search-ownership
+    title: Profile-search admission and private display projection are implemented in DBAL
+    evidence:
+      - src/backend/modules/database/services/UserService.ts 489-524 trims and admits search input, selects limit policy
+        and constructs masked-email UserInfo display rows. entityAdminController.ts 505-508 calls it for feature search.
+    impact: Query persistence owns request admissibility and private presentation, coupling administration UI rules to DBAL.
+    governing_contract: docs/ARCHITECTURE.md controllers and database services; development policy separation of concerns.
+    independent_review: The independent reviewer confirmed live callers across four feature administration APIs.
+    disposition: A separately approved boundary correction should put input/limit policy and safe projection in the
+      existing administration business owner while preserving scoped query and masked-data behavior. No raw-email
+      disclosure is asserted and no search behavior change is approved.
+    closes_when:
+      - Existing search consumers adopt controller-owned admission/projection and DBAL-only query operations.
+      - Focused checks preserve invalid-query results, bounds, scope and email masking.
+  - id: IMP-139
+    status: open
+    discovered_on: 2026-10-26
+    severity: medium
+    owner: Event and linked-resource maintainers
+    package: architecture-event-controller-direction
+    title: Event and its linked-resource controllers form a runtime dependency cycle
+    evidence:
+      - src/backend/controller/eventController.ts 41-43 imports Activity, Drivers and Packing controllers for
+        deleteEventChild 1148-1170. Each child imports Event linkage operations at Activity 30 and Packing/Drivers 42.
+      - Child creation, duplication and Event search actually call those linkage operations; these are runtime imports.
+    impact: Event and three child controllers cannot have a consistent module dependency direction and changes require
+      reasoning about the entire cycle. No initialization crash was demonstrated.
+    governing_contract: docs/ARCHITECTURE.md feature modularization and the maintainer's requested loose coupling/directed flow.
+    independent_review: Independent import inventory and source/caller tracing corroborated every direction of the cycle.
+    disposition: A cohesive Event linkage business owner could hold authorization, selection and search while existing
+      controllers retain child deletion and request orchestration. This ownership decision needs separate approval;
+      a forwarding-only module or bypass of child authorization would not resolve it.
+    closes_when:
+      - An approved change removes the runtime cycle with actual caller adoption and preserves linkage/deletion behavior.
+  - id: IMP-140
+    status: open
+    discovered_on: 2026-10-26
+    severity: medium
+    owner: identity maintainers
+    package: architecture-oidc-controller-direction
+    title: OIDC and the user controller depend on each other and repeat account-session assignment
+    evidence:
+      - src/backend/controller/userController.ts 37 imports oidc; src/backend/modules/oidc.ts 19 imports getDefaultProfile
+        from that controller and 118-134 performs local account/profile/session orchestration.
+      - userController.ts saveAccountIdentity 217-224 and oidc.ts 122-124 both install account authentication and select
+        the default profile. Local and provider paths are actual production callers.
+    impact: Provider protocol, application identity policy and session completion are intertwined; matching identity
+      changes must reconcile two implementations and a runtime import cycle.
+    governing_contract: docs/ARCHITECTURE.md identity, controller and feature ownership; development policy DRY.
+    independent_review: Independent source review confirmed the cycle, both assignment implementations and live callers.
+    disposition: Separately approve a directed boundary where provider code exchanges protocol evidence and the identity
+      business owner applies shared local identity selection. Preserve PKCE, state, tokens, context rotation and existing
+      persistence/finality differences; do not infer authority to repair deferred provider logout or session behavior.
+    closes_when:
+      - An approved change removes the cycle and makes both applicable journeys adopt the shared identity operation.
+      - Provider and local identity/session boundaries have focused coverage at their existing layers.
+  - id: IMP-141
+    status: open
+    discovered_on: 2026-10-26
+    severity: medium
+    owner: Packing and Drivers maintainers
+    package: architecture-list-controller-reuse
+    title: Packing and Drivers repeat common root metadata, context and settings controller operations
+    evidence:
+      - Matching bodies in packingController.ts / driversController.ts include metadataProjection 480/374,
+        metadataResult 499/393, normalization 662/557, assertLockedContext 677/572, authorizeRead 460/354,
+        permission adapters 472/366 and 872/801, headerProjection 953/875, mayOpenSettings 962/884,
+        Event search 1367/1304 and settingsEditToken 1500/1449. Paths are under src/backend/controller/.
+      - Production versioned routes and readSettings operations consume both copies; normalized-token comparison
+        and source review distinguish these shared mechanics from distinct item projections and commands.
+    impact: The same root policy/projection fixes require multiple feature edits despite existing shared administration helpers.
+    governing_contract: docs/policies/DEVELOPMENT_POLICY.md DRY/single source of truth; architecture feature ownership.
+    independent_review: An independent reviewer compared both bodies, actual callers and feature-specific exclusions.
+    disposition: Separate approved maintenance could share coherent root controller operations with explicit type/scope
+      inputs. Preserve field privacy, page/method distinction, comparison-token scope and Drivers precommit versus
+      Packing result-first completion. IMP-070 separately owns administrator/default-permission orchestration.
+    closes_when:
+      - Actual matching consumers adopt approved shared owners without conflating distinct CRUD or commit behavior.
+      - Privacy, admission, sparse comparison and existing receipt/transaction behavior remain covered.
+  - id: IMP-142
+    status: open
+    discovered_on: 2026-10-26
+    severity: low
+    owner: persistence maintainers
+    package: architecture-list-persistence-reuse
+    title: Packing and Drivers duplicate matching lock, creation and assignment persistence mechanics
+    evidence:
+      - src/backend/modules/database/services/PackingService.ts / DriverService.ts repeat locked item evidence 415/383,
+        assignment insertion 295/254, root-lock transactions 363/324 and parent-before-creation transactions 430/395.
+    impact: Matching persistence mechanics require parallel maintenance even where only entity targets differ.
+    governing_contract: docs/policies/DEVELOPMENT_POLICY.md DRY and information hiding.
+    independent_review: Independent body and controller-caller review confirms all four pairs are active and shareable.
+    disposition: Share only matching inner persistence mechanics through an approved DBAL owner. The complete Packing
+      and Drivers assignment-lock wrappers intentionally differ; Packing's root-first coordination and Drivers' legacy
+      order must retain their recorded DEC-006 boundaries. This finding does not establish a locking failure.
+    closes_when:
+      - Approved common persistence mechanics are adopted without widening transactions or changing lock ordering.
+  - id: IMP-143
+    status: open
+    discovered_on: 2026-10-26
+    severity: medium
+    owner: Activity maintainers
+    package: architecture-activity-modularization
+    title: Activity controller concentrates several large feature responsibilities with weak internal modularization
+    evidence:
+      - src/backend/controller/activityController.ts contains requirements decoding/analysis, participant availability,
+        linked-plan commitments, recommendation reconciliation/generation/application, schedule export and API projection.
+      - Existing src/backend/modules/activity/ already owns availability, requirements-related recommendation helpers,
+        allocation and jobs, but substantial cohesive business operations remain embedded in the controller.
+    impact: Changes to separate Activity workflows require understanding a controller spanning roughly 3500 lines and
+      140 top-level functions; pure policy and request orchestration are difficult to review independently.
+    governing_contract: docs/ARCHITECTURE.md feature modularization and source ownership.
+    independent_review: Domain and independent reviewers confirmed the concrete responsibilities and current module owners.
+    disposition: Controllers are permitted to own business checks; this finding concerns cohesion and the maintainability
+      of several large responsibilities. An approved responsibility-by-responsibility extraction should use existing
+      Activity business owners, preserving controller authorization, DBAL transactions and the single requirements/
+      allocation engines. File size alone is not the defect; no general rewrite or changed recommendation is authorized.
+    closes_when:
+      - Separately approved cohesive business responsibilities leave a readable controller with directed dependencies.
+  - id: IMP-144
+    status: open
+    discovered_on: 2026-10-26
+    severity: medium
+    owner: application maintainers
+    package: architecture-legacy-readability
+    title: Legacy complex operations lack the recorded contract and internal-step explanations
+    evidence:
+      - Manually confirmed examples include activityController.ts preprocessRequirementUpdate 219 and
+        calculateBaselineRequirement 1039; ActivityRequirementService.ts getRequirementConfiguration 64 and
+        replaceRoleRequirements 101 contain meaningful phases without the required method/step explanations.
+      - node scripts/check-development-policy.mjs --all --json reports 177 heuristic diagnostics across 1508 operations;
+        the ignored development-all.json records every location, including helpers, DBAL, Help, email/PDF and migrations.
+    impact: Reviewers must reconstruct input selection, transformation, persistence and recovery decisions from code;
+      the normal unchanged-file readability scope leaves this inherited debt invisible in an ordinary clean result.
+    governing_contract: docs/policies/DEVELOPMENT_POLICY.md implementation principles; docs/DEVELOPMENT.md readability.
+    independent_review: A separate reviewer inspected the concrete examples; automated counts are not semantic certification.
+    disposition: Review diagnostics in bounded approved maintenance scopes and explain actual contracts/steps rather than
+      adding ceremonial comments or running a blanket formatter. Historical migration behavior must remain immutable
+      unless a separate authorized correction requires otherwise. No CI/documentation gate is proposed.
+    closes_when:
+      - Reviewed affected operations meet the existing readability contract, with false positives distinguished explicitly.
+  - id: IMP-145
+    status: open
+    discovered_on: 2026-10-26
+    severity: low
+    owner: Activity maintainers
+    package: architecture-activity-projection-reuse
+    title: Activity repeats structural candidate and requirement-input projection
+    evidence:
+      - src/backend/modules/activity/availability.ts toAssignmentCandidate 147 and fairAssignment.ts toCandidate 139
+        construct the same seven fields and have active recommendation/availability callers.
+      - activityController.ts getRequirements 982 and calculateBaselineRequirement 1061 repeat the slot/role projection
+        feeding their distinct analysis algorithms, alongside overlapping configuration/attendance preparation.
+      - autoAssignment.ts generateAutoRecommendations 58 forwards directly to generateFairRecommendations; the
+        synchronous controller uses the wrapper while worker/job paths call the actual algorithm owner.
+    impact: Equivalent projection changes have multiple owners and forwarding obscures the actual allocation owner.
+    governing_contract: docs/policies/DEVELOPMENT_POLICY.md DRY; architecture direct source ownership.
+    independent_review: Independent body/caller review confirms the projection duplication and no second allocation algorithm.
+    disposition: Share narrow structural projections in the appropriate existing feature owner after approval. Keep
+      analysis versus baseline semantics distinct. The forwarding function is small indirection debt; its module also
+      contains real participant helpers and must not be removed wholesale.
+    closes_when:
+      - Approved matching consumers use one candidate/input projection and the actual allocation owner directly.
+  - id: IMP-146
+    status: open
+    discovered_on: 2026-10-26
+    severity: medium
+    owner: shared contract maintainers
+    package: architecture-declaration-ownership
+    title: Consumed shared declaration contracts remain exported from executable backend modules
+    evidence:
+      - Examples include AutoAssignmentContext in activity/autoAssignment.ts 45, FairAssignmentContext in
+        activity/fairAssignment.ts 29, AttendancePolicy in activity/availability.ts 73, RecommendationJobView in
+        activity/recommendationJobs.ts 19 and RequirementConfiguration in database/services/ActivityRequirementService.ts 44.
+      - The inventory also finds exported relation contracts in entities/abstract/BaseEntity.ts 24-48,
+        ProfileEntityItemAssignment.ts 35-36, recommendation status/operation and invoice status aliases, Settings
+        in modules/settings.ts 29 and GuestRegistrationNags in modules/lib/guestRegistrationNags.ts 17.
+      - All paths above are under src/backend/modules/. Controllers, peer business modules and declaration files
+        consume these contracts from executable owners. The existing check only rejects non-declarations under src/types.
+    impact: Consumers must depend on implementation modules to obtain shared contracts, contrary to the declaration owner.
+    governing_contract: docs/policies/DEVELOPMENT_POLICY.md shared type-only contracts in src/types/*.d.ts.
+    independent_review: A separate reviewer confirmed actual imports and distinguished private local types from shared exports.
+    disposition: Move consumed shared type-only contracts to their proper existing declarations in an approved maintenance
+      scope, keeping private details local and runtime enums executable. The three forbidden type forwarding exports
+      remain recorded once under IMP-135 inherited_review_limits_2026_10_26; this is no approval to remove them.
+    closes_when:
+      - Actual consumers import the reviewed declaration owner directly and executable behavior is unchanged.
+  - id: IMP-147
+    status: closed
+    closed_on: 2026-10-26
+    discovered_on: 2026-10-26
+    severity: medium
+    owner: Finance maintainers
+    package: architecture-finance-read-snapshot
+    title: Participant Finance loads the complete pool graph twice and derives eligibility from another snapshot
+    evidence:
+      - src/backend/controller/eventPoolController.ts readEventFinance 225-243 calls listPools and getParticipantPools
+        concurrently. src/backend/modules/database/services/EventInvoiceService.ts getParticipantPools 368 calls
+        listPools again; listPools 226-244 hydrates five child collections in a separate REPEATABLE READ transaction.
+      - The earlier eventController.ts fetchForView 393-394 repeats this pattern. getParticipantPools also selects
+        OPEN submission eligibility and assignment membership inside the DBAL rather than its business owner.
+    impact: Registered participant Finance reads duplicate substantial queries; eligibility IDs and displayed pool
+      metadata can originate from different committed revisions. No write-authorization failure or data leak was proven.
+    governing_contract: docs/ARCHITECTURE.md coherent Finance snapshots and controller/business versus DBAL responsibilities.
+    independent_review: A separate reviewer traced both list loads, transaction boundaries and the live Finance projection.
+    original_review_disposition: Separately approve deriving participant eligibility through the existing business owner from one
+      loaded pool snapshot. Preserve OPEN-only choices, own-invoice/share privacy and locked command checks; a read
+      optimization must not turn an earlier eligibility projection into write authority.
+    approved_amendment_2026_10_26: The maintainer explicitly approves R2 provided inter-request processing is unchanged
+      and performance/memory are considered. The existing invoice state module owns the pure eligibility predicate;
+      live Finance and retained Event projections use their own loaded pool rows. No cross-request state, cache, new
+      lock or write is introduced, and default-enrollment/IMP-012 behavior retains its separate scope.
+    disposition: The duplicate DBAL selector is retired with all source/test callers migrated to the actual business
+      owner. Finance keeps eligible IDs without copying a second graph. The focused real-ORM regression passes,
+      observing one root hydration per read and fresh lifecycle/actor results between requests while retaining own
+      history/privacy and prior returned projections. All 119 affected integration tests pass on the same owned
+      MariaDB 10.11.14 disposable schema, including existing enrollment, private history and locked submission checks.
+      Server/test compilation, development-policy and whitespace checks pass; independent/root review confirms one
+      request-local graph, bounded extra identity storage and unchanged inter-request processing. No cross-request
+      cache, schema/wire change or full-request snapshot is introduced. Build/browser/E2E and latency benchmarks were
+      not run. Current logs remain under ignored artifacts/architecture-review-20261026/.
+    closes_when:
+      - One coherent admitted graph supplies participant eligibility and Finance projection without duplicate hydration.
+      - Focused query/consistency and participant-privacy coverage protects the approved result.
+  - id: IMP-148
+    status: open
+    discovered_on: 2026-10-26
+    severity: medium
+    owner: Finance frontend maintainers
+    package: architecture-finance-component-direction
+    title: Finance invoice history, row and review components form a dependency cycle
+    evidence:
+      - src/frontend/features/finance/FinanceHistory.vue 9 imports FinanceInvoiceRow; FinanceInvoiceRow.vue 9 imports
+        FinanceInvoiceReview; FinanceInvoiceReview.vue 8 imports History and renders it at 42 for uncertain inspection.
+    impact: Read-only evidence and editable review composition depend on each other, increasing change coupling.
+    governing_contract: Maintainer-requested loose coupling/directed flow and architecture coherent presentation ownership.
+    independent_review: Independent import and template review confirms the cycle; Row's readOnly guard bounds recursion.
+    disposition: Separately approve acyclic read-only invoice evidence or higher-level dialog composition. Keep the one
+      invoiceReview.ts draft/command owner. No infinite rendering or runtime crash is asserted.
+    closes_when:
+      - Actual History/Row/Review consumers adopt an acyclic composition preserving inline and uncertain review behavior.
+  - id: IMP-149
+    status: open
+    discovered_on: 2026-10-26
+    severity: medium
+    owner: frontend admission maintainers
+    package: architecture-entry-retirement-reuse
+    title: Resource entry components repeat matching denial cache-retirement policy
+    evidence:
+      - src/frontend/features/packing/PackingEntry.vue 35, drivers/DriversEntry.vue 34 and activity/ActivityEntry.vue 34
+        repeat deniedQueries. surveys/SurveyEntry.vue 26 repeats the core without Event discovery.
+      - Actual EntityEntryPage props consume the detail/editor/overview retirement and 404 opposite-intent/guest/
+        inactive-duplicate selection; Event retains its separate intent-specific eventDeniedQueries owner.
+    impact: A shared admission-retirement correction must be reconciled across several policy copies.
+    governing_contract: docs/ARCHITECTURE.md shared cache/admission ownership and development policy DRY.
+    independent_review: Independent source/caller review confirms the matching algorithm and intentional differences.
+    disposition: Separately approve a shared policy function receiving explicit feature families. Preserve Event intent,
+      Survey's standalone model, the producing denial observer and live duplicate-creation drafts; add no second cache.
+    closes_when:
+      - All matching entries consume one policy with focused denial/actor/draft preservation coverage.
+  - id: IMP-150
+    status: open
+    discovered_on: 2026-10-26
+    severity: low
+    owner: frontend query maintainers
+    package: architecture-query-key-reuse
+    title: Common entity query-family construction is copied within the central key owner
+    evidence:
+      - src/frontend/app/queryKeys.ts 31, 65, 91 and 121 repeat common Packing/Drivers/Activity/Survey resource,
+        detail, entry, editor, metadata, settings, creation, duplicate and guest key construction.
+    impact: Matching key-layout changes require editing parallel constructors inside the same owner.
+    governing_contract: Development policy DRY; architecture single query-key owner.
+    independent_review: Independent source review confirms reasonable sharing; there is already one key module and cache owner.
+    disposition: Low-priority approved reuse may factor the common constructor while retaining exact key values,
+      optional-event semantics, locale policy and feature extensions. No stale-authority/cache bug is demonstrated.
+    closes_when:
+      - A reviewed common constructor preserves actual keys and invalidation-family behavior across consumers.
+  - id: IMP-151
+    status: open
+    discovered_on: 2026-10-26
+    severity: low
+    owner: frontend transport maintainers
+    package: architecture-api-read-composition
+    title: Feature API adapters repeat the same admitted read and response-decoding composition
+    evidence:
+      - src/frontend/features/packing/api.ts and drivers/api.ts contain matching settings 97, creation 113,
+        resource entry 127, duplicate 142, profile/header and guest reads after entity-name substitution.
+      - Activity and Event also compose allowedRead, captured headers, no-store dispatch, generated validation and
+        transport.read; the underlying HTTP/error/retry owners in app/transport.ts are already shared.
+    impact: Many normalized Packing/Drivers adapter function copies make transport-composition maintenance repetitive.
+    governing_contract: Development policy DRY; architecture generated adapters through the existing shared transport.
+    independent_review: Independent reviewer checked representative actual read bodies/callers and excluded endpoint declarations alone.
+    disposition: Approved reuse should extend the existing typed read composition, with features supplying their
+      operation/endpoint/validator. Preserve sparse comparison, Survey's no-If-Match boundary and command completion;
+      these are not interchangeable entire APIs or duplicate business operations.
+    closes_when:
+      - Matching live reads adopt the existing transport composition without another transport/cache/authority owner.
+  - id: IMP-152
+    status: open
+    discovered_on: 2026-10-26
+    severity: low
+    owner: Finance frontend maintainers
+    package: architecture-finance-pagination-reuse
+    title: Finance tables repeat pagination mechanics around a shared footer
+    evidence:
+      - src/frontend/features/finance/FinanceHistory.vue 31-34, FinanceShares.vue 36-42 and FinanceCoverage.vue 23-28
+        repeat page-count, slice, reset and clamp mechanics despite the existing FinanceLedgerFooter component.
+    impact: Common paging changes require parallel implementations.
+    governing_contract: Development policy DRY and coherent reusable presentation.
+    independent_review: Independent comparison confirms the repeated mechanics and distinct feature lifecycles.
+    disposition: Low-priority approved reuse should share pagination only; keep filters, settled-share row retention,
+      selection state and coverage-expansion resets with their feature owners.
+    closes_when:
+      - Matching pagination mechanics have one adopted owner without changing feature filters or draft lifetimes.
+  - id: IMP-153
+    status: open
+    discovered_on: 2026-10-26
+    severity: low
+    owner: file transport and frontend maintainers
+    package: architecture-upload-media-policy
+    title: Header-image and invoice-proof media policy is copied across browser and server callers
+    evidence:
+      - src/frontend/components/FileField.vue 21, app/transport.ts 273, features/finance/FinanceSubmission.vue 157
+        and FinanceOrganizerInvoice.vue 139 repeat image MIME sets with proof-specific PDF additions.
+      - src/backend/modules/lib/fileCommons.ts 34-63 and 108-114 independently construct matching upload/image policies.
+    impact: Supported file-type changes require reconciling chooser, binary response and upload admission lists.
+    governing_contract: Development policy single source of truth and browser-safe common-code ownership.
+    independent_review: Independent source comparison confirms matching media sets and actual form/transport/uploader consumers.
+    disposition: Approved reuse may share a browser-safe media descriptor/predicate. Keep server enforcement, extension
+      checks, file size, cleanup and response ownership separate; preserve binary application/octet-stream fallback.
+    closes_when:
+      - Matching callers derive media sets from one owner without reducing server admission or widening file policy.
+  - id: IMP-154
+    status: open
+    discovered_on: 2026-10-26
+    severity: low
+    owner: API contract maintainers
+    package: architecture-common-wire-shape-ownership
+    title: Shared wire shapes are owned by Packing and referenced through unrelated feature schemas
+    evidence:
+      - contracts/api/v1/drivers.yaml 350-365 aliases Packing administration/access/settings; activity.yaml 757/770
+        reaches into PackingSettings properties and 1099 aliases administration through Drivers.
+      - contracts/api/v1/events.yaml 469/472/1346/1434 consumes Packing archive/access/admin/profile shapes.
+    impact: Unrelated domains depend on Packing's schema organization and sometimes an intermediary domain to obtain common shapes.
+    governing_contract: Architecture coherent feature ownership, information hiding and authored wire-contract authority.
+    independent_review: Independent reference tracing confirms actual generated consumers and that schemas are already single-source.
+    disposition: This is ownership/coupling debt, not duplicated schema implementations. Separately approved relocation
+      of genuine common shapes to the existing common.yaml owner must preserve wire/version compatibility and feature exceptions.
+    closes_when:
+      - Shared shapes have a neutral canonical owner with compatible generated consumers and no unnecessary feature chain.
+  - id: IMP-155
+    status: open
+    discovered_on: 2026-10-26
+    severity: low
+    owner: Finance contract and frontend maintainers
+    package: architecture-finance-field-constraints
+    title: Matching Finance native control bounds repeat authored wire constraints
+    evidence:
+      - contracts/api/v1/finance.yaml 284/290/299/307 declares maxLength 4000; FinanceInvoiceRow.vue 82/86 and
+        FinanceInvoiceReview.vue 68/77 repeat that bound. Pool-name maxLength 255 appears at YAML 238 and PoolEditor.vue 191.
+    impact: A matching constraint change requires updating both the wire declaration and native form attributes.
+    governing_contract: Architecture authored schema authority and development policy single source of truth.
+    independent_review: Independent source review confirms matching current values; native constraints are expected UX defense.
+    disposition: Low-priority approved generation of matching native field attributes could remove duplicate literals.
+      Preserve deliberate UI/wire differences, including Event creation and capacities; no broken validation, alternate
+      runtime schema or need for a universal form engine is asserted.
+    closes_when:
+      - Selected matching native attributes derive from authored constraints while intentional differences remain explicit.
+  - id: IMP-156
+    status: open
+    discovered_on: 2026-10-26
+    severity: low
+    owner: common date helper maintainers
+    package: architecture-civil-date-step-reuse
+    title: Event and Activity helpers duplicate pure UTC day stepping
+    evidence:
+      - src/backend/modules/lib/util.ts 193 and src/common/activity/requirements.ts 33 implement the same ISO-day parse,
+        UTC date increment and ISO slice. Event buildDateTotals and Activity requirements actively use the copies.
+    impact: Matching calendar-step corrections require changes in two pure helper implementations.
+    governing_contract: Development policy DRY and browser-safe shared code ownership.
+    independent_review: Independent comparison confirms identical semantics and both live feature consumers.
+    disposition: Approved reuse may share only the primitive with its existing input/error semantics. Do not change
+      invoice attendance, deadlines, date validation or the explicitly bounded civilDate presentation correction.
+    closes_when:
+      - Both applicable consumers use one reviewed UTC stepping primitive without changed domain date behavior.
+  - id: IMP-157
+    status: open
+    discovered_on: 2026-10-26
+    severity: low
+    owner: stored-file maintainers
+    package: architecture-stored-path-reuse
+    title: Stored-file consumers repeat the same configured-directory confinement calculation
+    evidence:
+      - src/backend/modules/api/transport.ts 193-198, middleware/entityHeaderDownloadHandler.ts 19-23 and
+        modules/invoice/proofs.ts 27-31/51-58 repeat root/file resolution and relative-path containment checks.
+    impact: Matching confinement maintenance requires reconciling multiple implementations of the same path predicate.
+    governing_contract: Development policy DRY; architecture distinct file admission/delivery/lifecycle owners.
+    independent_review: Independent body comparison confirms shareable lexical resolution while delivery/deletion policies differ.
+    disposition: Share a pure resolver/predicate only after separate approval; preserve controller permission, status,
+      read/stream/delete and best-effort cleanup contracts. Existing stored-file alias/symlink safety debt remains
+      recorded once under OPSV-004 and must not be silently repaired or declared solved by deduplication.
+    closes_when:
+      - Applicable file consumers adopt one predicate with their existing delivery and lifecycle behavior intact.
+  - id: IMP-158
+    status: open
+    discovered_on: 2026-10-26
+    severity: low
+    owner: API error maintainers
+    package: architecture-event-problem-mapping
+    title: Event error translation repeats the contract-driven mapping already attempted by the shared classifier
+    evidence:
+      - src/backend/modules/api/problem.ts declaredApiProblem 35-49 looks up trusted status/cause in generated declarations;
+        classifyApiError 67-85 then repeats sixteen Event cause-to-identical-code cases.
+      - Current Event error constructors use matching declared statuses and empty parameters, so the generic lookup
+        already handles their cases. The explicit switch also adapts a recognized trusted cause with a mismatched status.
+    impact: Event problem additions and mapping changes have a handwritten second inventory despite generated contract authority.
+    governing_contract: Architecture shared error/contract owners and development policy DRY/single source of truth.
+    independent_review: Independent constructor/schema comparison confirms current redundancy and the mismatched-status distinction.
+    disposition: Approved consolidation should preserve or explicitly decide the existing status-adaptation behavior.
+      Identity ValidationError mappings intentionally adapt statuses and are excluded. Removing the Event switch blindly
+      would change behavior for trusted mismatched-status errors; no present user-visible misclassification is asserted.
+    closes_when:
+      - One reviewed Event mapping mechanism preserves the accepted error-class/status behavior and declared wire outcomes.
 findings:
   - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
     status: closed
@@ -3872,6 +4382,13 @@ findings:
     deficiency: Native documents, pilot documents and versioned API operations retain different session and feedback
       lifecycles. Their complete intended contract has not received one application-wide verification and unification
       review. This is a requested architectural follow-up, not a claim that every difference is a defect.
+    architecture_review_2026_10_26: Current documents and APIs share captureApiActor in modules/api/session.ts 54;
+      userController.ts validateSession 1159-1188 remains a second identity-validation implementation with no callers
+      in application source or tests. Independent source/import review confirms this is unused legacy duplication,
+      not an active security bypass. Its later approved retirement should retain the captured-actor owner; scoped
+      stageIdentitySession behavior, ordinary Express saves and documented transport differences are not defects.
+      OIDC/user-controller cycle and repeated identity assignment are separately scoped in IMP-140. This static
+      review does not close the requested whole-session/flash runtime verification or grant session-redesign authority.
     desired_outcome: Establish one reviewed session and flash concept with existing shared implementation owners and
       explicit transport differences, preserving server-owned authentication and authorization and native behavior.
     acceptance_criteria:

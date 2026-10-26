@@ -10,6 +10,7 @@ import packingController from '../../src/backend/controller/packingController';
 import surveyController from '../../src/backend/controller/surveyController';
 import * as userController from '../../src/backend/controller/userController';
 import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
+import {EventRegistration} from '../../src/backend/modules/database/entities/event/EventRegistration';
 import {AddActivityPlanStayRequirements1787688000000} from '../../src/backend/migrations/1787688000000-AddActivityPlanStayRequirements';
 import {AddActivityPlanExternalAssignees1787688100000} from '../../src/backend/migrations/1787688100000-AddActivityPlanExternalAssignees';
 import {AddActivityRecommendationOperations1788134500000} from '../../src/backend/migrations/1788134500000-AddActivityRecommendationOperations';
@@ -246,6 +247,104 @@ describe('activity plan user stories', () => {
         expect((await activityService.getActivityPlansByProfileId(owner.id)).map((plan) => plan.id)).not.toContain(planId);
     });
 
+});
+
+describe('activity schedule participant counts', () => {
+    it('counts different same-name profiles separately in standalone print and detail views', async () => {
+        // Display names are not identities: both persisted profiles must survive
+        // the print aggregation just as they do in the existing detail roster.
+        const firstAlex = await persistIntegrationProfile({name: 'Alex'});
+        const secondAlex = await persistIntegrationProfile({name: 'Alex'});
+        const planId = await createActivityPlanWithSlot(owner.id);
+        const [slot] = await activityService.getActivitySlotsFlat(planId);
+        await assignActivitySlot(slot.id, firstAlex.id);
+        await assignActivitySlot(slot.id, secondAlex.id);
+
+        const plan = await activityService.getActivityPlanById(planId);
+        const printed = await activityController.getScheduleExport(plan!);
+        const detail = await activityController.fetchForView(plan!, {session: {profile: owner}} as Request);
+
+        expect(printed.counters.participants).toBe(2);
+        expect(detail.counters.participants).toBe(2);
+        expect(detail.participantList.map(person => person.participantKey)).toEqual(
+            expect.arrayContaining([`profile:${firstAlex.id}`, `profile:${secondAlex.id}`]),
+        );
+        expect(detail.participantList.map(person => person.name)).toEqual(['Alex', 'Alex']);
+    });
+
+    it('counts one profile assigned to several standalone slots once', async () => {
+        const planId = await createActivityPlanWithSlot(owner.id);
+        const plan = await activityService.getActivityPlanById(planId);
+        await activityController.quickAddSlot(plan!, {date: '2027-06-02', title: 'Second day'}, {profile: owner} as never);
+        const slots = await activityService.getActivitySlotsFlat(planId);
+        await assignActivitySlot(slots[0].id, participant.id);
+        await assignActivitySlot(slots[1].id, participant.id);
+
+        const printed = await activityController.getScheduleExport(plan!);
+        const detail = await activityController.fetchForView(plan!, {session: {profile: owner}} as Request);
+
+        expect(printed.counters.participants).toBe(1);
+        expect(detail.participantList).toEqual([expect.objectContaining({
+            participantKey: `profile:${participant.id}`, assignedShifts: 2,
+        })]);
+        expect(printed.counters.slots).toBe(2);
+    });
+
+    it('unifies registered and assigned UUIDs while retaining an unassigned registration with the same name', async () => {
+        const assignedAlex = await persistIntegrationProfile({name: 'Alex'});
+        const unassignedAlex = await persistIntegrationProfile({name: 'Alex'});
+        const eventId = await createIntegrationEvent(owner.id, 'Same-name activity participants');
+        await registerEventAttendance(eventId, assignedAlex, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        await registerEventAttendance(eventId, unassignedAlex, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        const planId = await createEventActivityPlan(owner.id, eventId);
+        const slots = await activityService.getActivitySlotsFlat(planId);
+        await assignActivitySlot(slots[0].id, assignedAlex.id);
+        await assignActivitySlot(slots[1].id, assignedAlex.id);
+        // An assigned external profile remains part of the original membership
+        // scope even without an event registration; the owner alone does not.
+        await assignActivitySlot(slots[1].id, participant.id);
+
+        const plan = await activityService.getActivityPlanById(planId);
+        const printed = await activityController.getScheduleExport(plan!);
+        const detail = await activityController.fetchForView(plan!, {session: {profile: owner}} as Request);
+
+        expect(printed.counters.participants).toBe(3);
+        expect(detail.counters.participants).toBe(3);
+        expect(detail.participantList).toEqual(expect.arrayContaining([
+            expect.objectContaining({participantKey: `profile:${assignedAlex.id}`, assignedShifts: 2}),
+            expect.objectContaining({participantKey: `profile:${unassignedAlex.id}`, assignedShifts: 0}),
+            expect.objectContaining({participantKey: `profile:${participant.id}`, assignedShifts: 1}),
+        ]));
+    });
+
+    it('keeps an empty standalone plan at zero despite unrelated event registrations', async () => {
+        const unrelatedEvent = await createIntegrationEvent(owner.id, 'Unrelated activity participants');
+        await registerEventAttendance(unrelatedEvent, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        const planId = await createActivityPlanWithSlot(owner.id);
+        const plan = await activityService.getActivityPlanById(planId);
+
+        const printed = await activityController.getScheduleExport(plan!);
+        const detail = await activityController.fetchForView(plan!, {session: {profile: owner}} as Request);
+
+        expect(printed.counters.participants).toBe(0);
+        expect(detail.counters.participants).toBe(0);
+    });
+
+    it('does not invent a participant for a registration without a profile UUID', async () => {
+        const eventId = await createIntegrationEvent(owner.id, 'Nullable registration identity');
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        const planId = await createEventActivityPlan(owner.id, eventId);
+        // The inherited database relationship is nullable. A historical row
+        // without an identity must not add a phantom person to the UUID count.
+        await AppDataSource.getRepository(EventRegistration).insert({
+            event: {id: eventId}, arrivalDate: '2027-06-01', departureDate: '2027-06-03',
+        });
+        const plan = await activityService.getActivityPlanById(planId);
+
+        const printed = await activityController.getScheduleExport(plan!);
+
+        expect(printed.counters.participants).toBe(1);
+    });
 });
 
 describe('automatic activity assignment user stories', () => {

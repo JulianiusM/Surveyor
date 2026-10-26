@@ -15,7 +15,7 @@
  */
 
 import {EntityManager, In, Not} from "typeorm";
-import type {ActivityCreationCompletion, ActivityPropertyPatch, PlanParticipant, PlanParticipantRow, SlotAssignmentMap} from "../../../../types/ActivityTypes";
+import type {ActivityCreationCompletion, ActivityPropertyPatch, SlotAssignmentMap} from "../../../../types/ActivityTypes";
 import {AssignmentCandidate} from "../../activity/availability";
 import {toParticipantKey} from "../../../../common/activity/requirements";
 import {generateUniqueId} from "../../lib/util";
@@ -31,7 +31,6 @@ import {EventRegistration} from "../entities/event/EventRegistration";
 import {Event} from '../entities/event/Event';
 import {ActivityAssignmentRecommendation} from '../entities/activity/ActivityAssignmentRecommendation';
 import * as entityAdminService from "./EntityAdminService";
-import * as eventService from "./EventService";
 
 /**
  * Transaction ownership stays at the database boundary; the named callback belongs to
@@ -642,59 +641,34 @@ export async function getActivitySlotAssignees(planId: string, manager: EntityMa
     return map;
 }
 
-export async function getActivityPlanParticipants(planId: string): Promise<PlanParticipant[]> {
-    const plan = await AppDataSource.getRepository(ActivityPlan).findOne({
-        where: {id: planId},
-        relations: {
-            event: true
-        }
-    });
-
-    // Get assigned participants
-    const qb = AppDataSource
+/**
+ * Count distinct profile UUIDs across this plan's assignments and the event
+ * registration scope selected by the controller. A null event adds no rows.
+ * One scalar query avoids loading names, roles or complete participant records.
+ */
+export async function countActivityPlanParticipants(planId: string, eventId: string | null): Promise<number> {
+    // Project only identity from the two indexed scopes. UNION removes repeated
+    // assignments and a registered profile already assigned to this plan.
+    const assigned = AppDataSource
         .getRepository(ActivityAssignment)
-        .createQueryBuilder("aa")
-        .leftJoin("aa.profile", "profile")
-        .leftJoin("aa.activityAssignmentRoles", "ar")
-        .leftJoin("ar.role", "role")
-        .where("aa.entity_id = :planId", {planId})
-        .select([
-            `profile.name AS name`,
-            `COUNT(DISTINCT aa.id) AS count`,
-            `GROUP_CONCAT(DISTINCT role.title ORDER BY role.title) AS roles`
-        ])
-        .groupBy("name");
+        .createQueryBuilder("assignment")
+        .select("assignment.profile_id", "profileId")
+        .where("assignment.entity_id = :planId", {planId});
+    const registered = AppDataSource
+        .getRepository(EventRegistration)
+        .createQueryBuilder("registration")
+        .select("registration.profile_id", "profileId")
+        .where("registration.event_id = :eventId", {eventId});
 
-    const assignedRaw: PlanParticipantRow[] = await qb.getRawMany();
-    const participantMap = new Map<string, PlanParticipant>();
-
-    // Add assigned participants to map
-    for (const r of assignedRaw) {
-        participantMap.set(r.name, {
-            name: r.name,
-            count: Number(r.count),
-            roles: r.roles ? r.roles.split(",") : [],
-        });
-    }
-
-    // If plan is associated with an event, also include all event participants
-    if (plan?.event?.id) {
-        const eventParticipants = await eventService.getEventParticipants(plan.event.id);
-
-        for (const ep of eventParticipants) {
-            const name = ep.name || 'Unknown';
-            if (!participantMap.has(name)) {
-                // Add event participant who hasn't been assigned yet
-                participantMap.set(name, {
-                    name,
-                    count: 0,
-                    roles: [],
-                });
-            }
-        }
-    }
-
-    return Array.from(participantMap.values());
+    // Keep generated table/schema names and bound parameters with their owning
+    // queries; only the UUID set is materialized before the database counts it.
+    // Nullable historical relationships contribute no profile identity.
+    const result = await AppDataSource.createQueryBuilder()
+        .select("COUNT(participants.profileId)", "count")
+        .from(`(${assigned.getQuery()} UNION ${registered.getQuery()})`, "participants")
+        .setParameters({...assigned.getParameters(), ...registered.getParameters()})
+        .getRawOne<{count: string}>();
+    return Number(result!.count);
 }
 
 export async function getParticipantRolesForPlan(planId: string, manager: EntityManager = AppDataSource.manager): Promise<{

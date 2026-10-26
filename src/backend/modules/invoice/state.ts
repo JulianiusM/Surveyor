@@ -26,6 +26,19 @@ export function requireLockedPool(pool: EventInvoicePool | null): EventInvoicePo
     return pool;
 }
 
+/** Select participant submission choices from the caller's already loaded pool
+ * snapshot. This pure read policy retains no pool data across requests; command
+ * owners still check current enrollment and lifecycle under their existing lock. */
+export function isParticipantSubmissionPool(
+    pool: Pick<EventInvoicePool, 'status' | 'assignAll' | 'assignments'>,
+    registrationId: number,
+): boolean {
+    // Default enrollment is separate from eligibility: only an open pool with
+    // all-participant enrollment or this explicit assignment is a current choice.
+    return pool.status === 'OPEN' && (Boolean(pool.assignAll)
+        || pool.assignments.some(assignment => assignment.registrationId === registrationId));
+}
+
 /** Check event and pool membership using the current transaction’s rows. */
 export async function assertLockedParticipant(manager: EntityManager, pool: EventInvoicePool, registrationId: number): Promise<void> {
     // Read both event membership and explicit pool membership through the transaction-scoped DBAL.

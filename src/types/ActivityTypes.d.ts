@@ -29,18 +29,6 @@ export type SlotAssignee = {
     roles: string[];
 };
 
-export type PlanParticipantRow = {
-    name: string;
-    count: number;
-    roles: string;
-}
-
-export type PlanParticipant = {
-    name: string;
-    count: number;
-    roles: string[];
-};
-
 export type SlotAssignmentMap = Record<string, SlotAssignee[]>;
 
 /** Optional completion is prepared while the existing creation transaction can still roll back. */

@@ -33,6 +33,7 @@ import {EventRegistration} from "../modules/database/entities/event/EventRegistr
 import {ALLOWED_DIETARY} from "../modules/database/entities/event/EventRegistrationDietary";
 import * as invoiceService from "../modules/database/services/EventInvoiceService";
 import {invoicePresentation} from '../modules/invoice/presentation';
+import {isParticipantSubmissionPool} from '../modules/invoice/state';
 
 import * as eventService from '../modules/database/services/EventService';
 import * as adminService from '../modules/database/services/EntityAdminService';
@@ -391,7 +392,10 @@ async function fetchForView(event: Event, req: Request) {
         eventService.getDriverListsForEvent(event.id),
     ]) : [[], [], []];
     const invoicePools = shouldShowScoped ? await invoiceService.listPools(event.id) : [];
-    const participantPools = registration ? await invoiceService.getParticipantPools(event.id, registration.id) : [];
+    // Reuse the already admitted request-local pool rows for submission choices;
+    // their business predicate is shared with the versioned Finance projection.
+    const participantPools = registration
+        ? invoicePools.filter(pool => isParticipantSubmissionPool(pool, registration.id)) : [];
     const participantInvoices = registration
         ? invoicePools.flatMap((p) => (p.invoices || []).filter((inv) => inv.registrationId === registration.id))
         : [];

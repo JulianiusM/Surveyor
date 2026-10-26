@@ -554,15 +554,23 @@ async function fetchForView(plan: ActivityPlan, req: Request, includeNameProvena
     };
 }
 
+/**
+ * Prepare the existing printable schedule and its counters without changing
+ * dates, assignments or admission. Participants are distinct assigned profiles
+ * plus registrations in this plan's linked event, as in the detail projection.
+ */
 async function getScheduleExport(plan: ActivityPlan) {
-    const [slotsByDate, assigneeLists, slotRoles, textFields, participantList] = await Promise.all([
+    // Select the same participant sources as the detail owner; the DBAL counts
+    // their UUID union without loading names or a second participant roster.
+    const [slotsByDate, assigneeLists, slotRoles, textFields, participantCount] = await Promise.all([
         activityService.getActivitySlots(plan.id),
         activityService.getActivitySlotAssignees(plan.id),
         activityService.getActivitySlotRoles(plan.id),
         activityService.getActivityPlanTextFields(plan.id),
-        activityService.getActivityPlanParticipants(plan.id),
+        activityService.countActivityPlanParticipants(plan.id, plan.event?.id ?? null),
     ]);
 
+    // Keep the existing UTC day and Monday-week layout for printable output.
     const start = new Date(`${plan.startDate}T00:00:00Z`);
     const end = new Date(`${plan.endDate}T00:00:00Z`);
 
@@ -635,6 +643,8 @@ async function getScheduleExport(plan: ActivityPlan) {
         }
     }
 
+    // Occupancy still comes from the displayed slots; only the participant
+    // counter uses UUID deduplication, independently of display-name spelling.
     const slotList = Array.from(dayMap.values()).flatMap((d) => d.slots);
     let empty = 0, open = 0;
 
@@ -650,7 +660,7 @@ async function getScheduleExport(plan: ActivityPlan) {
         weeks,
         textFields,
         counters: {
-            participants: participantList.length,
+            participants: participantCount,
             slots: slotList.length,
             open,
             empty,

@@ -79,6 +79,55 @@ afterAll(async function closeFinanceDatabase() {
 });
 
 describe('versioned finance shared ownership and private saved projections', () => {
+    it('loads one pool graph per read and refreshes participant eligibility between requests', async () => {
+        const {id, event, poolId} = await fixture();
+        await submit(event, poolId, participant, 'Retained own invoice across reads');
+
+        // Observe actual database dispatch without replacing repositories, rows
+        // or transactions. A counter retains no pool payload or query parameters.
+        const logger = AppDataSource.logger;
+        const originalLogQuery = logger.logQuery;
+        let poolLoads = 0;
+        const observe = vi.spyOn(logger, 'logQuery').mockImplementation(function countPoolLoads(query, parameters, runner) {
+            if (/\bFROM\s+(?:`[^`]+`\.)?`event_invoice_pools`\s/iu.test(query)) poolLoads++;
+            originalLogQuery.call(logger, query, parameters, runner);
+        });
+
+        /** Each controller request must hydrate exactly one fresh pool graph. */
+        async function readParticipant(profile: Profile) {
+            const before = poolLoads;
+            const result = await readEventFinance(id, actor(profile));
+            expect(poolLoads - before).toBe(1);
+            return result;
+        }
+
+        try {
+            const open = await readParticipant(participant);
+            expect(open.pools.find(pool => pool.id === poolId)).toMatchObject({status: 'OPEN', canSubmit: true});
+
+            // A later request must observe the committed lifecycle change. Own
+            // history retains its pool name without borrowing submission access.
+            await invoices.changePoolSubmissionState(event, poolId,
+                {status: 'ORGANIZER_ONLY', expectedRevision: open.pools[0].revision});
+            const closed = await readParticipant(participant);
+            expect(closed.invoices).toHaveLength(1);
+            expect(closed.pools.find(pool => pool.id === poolId)).toMatchObject({status: 'ORGANIZER_ONLY', canSubmit: false,
+                coverageChoices: [], coverageGroups: [], assignedCount: 0});
+            expect((await readParticipant(other)).pools).toEqual([]);
+
+            // Reopening is independently visible; no earlier request's graph or
+            // actor-specific eligibility is cached or mutated by a later read.
+            await invoices.changePoolSubmissionState(event, poolId,
+                {status: 'OPEN', expectedRevision: closed.pools[0].revision});
+            expect((await readParticipant(other)).pools.find(pool => pool.id === poolId))
+                .toMatchObject({status: 'OPEN', canSubmit: true});
+            expect(open.pools[0]).toMatchObject({status: 'OPEN', canSubmit: true});
+            expect(closed.pools[0]).toMatchObject({status: 'ORGANIZER_ONLY', canSubmit: false});
+        } finally {
+            observe.mockRestore();
+        }
+    });
+
     it('projects one localized reviewed calculation without writes and preserves the independent preview method grant', async () => {
         const {id, event, poolId} = await fixture();
         await invoices.addOrganizerInvoice(event, poolId, {amount: 27.51, description: 'Preview source'}, nativeActor(owner));

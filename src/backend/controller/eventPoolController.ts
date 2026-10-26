@@ -26,6 +26,7 @@ import {resolveActorLabel} from '../modules/lib/util';
 import * as poolOperations from '../modules/invoice/poolOperations';
 import * as invoiceOperations from '../modules/invoice/invoiceOperations';
 import {savePoolTakeovers} from '../modules/invoice/takeovers';
+import {isParticipantSubmissionPool} from '../modules/invoice/state';
 import {
     preparePoolCreation, preparePoolAssignments, prepareTakeoverRequest, preparePoolSettings,
     prepareSurchargeRequest, prepareSubmittedInvoice, prepareOrganizerInvoice, prepareInvoiceAcceptance,
@@ -222,11 +223,17 @@ export async function readEventFinance(eventId: string, session: SessionLike,
     audience: components['schemas']['FinanceView']['audience'] = 'participant', locale?: string): Promise<components['schemas']['FinanceView']> {
     const {registration} = await admitFinance(eventId, session, audience);
     const text = financeFormatter(locale);
-    const [pools, participants, participantPools] = await Promise.all([
+    const [pools, participants] = await Promise.all([
         invoiceService.listPools(eventId), eventService.getEventParticipants(eventId),
-        registration ? invoiceService.getParticipantPools(eventId, registration.id) : Promise.resolve([]),
     ]);
-    const eligiblePoolIds = new Set(participantPools.map(pool => pool.id));
+    // Eligibility and displayed pool values use this request's same hydrated
+    // snapshot. Keep only eligible IDs, without copying or loading another graph.
+    const eligiblePoolIds = new Set<string>();
+    if (registration) {
+        for (const pool of pools) {
+            if (isParticipantSubmissionPool(pool, registration.id)) eligiblePoolIds.add(pool.id);
+        }
+    }
     // Organizers receive the existing accounting view; participants receive own invoices and own payer rows only.
     const invoices = pools.flatMap(pool => pool.invoices.filter(invoice => audience === 'organizer'
         || invoice.registrationId === registration!.id).map(invoice => projectFinanceInvoice(eventId, pool, invoice, participants, audience, registration?.id)));

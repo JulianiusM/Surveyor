@@ -6,7 +6,7 @@ owner: architecture maintainers
 status: current
 last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: source separation and strict serving scope recorded; rejected shared admission/administration acceptance claim corrected after explicit maintainer repudiation; prior rendering, responsiveness and domain contracts retained; no replacement architecture acceptance, deployment or exhaustive verification claim
+verification-scope: approved profile-UUID Activity count and request-local Finance pool selection recorded; source separation, rejected shared administration acceptance correction and prior rendering/domain contracts retained; no deployment or exhaustive verification claim
 source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: architecture-or-help-delivery-change
 -->
@@ -390,7 +390,10 @@ before takeovers are combined. Preview reconciliation reports the rounding surpl
 reimbursements and recorded settlements from gross costs.
 
 The pool loader fetches child collections with TypeORM's query relation strategy in a `REPEATABLE READ` transaction,
-keeping a consistent snapshot without a multiplying join. Writes retain locks and revision comparisons. Review and
+keeping a consistent snapshot without a multiplying join. Finance submission choices use those same loaded pool rows
+through the pure invoice state policy, without another pool-graph load or any cross-request cache. Each request reads
+current storage independently; event/participant reads retain their existing boundaries. The retained Event projection
+uses the same choice policy. Writes retain locks and revision comparisons. Review and
 settlement notifications start only after persistence; SMTP failures are logged separately from financial results.
 Pool and preview overviews retain meaningful cost and transfer context. Closed pool headers preserve the full total
 and both outstanding transfer totals. The global saved breakdown lists contextual calculation numbers only,
@@ -459,6 +462,12 @@ prior credits, and signed transfers recorded in this calculation without inferri
 ### Activity plans
 
 Activity plans contain dated slots, optional roles, assignments, shared fields, participant requirements, availability, recommendations, and review operations. The user guide owns the basic and advanced organizer workflows. [Activity Requirements and Assignment Recommendations](features/activity/ACTIVITY_REQUIREMENTS_ALGORITHM.md) is the canonical technical reference for precedence, coverage, fair allocation, bounded repair, overfill, background jobs, review states, and application persistence.
+
+Printable participant totals count distinct profile UUIDs from the plan's assignments and its linked event's
+registrations. The controller selects those scopes; one DBAL aggregate query unions UUIDs and returns a scalar count,
+without loading names, roles or a participant roster. Repeated assignments and registration overlap count once;
+same-name profiles remain distinct and null identity references contribute zero. Detail membership retains its
+existing profile-based projection. Schedule dates, print authorization and database schema remain unchanged.
 
 ### Packing lists
 
