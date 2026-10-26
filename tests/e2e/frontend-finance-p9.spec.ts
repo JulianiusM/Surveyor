@@ -3,7 +3,7 @@ import {expect, request as playwrightRequest, test, type APIRequestContext, type
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {dismissFrontendSuccessNotifications, expectUsableFrontendLayout} from '../keywords/e2eCoreKeywords';
 import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
-import {createTranslator} from '../../src/modules/localization/translator';
+import {createTranslator} from '../../src/common/localization/translator';
 import type {components} from '../../src/types/api/v1';
 
 test.use({actionTimeout: 10_000});

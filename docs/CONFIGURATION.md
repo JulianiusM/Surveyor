@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: archival defaults, coercion, inclusive UTC cutoff, startup validation, and pause behavior source review; D04 accepted from source review and deployment-practice confirmation for settings, precedence, authentication, SMTP, storage, and production safety; controlled execution tracked separately in D04V
-source-anchors: src/modules/entityArchival.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/settings.ts; src/server.ts; src/app.ts; src/modules/email.ts; src/modules/oidc.ts; src/modules/lib/fileCommons.ts; src/modules/invoice/retention.ts; src/modules/database/services/EventInvoiceService.ts; .github/workflows/ci.yml
+source-anchors: src/backend/modules/entityArchival.ts; src/backend/modules/archive/policy.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/modules/settings.ts; src/backend/server.ts; src/backend/app.ts; src/backend/modules/email.ts; src/backend/modules/oidc.ts; src/backend/modules/lib/fileCommons.ts; src/backend/modules/invoice/retention.ts; src/backend/modules/database/services/EventInvoiceService.ts; .github/workflows/ci.yml
 next-review: D04V
 -->
 
@@ -36,7 +36,7 @@ template and contain placeholder hosts, credentials, URLs, and a generated sessi
 
 Surveyor builds one settings object in this order, from lowest to highest precedence:
 
-1. Built-in defaults from `src/modules/settings.ts`.
+1. Built-in defaults from `src/backend/modules/settings.ts`.
 2. Values in the selected CSV settings file.
 3. Plain environment variables, including values loaded from the selected dotenv file.
 4. In E2E mode only, matching `E2E_` environment variables override their plain counterparts.

@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
-import {buildInvoiceSettlementEmail} from '../../src/modules/invoice/settlementEmail';
-import {renderEmail} from '../../src/modules/email';
+import {buildInvoiceSettlementEmail} from '../../src/backend/modules/invoice/settlementEmail';
+import {renderEmail} from '../../src/backend/modules/email';
 import type {InvoiceSettlementNotice} from '../../src/types/InvoicePoolTypes';
 
 function notice(share: Partial<InvoiceSettlementNotice['share']> = {}): InvoiceSettlementNotice {

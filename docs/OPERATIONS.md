@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
-source-anchors: src/modules/entityArchival.ts; src/modules/database/services/EntityLifecycleService.ts; src/migrations/1789862400000-AddEntityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/database/dataSource.ts; src/modules/invoice/retention.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/controller/helpController.ts; src/controller/eventPoolController.ts; src/modules/email.ts; src/modules/oidc.ts; docs/UPGRADING.md; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/calculation.ts; src/frontend/composables/command.ts; src/frontend/composables/feedback.ts; src/frontend/features/finance/
+source-anchors: src/backend/modules/entityArchival.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/migrations/1789862400000-AddEntityArchival.ts; src/backend/migrations/1789689600000-AddInvoiceRetraction.ts; src/backend/migrations/1789603200000-AddOrganizerInvoices.ts; src/backend/migrations/1789516800000-AddInvoiceShareRounding.ts; src/backend/modules/invoice/settlementEmail.ts; src/backend/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/backend/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; src/backend/server.ts; src/backend/app.ts; src/backend/modules/settings.ts; src/backend/modules/database/dataSource.ts; src/backend/modules/invoice/retention.ts; src/backend/modules/database/services/EventInvoiceService.ts; src/backend/modules/lib/fileCommons.ts; src/backend/modules/lib/pdf.ts; src/backend/controller/helpController.ts; src/backend/controller/eventPoolController.ts; src/backend/modules/email.ts; src/backend/modules/oidc.ts; docs/UPGRADING.md; src/backend/modules/invoice/invoiceOperations.ts; src/backend/modules/invoice/calculation.ts; src/frontend/composables/command.ts; src/frontend/composables/feedback.ts; src/frontend/features/finance/
 next-review: release-layout-or-operational-procedure-change
 -->
 
@@ -100,12 +100,12 @@ A valid release root contains at least:
 
 ```text
 dist/
-  server.js
+  backend/server.js
   frontend-server/entry-server.mjs
   public/app/.vite/manifest.json
   public/app/assets/
   api-contracts/
-  modules/localization/generated/
+  common/localization/generated/
 docs/
 fonts/
 package.json
@@ -115,7 +115,7 @@ package-lock.json
 
 The `docs/user-guide/` directory and its reviewed language corpora/assets must be present because the application
 serves them as in-app help. `dist/api-contracts/` contains the generated contract description, operation manifest and
-server validators; the language resources and manifest are packaged under `dist/modules/localization/generated/`.
+server validators; the language resources and manifest are packaged under `dist/common/localization/generated/`.
 Install the entire release rather than copying individual server files or client chunks from another build.
 
 ### 3. Install runtime dependencies
@@ -195,7 +195,7 @@ WorkingDirectory=/opt/surveyor/current
 Environment=NODE_ENV=production
 Environment=TZ=UTC
 Environment=SETTINGS_FILE=/etc/surveyor/settings.csv
-ExecStart=/usr/bin/node dist/server.js
+ExecStart=/usr/bin/node dist/backend/server.js
 Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=30s

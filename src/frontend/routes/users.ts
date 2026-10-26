@@ -1,6 +1,6 @@
 import type {RouteRecordRaw} from 'vue-router';
 import {javascriptPage, identityMessagePage} from './metadata';
-import {frontendOverviewPath} from '../../modules/lib/frontendIdentity';
+import {frontendOverviewPath} from '../../common/lib/frontendIdentity';
 
 // Views stay lazy so opening another domain does not enlarge the initial route.
 const OverviewPage = () => import('../features/overview/OverviewPage.vue');

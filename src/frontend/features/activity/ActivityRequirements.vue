@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref, shallowRef, watch} from 'vue';
 import type {ActivityRequirementConfiguration, ActivityRequirementDraft} from '../../../types/FrontendActivityRequirementTypes';
-import {calculateBaselineRequirementForPlan, hasValidRequirementValues} from '../../../modules/activity/requirements';
+import {calculateBaselineRequirementForPlan, hasValidRequirementValues} from '../../../common/activity/requirements';
 import {useFrontend} from '../../app/context';
 import {activityKeys} from '../../app/queryKeys';
 import {retireQueryFamily} from '../../app/queryCache';

@@ -8,7 +8,7 @@ import type {FrontendListCreationCopy, FrontendListCreationSource} from '../../t
 import type {FrontendPlainMessageKey} from '../../types/FrontendUiTypes';
 import {useActionState, useFrontend} from '../app/context';
 import {isReadDenial} from '../app/transport';
-import {isPlainMessageKey} from '../../modules/localization/translator';
+import {isPlainMessageKey} from '../../common/localization/translator';
 import {useCreationCommand} from '../composables/creation';
 import {useReadRetry, useReadRetryAt} from '../composables/feedback';
 import {usePageEntry} from '../composables/pageEntry';

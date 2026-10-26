@@ -24,7 +24,7 @@ import {
     resolveHelpAssetPath,
     searchHelpDocuments,
     validateTrustedHelpMarkdown,
-} from '../../src/controller/helpController';
+} from '../../src/backend/controller/helpController';
 
 const repositoryRoot = process.cwd();
 
@@ -168,7 +168,7 @@ describe('critical rendered help contracts', () => {
             'src/frontend/features/identity',
             'src/frontend/features/overview',
             'src/frontend/components/AppHeader.vue',
-            'src/locales/en.json',
+            'src/common/locales/en.json',
         );
         expectAll(visibleSources, ['Register', 'Your overview', 'Your participation', 'Administrable entities', 'New']);
     });
@@ -189,7 +189,7 @@ describe('critical rendered help contracts', () => {
             /owner-only/iu,
         ]);
 
-        const surveyUi = readRepositoryFiles('src/frontend/features/surveys', 'src/locales/en.json');
+        const surveyUi = readRepositoryFiles('src/frontend/features/surveys', 'src/common/locales/en.json');
         expectAll(surveyUi, [
             'Add new combination',
             'Weekday',
@@ -224,7 +224,7 @@ describe('critical rendered help contracts', () => {
             /Everyone.*excluded/iu,
         ]);
 
-        const packingUi = readRepositoryFiles('src/frontend/features/packing', 'src/locales/en.json');
+        const packingUi = readRepositoryFiles('src/frontend/features/packing', 'src/common/locales/en.json');
         expectAll(packingUi, [
             'Everyone',
             'All',
@@ -275,7 +275,7 @@ describe('critical rendered help contracts', () => {
             '4 The exact saved Stay duration requirements value',
         ]);
 
-        const activityUi = readRepositoryFiles('src/frontend/features/activity', 'src/locales/en.json');
+        const activityUi = readRepositoryFiles('src/frontend/features/activity', 'src/common/locales/en.json');
         expectAll(activityUi, [
             'Free',
             'Required',

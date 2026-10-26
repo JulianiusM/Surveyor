@@ -6,6 +6,7 @@ import {brotliCompress, constants, gzip} from 'node:zlib';
 import {promisify} from 'node:util';
 import {defineConfig, type Plugin} from 'vite';
 import vue from '@vitejs/plugin-vue';
+import {frontendBoundary, frontendBrowserDependencies} from './src/backend/modules/frontendBoundary';
 
 const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 const compressBrotli = promisify(brotliCompress);
@@ -56,9 +57,12 @@ function precompressedAssets(): Plugin {
 
 /** Client and SSR builds own separate output directories and preserve the server and print assets. */
 export default defineConfig(({isSsrBuild}) => ({
-    plugins: [vue(), ...isSsrBuild ? [] : [frontendAssetLicenses(), precompressedAssets()]],
+    plugins: [frontendBoundary(projectRoot), vue(), ...isSsrBuild ? [] : [frontendAssetLicenses(), precompressedAssets()]],
     publicDir: false,
     base: '/app/',
+    // Only reviewed browser entry points may produce publicly served optimized
+    // modules. A request cannot discover or prebundle another installed package.
+    optimizeDeps: {noDiscovery: true, include: frontendBrowserDependencies},
     server: {
         // Compile the shared entry and pre-JavaScript stylesheet before a first
         // browser visit pays for the cold source transform waterfall.
@@ -72,7 +76,7 @@ export default defineConfig(({isSsrBuild}) => ({
             // Test traces and review/coverage reports contain HTML, but they are
             // runtime evidence rather than application inputs. Watching them would
             // replace a live document and discard drafts while a browser test runs.
-            ignored: ['**/.generated/**', '**/src/modules/localization/generated/**', '**/src/types/**',
+            ignored: ['**/.generated/**', '**/src/common/localization/generated/**', '**/src/types/**',
                 '**/.temp/**', '**/artifacts/**', '**/test-results/**', '**/playwright-report/**', '**/coverage/**', '**/dist/**'],
         },
     },

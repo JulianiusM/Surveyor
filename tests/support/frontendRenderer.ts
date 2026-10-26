@@ -1,7 +1,7 @@
 import {readdir} from 'node:fs/promises';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {initializeFrontendRenderer} from '../../src/modules/frontendRenderer';
+import {initializeFrontendRenderer} from '../../src/backend/modules/frontendRenderer';
 
 /** Prepare installed renderer code and the named lazy route graphs as suite
  * infrastructure. Create no app, document, request, actor, query or private state. */

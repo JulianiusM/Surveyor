@@ -29,7 +29,7 @@ const script = path.join(repository, 'scripts/check-documentation.mjs');
 const helpScript = path.join(repository, 'scripts/check-help-documentation.mjs');
 const productionConfig = JSON.parse(fs.readFileSync(path.join(repository, 'docs/policies/documentation-check.json'), 'utf8'));
 const optionalPaths = [
-    'src/modules/database/__index__.ts', 'tests/.env.test.local', 'tests/.env.test', '.env.e2e',
+    'src/backend/modules/database/__index__.ts', 'tests/.env.test.local', 'tests/.env.test', '.env.e2e',
 ];
 const metadata = `<!--
 documentation-metadata
@@ -71,7 +71,7 @@ function fixture(t) {
     write(root, 'package.json', JSON.stringify({scripts: {valid: 'node -v'}}));
     write(root, 'README.md', `# Fixture\n${metadata}\n\n${optionalPaths.map(name => `\`${name}\``).join('\n')}\n`);
     write(root, 'docs/user-guide/README.md', `# Guide\n${metadata}\n\nUse [this page](README.md).\n`);
-    write(root, 'src/controller/helpController.ts', `const root = ['docs', 'user-guide'];\n`);
+    write(root, 'src/backend/controller/helpController.ts', `const root = ['docs', 'user-guide'];\n`);
     write(root, 'src/feature.ts', 'export const fixture = "Grüße";\n');
     write(root, '.github/workflows/release.yml', 'run: cp -R docs release/docs\n');
     const fingerprint = run(script, ['--root', root, '--fingerprint']);
@@ -526,7 +526,7 @@ test('temporary release copies do not enter maintained-document scans or source 
 
 test('advisory source inventory accepts equivalent fixed-path composition', t => {
     const root = fixture(t);
-    write(root, 'src/controller/helpController.ts', "const docsRoot = path.join(root, 'docs');\nconst helpRoot = path.join(docsRoot, 'user-guide');\n");
+    write(root, 'src/backend/controller/helpController.ts', "const docsRoot = path.join(root, 'docs');\nconst helpRoot = path.join(docsRoot, 'user-guide');\n");
     const {report} = inspect(root, true);
     // A source change still has fingerprint evidence; static expression spelling
     // must not be mistaken for a runtime source-boundary assertion.
@@ -557,7 +557,7 @@ test('a removed real source file still changes the fingerprint', t => {
 
 test('undefined source path is not masked by the exact generated-path exception', t => {
     const root = fixture(t);
-    fs.appendFileSync(path.join(root, 'README.md'), '\n`src/modules/database/missing.ts`\n');
+    fs.appendFileSync(path.join(root, 'README.md'), '\n`src/backend/modules/database/missing.ts`\n');
     expectError(root, 'missing-documented-repository-path');
 });
 
@@ -790,7 +790,7 @@ function helpFixture(t, extra = '') {
     write(root, 'scripts/check-documentation.mjs', fs.readFileSync(script));
     write(root, 'docs/user-guide/en/README.md', `# Help\n${metadata}\n\n![Test diagram](assets/test.png)\n${extra}\n`);
     write(root, 'docs/user-guide/en/assets/test.png', Buffer.from('89504e470d0a1a0a', 'hex'));
-    write(root, 'src/controller/helpController.ts', "'docs', 'user-guide'\nvalidateTrustedHelpMarkdown\nresolveHelpAssetPath\nrenderTrustedHelpMarkdown\n");
+    write(root, 'src/backend/controller/helpController.ts', "'docs', 'user-guide'\nvalidateTrustedHelpMarkdown\nresolveHelpAssetPath\nrenderTrustedHelpMarkdown\n");
     write(root, '.github/workflows/release.yml', 'cp -R docs release/docs\ndiff -qr docs/user-guide release/docs/user-guide\n');
     return root;
 }
@@ -812,7 +812,7 @@ test('help checker is parseable and accepts metadata, safe links and packaged im
 
 test('help report accepts named fixed-root composition without certifying runtime behavior', t => {
     const root = helpFixture(t);
-    write(root, 'src/controller/helpController.ts', "const docsRoot = path.join(root, 'docs');\nconst helpRoot = path.join(docsRoot, 'user-guide');\n");
+    write(root, 'src/backend/controller/helpController.ts', "const docsRoot = path.join(root, 'docs');\nconst helpRoot = path.join(docsRoot, 'user-guide');\n");
     const {report} = inspectHelp(root);
     assert.equal(report.ok, true);
 });
@@ -892,7 +892,7 @@ test('same-corpus regional hints remain valid while unsupported or distinct cata
 
     // A supported regional catalog is its own source even before its Help exists;
     // an unsupported tag must not pass merely because passive negotiation uses EN.
-    write(root, 'src/locales/en-US.json', '{}');
+    write(root, 'src/common/locales/en-US.json', '{}');
     write(root, 'docs/user-guide/en/README.md', `# Help\n${metadata}\n\n[Regional](/help?locale=en-US)\n[Autre](/help?locale=fr)\n![Figure](assets/test.png)\n`);
     const invalid = inspectHelp(root).report;
     assert.equal(invalid.errors.filter(error => error.message.includes('retain their own language')).length, 2);

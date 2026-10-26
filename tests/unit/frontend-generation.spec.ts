@@ -12,8 +12,8 @@ const artifacts = ['.generated/api/v1/openapi.json', '.generated/api/v1/operatio
     '.generated/api/v1/server.cjs', '.generated/api/v1/browser.mjs',
     '.generated/api/v1/server.d.cts', '.generated/api/v1/browser.d.mts',
     'src/types/api/v1.d.ts', 'src/types/api/validation-v1.d.ts', 'src/types/LocalizationTypes.d.ts',
-    'src/modules/localization/generated/resources.json', 'src/modules/localization/generated/manifest.json',
-    'src/modules/localization/generated/permissions.ts', '.generated/api/v1/policy.mjs',
+    'src/common/localization/generated/resources.json', 'src/common/localization/generated/manifest.json',
+    'src/common/localization/generated/permissions.ts', '.generated/api/v1/policy.mjs',
     '.generated/api/v1/browser/validatePackingListView.mjs', '.generated/api/v1/browser/validateRegistrationInput.mjs'];
 
 /** Run the real generators in an empty output tree; never substitute hand-authored validators. */
@@ -31,11 +31,11 @@ async function prepareGenerationTree(directory: string): Promise<void> {
         await fs.copyFile(path.join(root, 'scripts', script), path.join(directory, 'scripts', script));
     }
     await fs.cp(path.join(root, 'contracts/api/v1'), path.join(directory, 'contracts/api/v1'), {recursive: true});
-    await fs.cp(path.join(root, 'src/locales'), path.join(directory, 'src/locales'), {recursive: true});
-    await fs.mkdir(path.join(directory, 'src/modules/lib'), {recursive: true});
-    await fs.copyFile(path.join(root, 'src/modules/lib/permissions.ts'), path.join(directory, 'src/modules/lib/permissions.ts'));
-    await fs.mkdir(path.join(directory, 'src/modules/invoice/locales'), {recursive: true});
-    await fs.copyFile(path.join(root, 'src/modules/invoice/locales/en.ts'), path.join(directory, 'src/modules/invoice/locales/en.ts'));
+    await fs.cp(path.join(root, 'src/common/locales'), path.join(directory, 'src/common/locales'), {recursive: true});
+    await fs.mkdir(path.join(directory, 'src/backend/modules/lib'), {recursive: true});
+    await fs.copyFile(path.join(root, 'src/backend/modules/lib/permissions.ts'), path.join(directory, 'src/backend/modules/lib/permissions.ts'));
+    await fs.mkdir(path.join(directory, 'src/backend/modules/invoice/locales'), {recursive: true});
+    await fs.copyFile(path.join(root, 'src/backend/modules/invoice/locales/en.ts'), path.join(directory, 'src/backend/modules/invoice/locales/en.ts'));
     await fs.symlink(path.join(root, 'node_modules'), path.join(directory, 'node_modules'),
         process.platform === 'win32' ? 'junction' : 'dir');
 }
@@ -190,7 +190,7 @@ filesystem.watch = function observeInput(directory, options, listener) {
 
     function inputObserved(event, filename) {
         callback.call(this, event, filename);
-        if (path.resolve(String(directory)) === path.join(process.cwd(), 'src/modules/lib')
+        if (path.resolve(String(directory)) === path.join(process.cwd(), 'src/backend/modules/lib')
             && filename?.toString() === 'permissions.ts') process.send({kind: 'permission-observed'});
     }
 };
@@ -265,19 +265,19 @@ describe('contract and catalog generation', () => {
             // observing this same source directly would restart before derived
             // interface messages and their version had finished regenerating.
             const scripts = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8')).scripts;
-            expect(scripts['server:dev']).toContain('--ignore src/modules/invoice/locales/en.ts');
+            expect(scripts['server:dev']).toContain('--ignore src/backend/modules/invoice/locales/en.ts');
             expect(scripts['server:dev']).toContain('--watch .generated/frontend-ready.json');
             // Run copies of the actual watcher/generators against a detached authored
             // tree. Installed dependencies are read through one junction; no maintained
             // source, application server, environment or database is changed.
             await prepareWatcherTree(temporary);
-            const permissionsPath = path.join(temporary, 'src/modules/lib/permissions.ts');
+            const permissionsPath = path.join(temporary, 'src/backend/modules/lib/permissions.ts');
             const originalPermissions = await fs.readFile(permissionsPath, 'utf8');
 
             // Add the synthetic permission's text before watching. Subsequent changes
             // affect only the registry, proving its exact dependency is observed.
             for (const filename of ['en.json', 'de.json']) {
-                const catalogPath = path.join(temporary, 'src/locales', filename);
+                const catalogPath = path.join(temporary, 'src/common/locales', filename);
                 const catalog = JSON.parse(await fs.readFile(catalogPath, 'utf8'));
                 catalog.resources.ui.permissions.WATCHER_PERMISSION = 'Watcher fixture permission';
                 await fs.writeFile(catalogPath, JSON.stringify(catalog));
@@ -306,9 +306,9 @@ describe('contract and catalog generation', () => {
             // until real API and locale generation have both completed successfully.
             const validPermissions = originalPermissions.replace('    EDIT_TITLE: 1,', '    WATCHER_PERMISSION: 1,');
             expect(validPermissions).not.toBe(originalPermissions);
-            const replacement = path.join(temporary, 'src/modules/lib/permissions.next');
+            const replacement = path.join(temporary, 'src/backend/modules/lib/permissions.next');
             const markerPath = path.join(temporary, '.generated/frontend-ready.json');
-            const generatedDirectory = path.join(temporary, 'src/modules/localization/generated');
+            const generatedDirectory = path.join(temporary, 'src/common/localization/generated');
             expect(await readOptionalFile(markerPath)).toBeNull();
             await fs.writeFile(replacement, validPermissions);
             await fs.rename(replacement, permissionsPath);
@@ -354,7 +354,7 @@ describe('contract and catalog generation', () => {
             expect(firstManifest.messages['permissions.WATCHER_PERMISSION']).toBeDefined();
             const markerModified = (await fs.stat(markerPath)).mtimeMs;
             for (const relative of ['.generated/api/v1/operations.json',
-                'src/modules/localization/generated/permissions.ts', 'src/modules/localization/generated/manifest.json']) {
+                'src/common/localization/generated/permissions.ts', 'src/common/localization/generated/manifest.json']) {
                 expect((await fs.stat(path.join(temporary, relative))).mtimeMs).toBeLessThanOrEqual(markerModified);
             }
 
@@ -382,7 +382,7 @@ describe('contract and catalog generation', () => {
             // An atomic source save must update its derived interface wording
             // and version before publishing the next Express readiness marker.
             const recoveredMarker = await fs.readFile(markerPath, 'utf8');
-            const invoicePath = path.join(temporary, 'src/modules/invoice/locales/en.ts');
+            const invoicePath = path.join(temporary, 'src/backend/modules/invoice/locales/en.ts');
             const invoiceSource = await fs.readFile(invoicePath, 'utf8');
             const invoiceReplacement = invoiceSource.replace('base: "Base share"', 'base: "Watched shared invoice base"');
             expect(invoiceReplacement).not.toBe(invoiceSource);
@@ -451,7 +451,7 @@ describe('contract and catalog generation', () => {
         try {
             const destination = path.join(temporary, 'output');
             generate('generate-locales.mjs', ['--output-root', destination]);
-            const generated = path.join(destination, 'src/modules/localization/generated');
+            const generated = path.join(destination, 'src/common/localization/generated');
             const sourcePath = path.join(generated, 'permissions.ts');
             const sourceBefore = await fs.readFile(sourcePath, 'utf8');
             const sourceModifiedBefore = (await fs.stat(sourcePath)).mtimeMs;
@@ -737,12 +737,12 @@ describe('contract and catalog generation', () => {
                 await fs.copyFile(path.join(root, '.generated/api/v1', filename), path.join(apiDirectory, filename));
             }
             const destination = path.join(temporary, 'output');
-            const localePath = path.join(temporary, 'src/locales/en.json');
+            const localePath = path.join(temporary, 'src/common/locales/en.json');
             const english = JSON.parse(await fs.readFile(localePath, 'utf8'));
-            const invoicePath = path.join(temporary, 'src/modules/invoice/locales/en.ts');
+            const invoicePath = path.join(temporary, 'src/backend/modules/invoice/locales/en.ts');
             const originalInvoice = await fs.readFile(invoicePath, 'utf8');
-            const resourcesPath = path.join(destination, 'src/modules/localization/generated/resources.json');
-            const manifestPath = path.join(destination, 'src/modules/localization/generated/manifest.json');
+            const resourcesPath = path.join(destination, 'src/common/localization/generated/resources.json');
+            const manifestPath = path.join(destination, 'src/common/localization/generated/manifest.json');
             generate('generate-locales.mjs', ['--output-root', destination], temporary);
             const resources = JSON.parse(await fs.readFile(resourcesPath, 'utf8'));
             const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
@@ -809,17 +809,17 @@ describe('contract and catalog generation', () => {
         try {
             const source = path.join(temporary, 'locales');
             const destination = path.join(temporary, 'output');
-            await fs.cp(path.join(root, 'src/locales'), source, {recursive: true});
+            await fs.cp(path.join(root, 'src/common/locales'), source, {recursive: true});
             const english = JSON.parse(await fs.readFile(path.join(source, 'en.json'), 'utf8'));
             // Synthetic fixture: tests discovery and applicable plural categories, not translation quality.
             generate('generate-locales.mjs', ['--source', source, '--output-root', destination]);
-            const resolved = JSON.parse(await fs.readFile(path.join(destination, 'src/modules/localization/generated/resources.json'), 'utf8'));
+            const resolved = JSON.parse(await fs.readFile(path.join(destination, 'src/common/localization/generated/resources.json'), 'utf8'));
             const added = {...english, resources: resolved.en, locale: 'nl', nativeName: 'Nederlands', help: {directory: 'nl'}};
             delete added.uiContracts;
             delete added.invoiceMessages;
             await fs.writeFile(path.join(source, 'nl.json'), JSON.stringify(added));
             generate('generate-locales.mjs', ['--source', source, '--output-root', destination]);
-            const manifest = JSON.parse(await fs.readFile(path.join(destination, 'src/modules/localization/generated/manifest.json'), 'utf8'));
+            const manifest = JSON.parse(await fs.readFile(path.join(destination, 'src/common/localization/generated/manifest.json'), 'utf8'));
             expect(manifest.locales.map((locale: {locale: string}) => locale.locale)).toContain('nl');
             expect(manifest.helpSources.nl).toBe('nl');
             const germanPath = path.join(source, 'de.json');
@@ -847,9 +847,9 @@ describe('contract and catalog generation', () => {
         try {
             const source = path.join(temporary, 'locales');
             const destination = path.join(temporary, 'output');
-            await fs.cp(path.join(root, 'src/locales'), source, {recursive: true});
+            await fs.cp(path.join(root, 'src/common/locales'), source, {recursive: true});
             generate('generate-locales.mjs', ['--source', source, '--output-root', destination]);
-            const manifest = JSON.parse(await fs.readFile(path.join(destination, 'src/modules/localization/generated/manifest.json'), 'utf8'));
+            const manifest = JSON.parse(await fs.readFile(path.join(destination, 'src/common/localization/generated/manifest.json'), 'utf8'));
             expect(manifest.messages['activity.progressFree']).toMatchObject({nodes: ['assigned'], plural: true});
             const germanPath = path.join(source, 'de.json');
             const original = await fs.readFile(germanPath, 'utf8');

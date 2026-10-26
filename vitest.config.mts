@@ -101,8 +101,8 @@ export default defineConfig({
             reporter: ['text', 'lcov', 'json'],
             include: ['src/**/*.ts', 'src/frontend/**/*.vue'],
             exclude: [
-                'src/migrations/**',
-                'src/modules/database/__index__.ts',
+                'src/backend/migrations/**',
+                'src/backend/modules/database/__index__.ts',
                 'src/types/**',
             ],
         },

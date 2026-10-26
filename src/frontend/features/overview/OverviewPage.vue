@@ -9,7 +9,7 @@ import type {components} from '../../../types/api/v1';
 import type {FrontendOverviewCountRead, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import {overviewKeys} from '../../app/queryKeys';
 import {overviewQueryParameters} from './api';
-import {frontendOverviewPath, frontendOverviewPageEntry} from '../../../modules/lib/frontendIdentity';
+import {frontendOverviewPath, frontendOverviewPageEntry} from '../../../common/lib/frontendIdentity';
 import OverviewRegion from './OverviewRegion.vue';
 import AppAccordionButton from '../../components/AppAccordionButton.vue';
 import RefreshButton from '../../components/RefreshButton.vue';

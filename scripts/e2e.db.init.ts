@@ -18,8 +18,8 @@ import 'reflect-metadata';
 import bcrypt from "bcryptjs";
 import * as dotenv from 'dotenv';
 import {DataSource} from 'typeorm';
-import {Profile} from "../src/modules/database/entities/user/Profile";
-import {User} from "../src/modules/database/entities/user/User";
+import {Profile} from "../src/backend/modules/database/entities/user/Profile";
+import {User} from "../src/backend/modules/database/entities/user/User";
 
 dotenv.config({path: process.env.E2E_DOTENV_FILE ?? '.env.e2e'});
 
@@ -43,9 +43,9 @@ export const E2EDataSource = new DataSource({
     timezone: 'Z' as any,
     // @ts-ignore common driver option
     dateStrings: ['DATE'],
-    entities: ['src/modules/database/entities/**/*.ts'],
-    migrations: ['src/migrations/*.ts'],
-    subscribers: ['src/modules/database/subscribers/**/*.ts'],
+    entities: ['src/backend/modules/database/entities/**/*.ts'],
+    migrations: ['src/backend/migrations/*.ts'],
+    subscribers: ['src/backend/modules/database/subscribers/**/*.ts'],
     // Never use synchronize in CI; rely on migrations.
     synchronize: false,
     logging: false,

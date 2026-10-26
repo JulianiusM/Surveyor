@@ -11,7 +11,7 @@ import {usePageTitle} from '../../composables/pageTitle';
 import type {FrontendCommonPage, FrontendProfileWorkflow} from '../../../types/FrontendTypes';
 import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {components, operations} from '../../../types/api/v1';
-import {frontendDocumentUrl} from '../../../modules/lib/frontendIdentity';
+import {frontendDocumentUrl} from '../../../common/lib/frontendIdentity';
 import {IdentityAdministrationApi} from './administrationApi';
 import ActionButton from '../../components/ActionButton.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';

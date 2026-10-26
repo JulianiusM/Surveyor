@@ -4,7 +4,7 @@ import {RouterLink, useRoute} from 'vue-router';
 import type {FrontendLandingQuickCreate} from '../../../types/FrontendTypes';
 import {useFrontend} from '../../app/context';
 import {usePageTitle} from '../../composables/pageTitle';
-import {frontendOverviewPath} from '../../../modules/lib/frontendIdentity';
+import {frontendOverviewPath} from '../../../common/lib/frontendIdentity';
 
 const context = useFrontend();
 const {messages, session} = context;

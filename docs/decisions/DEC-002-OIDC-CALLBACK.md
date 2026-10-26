@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: P11 route-owner reconciliation; public callback and original decision preserved
-source-anchors: src/app.ts; src/modules/settings.ts; src/modules/oidc.ts; docs/backlog/documentation-remediation.yml; src/routes/users.ts
+source-anchors: src/backend/app.ts; src/backend/modules/settings.ts; src/backend/modules/oidc.ts; docs/backlog/documentation-remediation.yml; src/backend/routes/users.ts
 next-review: D04
 -->
 
@@ -29,7 +29,7 @@ configuration.
 
 The original public route was composed from two implementation elements:
 
-1. `src/app.ts` mounts the users router at `/users`.
+1. `src/backend/app.ts` mounts the users router at `/users`.
 2. The retired native users router registered `/oidc/callback` inside that mount.
 
 The resulting externally reachable callback path is `/users/oidc/callback`. OIDC login and callback processing use the

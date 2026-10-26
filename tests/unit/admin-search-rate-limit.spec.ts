@@ -3,10 +3,10 @@ import type {NextFunction, Request, Response} from 'express';
 // The imported native middleware uses the application's installed Request.flash
 // declaration; this erased import keeps its standalone test compilation complete.
 import type {} from 'express-flash';
-import {searchLimiter} from '../../src/middleware/adminApiFactory';
-import {classifyApiError, handleApiProblem, isVersionedApiRequest} from '../../src/modules/api/problem';
-import {contractValidator} from '../../src/modules/api/contracts';
-import {APIError} from '../../src/modules/lib/errors';
+import {searchLimiter} from '../../src/backend/middleware/adminApiFactory';
+import {classifyApiError, handleApiProblem, isVersionedApiRequest} from '../../src/backend/modules/api/problem';
+import {contractValidator} from '../../src/backend/modules/api/contracts';
+import {APIError} from '../../src/backend/modules/lib/errors';
 
 /** Exercise the actual in-memory limiter without HTTP, sessions, an application
  * server or database. Mounted route paths deliberately omit the protocol prefix. */

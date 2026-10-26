@@ -1,18 +1,18 @@
-import * as invoiceOperations from '../../src/modules/invoice/invoiceOperations';
-import * as poolOperations from '../../src/modules/invoice/poolOperations';
+import * as invoiceOperations from '../../src/backend/modules/invoice/invoiceOperations';
+import * as poolOperations from '../../src/backend/modules/invoice/poolOperations';
 import type {Request} from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {afterAll, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
-import eventPoolController from '../../src/controller/eventPoolController';
-import {AddInvoiceRetraction1789689600000} from '../../src/migrations/1789689600000-AddInvoiceRetraction';
-import {AppDataSource} from '../../src/modules/database/dataSource';
-import {Profile} from '../../src/modules/database/entities/user/Profile';
-import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
-import * as eventService from '../../src/modules/database/services/EventService';
-import mailer from '../../src/modules/email';
-import settings from '../../src/modules/settings';
+import eventPoolController from '../../src/backend/controller/eventPoolController';
+import {AddInvoiceRetraction1789689600000} from '../../src/backend/migrations/1789689600000-AddInvoiceRetraction';
+import {AppDataSource} from '../../src/backend/modules/database/dataSource';
+import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
+import * as invoiceService from '../../src/backend/modules/database/services/EventInvoiceService';
+import * as eventService from '../../src/backend/modules/database/services/EventService';
+import mailer from '../../src/backend/modules/email';
+import settings from '../../src/backend/modules/settings';
 import {createIntegrationEvent, persistIntegrationProfile, registerEventAttendance} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 

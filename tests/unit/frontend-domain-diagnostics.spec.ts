@@ -1,9 +1,9 @@
 import {describe, expect, it} from 'vitest';
-import activityController from '../../src/controller/activityController';
-import {classifyArchiveCommandError} from '../../src/controller/entityAdminController';
-import type {ActivityPlan} from '../../src/modules/database/entities/activity/ActivityPlan';
-import {APIError, ExpectedError} from '../../src/modules/lib/errors';
-import {ApiProblem, classifyApiError, declaredApiProblem, validatedProblemBody} from '../../src/modules/api/problem';
+import activityController from '../../src/backend/controller/activityController';
+import {classifyArchiveCommandError} from '../../src/backend/controller/entityAdminController';
+import type {ActivityPlan} from '../../src/backend/modules/database/entities/activity/ActivityPlan';
+import {APIError, ExpectedError} from '../../src/backend/modules/lib/errors';
+import {ApiProblem, classifyApiError, declaredApiProblem, validatedProblemBody} from '../../src/backend/modules/api/problem';
 
 /** These actual controller checks reject before persistence. No datasource,
  * repository, transaction or business operation is replaced for these cases. */

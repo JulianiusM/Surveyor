@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-09-05
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: feature-specific-static-behavior
-source-anchors: src/controller/driversController.ts; src/modules/database/services/DriverService.ts; src/modules/database/entities/drivers/DriversAssignment.ts; src/modules/database/entities/drivers/DriversItem.ts; tests/integration/controller-smoke-workflows.spec.ts; docs/backlog/documentation-remediation.yml; src/frontend/; src/routes/api/v1/
+source-anchors: src/backend/controller/driversController.ts; src/backend/modules/database/services/DriverService.ts; src/backend/modules/database/entities/drivers/DriversAssignment.ts; src/backend/modules/database/entities/drivers/DriversItem.ts; tests/integration/controller-smoke-workflows.spec.ts; docs/backlog/documentation-remediation.yml; src/frontend/; src/backend/routes/api/v1/
 next-review: D11
 -->
 
@@ -27,11 +27,11 @@ A driver who is also assigned to a row is counted once because of that assignmen
 
 The computation and presentation establish one consistent meaning:
 
-- `src/controller/driversController.ts` obtains the assignees for every driver item, inserts an assignee identity into a
+- `src/backend/controller/driversController.ts` obtains the assignees for every driver item, inserts an assignee identity into a
   set, and exposes the set size as `counters.participants`.
 - The set key is based on `profileId`, so multiple assignments belonging to the same profile are deduplicated. The
   controller contains a defensive name fallback, although current persisted assignments are profile-backed.
-- `src/modules/database/services/DriverService.ts` builds the assignee lists from `DriversAssignment` records joined to
+- `src/backend/modules/database/services/DriverService.ts` builds the assignee lists from `DriversAssignment` records joined to
   profiles. Driver identity is loaded separately from the profile that owns each `DriversItem` and is returned as
   `driverName`; it is never added to the participant set by virtue of owning the item.
 - `drivers-view.pug` (the retired native owner) displays `data.counters.participants` under **Participants** and separately displays

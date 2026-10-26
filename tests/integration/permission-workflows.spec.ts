@@ -1,22 +1,22 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {Request} from 'express';
-import activityController from '../../src/controller/activityController';
-import driversController from '../../src/controller/driversController';
-import * as entityAdminController from '../../src/controller/entityAdminController';
-import eventPoolController from '../../src/controller/eventPoolController';
-import * as helpController from '../../src/controller/helpController';
-import eventController from '../../src/controller/eventController';
-import packingController from '../../src/controller/packingController';
-import surveyController from '../../src/controller/surveyController';
-import * as userController from '../../src/controller/userController';
-import {Profile} from '../../src/modules/database/entities/user/Profile';
-import {PERM} from '../../src/modules/lib/permissions';
-import * as activityService from '../../src/modules/database/services/ActivityService';
-import * as adminService from '../../src/modules/database/services/EntityAdminService';
-import * as eventService from '../../src/modules/database/services/EventService';
-import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
-import * as surveyService from '../../src/modules/database/services/SurveyService';
-import * as userService from '../../src/modules/database/services/UserService';
+import activityController from '../../src/backend/controller/activityController';
+import driversController from '../../src/backend/controller/driversController';
+import * as entityAdminController from '../../src/backend/controller/entityAdminController';
+import eventPoolController from '../../src/backend/controller/eventPoolController';
+import * as helpController from '../../src/backend/controller/helpController';
+import eventController from '../../src/backend/controller/eventController';
+import packingController from '../../src/backend/controller/packingController';
+import surveyController from '../../src/backend/controller/surveyController';
+import * as userController from '../../src/backend/controller/userController';
+import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
+import {PERM} from '../../src/backend/modules/lib/permissions';
+import * as activityService from '../../src/backend/modules/database/services/ActivityService';
+import * as adminService from '../../src/backend/modules/database/services/EntityAdminService';
+import * as eventService from '../../src/backend/modules/database/services/EventService';
+import * as invoiceService from '../../src/backend/modules/database/services/EventInvoiceService';
+import * as surveyService from '../../src/backend/modules/database/services/SurveyService';
+import * as userService from '../../src/backend/modules/database/services/UserService';
 import {
     createActivitySlotEntity,
     createDriversItemEntity,

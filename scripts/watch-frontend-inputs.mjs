@@ -120,11 +120,11 @@ function observeInvoiceCatalog(_event, filename) {
 }
 
 const watchers = [];
-for (const directory of ['contracts/api/v1', 'src/locales']) {
+for (const directory of ['contracts/api/v1', 'src/common/locales']) {
     watchers.push(watch(path.join(root, directory), {recursive: true}, observeContractOrCatalog));
 }
-watchers.push(watch(path.join(root, 'src/modules/lib'), observePermissionRegistry));
-watchers.push(watch(path.join(root, 'src/modules/invoice/locales'), observeInvoiceCatalog));
+watchers.push(watch(path.join(root, 'src/backend/modules/lib'), observePermissionRegistry));
+watchers.push(watch(path.join(root, 'src/backend/modules/invoice/locales'), observeInvoiceCatalog));
 
 /** Release timers, directory handles and the active child when the development group stops. */
 function stop() {

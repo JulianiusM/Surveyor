@@ -6,7 +6,7 @@ import {
     calculateHypotheticalRoleCoverage,
     calculateRequirementCapacitySummary,
     summarizeParticipantRequirements,
-} from '../../src/modules/activity/requirements';
+} from '../../src/common/activity/requirements';
 import {
     createParticipantAttendance,
     createParticipantRequirementOverride,

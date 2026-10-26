@@ -1,4 +1,4 @@
-import {PERM, toMaskFromBodyValue} from '../../src/modules/lib/permissions';
+import {PERM, toMaskFromBodyValue} from '../../src/backend/modules/lib/permissions';
 
 export interface PermissionBodyCase {
     description: string;

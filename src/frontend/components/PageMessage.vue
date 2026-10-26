@@ -2,7 +2,7 @@
 import {computed, ref, watch} from 'vue';
 import {RouterLink, useRoute} from 'vue-router';
 import {useFrontend} from '../app/context';
-import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
+import {frontendDocumentUrl} from '../../common/lib/frontendIdentity';
 import type {FrontendNoticeAction} from '../../types/FrontendFeedbackTypes';
 import StatusNotice from './StatusNotice.vue';
 

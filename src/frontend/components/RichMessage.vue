@@ -3,7 +3,7 @@ import {computed} from 'vue';
 import type {VNode} from 'vue';
 import {TranslationComponent as I18next} from 'i18next-vue';
 import type {MessageNodes, MessageParameters, RichMessageKey} from '../../types/LocalizationTypes';
-import {assertRichMessageNodes} from '../../modules/localization/translator';
+import {assertRichMessageNodes} from '../../common/localization/translator';
 import {useFrontend} from '../app/context';
 
 // Catalog declarations own placement and names; features supply authored nodes.

@@ -14,15 +14,16 @@
  * limitations under the License.
  */
 
-import type {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
+import type {ActivityPlan} from "../backend/modules/database/entities/activity/ActivityPlan";
 import type {EntityManager} from 'typeorm';
-import type {DriversList} from "../modules/database/entities/drivers/DriversList";
-import type {Event} from "../modules/database/entities/event/Event";
-import type {PackingList} from "../modules/database/entities/packing/PackingList";
-import type {Survey} from "../modules/database/entities/surveys/Survey";
-import {Guest} from "../modules/database/entities/user/Guest";
+import type {DriversList} from "../backend/modules/database/entities/drivers/DriversList";
+import type {Event} from "../backend/modules/database/entities/event/Event";
+import type {PackingList} from "../backend/modules/database/entities/packing/PackingList";
+import type {Survey} from "../backend/modules/database/entities/surveys/Survey";
+import {Guest} from "../backend/modules/database/entities/user/Guest";
 import type {EntityType} from "./UtilTypes";
 import type {ArchivePresentation, ArchiveSnapshotEntry, PersonalVisibility} from "./ArchiveTypes";
+import type {components} from './api/v1';
 
 export type OidcClaims = {
     sub: string;
@@ -177,3 +178,16 @@ export type GuestLinkData = Guest & { link: string }
 
 /** Shared document admission; attached roots are checked before standalone guest entry. */
 export type EntityViewAdmission = 'render' | 'guest' | 'event-registration-required';
+
+/** Common page admission discloses a public guest title only on the guest view. */
+export interface EntityResourceEntry {
+    entry: components['schemas']['PageEntryOutcome'];
+    guest: components['schemas']['GuestEntry'] | null;
+}
+
+/** Feature-owned snapshot and navigation input; none of these values grant authority. */
+export interface EntityResourceEntryOptions {
+    manager?: EntityManager;
+    query?: URLSearchParams;
+    resourceId?: string;
+}

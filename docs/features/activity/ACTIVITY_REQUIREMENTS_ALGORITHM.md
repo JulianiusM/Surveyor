@@ -7,7 +7,7 @@ status: current
 last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: P11 source-owner and Help-link reconciliation; existing domain behavior and decisions retained; no new execution claim
-source-anchors: src/types/ActivityTypes.d.ts; src/modules/database/services/ActivityService.ts; tests/unit/activity-linked-recommendations.spec.ts; tests/integration/activity-plan-interlinking.spec.ts; tests/e2e/frontend-activity-advanced.spec.ts; src/modules/activity/requirements.ts; src/modules/activity/availability.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/autoAssignment.ts; src/modules/activity/recommendations.ts; src/modules/activity/recommendationJobs.ts; src/modules/database/services/ActivityRequirementService.ts; src/modules/database/services/ActivityRecommendationService.ts; src/controller/activityController.ts; tests/unit/activity-requirements.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/frontend/features/activity/; src/routes/api/v1/activity.ts
+source-anchors: src/types/ActivityTypes.d.ts; src/backend/modules/database/services/ActivityService.ts; tests/unit/activity-linked-recommendations.spec.ts; tests/integration/activity-plan-interlinking.spec.ts; tests/e2e/frontend-activity-advanced.spec.ts; src/common/activity/requirements.ts; src/backend/modules/activity/availability.ts; src/backend/modules/activity/fairAssignment.ts; src/backend/modules/activity/autoAssignment.ts; src/backend/modules/activity/recommendations.ts; src/backend/modules/activity/recommendationJobs.ts; src/backend/modules/database/services/ActivityRequirementService.ts; src/backend/modules/database/services/ActivityRecommendationService.ts; src/backend/controller/activityController.ts; tests/unit/activity-requirements.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/frontend/features/activity/; src/backend/routes/api/v1/activity.ts
 next-review: implementation-change,D14
 -->
 
@@ -390,15 +390,15 @@ A change to this subsystem should review all of the following together:
 
 ## Primary code and test references
 
-- Requirement and baseline calculations: `src/modules/activity/requirements.ts`
-- Availability and warning rules: `src/modules/activity/availability.ts`
-- Fair recommendation algorithm: `src/modules/activity/fairAssignment.ts`
-- Context assembly: `src/modules/activity/autoAssignment.ts`
-- Batch warning calculation: `src/modules/activity/recommendations.ts`
-- Job coordination: `src/modules/activity/recommendationJobs.ts`
-- Requirement persistence: `src/modules/database/services/ActivityRequirementService.ts`
-- Recommendation persistence: `src/modules/database/services/ActivityRecommendationService.ts`
-- Controller orchestration: `src/controller/activityController.ts`
+- Requirement and baseline calculations: `src/common/activity/requirements.ts`
+- Availability and warning rules: `src/backend/modules/activity/availability.ts`
+- Fair recommendation algorithm: `src/backend/modules/activity/fairAssignment.ts`
+- Context assembly: `src/backend/modules/activity/autoAssignment.ts`
+- Batch warning calculation: `src/backend/modules/activity/recommendations.ts`
+- Job coordination: `src/backend/modules/activity/recommendationJobs.ts`
+- Requirement persistence: `src/backend/modules/database/services/ActivityRequirementService.ts`
+- Recommendation persistence: `src/backend/modules/database/services/ActivityRecommendationService.ts`
+- Controller orchestration: `src/backend/controller/activityController.ts`
 - Browser requirement workflow: `src/frontend/features/activity/ActivityRequirements.vue`
 - Browser recommendation workflow: `src/frontend/features/activity/ActivityRecommendations.vue`
 

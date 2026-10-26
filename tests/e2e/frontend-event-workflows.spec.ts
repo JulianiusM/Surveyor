@@ -5,9 +5,9 @@ import type {components} from '../../src/types/api/v1';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {dismissFrontendSuccessNotifications, updateEntityDefaultsForE2E, updateEntityMetadataForE2E} from '../keywords/e2eCoreKeywords';
 import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
-import {PERM} from '../../src/modules/lib/permissions';
-import {createTranslator} from '../../src/modules/localization/translator';
-import {getGuestRegistrationNags} from '../../src/modules/lib/guestRegistrationNags';
+import {PERM} from '../../src/backend/modules/lib/permissions';
+import {createTranslator} from '../../src/common/localization/translator';
+import {getGuestRegistrationNags} from '../../src/backend/modules/lib/guestRegistrationNags';
 
 /** Seed attendance through the integrated API, independently of the Vue control
  * being exercised. Each test owns a separately created Event. */

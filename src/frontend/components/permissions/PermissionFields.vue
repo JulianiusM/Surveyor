@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed} from 'vue';
 import type {components} from '../../../types/api/v1';
-import {permissionLabel} from '../../../modules/localization/permissionLabels';
+import {permissionLabel} from '../../../common/localization/permissionLabels';
 import type {MessageKey} from '../../../types/LocalizationTypes';
 import {useFrontend} from '../../app/context';
 import ActionButton from '../ActionButton.vue';

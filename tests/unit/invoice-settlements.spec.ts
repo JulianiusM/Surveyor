@@ -1,10 +1,10 @@
 import {describe, expect, it} from 'vitest';
-import {collectSettledRegistrationIds, projectInvoiceShares} from '../../src/modules/invoice/settlements';
-import {preparePoolCalculation} from '../../src/modules/invoice/calculation';
-import {invoiceSettledShareImpact} from '../../src/modules/invoice/coverage';
+import {collectSettledRegistrationIds, projectInvoiceShares} from '../../src/backend/modules/invoice/settlements';
+import {preparePoolCalculation} from '../../src/backend/modules/invoice/calculation';
+import {invoiceSettledShareImpact} from '../../src/backend/modules/invoice/coverage';
 import type {PreviousInvoiceShare} from '../../src/types/InvoicePoolTypes';
-import type {EventInvoicePool} from '../../src/modules/database/entities/event/EventInvoicePool';
-import type {EventRegistration} from '../../src/modules/database/entities/event/EventRegistration';
+import type {EventInvoicePool} from '../../src/backend/modules/database/entities/event/EventInvoicePool';
+import type {EventRegistration} from '../../src/backend/modules/database/entities/event/EventRegistration';
 import type {ParticipantRow} from '../../src/types/EventTypes';
 
 describe('active carried invoice settlements', () => {

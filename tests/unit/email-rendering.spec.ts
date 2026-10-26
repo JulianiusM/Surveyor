@@ -1,8 +1,8 @@
 import {describe, expect, it, vi} from 'vitest';
 import nodemailer from 'nodemailer';
 import type {Transporter} from 'nodemailer';
-import {createMailOptions, prepareGuestLinkEmail, renderEmail, resolveEmailRecipientName, sendEmail} from '../../src/modules/email';
-import settings from '../../src/modules/settings';
+import {createMailOptions, prepareGuestLinkEmail, renderEmail, resolveEmailRecipientName, sendEmail} from '../../src/backend/modules/email';
+import settings from '../../src/backend/modules/settings';
 import {createStructuredEmailContent} from '../factories/emailFactory';
 
 const recipient = {name: 'Taylor', address: 'taylor@example.com'};

@@ -9,7 +9,7 @@ import {DataSource, In} from 'typeorm';
 import {createE2EPasswordResetAccount} from '../factories/e2eCoreFactory';
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import type {components} from '../../src/types/api/v1';
-import {PERM} from '../../src/modules/lib/permissions';
+import {PERM} from '../../src/backend/modules/lib/permissions';
 import {waitForFrontendHydration} from './frontendDynamicKeywords';
 
 export interface CreatedResource {
@@ -522,8 +522,8 @@ export async function withPasswordResetAccountForE2E(
 ): Promise<void> {
     /** Keep fixture insertion, exercise and exact-row cleanup inside the selected connection owner. */
     async function exerciseAccount(datasource: DataSource, requireBuilt: ReturnType<typeof createRequire>): Promise<void> {
-        const {User} = requireBuilt('./dist/modules/database/entities/user/User.js') as typeof import('../../src/modules/database/entities/user/User');
-        const {Profile} = requireBuilt('./dist/modules/database/entities/user/Profile.js') as typeof import('../../src/modules/database/entities/user/Profile');
+        const {User} = requireBuilt('./dist/backend/modules/database/entities/user/User.js') as typeof import('../../src/backend/modules/database/entities/user/User');
+        const {Profile} = requireBuilt('./dist/backend/modules/database/entities/user/Profile.js') as typeof import('../../src/backend/modules/database/entities/user/Profile');
         let userId: number | undefined;
 
         try {
@@ -563,10 +563,10 @@ export async function withProfileWorkflowFixtureForE2E(
     accountContact: 'ordinary' | 'absent' = 'ordinary',
 ): Promise<void> {
     async function exerciseWorkflow(datasource: DataSource, requireBuilt: ReturnType<typeof createRequire>): Promise<void> {
-        const {User} = requireBuilt('./dist/modules/database/entities/user/User.js') as typeof import('../../src/modules/database/entities/user/User');
-        const {Profile} = requireBuilt('./dist/modules/database/entities/user/Profile.js') as typeof import('../../src/modules/database/entities/user/Profile');
-        const {Guest} = requireBuilt('./dist/modules/database/entities/user/Guest.js') as typeof import('../../src/modules/database/entities/user/Guest');
-        const userService = requireBuilt('./dist/modules/database/services/UserService.js') as typeof import('../../src/modules/database/services/UserService');
+        const {User} = requireBuilt('./dist/backend/modules/database/entities/user/User.js') as typeof import('../../src/backend/modules/database/entities/user/User');
+        const {Profile} = requireBuilt('./dist/backend/modules/database/entities/user/Profile.js') as typeof import('../../src/backend/modules/database/entities/user/Profile');
+        const {Guest} = requireBuilt('./dist/backend/modules/database/entities/user/Guest.js') as typeof import('../../src/backend/modules/database/entities/user/Guest');
+        const userService = requireBuilt('./dist/backend/modules/database/services/UserService.js') as typeof import('../../src/backend/modules/database/services/UserService');
         const suffix = randomUUID().slice(0, 8);
         const password = 'Profile-workflow-password!A1';
         let userId: number | undefined;
@@ -603,9 +603,9 @@ export async function withProfileWorkflowFixtureForE2E(
 /** Observe this fixture's actual saved ownership/token state without returning private credentials or relations. */
 export async function readProfileWorkflowFixtureForE2E(fixture: E2EProfileWorkflowFixture) {
     async function readWorkflow(datasource: DataSource, requireBuilt: ReturnType<typeof createRequire>) {
-        const {User} = requireBuilt('./dist/modules/database/entities/user/User.js') as typeof import('../../src/modules/database/entities/user/User');
-        const {Guest} = requireBuilt('./dist/modules/database/entities/user/Guest.js') as typeof import('../../src/modules/database/entities/user/Guest');
-        const {Profile} = requireBuilt('./dist/modules/database/entities/user/Profile.js') as typeof import('../../src/modules/database/entities/user/Profile');
+        const {User} = requireBuilt('./dist/backend/modules/database/entities/user/User.js') as typeof import('../../src/backend/modules/database/entities/user/User');
+        const {Guest} = requireBuilt('./dist/backend/modules/database/entities/user/Guest.js') as typeof import('../../src/backend/modules/database/entities/user/Guest');
+        const {Profile} = requireBuilt('./dist/backend/modules/database/entities/user/Profile.js') as typeof import('../../src/backend/modules/database/entities/user/Profile');
         const profiles = await datasource.getRepository(Profile).find({where: {id: In([fixture.account.profileId, fixture.guest.profileId])}});
         const accountCount = await datasource.getRepository(User).countBy({id: fixture.account.id});
         const guestCount = await datasource.getRepository(Guest).countBy({id: fixture.guest.id});
@@ -628,8 +628,8 @@ export async function readGuestRegistrationCountsForE2E(usernames: readonly stri
     if (!usernames.length || usernames.some(username => !username)) throw new Error('Guest counts require explicit nonempty test names.');
 
     async function readCounts(datasource: DataSource, requireBuilt: ReturnType<typeof createRequire>) {
-        const {Guest} = requireBuilt('./dist/modules/database/entities/user/Guest.js') as typeof import('../../src/modules/database/entities/user/Guest');
-        const {Profile} = requireBuilt('./dist/modules/database/entities/user/Profile.js') as typeof import('../../src/modules/database/entities/user/Profile');
+        const {Guest} = requireBuilt('./dist/backend/modules/database/entities/user/Guest.js') as typeof import('../../src/backend/modules/database/entities/user/Guest');
+        const {Profile} = requireBuilt('./dist/backend/modules/database/entities/user/Profile.js') as typeof import('../../src/backend/modules/database/entities/user/Profile');
 
         // Count the related production rows independently. A join to a surviving
         // guest would hide a profile left behind by a rejected guest operation.
@@ -650,8 +650,8 @@ export async function readAccountRegistrationCountsForE2E(usernames: readonly st
     if (!usernames.length || usernames.some(username => !username)) throw new Error('Account counts require explicit nonempty test names.');
 
     async function readCounts(datasource: DataSource, requireBuilt: ReturnType<typeof createRequire>) {
-        const {User} = requireBuilt('./dist/modules/database/entities/user/User.js') as typeof import('../../src/modules/database/entities/user/User');
-        const {Profile} = requireBuilt('./dist/modules/database/entities/user/Profile.js') as typeof import('../../src/modules/database/entities/user/Profile');
+        const {User} = requireBuilt('./dist/backend/modules/database/entities/user/User.js') as typeof import('../../src/backend/modules/database/entities/user/User');
+        const {Profile} = requireBuilt('./dist/backend/modules/database/entities/user/Profile.js') as typeof import('../../src/backend/modules/database/entities/user/Profile');
         const [accounts, profiles] = await Promise.all([
             datasource.getRepository(User).find({where: {username: In([...usernames])},
                 select: {password: true, isActive: true, activationToken: true, activationTokenExpiration: true}}),
@@ -683,7 +683,7 @@ async function withBuiltE2EDatabase<Result>(
     // E2E exercises the built application. Load that same compiled metadata rather than
     // asking Playwright's browser-oriented transform to interpret TypeORM decorators.
     const requireBuilt = createRequire(resolve('package.json'));
-    const {entities} = requireBuilt('./dist/modules/database/__index__.js') as typeof import('../../src/modules/database/__index__');
+    const {entities} = requireBuilt('./dist/backend/modules/database/__index__.js') as typeof import('../../src/backend/modules/database/__index__');
     const datasource = new DataSource({
         type: 'mariadb', host: process.env.E2E_DB_HOST, port: Number(process.env.E2E_DB_PORT ?? '3306'),
         username: process.env.E2E_DB_USER, password: process.env.E2E_DB_PASSWORD, database,

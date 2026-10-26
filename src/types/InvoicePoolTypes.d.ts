@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import {InvoicePoolDistributions} from "../modules/database/entities/event/EventInvoicePool";
-import type {EventInvoiceShare} from "../modules/database/entities/event/EventInvoiceShare";
-import type {Event} from '../modules/database/entities/event/Event';
-import type {EventInvoicePool} from '../modules/database/entities/event/EventInvoicePool';
+import {InvoicePoolDistributions} from "../backend/modules/database/entities/event/EventInvoicePool";
+import type {EventInvoiceShare} from "../backend/modules/database/entities/event/EventInvoiceShare";
+import type {Event} from '../backend/modules/database/entities/event/Event';
+import type {EventInvoicePool} from '../backend/modules/database/entities/event/EventInvoicePool';
 
 export type InvoicePoolStatus = 'OPEN' | 'ORGANIZER_ONLY' | 'CLOSED';
 
@@ -319,7 +319,7 @@ export interface InvoiceSharesPdfData {
     pdfOptions?: InvoiceSharesPdfOptions;
 }
 
-export type InvoiceLabels = ReturnType<typeof import('../modules/invoice/wording').getInvoiceLabels>;
+export type InvoiceLabels = ReturnType<typeof import('../backend/modules/invoice/wording').getInvoiceLabels>;
 
 export interface PoolCalculationShare {
     registrationId: number;
@@ -370,7 +370,7 @@ export interface InvoiceOrganizerRequest {
 }
 
 /** Locale catalogs retain the same stable keys while translated values remain unrestricted strings. */
-export type InvoiceTextKey = keyof typeof import('../modules/invoice/locales/en').englishInvoiceCatalog;
+export type InvoiceTextKey = keyof typeof import('../backend/modules/invoice/locales/en').englishInvoiceCatalog;
 /** Only authored Finance Problem messages can annotate a controller rejection.
  * The generated contract remains the runtime code/status/parameter allowlist. */
 export type InvoiceRejectionKey = Extract<import('./api/v1').components['schemas']['Problem'],

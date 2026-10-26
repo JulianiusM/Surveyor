@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
-source-anchors: package.json; README.md; AGENTS.md; .github/copilot-instructions.md; .github/copilot/; docs/policies/documentation-check.json; docs/backlog/documentation-remediation.yml; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; docs/user-guide/; src/server.ts; src/app.ts; src/modules/settings.ts; vitest.config.mts; playwright.config.ts; .github/workflows/ci.yml; .github/workflows/release.yml; docs/features/help/HELP_VISUALS.md; scripts/check-help-documentation.mjs; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+source-anchors: package.json; README.md; AGENTS.md; .github/copilot-instructions.md; .github/copilot/; docs/policies/documentation-check.json; docs/backlog/documentation-remediation.yml; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; docs/user-guide/; src/backend/server.ts; src/backend/app.ts; src/backend/modules/settings.ts; vitest.config.mts; playwright.config.ts; .github/workflows/ci.yml; .github/workflows/release.yml; docs/features/help/HELP_VISUALS.md; scripts/check-help-documentation.mjs; src/backend/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: documentation-inventory-or-status-change
 -->
 

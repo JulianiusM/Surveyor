@@ -7,9 +7,9 @@ import {addEntityAdministratorForE2E, expectUsableFrontendLayout, loginForE2E,
     readControlContracts, updateEntityAdministratorForE2E} from '../keywords/e2eCoreKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
-import {PERM} from '../../src/modules/lib/permissions';
-import {getGuestRegistrationNags} from '../../src/modules/lib/guestRegistrationNags';
-import {createTranslator} from '../../src/modules/localization/translator';
+import {PERM} from '../../src/backend/modules/lib/permissions';
+import {getGuestRegistrationNags} from '../../src/backend/modules/lib/guestRegistrationNags';
+import {createTranslator} from '../../src/common/localization/translator';
 
 /** Establish a distinct guest through the real Event identity boundary, then
  * prove this cookie jar cannot inherit the fixture owner's full permissions. */

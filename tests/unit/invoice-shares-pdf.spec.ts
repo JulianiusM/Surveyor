@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import type {ContentTable, Node, NodeQueries, TableCell, TDocumentDefinitions} from 'pdfmake/interfaces';
-import {buildInvoiceSharesPdfDefinition} from '../../src/modules/invoice/exports';
-import {invoiceText} from '../../src/modules/invoice/wording';
+import {buildInvoiceSharesPdfDefinition} from '../../src/backend/modules/invoice/exports';
+import {invoiceText} from '../../src/backend/modules/invoice/wording';
 import type {InvoiceSharesPdfData} from '../../src/types/InvoicePoolTypes';
 
 function fixture(): InvoiceSharesPdfData {

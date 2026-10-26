@@ -2,7 +2,7 @@ import {shallowRef, watch} from 'vue';
 import type {InjectionKey} from 'vue';
 import type {NavigationFailure, RouteLocationNormalized, Router} from 'vue-router';
 import type {FrontendPageNavigation, FrontendPageNavigationOptions, FrontendPageReadiness, FrontendPageReadinessSource} from '../../types/FrontendUiTypes';
-import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
+import {frontendDocumentUrl} from '../../common/lib/frontendIdentity';
 
 export const pageReadinessKey: InjectionKey<FrontendPageReadiness> = Symbol('frontend.page-readiness');
 

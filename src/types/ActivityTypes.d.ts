@@ -71,7 +71,7 @@ export interface ActivityRecommendationPersistenceContext extends ActivityRecomm
 export interface ActivityRecommendationOperationInput {
     itemId: string;
     profileId: string;
-    operation: import("../modules/database/entities/activity/ActivityAssignmentRecommendation").RecommendationOperation;
+    operation: import("../backend/modules/database/entities/activity/ActivityAssignmentRecommendation").RecommendationOperation;
     sourceItemId?: string | null;
 }
 
@@ -80,8 +80,8 @@ export interface RecommendationInput {
     id?: string;
     itemId: string;
     profileId?: string | null;
-    status?: import("../modules/database/entities/activity/ActivityAssignmentRecommendation").RecommendationStatus;
-    operation?: import("../modules/database/entities/activity/ActivityAssignmentRecommendation").RecommendationOperation;
+    status?: import("../backend/modules/database/entities/activity/ActivityAssignmentRecommendation").RecommendationStatus;
+    operation?: import("../backend/modules/database/entities/activity/ActivityAssignmentRecommendation").RecommendationOperation;
     sourceItemId?: string | null;
     manual?: boolean;
     hidden?: boolean;

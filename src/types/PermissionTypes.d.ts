@@ -16,10 +16,10 @@
 
 import type {Request} from "express";
 import type {EntityManager} from 'typeorm';
-import type {Guest} from "../modules/database/entities/user/Guest";
-import type {Profile} from "../modules/database/entities/user/Profile";
-import type {User} from "../modules/database/entities/user/User";
-import type {PERM} from "../modules/lib/permissions";
+import type {Guest} from "../backend/modules/database/entities/user/Guest";
+import type {Profile} from "../backend/modules/database/entities/user/Profile";
+import type {User} from "../backend/modules/database/entities/user/User";
+import type {PERM} from "../backend/modules/lib/permissions";
 import type {EntityItemType, EntityType, PartialRecord} from "./UtilTypes";
 
 export type PermType = keyof typeof PERM;
@@ -39,6 +39,19 @@ export type EntityAdministratorCommand = {
 
 /** Domain evidence; each transport retains its own existing error presentation. */
 export type EntityAdministratorOutcome = 'saved' | 'profile-missing' | 'mask-required';
+
+/** Current grant evidence and its selected operation stay in the caller's transaction. */
+export interface EntityAdministratorReview {
+    previousMask: number | null;
+    command: EntityAdministratorCommand;
+}
+
+/** Reuse the caller's snapshot/locks and Event's established broader comparison fields. */
+export interface EntityPermissionReviewContext {
+    manager?: EntityManager;
+    headerImg?: string | null;
+    comparisonId?: string;
+}
 
 export type GetResource = (req: Request) => any;
 export type GetAdditional = (req: Request) => any[];

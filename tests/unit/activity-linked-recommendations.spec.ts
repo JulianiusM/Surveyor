@@ -1,8 +1,8 @@
 import {describe, expect, it} from 'vitest';
-import {generateFairRecommendations} from '../../src/modules/activity/fairAssignment';
-import {buildRecommendationWarnings} from '../../src/modules/activity/recommendations';
-import {fingerprintRecommendationContext} from '../../src/modules/activity/recommendationJobs';
-import type {AutoAssignmentContext} from '../../src/modules/activity/autoAssignment';
+import {generateFairRecommendations} from '../../src/backend/modules/activity/fairAssignment';
+import {buildRecommendationWarnings} from '../../src/backend/modules/activity/recommendations';
+import {fingerprintRecommendationContext} from '../../src/backend/modules/activity/recommendationJobs';
+import type {AutoAssignmentContext} from '../../src/backend/modules/activity/autoAssignment';
 import type {ActivityLinkedPlanContext, AssignmentCandidate} from '../../src/types/ActivityTypes';
 import {createAutoAssignmentContext, createAutoAssignmentParticipant, createAutoAssignmentSlot} from '../factories/activityAutoAssignmentFactory';
 import {createParticipantRequirementOverride} from '../factories/activityRequirementFactory';

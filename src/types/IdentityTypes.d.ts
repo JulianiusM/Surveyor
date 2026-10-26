@@ -2,17 +2,6 @@ import type {Request} from 'express';
 import type {EntityManager} from 'typeorm';
 import type {components} from './api/v1';
 
-/** Presentation follows the operation, independently of stable API problem codes.
- * Password mismatch intentionally differs between account registration and password reset. */
-export type FrontendIdentityOperation = 'login' | 'register' | 'forgot' | 'reset' | 'activate'
-    | 'guest-login' | 'recovery' | 'oidc' | 'error';
-
-/** Public login configuration selects the identity page journey, never credential authority. */
-export interface IdentityLoginSettings {
-    localLoginEnabled: boolean;
-    oidcEnabled: boolean;
-}
-
 /** The existing transfer/deactivation flow reports only completed former-owner
  * cleanup. Controller prose and localized API notices project the same facts; this
  * result does not promise atomicity or change the workflow's operation order. */

@@ -2,7 +2,7 @@ import {patchActivitySlotForE2E} from '../keywords/frontendActivityE2EKeywords';
 import {commandHeadersForE2E} from '../keywords/e2eCoreKeywords';
 import {expect, test, type Locator, type Route} from '@playwright/test';
 import type {components} from '../../src/types/api/v1';
-import {createTranslator} from '../../src/modules/localization/translator';
+import {createTranslator} from '../../src/common/localization/translator';
 import {expectUsableFrontendLayout, readControlContracts} from '../keywords/e2eCoreKeywords';
 import {createActivityOverlapForE2E, expectActivityTabKeyboard, observeActivityCommand,
     readActivityForE2E} from '../keywords/frontendActivityE2EKeywords';

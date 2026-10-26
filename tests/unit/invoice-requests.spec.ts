@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
-import {prepareSharesPdfOptions, preparePoolSubmissionState, preparePoolCreation, prepareOrganizerInvoice} from '../../src/modules/invoice/requests';
-import {APIError} from '../../src/modules/lib/errors';
+import {prepareSharesPdfOptions, preparePoolSubmissionState, preparePoolCreation, prepareOrganizerInvoice} from '../../src/backend/modules/invoice/requests';
+import {APIError} from '../../src/backend/modules/lib/errors';
 
 describe('invoice shares PDF preferences', () => {
     it('preserves the existing example when no preference is supplied', () => {

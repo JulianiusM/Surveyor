@@ -20,7 +20,7 @@ import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {observePageNavigation} from '../../composables/pageNavigation';
 import {ApiFailure, isReadDenial, isTerminalReadFailure, ObsoleteRequestError} from '../../app/transport';
 import {overviewKeys} from '../../app/queryKeys';
-import {frontendOverviewPath} from '../../../modules/lib/frontendIdentity';
+import {frontendOverviewPath} from '../../../common/lib/frontendIdentity';
 import {observeQueryReads, refetchFreshQueries, refetchFreshQuery, retireQueryFamily, useQueryAdmission, useQueryInvalidation} from '../../app/queryCache';
 import ActionButton from '../../components/ActionButton.vue';
 import RefreshButton from '../../components/RefreshButton.vue';

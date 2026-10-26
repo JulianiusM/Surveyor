@@ -1,13 +1,21 @@
 import {describe, expect, it} from 'vitest';
 import type {Request} from 'express';
-import {getAccountPageEntry} from '../../src/controller/userController';
-import {getEntityViewAdmission} from '../../src/controller/entityAdminController';
-import {readPackingCreateEntry} from '../../src/controller/packingController';
-import {captureApiActor} from '../../src/modules/api/session';
-import {contractValidator} from '../../src/modules/api/contracts';
-import {Profile} from '../../src/modules/database/entities/user/Profile';
-import {User} from '../../src/modules/database/entities/user/User';
-import {Guest} from '../../src/modules/database/entities/user/Guest';
+import {getAccountPageEntry} from '../../src/backend/controller/accountAdmission';
+import {getEntityCreationContext, getEntityResourceEntry, getEntityViewAdmission, requireEntityCreation} from '../../src/backend/controller/entityAdminController';
+import {readPackingCreateEntry} from '../../src/backend/controller/packingController';
+import {readDriversCreateEntry} from '../../src/backend/controller/driversController';
+import {readSurveyCreateEntry} from '../../src/backend/controller/surveyController';
+import {readActivityCreateEntry} from '../../src/backend/controller/activityController';
+import {readEventCreateEntry} from '../../src/backend/controller/eventController';
+import {captureApiActor} from '../../src/backend/modules/api/session';
+import {contractValidator} from '../../src/backend/modules/api/contracts';
+import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
+import {User} from '../../src/backend/modules/database/entities/user/User';
+import {Guest} from '../../src/backend/modules/database/entities/user/Guest';
+import type {EntityType} from '../../src/types/UtilTypes';
+
+const resourceTypes: EntityType[] = ['packing', 'drivers', 'survey', 'activity', 'event'];
+const resourceId = '84305c09-5386-47bc-b62d-520b8a8edbb2';
 
 describe('shared server-owned page admission', () => {
     it('admits account creation and sends guests/anonymous users to login with the exact duplicate return', async () => {
@@ -31,6 +39,92 @@ describe('shared server-owned page admission', () => {
         expect(await getEntityViewAdmission('packing', root, {})).toBe('guest');
         expect(await getEntityViewAdmission('packing', {...root, eventId: 'event'}, {})).toBe('event-registration-required');
         expect(await getEntityViewAdmission('packing', root, {profile: new Profile()})).toBe('render');
+    });
+
+    it.each(resourceTypes)('shares %s guest/detail admission without disclosing private root fields', async type => {
+        const root = {id: resourceId, title: 'Public guest title', ownerId: 'private-owner', description: 'Private detail'};
+        const session = {profile: new Profile()};
+        expect(await getEntityResourceEntry(type, null, 'guest', session))
+            .toEqual({entry: {kind: 'denied', status: 404, messageKey: `${type}.notFound`}, guest: null});
+        expect(await getEntityResourceEntry(type, root, 'detail', {}))
+            .toEqual({entry: {kind: 'redirect', url: `/${type}/${resourceId}/guest`, notice: null}, guest: null});
+        expect(await getEntityResourceEntry(type, root, 'detail', session))
+            .toEqual({entry: {kind: 'render'}, guest: null});
+        const guest = await getEntityResourceEntry(type, root, 'guest', {});
+        expect(guest).toEqual({entry: {kind: 'render'}, guest: {id: resourceId, title: 'Public guest title'}});
+        expect(contractValidator('PackingResourceEntry')(guest)).toBe(true);
+        expect(await getEntityResourceEntry(type, root, 'guest', session))
+            .toEqual({entry: {kind: 'redirect', url: `/${type}/${resourceId}`, notice: null}, guest: null});
+        expect(root.description).toBe('Private detail');
+    });
+
+    it.each(['packing', 'drivers', 'activity'] as const)('keeps %s attached denial before anonymous detail redirects', async type => {
+        const root = {id: resourceId, title: 'Public title', ownerId: 'owner', eventId: 'private-event'};
+        expect(await getEntityResourceEntry(type, root, 'detail', {}))
+            .toEqual({entry: {kind: 'denied', status: 400, messageKey: `${type}.eventRegistrationRequired`}, guest: null});
+        expect(await getEntityResourceEntry(type, root, 'guest', {}))
+            .toEqual({entry: {kind: 'render'}, guest: {id: resourceId, title: 'Public title'}});
+    });
+
+    it('carries Event token navigation without changing the token or making attendance', async () => {
+        const root = {id: resourceId, title: 'Event', ownerId: 'owner'};
+        const query = new URLSearchParams({regToken: 'opaque +&? token'});
+        expect(await getEntityResourceEntry('event', root, 'detail', {}, {query}))
+            .toEqual({entry: {kind: 'redirect', url: `/event/${resourceId}/guest?${query}`, notice: null}, guest: null});
+        expect(await getEntityResourceEntry('event', root, 'guest', {profile: new Profile()}, {query}))
+            .toEqual({entry: {kind: 'redirect', url: `/event/${resourceId}?${query}`, notice: null}, guest: null});
+        expect(query.get('regToken')).toBe('opaque +&? token');
+    });
+
+    it('preserves feature-owned input identifier spelling without changing the authoritative row', async () => {
+        const root = {id: resourceId, title: 'Public title', ownerId: 'owner'};
+        const requestedId = resourceId.toUpperCase();
+        for (const type of ['activity', 'survey', 'event'] as const) {
+            const entry = await getEntityResourceEntry(type, root, 'detail', {}, {resourceId: requestedId});
+            expect(entry.entry).toEqual({kind: 'redirect', url: `/${type}/${requestedId}/guest`, notice: null});
+        }
+        expect((await getEntityResourceEntry('activity', root, 'guest', {}, {resourceId: requestedId})).guest)
+            .toEqual({id: requestedId, title: 'Public title'});
+        expect((await getEntityResourceEntry('event', root, 'guest', {}, {resourceId: requestedId})).guest)
+            .toEqual({id: resourceId, title: 'Public title'});
+        expect(root.id).toBe(resourceId);
+    });
+
+    it('adopts common creation admission in every feature while retaining event-context and Survey differences', async () => {
+        const entries = [
+            readPackingCreateEntry({}, '/packing/source/duplicate', 'private-event'),
+            readDriversCreateEntry({}, '/drivers/source/duplicate', 'private-event'),
+            readSurveyCreateEntry({}, '/survey/source/duplicate'),
+            readActivityCreateEntry({}, '/activity/source/duplicate', 'private-event'),
+            readEventCreateEntry({}, '/event/source/duplicate'),
+        ];
+        const results = await Promise.all(entries);
+        for (const [index, type] of resourceTypes.entries()) {
+            expect(results[index]).toMatchObject({entry: {kind: 'redirect',
+                url: `/users/login?next=${encodeURIComponent(`/${type}/source/duplicate`)}`,
+                notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, context: null});
+        }
+        expect(results[0]).toHaveProperty('selectedEvent', null);
+        expect(results[1]).toHaveProperty('selectedEvent', null);
+        expect(results[3]).toHaveProperty('selectedEvent', null);
+        expect(results[2]).not.toHaveProperty('selectedEvent');
+        expect(results[4]).not.toHaveProperty('selectedEvent');
+        const account = {auth: {user: new User()}, profile: new Profile()};
+        expect(readSurveyCreateEntry(account)).toEqual({entry: {kind: 'render'}, context: {}});
+        expect(readEventCreateEntry(account)).toEqual({entry: {kind: 'render'}, context: getEntityCreationContext('event')});
+    });
+
+    it.each(resourceTypes)('retains %s creation command identity and account diagnostics', type => {
+        expect(() => requireEntityCreation(type, {})).toThrowError(expect.objectContaining({code: 'AUTH_REQUIRED'}));
+        const profile = Object.assign(new Profile(), {id: 'profile'});
+        expect(() => requireEntityCreation(type, {profile, auth: {guest: new Guest()}}))
+            .toThrowError(expect.objectContaining({code: 'FORBIDDEN'}));
+        expect(() => requireEntityCreation(type, {profile, auth: {user: new User()}})).not.toThrow();
+        // Event historically admits an account's profile object; other commands
+        // require an identifier. Preserve that contract rather than tightening it.
+        const idless = {profile: new Profile(), auth: {user: new User()}};
+        if (type === 'event') expect(() => requireEntityCreation(type, idless)).not.toThrow();
+        else expect(() => requireEntityCreation(type, idless)).toThrowError(expect.objectContaining({code: 'AUTH_REQUIRED'}));
     });
 
     it('keeps document logout evidence until native logout', async () => {

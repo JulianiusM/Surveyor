@@ -6,8 +6,8 @@ owner: developer-experience maintainers
 status: current
 last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved local browser assets, responsiveness and dependency compatibility scope reconciled; public asset encodings, module preload delivery and renderer startup readiness retained alongside prior P11 routing, Vue rendering, native browser retirement and inherited domain and database safety; no deployment or exhaustive verification claim
-source-anchors: package.json; src/app.ts; src/server.ts; src/modules/frontendAssets.ts; src/modules/frontendRenderer.ts; src/frontend/; src/routes/; src/controller/; src/modules/database/; src/modules/api/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/check-development-policy.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
+verification-scope: authorized source ownership, compiler scopes, generator/runtime paths and guarded asset delivery reconciled; prior rendering, responsiveness and domain contracts retained; no deployment or exhaustive verification claim
+source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/check-development-policy.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: development-workflow-or-help-tooling-change
 -->
 
@@ -56,7 +56,7 @@ Never point development reset or synchronization commands at a shared, staging, 
 
 ### 3. Create `.env`
 
-The repository intentionally has no general environment example because the complete supported surface is generated from `src/modules/settings.ts` and maintained in [Configuration Reference](CONFIGURATION.md). For a local account/password instance, this is the minimum practical starting point:
+The repository intentionally has no general environment example because the complete supported surface is generated from `src/backend/modules/settings.ts` and maintained in [Configuration Reference](CONFIGURATION.md). For a local account/password instance, this is the minimum practical starting point:
 
 ```dotenv
 NODE_ENV=development
@@ -126,13 +126,18 @@ npm run server
 - Express under Nodemon through `npm run server:dev`, with Vite middleware/HMR; and
 - serialized contract/catalog generation under `npm run server:frontend`.
 
-Authored inputs are `contracts/api/v1/`, `src/locales/` and the exact permission registry
-`src/modules/lib/permissions.ts`. The watcher observes the registry's parent so atomic editor replacement remains
+Authored inputs are `contracts/api/v1/`, `src/common/locales/` and the exact permission registry
+`src/backend/modules/lib/permissions.ts`. The watcher observes the registry's parent so atomic editor replacement remains
 visible, generates API before locales and publishes `.generated/frontend-ready.json` only after the current successful
 batch. Failed or superseded batches keep watching without restarting Express with partial inputs. Other library
 saves retain ordinary server restart behavior. Source serving explicitly uses `vite.config.mts` and the repository
 root. Vite excludes ignored runtime evidence under `artifacts/`, alongside generated/build/test-output exclusions.
 Application source uses normal HMR. Production runs matching built artifacts without a Vite server.
+
+The development boundary admits only the maintained public source inventory and optimized browser dependencies.
+Add browser-safe shared implementations to their actual `src/common/` owner; private server/session behavior belongs
+in `src/backend/`. Backend compilation starts from those backend/common roots and the Express augmentation, loading
+other declarations through their actual imports rather than compiling unrelated frontend modules.
 
 
 Check the instance:
@@ -146,24 +151,24 @@ A healthy process returns `ok`. Complete a local activation email or an OIDC log
 ## Project structure
 
 ```text
-src/server.ts                      ordered process bootstrap
-src/app.ts                         Express application and top-level route mounts
-src/routes/                        canonical document routes and standalone output adapters
-src/routes/api/v1/                 generated-contract feature API adapters
-src/controller/                    request and response orchestration
-src/middleware/                    shared request flows and authorization
-src/modules/database/entities/     TypeORM entities
-src/modules/database/services/     database and transaction functions
-src/modules/database/subscribers/  TypeORM subscribers
-src/migrations/                    TypeORM migrations
-src/modules/lib/                   cross-feature utilities and contracts
-src/frontend/                      Vue app, components, composables and feature views
-contracts/api/v1/                   authored API schema and operation policy
-src/locales/                        shared UI/server catalogs
-src/types/                          shared .d.ts contracts
-src/public/style/                   standalone print stylesheet
-
-src/views/                         standalone Activity/Event print templates
+src/backend/server.ts                      ordered process bootstrap
+src/backend/app.ts                         Express application and top-level route mounts
+src/backend/routes/                        canonical document routes and standalone output adapters
+src/backend/routes/api/v1/                 generated-contract feature API adapters
+src/backend/controller/                    request and response orchestration
+src/backend/middleware/                    shared request flows and authorization
+src/backend/modules/database/entities/     TypeORM entities
+src/backend/modules/database/services/     database and transaction functions
+src/backend/modules/database/subscribers/  TypeORM subscribers
+src/backend/migrations/                    TypeORM migrations
+src/backend/modules/lib/                   private cross-feature utilities
+src/backend/views/                         standalone Activity/Event print templates
+src/frontend/                              Vue app, components, composables and feature views
+src/common/                                browser-safe shared implementations
+src/common/locales/                        shared UI/server catalogs
+src/types/                                 shared .d.ts contracts
+src/public/style/                          standalone print stylesheet
+contracts/api/v1/                          authored API schema and operation policy
 
 tests/unit/                        isolated production logic
 tests/frontend/                    client helpers/mounted Vue and isolated browser checks
@@ -176,7 +181,7 @@ docs/user-guide/                   canonical in-app help
 docs/                              maintainer and operator documentation
 ```
 
-`dist/`, compiled print CSS, generated contract/catalog consumers, uploads, local environment files, `settings.csv`, reports, and `src/modules/database/__index__.ts` are ignored build/runtime outputs.
+`dist/`, compiled print CSS, generated contract/catalog consumers, uploads, local environment files, `settings.csv`, reports, and `src/backend/modules/database/__index__.ts` are ignored build/runtime outputs.
 
 ## Build and run commands
 
@@ -193,7 +198,7 @@ docs/                              maintainer and operator documentation
 | `npm run typecheck:frontend` | Check both Vue client and SSR configurations. |
 | `npm run typecheck:tests` | Check the Vue-aware test import graph without executing tests. |
 | `npm run copy` | Copy shared images, print CSS and standalone Pug print templates into `dist/`. |
-| `npm run run` | Start `dist/server.js`; it does not build first. |
+| `npm run run` | Start `dist/backend/server.js`; it does not build first. |
 | `npm run generate` | Rebuild database metadata and API/localization consumers without a database connection. |
 | `npm run prepare:frontend` | Generate the authored API and locale boundaries only. |
 
@@ -201,10 +206,10 @@ docs/                              maintainer and operator documentation
 
 Do not hand-edit or commit these generated outputs:
 
-- `src/modules/database/__index__.ts`
+- `src/backend/modules/database/__index__.ts`
 - `.generated/api/` and `.generated/frontend-ready.json`
 - `src/types/api/` generated declarations and `src/types/LocalizationTypes.d.ts`
-- `src/modules/localization/generated/`
+- `src/common/localization/generated/`
 
 - `src/public/style/print.css`
 - `dist/`
@@ -270,11 +275,11 @@ inside the module that owns them instead of exporting them merely to connect new
 ### Routes
 
 - Use `express.Router()` in a feature route module.
-- Add canonical document entries to their domain module under `src/routes/`; `src/app.ts` owns the ordered domain mounts.
-- Keep shared document admission, bootstrap and error helpers in `src/routes/frontend.ts`, without domain route registrations.
+- Add canonical document entries to their domain module under `src/backend/routes/`; `src/backend/app.ts` owns the ordered domain mounts.
+- Keep shared document admission, bootstrap and error helpers in `src/backend/routes/frontend.ts`, without domain route registrations.
 - Declare client paths, lazy views and static metadata in the matching domain under `src/frontend/routes/`; its index composes the records with the catch-all last.
-- Mount versioned feature adapters in `src/routes/api/v1.ts` and document routes in their existing domain modules.
-  `src/app.ts` mounts the versioned API separately; each transport retains structured or document admission/errors.
+- Mount versioned feature adapters in `src/backend/routes/api/v1.ts` and document routes in their existing domain modules.
+  `src/backend/app.ts` mounts the versioned API separately; each transport retains structured or document admission/errors.
 
 - Keep middleware order visible in the route definition.
 - Wrap asynchronous request and parameter handlers with `asyncHandler` or `asyncParamHandler`.
@@ -290,7 +295,7 @@ inside the module that owns them instead of exporting them merely to connect new
   throw `APIError`, `ExpectedError`, or other request/UI-specific errors: they are pure DBAL.
 - Database services are functional database service modules that export functions; they do not require a service class or dependency-injection container.
 - Extend an existing controller, service, or middleware module when the responsibility already belongs there. Keep cohesive operations together; a new module must have a distinct responsibility, not just forward calls to another module.
-- Keep repository access and transactions in `src/modules/database/services/` rather than routes or controllers or the feature modules they orchestrate.
+- Keep repository access and transactions in `src/backend/modules/database/services/` rather than routes or controllers or the feature modules they orchestrate.
 - Expose operations that describe the domain workflow. Keep repository selection, query construction, and lock ordering private to the persistence boundary.
 - Use a TypeORM transaction for multi-record writes that must succeed or fail together.
 - For a rule requiring locked data, let the service own transaction creation and locking, then invoke a named
@@ -307,7 +312,7 @@ different transaction and locking behavior.
 
 - Local login, guest identity, and OIDC all converge on the session's active profile.
 - The OIDC implementation uses `openid-client` directly and persists PKCE/state material in the database-backed session.
-- Use the middleware exported by `src/middleware/permissionMiddleware.ts`; do not invent a parallel authorization vocabulary.
+- Use the middleware exported by `src/backend/middleware/permissionMiddleware.ts`; do not invent a parallel authorization vocabulary.
 - Page admission, action permission, entity ownership, item ownership, event participation, and delegated administration are separate checks.
 - General permission grants combine cumulatively. Surveys intentionally use their own participation model. See [Permission-System Reference](PERMISSIONS_REFERENCE.md).
 
@@ -326,7 +331,7 @@ or session save must not reject an already committed operation. Scope-preserving
 [existing-operation boundary](policies/DEVELOPMENT_POLICY.md#scope-of-separately-authorized-work) without requiring
 unapproved legacy repairs. Delivery failure remains distinct from business rejection. Services never own
 transport-specific errors.
-The domain document routers use `src/modules/frontendRenderer.ts` for Vue HTML and ordinary document
+The domain document routers use `src/backend/modules/frontendRenderer.ts` for Vue HTML and ordinary document
 errors, reusing controller projections. The outer generic error handler supplies a localized private/no-store
 plain-text response if parsing, session admission or rendering fails. Components do not duplicate business behavior.
 
@@ -612,7 +617,7 @@ when the visible label targets a separate actual control, such as a timezone but
 authority. The Activity Slots badge counts every admitted saved slot; All/My/Open only change visibility, and an
 empty collection displays zero. Derive the total from that collection rather than DOM rows or another store.
 
-Under the approved calendar-day policy, `src/modules/lib/civilDate.ts` is the pure shared owner of strict ISO civil
+Under the approved calendar-day policy, `src/common/lib/civilDate.ts` is the pure shared owner of strict ISO civil
 date parsing, selected-locale display and Monday-to-Sunday week grouping. Activity creation adapts its clipped day
 arrays, and the versioned detail projection returns its structural `CivilDateWeek` values without another calendar
 loop. UTC calendar stepping preserves saved days across timezone and daylight-saving changes, including a preceding
@@ -1742,8 +1747,8 @@ groups in both alternatives. Omitted options preserve the existing layout and ac
 
 A schema change normally requires:
 
-1. Update or add the entity under `src/modules/database/entities/`.
-2. Add a migration under `src/migrations/` for existing installations.
+1. Update or add the entity under `src/backend/modules/database/entities/`.
+2. Add a migration under `src/backend/migrations/` for existing installations.
 3. Run `npm run generate`.
 4. Exercise the migration against an appropriate disposable database.
 5. Add integration coverage using the production `DataSource` metadata.
@@ -1855,7 +1860,7 @@ can grow with membership even when returned cards/DOM are bounded; measure plans
 ### Invoice pool calculation and saved changes
 
 `eventPoolController.ts` provides route implementations by orchestrating request context, DBAL data, and the
-business modules under `src/modules/invoice/`, following the existing activity feature-folder pattern. It does not
+business modules under `src/backend/modules/invoice/`, following the existing activity feature-folder pattern. It does not
 contain the allocation algorithm, persistence policy, message construction, or proof-retention implementation.
 
 | Owner | Responsibility |
@@ -2014,7 +2019,7 @@ existing revision-checked correction/retraction contracts remain unchanged.
 Stable typed keys identify whole messages; named parameters and `Intl.PluralRules` select complete messages.
 That catalog currently supplies English with supported-language fallback. Finance uses generated i18next catalogs
 and the typed context translator for English/German interface messages and localized saved-data projections.
-`src/locales/en.json` selects existing English invoice messages by key; `scripts/generate-locales.mjs` reads the
+`src/common/locales/en.json` selects existing English invoice messages by key; `scripts/generate-locales.mjs` reads the
 maintained literal catalog and derives generated resources without copying text. Do not copy catalogs, add forwarding
 exports or expose server-side invoice business modules as browser entries.
 
@@ -2274,8 +2279,8 @@ reuse development or production database names.
 
 ### Add or change a page workflow
 
-1. Find the existing top-level mount in `src/app.ts`.
-2. Add or update the feature route under `src/routes/`.
+1. Find the existing top-level mount in `src/backend/app.ts`.
+2. Add or update the feature route under `src/backend/routes/`.
 3. Add normalization/orchestration in the corresponding controller.
 4. Add persistence operations in the corresponding service module.
 5. Update the feature component, generated read/command contract and shared catalog together when values or actions change.
@@ -2301,7 +2306,7 @@ reuse development or production database names.
 
 ### Change a setting
 
-1. Add the field, default, key mapping, and coercion in `src/modules/settings.ts`.
+1. Add the field, default, key mapping, and coercion in `src/backend/modules/settings.ts`.
 2. Update [Configuration Reference](CONFIGURATION.md).
 3. Check E2E-prefixed behavior when the setting affects E2E startup.
 4. Evaluate database, release, secret, and upgrade implications.
@@ -2337,7 +2342,7 @@ The manual release workflow invokes full CI, updates the requested semantic vers
 
 ### Startup fails before the server listens
 
-Startup requires settings, MariaDB, invoice-retention and entity-archival initialization, and application construction. Read the first error printed by `src/server.ts`; common causes are an unreachable database, a missing generated TypeORM index, invalid database credentials or archival configuration, or a schema that has not been initialized/migrated.
+Startup requires settings, MariaDB, invoice-retention and entity-archival initialization, and application construction. Read the first error printed by `src/backend/server.ts`; common causes are an unreachable database, a missing generated TypeORM index, invalid database credentials or archival configuration, or a schema that has not been initialized/migrated.
 
 ### A standalone TypeORM command cannot load entities
 

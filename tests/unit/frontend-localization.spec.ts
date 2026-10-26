@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {assertRichMessageNodes, catalogVersion, createTranslator, isPlainMessageKey, localeManifest, resolveLocale} from '../../src/modules/localization/translator';
+import {assertRichMessageNodes, catalogVersion, createTranslator, isPlainMessageKey, localeManifest, resolveLocale} from '../../src/common/localization/translator';
 
 describe('shared request-bound localization', () => {
     it('requires declared nodes and prevents node messages from becoming plain notices', () => {

@@ -1,5 +1,5 @@
 import type {LocalizationContext} from '../../../types/LocalizationTypes';
-import {formatCivilDate} from '../../../modules/lib/civilDate';
+import {formatCivilDate} from '../../../common/lib/civilDate';
 
 /** Summary and saved attendance display their stored civil day in the selected
  * language. The existing invalid-value fallback remains feature-owned. */

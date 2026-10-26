@@ -1,8 +1,10 @@
 schema_version: 1
 maintenance:
-  reviewed_on: 2026-10-25
+  reviewed_on: 2026-10-26
   authority: Explicit P11 implementation request authorizes cutover and retirement; existing open backend remedies retain
     their separately authorized scope.
+  shared_maintenance_authority: The direct 2026-10-26 historical-audit request separately authorizes shared source
+    ownership, restored common flows and strict private/public serving boundaries; excluded business remedies remain deferred.
   policy: docs/policies/DOCUMENTATION_POLICY.md
   history: Superseded audit metrics, completed package sequences and detailed run transcripts remain in Git history; no
     parallel archive is maintained. Retired native source paths and temporary review records below identify historical
@@ -108,9 +110,9 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Built-in OIDC redirect default does not match the mounted callback route
     evidence:
-      - src/app.ts mounts the users router at /users
-      - src/routes/users.ts registers /oidc/callback inside that router
-      - src/modules/settings.ts defaults to a URL ending in /user/oidc/callback
+      - src/backend/app.ts mounts the users router at /users
+      - src/backend/routes/users.ts registers /oidc/callback inside that router
+      - src/backend/modules/settings.ts defaults to a URL ending in /user/oidc/callback
     impact: OIDC login can fail when the mismatched default is used unchanged.
     documentation_contract: Product documentation uses the corrected /users/oidc/callback contract and does not mention this transient defect.
     closes_when:
@@ -127,9 +129,9 @@ implementation_defects:
     evidence:
       - src/public/js/core/password-validation.ts defines the intended minimum of eight characters, one letter, and one
         digit
-      - src/views/users/register.pug loads the password validator, but src/controller/userController.ts checks only
+      - src/backend/views/users/register.pug loads the password validator, but src/backend/controller/userController.ts checks only
         presence and equality
-      - src/views/users/reset-password.pug declares only an eight-character HTML minimum and the reset controller checks
+      - src/backend/views/users/reset-password.pug declares only an eight-character HTML minimum and the reset controller checks
         only equality
     impact: A client bypass or the reset path can accept a password that does not meet the policy presented during
       registration.
@@ -145,8 +147,8 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Guest recovery is not reachable through the login page in an organization-sign-in-only deployment
     evidence:
-      - src/routes/users.ts redirects GET /users/login to OIDC before rendering the page when local login is disabled
-      - the guest-recovery form exists only in src/views/users/login.pug
+      - src/backend/routes/users.ts redirects GET /users/login to OIDC before rendering the page when local login is disabled
+      - the guest-recovery form exists only in src/backend/views/users/login.pug
       - GET /guest/recovery redirects back to /users/login
     impact: A guest with an email address can be unable to request their private links when the deployment disables local
       login.
@@ -163,9 +165,9 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Guest profile settings expose a profile-deactivation action that rejects guest sessions
     evidence:
-      - src/views/users/profile/view.pug renders Delete profile without checking whether the active profile belongs to a
+      - src/backend/views/users/profile/view.pug renders Delete profile without checking whether the active profile belongs to a
         full account
-      - src/routes/users.ts protects the profile-deletion routes with isAuthenticated rather than isLoggedIn
+      - src/backend/routes/users.ts protects the profile-deletion routes with isAuthenticated rather than isLoggedIn
     impact: Guests see an action that redirects them away instead of performing the supported guest-account closure flow.
     documentation_contract: D01 directs guests to Delete account and assumes the inapplicable profile-deactivation action is not shown.
     closes_when:
@@ -179,7 +181,7 @@ implementation_defects:
     out_of_scope_for_frontend_migration: true
     title: Deactivating the final full-account profile can complete deletion and then fail while selecting another profile
     evidence:
-      - src/controller/userController.ts deletes the previous user when profile deactivation leaves no profiles
+      - src/backend/controller/userController.ts deletes the previous user when profile deactivation leaves no profiles
       - the profile-deletion route then unconditionally calls changeActiveProfile
       - changeActiveProfile throws when the deleted account has no remaining profile
     impact: The destructive operation can succeed while the user receives an error instead of a clean account-closure result.
@@ -198,10 +200,10 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Event registration-link creation ignores the submitted Uses value
     evidence:
-      - src/views/modules/module_registration_links.pug exposes a Uses field with values greater than one
+      - src/backend/views/modules/module_registration_links.pug exposes a Uses field with values greater than one
       - src/public/js/modules/reg-links.ts sends maxUses to the event links API
-      - src/modules/database/services/EventService.ts stores and enforces maxUses
-      - "src/controller/eventController.ts creates every link with maxUses: 1"
+      - src/backend/modules/database/services/EventService.ts stores and enforces maxUses
+      - "src/backend/controller/eventController.ts creates every link with maxUses: 1"
     impact: A link configured for multiple late registrations is created as single-use.
     documentation_contract: D05 documents the coherent working contract in which Uses controls the allowed number of
       successful late registrations and does not mention the controller mismatch.
@@ -216,8 +218,8 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Event participant details are embedded in the page without an Access Participants rendering guard
     evidence:
-      - src/controller/eventController.ts fetches the complete participant rows for every admitted event-page request
-      - src/views/event/event-view.pug always serializes data.participants into participantsData
+      - src/backend/controller/eventController.ts fetches the complete participant rows for every admitted event-page request
+      - src/backend/views/event/event-view.pug always serializes data.participants into participantsData
       - the visible Participants component and API are separately guarded by ACCESS_PARTICIPANTS
     impact: A profile without participant-list permission can receive names, available email addresses, dates, and dietary
       data in page source even when the visible participant section is hidden.
@@ -243,7 +245,7 @@ implementation_defects:
     title: A late-registration token is not preserved through first-time guest onboarding
     evidence:
       - src/public/js/modules/reg-links.ts creates event URLs with the regToken query parameter
-      - src/middleware/guestFlowFactory.ts redirects an anonymous event request to /event/:id/guest without carrying the
+      - src/backend/middleware/guestFlowFactory.ts redirects an anonymous event request to /event/:id/guest without carrying the
         query parameter
       - the guest registration POST redirects to the event page without restoring regToken
     impact: A new guest following a valid deadline-bypass link can lose the token before submitting the registration.
@@ -265,14 +267,14 @@ implementation_defects:
       finding: Current proof routing no longer has the outer participant guard; current controller policy accepts an effective
         manager or the attributed participant. The original description is historical evidence, not an intentional
         exception to preserve.
-      source_evidence: src/routes/api/eventInvoices.ts; src/controller/eventPoolController.ts; src/modules/invoice/proofs.ts;
+      source_evidence: src/backend/routes/api/eventInvoices.ts; src/backend/controller/eventPoolController.ts; src/backend/modules/invoice/proofs.ts;
         tests/integration/organizer-invoices.spec.ts
       remaining_verification: Retain open status until the full route actor matrix in closes_when is checked; this source
         review did not execute tests.
     evidence:
-      - src/routes/api/eventInvoices.ts protects the proof route first with requireEventParticipantAPI
+      - src/backend/routes/api/eventInvoices.ts protects the proof route first with requireEventParticipantAPI
       - requireEventParticipantAPI admits only the event owner or a registered event participant
-      - src/controller/eventPoolController.ts then separately allows MANAGE_ASSIGNMENTS or the invoice submitter
+      - src/backend/controller/eventPoolController.ts then separately allows MANAGE_ASSIGNMENTS or the invoice submitter
     impact: A non-owner organizer with Access Admin and Manage Assignments can administer invoices but still be blocked from
       opening their proof unless the organizer is also registered for the event.
     documentation_contract: D06 documents the coherent working contract in which an entrusted invoice-pool organizer can
@@ -292,14 +294,14 @@ implementation_defects:
       date: 2026-10-04
       finding: Current controller, locked state validation and participant-pool query use assignAll or explicit assignment for
         eligibility; default enrollment is separate. The original mismatch appears superseded by current code.
-      source_evidence: src/controller/eventPoolController.ts; src/modules/invoice/state.ts;
-        src/modules/database/services/EventInvoiceService.ts
+      source_evidence: src/backend/controller/eventPoolController.ts; src/backend/modules/invoice/state.ts;
+        src/backend/modules/database/services/EventInvoiceService.ts
       remaining_verification: The complete current-participant, future-participant, default-enrollment and listing matrix was
         not verified in execution; retain open status pending reconciliation.
     evidence:
-      - src/modules/database/services/EventInvoiceService.ts lists an open participant pool only when assignAll is true
+      - src/backend/modules/database/services/EventInvoiceService.ts lists an open participant pool only when assignAll is true
         or an explicit assignment exists
-      - src/controller/eventPoolController.ts also treats pool.isDefault as sufficient for invoice submission
+      - src/backend/controller/eventPoolController.ts also treats pool.isDefault as sufficient for invoice submission
       - default-pool registration is otherwise materialized by registerForDefaultPools when a new event registration is
         created
     impact: A crafted submission can be accepted for an existing registration that is not shown as assigned to the pool.
@@ -318,7 +320,7 @@ implementation_defects:
     evidence:
       - multer writes the proof before controller validation and only the unsupported-MIME branch explicitly unlinks it
       - persistence or later validation failures can occur after upload without a common cleanup path
-      - src/modules/database/services/EventService.ts deletes an event through database cascade but does not remove its
+      - src/backend/modules/database/services/EventService.ts deletes an event through database cascade but does not remove its
         proof files
       - retention cleanup can remove a proof only while its invoice row still exists
       - P7's versioned submission cleans up rejected multipart decoding before entering the unchanged business owner;
@@ -341,12 +343,12 @@ implementation_defects:
       date: 2026-10-04
       finding: Current locked takeover operation rejects participant changes unless the pool is OPEN, including
         ORGANIZER_ONLY. Existing integration assertions include organizer-only and closed rejection.
-      source_evidence: src/modules/invoice/takeovers.ts; tests/integration/invoice-workflows.spec.ts
+      source_evidence: src/backend/modules/invoice/takeovers.ts; tests/integration/invoice-workflows.spec.ts
       remaining_verification: Source assertions were inspected but not run; retain open status until the stated route-level
         acceptance matrix is reconciled with current evidence.
     evidence:
-      - src/views/modules/module_invoice_pool.pug exposes participant takeover controls only for open pools
-      - src/controller/eventPoolController.ts updateTakeovers validates assignment and relationship rules but not
+      - src/backend/views/modules/module_invoice_pool.pug exposes participant takeover controls only for open pools
+      - src/backend/controller/eventPoolController.ts updateTakeovers validates assignment and relationship rules but not
         pool.status
       - the participant takeover route does not add a separate closed-pool guard
     impact: A crafted request can alter takeover instructions for a closed pool, affecting a later recalculation despite the
@@ -367,11 +369,11 @@ implementation_defects:
       date: 2026-10-04
       finding: Current assignment operation retains an empty valid-ID set and prunes out-of-scope takeovers and surcharges.
         The previous empty-set bypass is not the current implementation.
-      source_evidence: src/modules/invoice/poolOperations.ts; tests/integration/invoice-workflows.spec.ts
+      source_evidence: src/backend/modules/invoice/poolOperations.ts; tests/integration/invoice-workflows.spec.ts
       remaining_verification: Reviewed empty-allocation tests do not explicitly seed and assert removal of stale takeovers and
         adjustments; retain open status for that exact acceptance check.
     evidence:
-      - src/modules/database/services/EventInvoiceService.ts updateAssignments replaces explicit assignment rows with
+      - src/backend/modules/database/services/EventInvoiceService.ts updateAssignments replaces explicit assignment rows with
         the submitted registration IDs
       - when the submitted registration list is empty, the cleanup variable validIds falls back to every event
         registration instead of the empty effective assignment scope
@@ -392,7 +394,7 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Editing a slot compares activity-slot-role mapping IDs with role IDs when deciding what to remove
     evidence:
-      - src/modules/database/services/ActivityService.ts updateActivitySlotRoles loads ActivitySlotRole rows and their
+      - src/backend/modules/database/services/ActivityService.ts updateActivitySlotRoles loads ActivitySlotRole rows and their
         roles
       - the deletion filter checks roles.includes(r.id), where r.id is the mapping-row ID rather than r.roleId
       - the creation filter correctly compares the submitted values with r.roleId, so the two halves use different
@@ -435,8 +437,8 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: The activity Participants tab and participant rows are not guarded by Access Participants
     evidence:
-      - src/controller/activityController.ts builds participantList for every admitted activity-plan page request
-      - src/views/activity/activity-view.pug shows the Participants tab whenever participantList is nonempty without
+      - src/backend/controller/activityController.ts builds participantList for every admitted activity-plan page request
+      - src/backend/views/activity/activity-view.pug shows the Participants tab whenever participantList is nonempty without
         checking ACCESS_PARTICIPANTS
       - the Schedule view separately checks ACCESS_PARTICIPANTS before rendering assignee names
     impact: A profile that may view the plan but lacks participant-list permission can receive names, attendance, assignment
@@ -459,7 +461,7 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Survey descriptions are not rendered correctly on the voting page
     evidence:
-      - src/views/surveyor/survey-vote.pug creates a lines array but interpolates line and i without iterating over that
+      - src/backend/views/surveyor/survey-vote.pug creates a lines array but interpolates line and i without iterating over that
         array
       - the survey creation flow persists the description and the view controller returns the survey entity
       - original native E2E detail assertions did not require the saved description text to be visible
@@ -488,7 +490,7 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Survey duplication does not reliably prefill the description and week-of-month values
     evidence:
-      - src/views/surveyor/survey-create.pug places the description in a textarea value attribute rather than its text
+      - src/backend/views/surveyor/survey-create.pug places the description in a textarea value attribute rather than its text
         content
       - src/public/js/survey-create.ts reads nth_week while SurveyCombination exposes nthWeek
       - the generic duplicate route supplies the original entity and SurveyCombination objects to the creation template
@@ -514,8 +516,8 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Survey routing retains nonfunctional event-scoping plumbing
     evidence:
-      - src/routes/survey.ts configures the generic guest-flow router with addToEvent true
-      - src/middleware/guestFlowFactory.ts accepts eventId and applies event-creation authorization for that mode
+      - src/backend/routes/survey.ts configures the generic guest-flow router with addToEvent true
+      - src/backend/middleware/guestFlowFactory.ts accepts eventId and applies event-creation authorization for that mode
       - Survey has no event relation and surveyController.createEntity does not persist the injected event ID
       - the event dashboard survey section is commented out while an E2E case calls the query-driven flow event-scoped
         without checking a relationship
@@ -539,9 +541,9 @@ implementation_defects:
       correction; migration must not silently replace EDIT_META with the more specific grants or infer additional parent
       inheritance.
     evidence:
-      - src/views/packing/packing-view.pug renders title editing for EDIT_TITLE or ITEM_EDIT and capacity editing for
+      - src/backend/views/packing/packing-view.pug renders title editing for EDIT_TITLE or ITEM_EDIT and capacity editing for
         EDIT_CAPACITY or ITEM_EDIT
-      - src/routes/api/packing.ts protects the shared item-attribute mutation route with EDIT_META or ITEM_EDIT
+      - src/backend/routes/api/packing.ts protects the shared item-attribute mutation route with EDIT_META or ITEM_EDIT
       - src/public/js/packing.ts sends both title and maxAssignees changes through that shared route
     impact: A profile granted only the field-specific title or capacity permission can see an edit control but have the save
       rejected.
@@ -560,8 +562,8 @@ implementation_defects:
     title: Native Packing-item creation does not persist the intended item order
     evidence:
       - Original discovery at native comparator 2dfa2573c64178f54684cc4877b5a945f66e24c8 found
-        src/controller/packingController.ts supplying position for initial and quick-added items while
-        src/modules/database/services/PackingService.ts persisted pos in createPackingListTx and addPackingItems.
+        src/backend/controller/packingController.ts supplying position for initial and quick-added items while
+        src/backend/modules/database/services/PackingService.ts persisted pos in createPackingListTx and addPackingItems.
       - The current shared createEntity and addPackingItem controller operations preserve that native ordering
         behavior by omitting pos. Native Quick Add now reaches PackingService.createPackingItem; the unset position
         retains its database default instead of persisting the intended next sequence.
@@ -582,10 +584,10 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Everyone items can retain or receive hidden individual assignments
     evidence:
-      - src/modules/database/services/PackingService.ts togglePackingItemRequiredByAll changes only the flag and does
+      - src/backend/modules/database/services/PackingService.ts togglePackingItemRequiredByAll changes only the flag and does
         not reconcile existing PackingAssignment rows
       - the assignment service does not reject an item whose requiredByAll flag is true
-      - src/views/packing/packing-view.pug hides individual assignee names and Take controls for Everyone rows
+      - src/backend/views/packing/packing-view.pug hides individual assignee names and Take controls for Everyone rows
       - participant overview lookup still considers any retained PackingAssignment row
     impact: A row presented as a group-wide requirement can retain invisible individual responsibility, affect Your
       participation, and reveal old assignments again if All is disabled.
@@ -603,7 +605,7 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Post-creation packing-item capacity mutations do not enforce the creation-time positive-integer rule server-side
     evidence:
-      - src/controller/packingController.ts preprocessCreate validates maxAssignees as an integer of at least one
+      - src/backend/controller/packingController.ts preprocessCreate validates maxAssignees as an integer of at least one
       - quickAddItem converts the submitted value without a positive-integer validation boundary
       - updateItemAttr accepts maxAssignees through the generic field update without validating its type or range
     impact: Crafted requests can create or update an item with a capacity that breaks the documented assignment and
@@ -621,8 +623,8 @@ implementation_defects:
     title: Drivers-list capacity mutations do not consistently enforce the positive whole-number and current-assignment
       boundary
     evidence:
-      - src/views/drivers/drivers-view.pug supplies a numeric Max
-      - src/controller/driversController.ts quickAddItem uses Number(maxAssignees) || 1, which does not reject negative
+      - src/backend/views/drivers/drivers-view.pug supplies a numeric Max
+      - src/backend/controller/driversController.ts quickAddItem uses Number(maxAssignees) || 1, which does not reject negative
         or fractional values
       - updateItemAttr writes maxAssignees through a generic field update without validating its type, range, or
         relationship to the current assignment count
@@ -643,9 +645,9 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Drivers-list participation lookup requires a profile to be both a driver and a passenger
     evidence:
-      - src/modules/database/services/DriverService.ts getDriversListByParticipant combines an assignment existence
+      - src/backend/modules/database/services/DriverService.ts getDriversListByParticipant combines an assignment existence
         predicate with a driver-row ownership predicate using AND
-      - src/controller/userController.ts uses that result for the drivers-list entries under Your participation
+      - src/backend/controller/userController.ts uses that result for the drivers-list entries under Your participation
       - tests/integration/controller-smoke-workflows.spec.ts exercises only a profile that both creates a row and
         assigns itself, so driver-only and passenger-only participation are not covered
     impact: A profile that only offers a ride or only takes a passenger place can be absent from the participation
@@ -663,9 +665,9 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Drivers-list Take and Remove controls are rendered without the Access View action guard used by the API
     evidence:
-      - src/views/drivers/drivers-view.pug renders Take or Remove from assignment and capacity state without checking
+      - src/backend/views/drivers/drivers-view.pug renders Take or Remove from assignment and capacity state without checking
         ACCESS_VIEW
-      - src/routes/api/drivers.ts protects both assignment mutations with requirePermissionApi for ACCESS_VIEW
+      - src/backend/routes/api/drivers.ts protects both assignment mutations with requirePermissionApi for ACCESS_VIEW
       - standalone page admission accepts any active profile even when that profile has no effective Access View grant
     impact: A profile can be shown an assignment control that the server rejects, making access and permission behavior
       appear inconsistent.
@@ -720,7 +722,7 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: The active recommendation schedule does not observe automatically queued binding-deadline generation
     evidence:
-      - src/controller/activityController.ts returns autoGenerationJob when Required mode has a past binding deadline
+      - src/backend/controller/activityController.ts returns autoGenerationJob when Required mode has a past binding deadline
         and no recommendation history
       - src/public/js/activity.ts initializes activity-recommendations-schedule.ts for the active page
       - activity-recommendations-schedule.ts ignores autoGenerationJob when loading recommendations and therefore does
@@ -747,7 +749,7 @@ implementation_defects:
     resolution: The authorized invoice-pool feature follow-up makes the form a shrinkable flex column, scrolls the modal
       body, keeps header/footer visible, and wraps long participant names.
     resolution_evidence:
-      - src/views/modules/module_invoice_pool.pug
+      - src/backend/views/modules/module_invoice_pool.pug
       - src/public/style/style.sass
       - Chromium layout checks with 28 long participant names at desktop and mobile sizes
   - id: IMP-032
@@ -772,8 +774,8 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Help pages omit the browser document title
     evidence:
-      - src/views/layout.pug supplies block meta inside head without a default title
-      - src/views/help.pug supplies the visible body title but does not override block meta with an HTML title element
+      - src/backend/views/layout.pug supplies block meta inside head without a default title
+      - src/backend/views/help.pug supplies the visible body title but does not override block meta with an HTML title element
       - The frontend baseline capture on 2026-10-04 records an empty document.title for /help at desktop and mobile sizes
     impact: Help pages have no meaningful browser-tab or history title despite a visible page heading.
     documentation_contract: Help pages identify their current topic in the browser title as well as the visible heading.
@@ -787,7 +789,7 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Automatic copying of a newly created registration link reads the wrong response field
     evidence:
-      - src/routes/api/event.ts POST /:id/links responds through respondWithSuccessDataJson with data containing id and
+      - src/backend/routes/api/event.ts POST /:id/links responds through respondWithSuccessDataJson with data containing id and
         token
       - src/public/js/core/http.ts returns the complete response envelope without unwrapping data
       - src/public/js/modules/reg-links.ts handleCreate reads data.token from that envelope when constructing the
@@ -807,12 +809,12 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Account and guest return targets can redirect outside the application
     evidence:
-      - src/routes/users.ts POST /login redirects directly to any string query.next after successful authentication
-      - src/routes/guests.ts GET /:id/login/:token redirects directly to any string query.next after successful guest
+      - src/backend/routes/users.ts POST /login redirects directly to any string query.next after successful authentication
+      - src/backend/routes/guests.ts GET /:id/login/:token redirects directly to any string query.next after successful guest
         authentication
-      - src/middleware/referrerUpdater.ts accepts a next value starting with slash, including protocol-relative external
+      - src/backend/middleware/referrerUpdater.ts accepts a next value starting with slash, including protocol-relative external
         destinations
-      - src/routes/users.ts GET /logout uses that weaker next validation before redirecting
+      - src/backend/routes/users.ts GET /logout uses that weaker next validation before redirecting
     impact: An attacker-controlled return target can send a person to an external destination after an otherwise legitimate
       account or guest action.
     documentation_contract: Internal return navigation preserves the requested application destination; external provider
@@ -829,10 +831,10 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: New event registration checks capacity before the write transaction
     evidence:
-      - src/controller/eventController.ts registerAttendance checks isEventFull before entering withEventTransaction
+      - src/backend/controller/eventController.ts registerAttendance checks isEventFull before entering withEventTransaction
       - The transaction rechecks and locks a deadline-bypass token when applicable, but does not lock and recheck
         current event capacity
-      - src/modules/database/services/EventService.ts register locks event pools and persists registration without a
+      - src/backend/modules/database/services/EventService.ts register locks event pools and persists registration without a
         capacity policy callback
       - The second-pass frontend migration review established this ordering from source; no concurrent database
         reproduction was run
@@ -851,7 +853,7 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Blank absent dietary notes can make an unchanged registration appear changed
     evidence:
-      - src/controller/eventController.ts isDietaryEqual initializes localAllergy and localComment as undefined when the
+      - src/backend/controller/eventController.ts isDietaryEqual initializes localAllergy and localComment as undefined when the
         corresponding dietary choices are absent
       - The same function compares these values directly with submitted allergyNotes and dietComment strings before
         later note normalization
@@ -1066,8 +1068,8 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Permission registry changes bypass serialized frontend input generation
     evidence:
-      - generate-locales.mjs derives permission keys and hashes src/modules/lib/permissions.ts, but the watcher
-        observed only contracts/api/v1 and src/locales. The server could restart directly on the omitted registry.
+      - generate-locales.mjs derives permission keys and hashes src/backend/modules/lib/permissions.ts, but the watcher
+        observed only contracts/api/v1 and src/common/locales. The server could restart directly on the omitted registry.
       - A later deterministic real-watcher fixture held the awaited readiness write, delivered a known newer invalid
         permission save and then released the write. It reproduced readiness publication despite the queued invalid
         batch. The earlier six passing cases and source review had not exercised that final publication window.
@@ -1148,7 +1150,7 @@ implementation_defects:
         The separately approved pilot correction and its passing evidence remain intact. The mixed activation
         consequence originally recorded alongside this finding is now tracked separately as IMP-057.
     evidence:
-      - src/controller/userController.ts resetPassword verifies the token before UserService.resetPassword awaits
+      - src/backend/controller/userController.ts resetPassword verifies the token before UserService.resetPassword awaits
         bcrypt and updates by username alone. The conditional token is not part of that shared write's predicate.
       - Independent source scheduling shows native reset reading valid token T, pilot reset locking its account,
         writing and clearing T before commit, then the native bcrypt continuation overwriting the pilot password.
@@ -1319,7 +1321,7 @@ implementation_defects:
     out_of_scope_for_frontend_migration: true
     title: Provider logout can clear stored local identity before preparing a fallible provider destination
     evidence:
-      - src/modules/oidc.ts logout captures whether tokens exist, clears auth/profile/tokens, rotates frontend context
+      - src/backend/modules/oidc.ts logout captures whether tokens exist, clears auth/profile/tokens, rotates frontend context
         and persists the session before lazy provider discovery and end-session URL construction.
       - Native logout and token-bearing pilot API/document logout call this same owner. A discovery/metadata/URL
         preparation failure can therefore reject the journey after local logout has already been saved.
@@ -1345,7 +1347,7 @@ implementation_defects:
     out_of_scope_for_frontend_migration: true
     title: Native activation can acknowledge a consumed or reissued token after an earlier token read
     evidence:
-      - src/controller/userController.ts activateAccount reads verifyActivationToken before UserService.activateUser
+      - src/backend/controller/userController.ts activateAccount reads verifyActivationToken before UserService.activateUser
         updates by account ID alone and clears activationToken. That update does not test the submitted token again.
       - Independent source scheduling shows native activation reading T, a cooperating pilot activation consuming T
         under its account lock, then the earlier native continuation acknowledging activation through its ID-only write.
@@ -1372,7 +1374,7 @@ implementation_defects:
     out_of_scope_for_frontend_migration: true
     title: Profile migration token writes do not recheck current authority with the mutation
     evidence:
-      - src/routes/users.ts profile/migrate/request passes the admitted session profile ID to getMigrationToken;
+      - src/backend/routes/users.ts profile/migrate/request passes the admitted session profile ID to getMigrationToken;
         UserService.generateMigrationToken updates that ID without checking its current owner at the write.
       - userController.getProfileToMigrate verifies token and expiry before moveProfileToUserTx begins. That transaction
         moves the profile and clears its token by profile ID without rechecking the submitted token or expiry.
@@ -1399,11 +1401,11 @@ implementation_defects:
     out_of_scope_for_frontend_migration: true
     title: Profile transfer commits before required previous-owner cleanup and completion preparation
     evidence:
-      - src/controller/userController.ts migrateProfile commits UserService.moveProfileToUserTx before loading the
+      - src/backend/controller/userController.ts migrateProfile commits UserService.moveProfileToUserTx before loading the
         destination owner for migration mail and calling handlePreviousProfileOwner.
       - handlePreviousProfileOwner reads remaining profiles, deletes a final previous account or guest, and prepares
         its deletion mail after the ownership/token transaction. These required steps do not share that commit.
-      - src/modules/email.ts prepares mail and initializes the native sender outside its delivery-error catch;
+      - src/backend/modules/email.ts prepares mail and initializes the native sender outside its delivery-error catch;
         ordinary SMTP delivery failures inside that catch are logged rather than propagated.
     impact: A later lookup, cleanup or mail-preparation failure can reject an already committed transfer or leave its
       previous-owner cleanup incomplete, without rolling back the transferred profile or consumed token.
@@ -1427,9 +1429,9 @@ implementation_defects:
     out_of_scope_for_frontend_migration: true
     title: Account deletion commits before required session and completion preparation
     evidence:
-      - src/controller/userController.ts deleteUser and deleteGuest call their UserService deletion before deletion
+      - src/backend/controller/userController.ts deleteUser and deleteGuest call their UserService deletion before deletion
         mail and logoutUserOidc. The DBAL delete is not atomic with the following stored-session transition.
-      - src/modules/email.ts mail preparation/native sender initialization and src/modules/oidc.ts persistSession
+      - src/backend/modules/email.ts mail preparation/native sender initialization and src/backend/modules/oidc.ts persistSession
         remain fallible after account deletion; ordinary caught SMTP delivery errors are not propagated.
     impact: Preparation or stored-session failure can reject after permanent deletion, leaving the request's previous
       identity or a missing completion despite an irreversible account outcome.
@@ -1520,7 +1522,7 @@ implementation_defects:
     evidence:
       - src/public/js/core/password-validation.ts separately calculates length, letter and digit requirements in
         isPasswordValid and verifyPassword. Native registration loads this implementation through verify_password.ts.
-      - src/modules/lib/frontendIdentity.ts repeats those criteria for the mounted Vue registration form's validity
+      - src/common/lib/frontendIdentity.ts repeats those criteria for the mounted Vue registration form's validity
         and feedback. At the original review its dependency-avoidance comment did not establish an approved exception.
     impact: The original review identified divergence risk between native and Vue criteria and found behavior tests
       insufficient to establish shared implementation. The later explicit isolation decision accepts that temporary
@@ -1548,7 +1550,7 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Pilot admission can save an earlier session over a later identity transition
     evidence:
-      - The original src/modules/api/session.ts reloadSession installed fresh stored evidence directly into req.session
+      - The original src/backend/modules/api/session.ts reloadSession installed fresh stored evidence directly into req.session
         through sessionStore.createSession. Express retained its initial saved-state comparison while the replacement
         lost the middleware save/reload wrappers. The direct replacement first appeared in correction d58fb35.
       - A database-free HTTP fixture using production captureApiActor and actual Express/session middleware loaded
@@ -1635,9 +1637,9 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Event permission comparisons do not coordinate intervening native writes
     evidence:
-      - src/controller/eventController.ts withEventManagement holds an exclusive Event root lock through
+      - src/backend/controller/eventController.ts withEventManagement holds an exclusive Event root lock through
         updateEventDefaults and setEventAdmin comparison and persistence.
-      - src/modules/database/services/EntityAdminService.ts coordinates the Packing root only. Native Event
+      - src/backend/modules/database/services/EntityAdminService.ts coordinates the Packing root only. Native Event
         default and administrator writers can update polymorphic permission rows without taking the Event lock.
       - Those permission rows have no Event foreign key supplying implicit coordination. An intervening native
         write after comparison can be overwritten or removed by the versioned save without a 412 response.
@@ -1751,7 +1753,8 @@ implementation_defects:
       final client/compiler checks passed. Independent/root review confirms actual shared adoption without another
       owner or native/backend changes. Header has no native-equivalence claim; preceding failures remain historical.
   - id: IMP-070
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-18
     severity: medium
     owner: backend administration maintainers
@@ -1759,10 +1762,10 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Repeated versioned permission and administrator orchestration
     evidence:
-      - src/controller/packingController.ts and src/controller/driversController.ts repeat audience-mask baseline
+      - src/backend/controller/packingController.ts and src/backend/controller/driversController.ts repeat audience-mask baseline
         projection, selected-field comparison, administrator baseline admission and grant-result orchestration in
         updatePackingDefaults/updateDriversDefaults, readPackingAdminBaseline/readDriversAdminBaseline and
-        setPackingAdmin/setDriversAdmin. src/controller/eventController.ts contains corresponding Event orchestration.
+        setPackingAdmin/setDriversAdmin. src/backend/controller/eventController.ts contains corresponding Event orchestration.
       - The controllers already reuse entityAdminController.applyEntityAdministrator, permission-engine mask
         persistence and EntityAdminService queries. The repetition concerns their versioned controller orchestration,
         not a second DBAL or a demonstrated user-visible authorization defect.
@@ -1771,6 +1774,17 @@ implementation_defects:
     authorization: The maintainer's direct 2026-10-18 implementation reply limits the correction to frontend migration
       and explicitly sends deeper backend changes that do not support major frontend work to this backlog. The
       shared administration refactor is excluded from this effort; it is not a pending approval or parity blocker.
+    authorization_amendment_2026_10_26: The maintainer directly requests a separate historical audit and unified shared
+      implementation across frontend, backend and common code. This authorizes consolidation of the repeated
+      permission/administrator orchestration while preserving its grants, comparison evidence and operation order;
+      the original frontend-migration exclusion above remains historical and excluded business remedies stay deferred.
+    resolution: Packing, Drivers, Event and Activity now consume shared controller-owned defaults, comparison and
+      administrator operations. Their original feature admission, snapshot/lock ownership, validation order, Event
+      comparison fields and Drivers transaction preparation are preserved.
+    verification: The 14-case real-ORM matrix passed on the guarded disposable schema, covering public method
+      grants, sparse updates, zero/absent grants, stale evidence, identifier scopes and receipt-preparation rollback.
+      Independent semantic review confirmed actual matching callers; this does not claim the broader integration
+      suites passed their existing local schema-setup deadlines.
     documentation_contract: Native and Vue retain their existing shared backend operations and feature-specific
       method/private-projection boundaries. Bounded readability corrections do not establish a new common owner.
     closes_when:
@@ -1931,8 +1945,8 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Activity schedule total slot badge reads an array length from grouped data
     evidence:
-      - src/controller/activityController.ts fetchForView returns slots grouped by date, while
-        src/views/activity/parts/schedule.pug renders the total badge from data.slots.length.
+      - src/backend/controller/activityController.ts fetchForView returns slots grouped by date, while
+        src/backend/views/activity/parts/schedule.pug renders the total badge from data.slots.length.
       - P5 source review finds no length member on that grouped record; the native total badge is therefore blank.
         The open and unassigned counters have independent calculated values.
     impact: The schedule shows no total slot count beside its open and unassigned counts.
@@ -1963,7 +1977,7 @@ implementation_defects:
       - src/public/js/modules/activity/activity-filters.ts constructs UTC-midnight dates, then formats their
         weekday/date in the browser timezone; negative UTC offsets can display the previous civil day.
       - Native creation adjusts week boundaries with browser-local calendar arithmetic but adds day cells by fixed
-        milliseconds. src/views/activity/activity-view.pug instead performs week/day arithmetic in the server timezone.
+        milliseconds. src/backend/views/activity/activity-view.pug instead performs week/day arithmetic in the server timezone.
         These algorithms can differ across timezone offsets and daylight-saving boundaries.
       - >-
         The 2026-10-20 Vue review also finds the matching previous-day shift in Event summary, saved attendance and
@@ -1995,7 +2009,7 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Activity creation date labels target absent control identifiers
     evidence:
-      - src/views/activity/activity-create.pug renders date labels for start/end but inputs with IDs startDate/endDate.
+      - src/backend/views/activity/activity-create.pug renders date labels for start/end but inputs with IDs startDate/endDate.
         Standard label activation therefore does not focus the corresponding date input.
     impact: Clicking a creation date label does not activate its date control.
     authorization: Original P5 preserved native label activation. The direct R4/R6 decisions on 2026-10-19 require
@@ -2014,7 +2028,7 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Recommendation application can report failure after assignments have committed
     evidence:
-      - src/controller/activityController.ts applyRecommendations commits applyReviewed through withActivityTransaction,
+      - src/backend/controller/activityController.ts applyRecommendations commits applyReviewed through withActivityTransaction,
         then conditionally awaits getRecommendations and generateAndSaveRecommendations before returning its result.
       - The versioned adapter reuses this existing operation. A failure in the later regeneration work propagates
         after assignments and applied recommendation history have already committed.
@@ -2043,7 +2057,7 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: The recommendation card header clips its rightmost action on a narrow screen
     evidence:
-      - src/views/activity/parts/assignments.pug renders a non-wrapping recommendation title and three action buttons
+      - src/backend/views/activity/parts/assignments.pug renders a non-wrapping recommendation title and three action buttons
         together in its flex card header.
       - Pre-decision same-actor English Chromium comparisons at 390px show the Save changes action extending beyond
         the 332px recommendation card in both the native comparator and the then-parity-preserving Vue presentation.
@@ -2107,7 +2121,7 @@ implementation_defects:
     out_of_scope_for_frontend_migration: true
     title: Recommendation blocking infers swap partners from reciprocal slots without pair provenance
     evidence:
-      - src/controller/activityController.ts includeBlockedSwapLegs selects the first reciprocal REASSIGN by source
+      - src/backend/controller/activityController.ts includeBlockedSwapLegs selects the first reciprocal REASSIGN by source
         and target slot IDs without participant identity or an explicit swap relationship.
       - prepareRecommendationApplication invokes that helper while removing blocked approved operations, so its
         pairing decision can change the remaining applicable set and reported skipped count.
@@ -3049,8 +3063,8 @@ implementation_defects:
     title: Profile-deactivation confirmation always describes account deletion
     evidence:
       - At discovery, fresh native and Vue profile-deactivation forms both told users to confirm deleting their account.
-      - The discovery-time src/views/users/profile/delete.pug and profile.deactivateIntro in src/locales/en.json and de.json shared that wording.
-      - src/controller/userController.ts deactivates the selected profile and deletes its previous account only when no profiles remain.
+      - The discovery-time src/backend/views/users/profile/delete.pug and profile.deactivateIntro in src/common/locales/en.json and de.json shared that wording.
+      - src/backend/controller/userController.ts deactivates the selected profile and deletes its previous account only when no profiles remain.
     impact: Users with other profiles receive a misleading description of the destructive operation they are confirming.
     authorization: The maintainer directly approved R2 on 2026-10-25, authorizing Vue EN/DE consequence wording only.
     disposition: The shared Vue catalog now states profile deactivation and conditional account deletion. The native
@@ -3136,7 +3150,7 @@ implementation_defects:
         without returning the promise. Promise.all therefore receives undefined entries rather than deletion promises.
       - The outer completion callback can run before those database operations settle, and their later rejected
         promises do not enter the attached catch handler.
-      - src/modules/lib/session.ts constructs this unmodified TypeormStore, and src/app.ts installs it in
+      - src/backend/modules/lib/session.ts constructs this unmodified TypeormStore, and src/backend/app.ts installs it in
         express-session. Express's Session.destroy and Store.regenerate delegate completion to the store callback.
     impact: A caller relying on store destruction completion can proceed before deletion settles, and a later SQL
       rejection can escape that callback's error handling.
@@ -3180,6 +3194,47 @@ implementation_defects:
     closes_when:
       - A separately authorized change supplies the required coherent artifacts before integration execution and
         verifies the existing profile assertions from a clean checkout on the supported CI baseline.
+  - id: IMP-134
+    status: closed
+    closed_on: 2026-10-26
+    discovered_on: 2026-10-26
+    severity: high
+    owner: application security maintainers
+    package: shared-source-ownership
+    title: Development asset serving exposes private repository and dependency files
+    evidence:
+      - The repository-root Vite middleware introduced in c42758a admitted the complete asset prefix without a
+        public-file boundary. Unauthenticated HTTP probes returned private settings source through a raw-file query,
+        the repository manifest and an arbitrary installed dependency manifest.
+      - The installed public roots were separate, but plain static delivery did not prevent filesystem aliases
+        from escaping their public tree. This boundary required protection under the same explicit request.
+    authorization: The maintainer's direct 2026-10-26 instruction requires separate source owners, no private code
+      exposure and strictly guarded exceptions to the prohibition on common node_modules serving.
+    resolution: One backend-owned inventory guards development HTTP and the actual client module graph. Both
+      installed static roots share canonical containment for ordinary files, index files and prepared compressed
+      representations. Dependency exceptions are restricted to the admitted optimized browser graph, required
+      Vite browser runtime files and specific icon fonts. Server-only guest flash decoding moved out of common code.
+    verification: The six real HTTP/SSR/HMR, client-build and filesystem-alias fixture cases passed after relocation.
+      Independent review found no backend references in the public build's source maps. This is not deployment evidence.
+  - id: IMP-135
+    status: closed
+    closed_on: 2026-10-26
+    discovered_on: 2026-10-26
+    severity: medium
+    owner: shared application maintainers
+    package: shared-source-ownership
+    title: Migrated resource and creation entry flows duplicate former shared guest-flow responsibilities
+    evidence:
+      - Resource-entry copies accumulated during the migration (Packing e80a512, Drivers 479eb46, Survey 3ebec30,
+        Activity 2dcb9d5). P11 commit 2ae7210 removed the native guest-flow factory while those copies remained.
+      - DEC-006 records authorized native transport retirement and continued shared business ownership. Factory
+        deletion alone does not establish an unapproved behavior change; full conversational provenance is unavailable.
+    authorization: The maintainer's direct 2026-10-26 historical-audit request requires unified shared implementations.
+    resolution: All five entity controllers consume one guest/detail and creation-admission owner. Account admission
+      has one controller owner without a controller cycle. Features retain their reads/snapshots, linked-event denial
+      order, public-title-only guest projection, Event token/admin boundary, identifier spelling and Survey exceptions.
+    verification: All 20 focused admission tests passed with valid wire-format fixtures. Independent review found no
+      new writes, locks, session ownership or private projection; this does not establish every historical approval.
 findings:
   - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
     status: closed
@@ -3505,8 +3560,8 @@ findings:
     title: Review and deliberately rework native permission semantics across features
     related_defects: [IMP-022, IMP-023]
     implementation_evidence:
-      - src/modules/permissionEngine.ts and src/modules/lib/permissions.ts define audience grants and item fallbacks.
-      - src/controller/packingController.ts preserves distinct native method and display grants across both frontends.
+      - src/backend/modules/permissionEngine.ts and src/backend/modules/lib/permissions.ts define audience grants and item fallbacks.
+      - src/backend/controller/packingController.ts preserves distinct native method and display grants across both frontends.
     desired_outcome: Review actor, page, method, field and private-projection boundaries across features; distinguish
       intentional public powers and feature exceptions from actual unintended access. Define a coherent rework with
       explicit approval before changing any native policy, default mask, design decision or protected-resource access.
@@ -3524,7 +3579,7 @@ findings:
       - The removed participant-and-organizer-controls illustration used the former activity Settings label and
         owner-only duplicate grouping.
     implementation_evidence:
-      - src/views/modules/module_entity_properties.pug supplies permission-filtered Entity settings and distinct
+      - src/backend/views/modules/module_entity_properties.pug supplies permission-filtered Entity settings and distinct
         duplication and owner-only deletion actions
     disposition: The maintainer explicitly approved cleanup on 2026-10-12. The unreferenced obsolete illustration was
       removed; maintained written control guidance remains. No replacement illustration or visual redesign is required.
@@ -3745,16 +3800,16 @@ findings:
     authorization: The maintainer explicitly requested this follow-up after selecting the native anonymous-session
       flash behavior for the pilot account-required redirect. Recording the work does not authorize a session redesign.
     implementation_evidence:
-      - src/app.ts
-      - src/middleware/permissionMiddleware.ts
-      - src/modules/api/session.ts
-      - src/modules/lib/session.ts
-      - src/modules/lib/frontendSession.ts
-      - src/modules/oidc.ts
-      - src/controller/userController.ts
-      - src/routes/users.ts
-      - src/routes/frontendPilot.ts
-      - src/routes/api/v1/auth.ts
+      - src/backend/app.ts
+      - src/backend/middleware/permissionMiddleware.ts
+      - src/backend/modules/api/session.ts
+      - src/backend/modules/lib/session.ts
+      - src/backend/modules/lib/frontendSession.ts
+      - src/backend/modules/oidc.ts
+      - src/backend/controller/userController.ts
+      - src/backend/routes/users.ts
+      - src/backend/routes/frontendPilot.ts
+      - src/backend/routes/api/v1/auth.ts
     deficiency: Native documents, pilot documents and versioned API operations retain different session and feedback
       lifecycles. Their complete intended contract has not received one application-wide verification and unification
       review. This is a requested architectural follow-up, not a claim that every difference is a defect.
@@ -3822,7 +3877,7 @@ findings:
     implementation_evidence:
       - .github/workflows/release.yml
       - package.json
-      - src/server.ts
+      - src/backend/server.ts
     deficiency: The documented official-archive extraction, production-only dependency installation, versioned release
       layout, systemd startup, and /healthz checks have not been captured in a reproducible validation record.
     desired_outcome: Run the procedure with Node.js 24.15.0 and an official release archive; record versions, commands,
@@ -3840,7 +3895,7 @@ findings:
     implementation_evidence:
       - migrationDataSource.ts
       - scripts/runMigration.ts
-      - src/modules/database/migrations/
+      - src/backend/modules/database/migrations/
     deficiency: The documented empty-database sequence is source-derived but has not been run against a clean MariaDB 10.11
       database, including migration-history and trigger outcomes.
     desired_outcome: Initialize an empty isolated database exactly as documented, verify the resulting tables, migration
@@ -3857,7 +3912,7 @@ findings:
       - docs/DATABASE.md
       - docs/UPGRADING.md
     implementation_evidence:
-      - src/modules/settings.ts
+      - src/backend/modules/settings.ts
       - migrationDataSource.ts
       - scripts/runMigration.ts
     deficiency: The SETTINGS_FILE-to-DB_* bridge, target-proof step, pending-migration inspection, and representative
@@ -3876,9 +3931,9 @@ findings:
       - docs/OPERATIONS.md
       - docs/CONFIGURATION.md
     implementation_evidence:
-      - src/modules/lib/fileCommons.ts
-      - src/modules/invoice/retention.ts
-      - src/modules/settings.ts
+      - src/backend/modules/lib/fileCommons.ts
+      - src/backend/modules/invoice/retention.ts
+      - src/backend/modules/settings.ts
     deficiency: The release symlink layout and write permissions for header images and invoice proofs have not been
       exercised through restart, release switch, and retention processing.
     desired_outcome: Upload representative files, restart and switch releases, verify continued access and correct
@@ -3896,11 +3951,11 @@ findings:
       - docs/OPERATIONS.md
       - docs/CONFIGURATION.md
     implementation_evidence:
-      - src/app.ts
-      - src/modules/email.ts
-      - src/modules/oidc.ts
-      - src/routes/users.ts
-      - src/routes/guests.ts
+      - src/backend/app.ts
+      - src/backend/modules/email.ts
+      - src/backend/modules/oidc.ts
+      - src/backend/routes/users.ts
+      - src/backend/routes/guests.ts
     deficiency: The documented proxy headers, TLS boundary, secure cookies, outbound email, authentication variants,
       callback, and guest recovery have not been exercised in a production-shaped test deployment.
     desired_outcome: Execute the supported authentication/email matrix behind the documented proxy, capture callback and
@@ -3918,9 +3973,9 @@ findings:
       - docs/OPERATIONS.md
       - docs/DATABASE.md
     implementation_evidence:
-      - src/modules/database/dataSource.ts
-      - src/modules/lib/fileCommons.ts
-      - src/modules/settings.ts
+      - src/backend/modules/database/dataSource.ts
+      - src/backend/modules/lib/fileCommons.ts
+      - src/backend/modules/settings.ts
     deficiency: The documented backup unit has not been restored into an isolated environment and checked for registrations,
       sessions where applicable, header images, invoice proofs, configuration, and release compatibility.
     desired_outcome: Create a maintenance-boundary backup, restore every component in isolation, start the matching release,
@@ -3938,7 +3993,7 @@ findings:
     implementation_evidence:
       - .github/workflows/release.yml
       - scripts/runMigration.ts
-      - src/server.ts
+      - src/backend/server.ts
     deficiency: The stage-backup-stop-migrate-activate-check sequence and restoration of the previous release, database,
       uploads, and configuration have not been completed as one controlled exercise.
     desired_outcome: Perform a representative upgrade, execute all post-start checks, then rehearse the documented full
@@ -4050,13 +4105,13 @@ work_packages:
       - docs/UPGRADING.md
     source_anchors:
       - .github/workflows/release.yml
-      - src/modules/settings.ts
+      - src/backend/modules/settings.ts
       - migrationDataSource.ts
       - scripts/runMigration.ts
-      - src/server.ts
-      - src/app.ts
-      - src/modules/lib/fileCommons.ts
-      - src/modules/invoice/retention.ts
+      - src/backend/server.ts
+      - src/backend/app.ts
+      - src/backend/modules/lib/fileCommons.ts
+      - src/backend/modules/invoice/retention.ts
     deliverables:
       - environment manifest and release hashes
       - command and output transcript with secrets redacted

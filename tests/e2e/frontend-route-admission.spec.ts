@@ -2,7 +2,7 @@ import {expect, test} from '@playwright/test';
 import {createE2ELogin} from '../factories/e2eCoreFactory';
 import {createFrontendEventFixture} from '../keywords/frontendEventE2EKeywords';
 import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
-import {createTranslator} from '../../src/modules/localization/translator';
+import {createTranslator} from '../../src/common/localization/translator';
 
 test('keeps public Home separate from the authenticated Dashboard through direct and warm Login', async ({page, request}) => {
     // The independent HTTP actor proves actual document admission and its saved

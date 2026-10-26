@@ -1,8 +1,8 @@
 import {describe, expect, it} from 'vitest';
-import {distributeInvoiceAmount, validateInvoiceFactor} from '../../src/modules/invoice/distribution';
-import {buildPoolCalculationPreview, preparePoolCalculation} from '../../src/modules/invoice/calculation';
-import type {EventInvoicePool} from '../../src/modules/database/entities/event/EventInvoicePool';
-import type {EventRegistration} from '../../src/modules/database/entities/event/EventRegistration';
+import {distributeInvoiceAmount, validateInvoiceFactor} from '../../src/backend/modules/invoice/distribution';
+import {buildPoolCalculationPreview, preparePoolCalculation} from '../../src/backend/modules/invoice/calculation';
+import type {EventInvoicePool} from '../../src/backend/modules/database/entities/event/EventInvoicePool';
+import type {EventRegistration} from '../../src/backend/modules/database/entities/event/EventRegistration';
 import type {ParticipantRow} from '../../src/types/EventTypes';
 
 /** Supply real calculation inputs without repeatedly persisting an unchanged 28-person roster. */

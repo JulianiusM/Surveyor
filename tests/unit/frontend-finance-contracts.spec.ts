@@ -3,9 +3,9 @@ import {FinanceApi} from '../../src/frontend/features/finance/api';
 import {FrontendApi} from '../../src/frontend/app/api';
 import {InvalidInputError} from '../../src/frontend/app/transport';
 import {financeDecimal} from '../../src/frontend/features/finance/numbers';
-import {contractValidator, operationContract} from '../../src/modules/api/contracts';
-import {formatInputDiagnostic} from '../../src/modules/localization/inputValidation';
-import {createTranslator} from '../../src/modules/localization/translator';
+import {contractValidator, operationContract} from '../../src/backend/modules/api/contracts';
+import {formatInputDiagnostic} from '../../src/common/localization/inputValidation';
+import {createTranslator} from '../../src/common/localization/translator';
 
 describe('finance decimal transport preserves existing business inputs', () => {
     it.each(['calculation', 'settlement', 'retraction'] as const)('explains an invalid generated %s field before any request', async kind => {

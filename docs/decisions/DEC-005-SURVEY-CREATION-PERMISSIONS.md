@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: editorial dependency disposition against the backlog and advisory documentation policy; original technical decision retained without new runtime verification
-source-anchors: src/controller/surveyController.ts; src/modules/lib/permissions.ts; docs/backlog/documentation-remediation.yml; docs/policies/DOCUMENTATION_POLICY.md; src/frontend/; src/routes/api/v1/
+source-anchors: src/backend/controller/surveyController.ts; src/backend/modules/lib/permissions.ts; docs/backlog/documentation-remediation.yml; docs/policies/DOCUMENTATION_POLICY.md; src/frontend/; src/backend/routes/api/v1/
 next-review: survey-permission-or-access-model-change
 -->
 
@@ -27,7 +27,7 @@ This record changes documentation state only. It does not modify the survey impl
 The survey feature follows its own participation and access flow:
 
 - `survey-create.pug` (the retired native owner) contains the survey fields and date-combination controls, but no permission matrix.
-- `src/controller/surveyController.ts` creates the survey and combinations without saving general audience permissions.
+- `src/backend/controller/surveyController.ts` creates the survey and combinations without saving general audience permissions.
 - `survey.ts` (the retired native owner) exposes survey-specific participation actions such as voting and adding combinations.
 - The shared creation router may provide permission-related view metadata, but a feature participates in the permission
   system only when its view, controller, routes, and persistence model consume that capability.

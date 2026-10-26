@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
-source-anchors: src/migrations/1789862400000-AddEntityArchival.ts; src/modules/database/entities/archive/EntityVisibilityPreference.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; src/controller/packingController.ts; src/modules/database/services/PackingService.ts; src/modules/api/contracts.ts; src/modules/database/entities/session/Session.ts; src/migrations; package.json; .github/workflows/ci.yml
+source-anchors: src/backend/migrations/1789862400000-AddEntityArchival.ts; src/backend/modules/database/entities/archive/EntityVisibilityPreference.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; src/backend/controller/packingController.ts; src/backend/modules/database/services/PackingService.ts; src/backend/modules/api/contracts.ts; src/backend/modules/database/entities/session/Session.ts; src/backend/migrations; package.json; .github/workflows/ci.yml
 next-review: database-schema-or-targeting-change
 -->
 
@@ -36,7 +36,7 @@ than converting them to JavaScript timestamps.
 Runtime and migration code reach the same database through different stages:
 
 1. The running application reads built-in defaults, the selected CSV file, and environment overrides through
-   `src/modules/settings.ts`, then creates the runtime datasource.
+   `src/backend/modules/settings.ts`, then creates the runtime datasource.
 2. TypeORM's datasource file reads `DB_TYPE`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` directly from
    the process environment.
 3. The repository's `npm run typeorm` wrapper first loads the normal Surveyor settings, maps the resulting database
@@ -61,7 +61,7 @@ npm ci
 npm run generate
 ```
 
-`npm run generate` rebuilds `src/modules/database/__index__.ts`, the entity/migration/subscriber index consumed by the
+`npm run generate` rebuilds `src/backend/modules/database/__index__.ts`, the entity/migration/subscriber index consumed by the
 migration datasource, followed by the generated API contracts, validators and language catalogs. Generation does not
 connect to MariaDB or change its schema. `npm run generate:db-index` prepares only the TypeORM index. Run generation
 before every schema command in a fresh checkout.

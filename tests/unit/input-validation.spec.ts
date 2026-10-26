@@ -1,10 +1,10 @@
 import {describe, expect, it} from 'vitest';
 import type {ApiOperationId} from '../../src/types/ApiTransportTypes';
-import {contractValidator} from '../../src/modules/api/contracts';
-import {ApiProblem, validatedProblemBody} from '../../src/modules/api/problem';
-import {decodeApiParameters, validateApiInput} from '../../src/modules/api/transport';
-import {createTranslator} from '../../src/modules/localization/translator';
-import {formatFieldDiagnostic} from '../../src/modules/localization/inputValidation';
+import {contractValidator} from '../../src/backend/modules/api/contracts';
+import {ApiProblem, validatedProblemBody} from '../../src/backend/modules/api/problem';
+import {decodeApiParameters, validateApiInput} from '../../src/backend/modules/api/transport';
+import {createTranslator} from '../../src/common/localization/translator';
+import {formatFieldDiagnostic} from '../../src/common/localization/inputValidation';
 import {problemMessage} from '../../src/frontend/composables/feedback';
 
 /** Capture an actual generated transport rejection without starting an HTTP

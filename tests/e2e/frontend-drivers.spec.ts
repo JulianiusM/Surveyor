@@ -10,8 +10,8 @@ import {createFrontendEventFixture, frontendEventHeaders as apiHeaders} from '..
 import {captureDriversSettingsPresentation, createDriversSettingsFixture, exerciseDriversAdministratorForE2E,
     observeDriversSettingsCommand, openDriversSettingsForE2E, readDriversSettingsForE2E,
     selectDriversSettingsSurface} from '../keywords/frontendDriversE2EKeywords';
-import {PERM} from '../../src/modules/lib/permissions';
-import {createTranslator} from '../../src/modules/localization/translator';
+import {PERM} from '../../src/backend/modules/lib/permissions';
+import {createTranslator} from '../../src/common/localization/translator';
 
 type DriversView = components['schemas']['DriversListView'];
 

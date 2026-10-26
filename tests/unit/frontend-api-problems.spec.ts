@@ -1,13 +1,13 @@
 import {describe, expect, it} from 'vitest';
 import type {NextFunction, Request, Response} from 'express';
-import {ApiProblem, handleApiProblem, requestLocale} from '../../src/modules/api/problem';
-import {contractValidator} from '../../src/modules/api/contracts';
-import {createTranslator} from '../../src/modules/localization/translator';
-import {ExpectedError, ValidationError} from '../../src/modules/lib/errors';
-import {frontendIdentityProblemKey} from '../../src/modules/lib/frontendIdentity';
-import {loginUser, registerUser, resetPassword} from '../../src/controller/userController';
-import {normalizePackingMetadataPatch} from '../../src/controller/packingController';
-import {validateApiInput} from '../../src/modules/api/transport';
+import {ApiProblem, handleApiProblem, requestLocale} from '../../src/backend/modules/api/problem';
+import {contractValidator} from '../../src/backend/modules/api/contracts';
+import {createTranslator} from '../../src/common/localization/translator';
+import {ExpectedError, ValidationError} from '../../src/backend/modules/lib/errors';
+import {frontendIdentityProblemKey} from '../../src/common/lib/frontendIdentity';
+import {loginUser, registerUser, resetPassword} from '../../src/backend/controller/userController';
+import {normalizePackingMetadataPatch} from '../../src/backend/controller/packingController';
+import {validateApiInput} from '../../src/backend/modules/api/transport';
 
 /** Only request data used by the pure negotiation/error boundary is present; no application or database starts. */
 function request(options: {header?: string; cookie?: unknown; languages?: string[]; context?: string} = {}): Request {

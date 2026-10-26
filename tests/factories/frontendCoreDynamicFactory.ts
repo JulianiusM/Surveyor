@@ -1,7 +1,7 @@
-import type { DriversItem } from "../../src/modules/database/entities/drivers/DriversItem";
-import type { PackingItem } from "../../src/modules/database/entities/packing/PackingItem";
-import type { SurveyCombination } from "../../src/modules/database/entities/surveys/SurveyCombination";
-import type { ActivitySlot } from "../../src/modules/database/entities/activity/ActivitySlot";
+import type { DriversItem } from "../../src/backend/modules/database/entities/drivers/DriversItem";
+import type { PackingItem } from "../../src/backend/modules/database/entities/packing/PackingItem";
+import type { SurveyCombination } from "../../src/backend/modules/database/entities/surveys/SurveyCombination";
+import type { ActivitySlot } from "../../src/backend/modules/database/entities/activity/ActivitySlot";
 import type {
   PermBundle,
   PermType,

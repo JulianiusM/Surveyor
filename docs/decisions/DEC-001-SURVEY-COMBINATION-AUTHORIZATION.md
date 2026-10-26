@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-09-05
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: feature-specific-static-behavior
-source-anchors: src/controller/surveyController.ts; src/modules/database/services/SurveyService.ts; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; docs/backlog/documentation-remediation.yml; src/frontend/; src/routes/api/v1/
+source-anchors: src/backend/controller/surveyController.ts; src/backend/modules/database/services/SurveyService.ts; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; docs/backlog/documentation-remediation.yml; src/frontend/; src/backend/routes/api/v1/
 next-review: D09
 -->
 
@@ -35,9 +35,9 @@ The feature-specific implementation is internally consistent:
 - Requests to that original route first passed through the shared survey access safe zone in
   `guestFlowFactory.ts` (the retired native router factory). That access gate admitted a profile that could participate in the survey and sent a
   visitor without a profile through the guest-entry flow.
-- `src/controller/surveyController.ts` validates the submitted weekday and week-of-month values, then adds the
+- `src/backend/controller/surveyController.ts` validates the submitted weekday and week-of-month values, then adds the
   combination. It does not perform an owner or administrator check.
-- `src/modules/database/services/SurveyService.ts` stores the combination for the selected survey; no permission record
+- `src/backend/modules/database/services/SurveyService.ts` stores the combination for the selected survey; no permission record
   is consulted or created.
 
 This evidence establishes a deliberate collaborative workflow rather than an accidental omission of the general

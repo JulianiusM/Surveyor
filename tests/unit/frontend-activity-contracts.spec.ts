@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {contractValidator} from '../../src/modules/api/contracts';
+import {contractValidator} from '../../src/backend/modules/api/contracts';
 
 describe('Activity legacy identity wire contracts', () => {
     it('uses canonical strings for role catalogs, slot edits and attendance membership', () => {

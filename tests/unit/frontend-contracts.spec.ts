@@ -6,11 +6,11 @@ import path from 'node:path';
 import * as server from '../../.generated/api/v1/server.cjs';
 import * as browser from '../../.generated/api/v1/browser.mjs';
 import type {components} from '../../src/types/api/v1';
-import {isRegistrationPasswordValid} from '../../src/modules/lib/frontendIdentity';
+import {isRegistrationPasswordValid} from '../../src/common/lib/frontendIdentity';
 import type {Request, RequestHandler, Response} from 'express';
-import {normalizePackingMetadataPatch} from '../../src/controller/packingController';
-import {decodeApiMultipartData, decodeApiMultipartImage, receiveApiUpload, sendStoredApiBinary, validateOperationRequest} from '../../src/modules/api/transport';
-import {apiContract, operationContract} from '../../src/modules/api/contracts';
+import {normalizePackingMetadataPatch} from '../../src/backend/controller/packingController';
+import {decodeApiMultipartData, decodeApiMultipartImage, receiveApiUpload, sendStoredApiBinary, validateOperationRequest} from '../../src/backend/modules/api/transport';
+import {apiContract, operationContract} from '../../src/backend/modules/api/contracts';
 
 const listId = 'd506d78a-e2d7-4be9-bc95-04d83bbd22ec';
 const itemId = 'f092070d-07e3-461e-94bb-84b1d828dc38';

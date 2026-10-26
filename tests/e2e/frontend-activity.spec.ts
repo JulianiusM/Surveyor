@@ -3,7 +3,7 @@ import {commandHeadersForE2E} from '../keywords/e2eCoreKeywords';
 import {expect, test, type Page, type Route} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
-import {createTranslator} from '../../src/modules/localization/translator';
+import {createTranslator} from '../../src/common/localization/translator';
 import type {Locale} from '../../src/types/LocalizationTypes';
 import {createE2ELogin} from '../factories/e2eCoreFactory';
 import {loginForE2E} from '../keywords/e2eCoreKeywords';

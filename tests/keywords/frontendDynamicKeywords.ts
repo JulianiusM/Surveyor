@@ -1,7 +1,7 @@
 import type {Page} from '@playwright/test';
-import type {DriversItem} from '../../src/modules/database/entities/drivers/DriversItem';
-import type {PackingItem} from '../../src/modules/database/entities/packing/PackingItem';
-import type {SurveyCombination} from '../../src/modules/database/entities/surveys/SurveyCombination';
+import type {DriversItem} from '../../src/backend/modules/database/entities/drivers/DriversItem';
+import type {PackingItem} from '../../src/backend/modules/database/entities/packing/PackingItem';
+import type {SurveyCombination} from '../../src/backend/modules/database/entities/surveys/SurveyCombination';
 
 export interface InputLike extends Pick<HTMLInputElement, 'value' | 'checked'> {}
 

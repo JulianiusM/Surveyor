@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {civilDateWeeks, formatCivilDate} from '../../src/modules/lib/civilDate';
+import {civilDateWeeks, formatCivilDate} from '../../src/common/lib/civilDate';
 import {formatEventCivilDate, formatEventDate, formatEventTimestamp} from '../../src/frontend/features/event/presentation';
 
 describe('shared civil calendar presentation', () => {

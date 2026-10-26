@@ -7,7 +7,7 @@ status: current
 last-verified: 2026-10-12
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: mandatory central policy routing; former rule summaries consolidated into authoritative policies
-source-anchors: docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; docs/DATABASE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; migrationDataSource.ts; scripts/runMigration.ts; src/migrations/; src/modules/database/; tests/integration/
+source-anchors: docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; docs/DATABASE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; migrationDataSource.ts; scripts/runMigration.ts; src/backend/migrations/; src/backend/modules/database/; tests/integration/
 next-review: explicit-maintainer-policy-amendment
 -->
 

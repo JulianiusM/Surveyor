@@ -11,7 +11,7 @@ const outputArgument = process.argv.indexOf('--output-root');
 const outputRoot = outputArgument < 0 ? root : path.resolve(process.argv[outputArgument + 1]);
 const check = process.argv.includes('--check');
 const localeArgument = process.argv.indexOf('--source');
-const sourceDirectory = localeArgument < 0 ? path.join(root, 'src/locales') : path.resolve(process.argv[localeArgument + 1]);
+const sourceDirectory = localeArgument < 0 ? path.join(root, 'src/common/locales') : path.resolve(process.argv[localeArgument + 1]);
 const apiRoot = await selectApiRoot();
 const api = JSON.parse(await fs.readFile(path.join(apiRoot, '.generated/api/v1/operations.json'), 'utf8'));
 const contract = JSON.parse(await fs.readFile(path.join(apiRoot, '.generated/api/v1/openapi.json'), 'utf8'));
@@ -36,7 +36,7 @@ async function selectApiRoot() {
  * Validate exact lexical/real output paths and entry types before any unlink; check
  * mode reports the collision without changing outputs or unrelated files. */
 async function retireCompiledPermissionSiblings() {
-    const generatedRelative = path.join('src', 'modules', 'localization', 'generated');
+    const generatedRelative = path.join('src', 'common', 'localization', 'generated');
     const generatedDirectory = path.resolve(outputRoot, generatedRelative);
     const collisions = [];
 
@@ -79,7 +79,7 @@ async function retireCompiledPermissionSiblings() {
 async function permissionRegistryKeys() {
     // Parse the authoritative declarations without importing their executable
     // business helpers. Registry bytes also participate in the catalog version.
-    const source = await fs.readFile(path.join(root, 'src/modules/lib/permissions.ts'), 'utf8');
+    const source = await fs.readFile(path.join(root, 'src/backend/modules/lib/permissions.ts'), 'utf8');
     sourceHash.update(source);
     const tree = ts.createSourceFile('permissions.ts', source, ts.ScriptTarget.Latest, true);
     const names = [];
@@ -117,7 +117,7 @@ function unwrapRegistryExpression(node) {
 /** Read the maintained invoice catalog as static data, never import or execute its module. */
 async function sharedInvoiceCatalog() {
     if (invoiceCatalog) return invoiceCatalog;
-    const relative = 'src/modules/invoice/locales/en.ts';
+    const relative = 'src/backend/modules/invoice/locales/en.ts';
     const source = await fs.readFile(path.join(root, relative), 'utf8');
     const tree = ts.createSourceFile(relative, source, ts.ScriptTarget.Latest, true);
     if (tree.parseDiagnostics.length) throw new Error('Invalid invoice catalog syntax');
@@ -398,7 +398,7 @@ for (const key of permissionKeys) permissionMessages.push([key, `permissions.${k
 const manifest = {version: sourceHash.digest('hex'), locales: localeDefinitions,
     helpSources: Object.fromEntries(helpSources), messages: messageContracts};
 const resources = Object.fromEntries(resourceEntries);
-const declarations = `// Generated from src/locales and the API contract; do not edit.
+const declarations = `// Generated from src/common/locales and the API contract; do not edit.
 import type {components} from './api/v1';
 export type Locale = ${catalogs.map(catalog => JSON.stringify(catalog.locale)).join(' | ')};
 export interface LocaleDefinition { readonly locale: Locale; readonly nativeName: string; readonly direction: 'ltr' | 'rtl'; }
@@ -417,9 +417,9 @@ export interface LocalizationContext { readonly locale: Locale; readonly t: Tran
 `;
 const output = new Map([
     ['src/types/LocalizationTypes.d.ts', declarations],
-    ['src/modules/localization/generated/resources.json', `${JSON.stringify(resources, null, 2)}\n`],
-    ['src/modules/localization/generated/manifest.json', `${JSON.stringify(manifest, null, 2)}\n`],
-    ['src/modules/localization/generated/permissions.ts', '// Generated from permission registry and locale catalogs; do not edit.\n'
+    ['src/common/localization/generated/resources.json', `${JSON.stringify(resources, null, 2)}\n`],
+    ['src/common/localization/generated/manifest.json', `${JSON.stringify(manifest, null, 2)}\n`],
+    ['src/common/localization/generated/permissions.ts', '// Generated from permission registry and locale catalogs; do not edit.\n'
         + "import type {MessageKey} from '../../../types/LocalizationTypes';\n"
         + `export const permissionMessageKeys = ${JSON.stringify(Object.fromEntries(permissionMessages), null, 2)} as const satisfies Record<string, MessageKey>;\n`],
 ]);

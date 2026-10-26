@@ -53,7 +53,7 @@ function run(root, args = ['--all']) {
 test('accepts declaration contracts and documented DBAL/short named selectors', t => {
     const root = fixture(t);
     write(root, 'src/types/Contract.d.ts', 'export interface Contract { id: string }');
-    write(root, 'src/modules/database/services/ExampleService.ts',
+    write(root, 'src/backend/modules/database/services/ExampleService.ts',
         '/** Query data only; the caller owns validation. */\nexport function lookup(rows: string[]) { for (const row of rows) { return row; } }');
     write(root, 'src/example.ts', 'export const names = (rows: string[]) => rows.map(row => row.trim());');
     const result = run(root);
@@ -73,7 +73,7 @@ test('rejects executable files in src/types', t => {
 
 test('recognizes aliased, namespace, re-export and dynamic request dependencies in DBAL', t => {
     const root = fixture(t);
-    write(root, 'src/modules/database/services/ExampleService.ts', [
+    write(root, 'src/backend/modules/database/services/ExampleService.ts', [
         "import {APIError as Failure} from '../../lib/errors';",
         "import * as Problems from '../../api/problem';",
         "export {operation} from '../../../controller/packingController';",
@@ -91,7 +91,7 @@ test('recognizes aliased, namespace, re-export and dynamic request dependencies 
 
 test('does not treat error names in comments, strings or shared type contracts as DBAL imports', t => {
     const root = fixture(t);
-    write(root, 'src/modules/database/services/ExampleService.ts',
+    write(root, 'src/backend/modules/database/services/ExampleService.ts',
         "import type {Contract} from '../../../types/Contract';\n// APIError is a prohibited request error.\nexport const text = 'controller/APIError';");
     assert.equal(run(root).status, 0);
 });
@@ -133,7 +133,7 @@ test('a scoped review remains explicit and cannot skip global declaration/DBAL b
     assert.equal(run(root, ['--all', '--file', 'src/missing.ts']).status, 2);
     assert.equal(run(root, ['--all', '--file', 'src/../untouched.ts']).status, 2);
     write(root, 'src/types/Invalid.ts', 'export type Invalid = string');
-    write(root, 'src/modules/database/services/OutsideService.ts', "import * as Errors from '../../lib/errors';");
+    write(root, 'src/backend/modules/database/services/OutsideService.ts', "import * as Errors from '../../lib/errors';");
     const blocked = run(root, args);
     assert.equal(blocked.status, 1);
     assert.deepEqual(new Set(blocked.report.errors.map(error => error.rule)), new Set(['declaration-files', 'pure-dbal']));
@@ -182,7 +182,7 @@ test('rejects configurations that would silently disable policy boundaries', t =
         {...original, requestOwnerDirectories: ['src/../controller']},
         {...original, manualReview: []},
         {...original, sessionStagingOwner: undefined},
-        {...original, sessionStagingOwner: {file: 'src/modules/', operation: '*'}},
+        {...original, sessionStagingOwner: {file: 'src/backend/modules/', operation: '*'}},
         {...original, sessionStagingOwner: {...original.sessionStagingOwner, directory: 'src/'}},
     ];
     for (const config of invalid) {
@@ -211,7 +211,7 @@ test('keeps isolated Session construction and save deferral with the exact exist
     assert.equal(rejected.status, 1);
     assert.equal(rejected.report.errors.filter(error => error.rule === 'session-lifecycle-owner').length, 2);
     write(root, owner.file, accepted);
-    write(root, 'src/routes/example.ts', accepted);
+    write(root, 'src/backend/routes/example.ts', accepted);
     assert.equal(run(root).report.errors.filter(error => error.rule === 'session-lifecycle-owner').length, 2);
 });
 
@@ -406,7 +406,7 @@ test('checks both real Vue script blocks and preserves source line numbers', t =
 test('inspects staged comments and dependencies even when the worktree is restored to HEAD', t => {
     const root = fixture(t);
     const file = 'src/owned.ts';
-    const service = 'src/modules/database/services/ExampleService.ts';
+    const service = 'src/backend/modules/database/services/ExampleService.ts';
     const original = '/** Preserve the admitted value. */\nexport function action(value: boolean) { if (value) { return 1; } }\n';
     write(root, file, original);
     write(root, service, 'export const persisted = 1;\n');

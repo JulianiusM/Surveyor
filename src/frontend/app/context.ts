@@ -8,11 +8,11 @@ import type {FrontendActionInputs, FrontendActionState, FrontendContext, Fronten
 import type {Locale, MessageKey} from '../../types/LocalizationTypes';
 import type {components} from '../../types/api/v1';
 import type {RouteLocationNormalized, Router} from 'vue-router';
-import {createLocalizationInstance, createTranslator, resolveLocale} from '../../modules/localization/translator';
+import {createLocalizationInstance, createTranslator, resolveLocale} from '../../common/localization/translator';
 import {FrontendApi} from './api';
 import {ApiFailure, isTerminalReadFailure, ObsoleteRequestError} from './transport';
 import {createUpdateCoordinator} from './updateCoordinator';
-import {frontendDocumentUrl, frontendIdentityMessageFeedback} from '../../modules/lib/frontendIdentity';
+import {frontendDocumentUrl, frontendIdentityMessageFeedback} from '../../common/lib/frontendIdentity';
 import {belongsToLocalizedQueryFamily} from './queryKeys';
 
 // Development SSR can invalidate the context module between app construction and a lazy route

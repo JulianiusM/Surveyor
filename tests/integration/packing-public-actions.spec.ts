@@ -1,15 +1,16 @@
 import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 import fs from 'node:fs';
 import {randomUUID} from 'node:crypto';
-import * as packing from '../../src/controller/packingController';
-import * as adminService from '../../src/modules/database/services/EntityAdminService';
-import * as packingService from '../../src/modules/database/services/PackingService';
-import * as userService from '../../src/modules/database/services/UserService';
-import {AppDataSource} from '../../src/modules/database/dataSource';
-import {PackingAssignment} from '../../src/modules/database/entities/packing/PackingAssignment';
-import type {Profile} from '../../src/modules/database/entities/user/Profile';
-import {contractValidator} from '../../src/modules/api/contracts';
-import {DEFAULT_PERM, PERM} from '../../src/modules/lib/permissions';
+import * as packing from '../../src/backend/controller/packingController';
+import {requireEntityCreation} from '../../src/backend/controller/entityAdminController';
+import * as adminService from '../../src/backend/modules/database/services/EntityAdminService';
+import * as packingService from '../../src/backend/modules/database/services/PackingService';
+import * as userService from '../../src/backend/modules/database/services/UserService';
+import {AppDataSource} from '../../src/backend/modules/database/dataSource';
+import {PackingAssignment} from '../../src/backend/modules/database/entities/packing/PackingAssignment';
+import type {Profile} from '../../src/backend/modules/database/entities/user/Profile';
+import {contractValidator} from '../../src/backend/modules/api/contracts';
+import {DEFAULT_PERM, PERM} from '../../src/backend/modules/lib/permissions';
 import type {ApiActor} from '../../src/types/ApiTypes';
 import type {SessionLike} from '../../src/types/PermissionTypes';
 import {createIntegrationEvent, persistIntegrationProfile} from '../keywords/coreDomainKeywords';
@@ -93,7 +94,7 @@ describe('native-granted public Packing actions through versioned operations', (
         await expect(packing.changePackingEvent(id, {eventId: null, expectedEventId: null}, actor)).rejects.toMatchObject({status: 401});
         await expect(packing.setPackingArchived(id, true, actor)).rejects.toMatchObject({status: 401});
         await expect(packing.deletePackingList(id, actor)).rejects.toMatchObject({status: 401});
-        expect(() => packing.requirePackingCreation(actor)).toThrowError(expect.objectContaining({status: 401}));
+        expect(() => requireEntityCreation('packing', actor)).toThrowError(expect.objectContaining({status: 401}));
     });
 
     it('allows only independently granted item fields and binds baselines to the actual public context', async () => {

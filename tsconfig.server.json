@@ -12,7 +12,9 @@
     ]
   },
   "include": [
-    "src/**/*"
+    "src/backend/**/*",
+    "src/common/**/*",
+    "src/types/express.d.ts"
   ],
   "exclude": [
     "node_modules",

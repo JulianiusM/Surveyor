@@ -20,7 +20,7 @@ const locale = process.argv.find(argument => argument.startsWith('--locale='))?.
 if (!/^[a-z]{2}(?:-[A-Z]{2})?$/u.test(locale)) throw new Error('A supported locale tag is required.');
 const selectedFigure = process.argv.find(argument => argument.startsWith('--figure='))?.slice('--figure='.length) ?? 'all';
 if (!['all', 'navigation', 'survey', 'packing'].includes(selectedFigure)) throw new Error('Choose navigation, survey, packing or all.');
-const catalogPath = `src/locales/${locale}.json`;
+const catalogPath = `src/common/locales/${locale}.json`;
 const catalog = JSON.parse(await fs.readFile(path.join(root, catalogPath), 'utf8'));
 // Both source labels and generated pictures belong to the approved runtime corpus. Keeping
 // one fixed destination keeps authoring within the locale's reviewed Help corpus.

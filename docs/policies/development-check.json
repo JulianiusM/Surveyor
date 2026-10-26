@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "declarationDirectory": "src/types",
-  "databaseServiceDirectory": "src/modules/database/services",
-  "requestOwnerDirectories": ["src/controller", "src/middleware", "src/routes", "src/modules/api"],
-  "requestErrorModules": ["src/modules/lib/errors.ts"],
+  "databaseServiceDirectory": "src/backend/modules/database/services",
+  "requestOwnerDirectories": ["src/backend/controller", "src/backend/middleware", "src/backend/routes", "src/backend/modules/api"],
+  "requestErrorModules": ["src/backend/modules/lib/errors.ts"],
   "sourceExtensions": [".ts", ".mts", ".cts", ".vue"],
-  "sessionStagingOwner": {"file": "src/modules/lib/session.ts", "operation": "stageIdentitySession"},
+  "sessionStagingOwner": {"file": "src/backend/modules/lib/session.ts", "operation": "stageIdentitySession"},
   "manualReview": [
     "Apply Documentation Policy's optional task-profile discovery; verify declared scope and pass applicable profiles to delegates without requiring their presence or inferring approval.",
     "Resolve every conflict with existing policies or approved designs directly with the maintainer before dependent edits.",

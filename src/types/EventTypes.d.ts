@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {EventRegistrationDietary} from "../modules/database/entities/event/EventRegistrationDietary";
+import {EventRegistrationDietary} from "../backend/modules/database/entities/event/EventRegistrationDietary";
 
 export type CreateEventDTO = {
     title: string;

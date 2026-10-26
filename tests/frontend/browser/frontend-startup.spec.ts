@@ -95,7 +95,7 @@ function startupSession(locale: Session['locale'] = 'en'): Session {
  * API fixtures retain production decoding while refusing every command. */
 async function startupDocument(page: Page, path: string, bootstrap: FrontendBootstrap,
                                documentHeaders?: Record<string, string>) {
-    const renderer = await import(pathToFileURL(resolve('dist/modules/frontendRenderer.js')).href) as {
+    const renderer = await import(pathToFileURL(resolve('dist/backend/modules/frontendRenderer.js')).href) as {
         initializeFrontendRenderer(): Promise<void>;
         prepareFrontend(response: Response, url: string, bootstrap: FrontendBootstrap): Promise<FrontendPreparedDocument>;
     };
@@ -1617,8 +1617,8 @@ for (const width of [1280, 390]) {
 
 for (const width of [390, 1280]) {
     test(`Help retains native table words and column sizing with local overflow at ${width}px`, async ({page}, info) => {
-        const {renderTrustedHelpMarkdown} = await import(pathToFileURL(resolve('dist/controller/helpController.js')).href) as
-            typeof import('../../../src/controller/helpController');
+        const {renderTrustedHelpMarkdown} = await import(pathToFileURL(resolve('dist/backend/controller/helpController.js')).href) as
+            typeof import('../../../src/backend/controller/helpController');
         // Synthetic tables cover plain prose, emphasized first cells and wide
         // data without coupling application checks to maintained Help articles.
         // Both stylesheets render the same trusted Markdown and frame.

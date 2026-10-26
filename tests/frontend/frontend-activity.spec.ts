@@ -12,7 +12,7 @@ import {activityKeys} from '../../src/frontend/app/queryKeys';
 import ActivityPage from '../../src/frontend/features/activity/ActivityPage.vue';
 import ActivityCreatePage from '../../src/frontend/features/activity/ActivityCreatePage.vue';
 import {activityDateLabel, activityDayLabel, activityCreationWeeks, activityParticipantName} from '../../src/frontend/features/activity/presentation';
-import {createTranslator} from '../../src/modules/localization/translator';
+import {createTranslator} from '../../src/common/localization/translator';
 
 const planId = '11111111-1111-4111-8111-111111111111';
 const slotId = '22222222-2222-4222-8222-222222222222';

@@ -1,13 +1,13 @@
-import type {ActivityPlan} from '../../src/modules/database/entities/activity/ActivityPlan';
-import type {ActivitySlot} from '../../src/modules/database/entities/activity/ActivitySlot';
-import type {DriversList} from '../../src/modules/database/entities/drivers/DriversList';
-import type {Event} from '../../src/modules/database/entities/event/Event';
-import type {PackingItem} from '../../src/modules/database/entities/packing/PackingItem';
-import type {PackingList} from '../../src/modules/database/entities/packing/PackingList';
-import type {Survey} from '../../src/modules/database/entities/surveys/Survey';
-import type {SurveyCombination} from '../../src/modules/database/entities/surveys/SurveyCombination';
-import type {User} from '../../src/modules/database/entities/user/User';
-import type {Profile} from '../../src/modules/database/entities/user/Profile';
+import type {ActivityPlan} from '../../src/backend/modules/database/entities/activity/ActivityPlan';
+import type {ActivitySlot} from '../../src/backend/modules/database/entities/activity/ActivitySlot';
+import type {DriversList} from '../../src/backend/modules/database/entities/drivers/DriversList';
+import type {Event} from '../../src/backend/modules/database/entities/event/Event';
+import type {PackingItem} from '../../src/backend/modules/database/entities/packing/PackingItem';
+import type {PackingList} from '../../src/backend/modules/database/entities/packing/PackingList';
+import type {Survey} from '../../src/backend/modules/database/entities/surveys/Survey';
+import type {SurveyCombination} from '../../src/backend/modules/database/entities/surveys/SurveyCombination';
+import type {User} from '../../src/backend/modules/database/entities/user/User';
+import type {Profile} from '../../src/backend/modules/database/entities/user/Profile';
 import {randomUUID} from 'node:crypto';
 
 export interface E2ECreateCase<TForm extends E2ECreateForm> {

@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
-import settings from '../../src/modules/settings';
+import settings from '../../src/backend/modules/settings';
 
 export interface InvoiceSubmissionCase {
     amount: number;

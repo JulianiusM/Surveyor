@@ -1,7 +1,8 @@
 import {describe, expect, it} from 'vitest';
-import {frontendIdentityPageEntry, frontendOverviewPageEntry, readGuestLinkHandoff, safeFrontendReturn} from '../../src/modules/lib/frontendIdentity';
-import {createTranslator} from '../../src/modules/localization/translator';
-import {ApiProblem, validatedProblemBody} from '../../src/modules/api/problem';
+import {frontendIdentityPageEntry, frontendOverviewPageEntry, safeFrontendReturn} from '../../src/common/lib/frontendIdentity';
+import {readGuestLinkHandoff} from '../../src/backend/modules/lib/frontendSession';
+import {createTranslator} from '../../src/common/localization/translator';
+import {ApiProblem, validatedProblemBody} from '../../src/backend/modules/api/problem';
 
 describe('frontend identity destinations', () => {
     it('preserves owned path, query and fragment while normalizing dot segments', () => {

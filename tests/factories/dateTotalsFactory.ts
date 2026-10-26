@@ -1,4 +1,4 @@
-import type {buildDateTotals} from '../../src/modules/lib/util';
+import type {buildDateTotals} from '../../src/backend/modules/lib/util';
 
 type RegistrationDateRange = Parameters<typeof buildDateTotals>[2][number];
 

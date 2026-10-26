@@ -3,7 +3,7 @@ import path from "node:path";
 
 /**
  * What we generate:
- *   - One file: src/modules/database/index.ts
+ *   - One file: src/backend/modules/database/index.ts
  *   - Exports: export const entities = [...]; export const migrations = [...]; export const subscribers = [...];
  *
  * Key feature:
@@ -29,21 +29,21 @@ type SectionConfig = {
 const CONFIG: SectionConfig[] = [
     {
         key: "entities",
-        dir: "src/modules/database/entities",
+        dir: "src/backend/modules/database/entities",
         exclude: ["index.ts"],
         filePattern: /\.ts$/,
         matchStrategy: "decorator:Entity",
     },
     {
         key: "migrations",
-        dir: "src/migrations",
+        dir: "src/backend/migrations",
         filePattern: /\.ts$/,
         matchStrategy: "interface:MigrationInterface",
         sortBy: "filenameAsc",
     },
     {
         key: "subscribers",
-        dir: "src/modules/database/subscribers",
+        dir: "src/backend/modules/database/subscribers",
         exclude: ["index.ts"],
         filePattern: /\.ts$/,
         // support both styles for subscribers
@@ -51,7 +51,7 @@ const CONFIG: SectionConfig[] = [
     },
 ];
 
-const OUTPUT_FILE = path.resolve("src/modules/database/__index__.ts");
+const OUTPUT_FILE = path.resolve("src/backend/modules/database/__index__.ts");
 
 type ExportSymbol = {
     name: string;

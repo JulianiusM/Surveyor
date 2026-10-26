@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
-source-anchors: src/modules/invoice/invoiceOperations.ts; src/modules/invoice/requests.ts; src/modules/database/entities/event/EventInvoice.ts; src/migrations/1789862400000-AddEntityArchival.ts; src/modules/entityArchival.ts; src/modules/database/services/EntityLifecycleService.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; scripts/runMigration.ts; migrationDataSource.ts; src/server.ts; src/modules/settings.ts; src/modules/invoice/retention.ts; docs/DATABASE.md; docs/OPERATIONS.md
+source-anchors: src/backend/modules/invoice/invoiceOperations.ts; src/backend/modules/invoice/requests.ts; src/backend/modules/database/entities/event/EventInvoice.ts; src/backend/migrations/1789862400000-AddEntityArchival.ts; src/backend/modules/entityArchival.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/migrations/1789689600000-AddInvoiceRetraction.ts; src/backend/migrations/1789603200000-AddOrganizerInvoices.ts; src/backend/migrations/1789516800000-AddInvoiceShareRounding.ts; src/backend/modules/invoice/settlementEmail.ts; src/backend/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/backend/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; scripts/runMigration.ts; migrationDataSource.ts; src/backend/server.ts; src/backend/modules/settings.ts; src/backend/modules/invoice/retention.ts; docs/DATABASE.md; docs/OPERATIONS.md
 next-review: release-or-rollback-compatibility-change
 -->
 
@@ -39,8 +39,8 @@ Production runs the existing Node service without a Vite development server or a
 
 Review the release notes and repository diff for:
 
-- New or changed migrations under `src/migrations/`.
-- New configuration keys or changed defaults in `src/modules/settings.ts`.
+- New or changed migrations under `src/backend/migrations/`.
+- New configuration keys or changed defaults in `src/backend/modules/settings.ts`.
 - Changed persistent paths, upload behavior, retention, SMTP, or OIDC requirements.
 - The Node.js and MariaDB compatibility baseline.
 - Changes that make data written by the new release incompatible with the old release.

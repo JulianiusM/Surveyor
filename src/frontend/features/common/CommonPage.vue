@@ -2,8 +2,8 @@
 import {computed} from 'vue';
 import {useRoute} from 'vue-router';
 import type {FrontendCommonPage} from '../../../types/FrontendTypes';
-import {frontendDocumentUrl} from '../../../modules/lib/frontendIdentity';
-import {isPlainMessageKey} from '../../../modules/localization/translator';
+import {frontendDocumentUrl} from '../../../common/lib/frontendIdentity';
+import {isPlainMessageKey} from '../../../common/localization/translator';
 import {useFrontend} from '../../app/context';
 import {usePageTitle} from '../../composables/pageTitle';
 import PageMessage from '../../components/PageMessage.vue';

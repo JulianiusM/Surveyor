@@ -1,21 +1,21 @@
 import {Request} from 'express';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import activityController from '../../src/controller/activityController';
-import driversController from '../../src/controller/driversController';
-import * as entityAdminController from '../../src/controller/entityAdminController';
-import eventController from '../../src/controller/eventController';
-import eventPoolController from '../../src/controller/eventPoolController';
-import packingController from '../../src/controller/packingController';
-import surveyController from '../../src/controller/surveyController';
-import * as userController from '../../src/controller/userController';
-import {Profile} from '../../src/modules/database/entities/user/Profile';
-import * as activityService from '../../src/modules/database/services/ActivityService';
-import * as driverService from '../../src/modules/database/services/DriverService';
-import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
-import * as eventService from '../../src/modules/database/services/EventService';
-import * as packingService from '../../src/modules/database/services/PackingService';
-import * as surveyService from '../../src/modules/database/services/SurveyService';
-import * as userService from '../../src/modules/database/services/UserService';
+import activityController from '../../src/backend/controller/activityController';
+import driversController from '../../src/backend/controller/driversController';
+import * as entityAdminController from '../../src/backend/controller/entityAdminController';
+import eventController from '../../src/backend/controller/eventController';
+import eventPoolController from '../../src/backend/controller/eventPoolController';
+import packingController from '../../src/backend/controller/packingController';
+import surveyController from '../../src/backend/controller/surveyController';
+import * as userController from '../../src/backend/controller/userController';
+import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
+import * as activityService from '../../src/backend/modules/database/services/ActivityService';
+import * as driverService from '../../src/backend/modules/database/services/DriverService';
+import * as invoiceService from '../../src/backend/modules/database/services/EventInvoiceService';
+import * as eventService from '../../src/backend/modules/database/services/EventService';
+import * as packingService from '../../src/backend/modules/database/services/PackingService';
+import * as surveyService from '../../src/backend/modules/database/services/SurveyService';
+import * as userService from '../../src/backend/modules/database/services/UserService';
 import {
     assignActivitySlot,
     assignDriversItem,

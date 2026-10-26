@@ -7,7 +7,7 @@ status: current
 last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: approved local browser asset and responsiveness scope recorded; original framework/interface decisions, deferred targets, authorized P11 cutover scope and lasting amendments retained without final acceptance or deployment claim
-source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendRenderer.ts; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; src/routes/api/v1/
+source-anchors: package.json; vite.config.mts; src/backend/app.ts; src/backend/modules/frontendDevelopment.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/backend/modules/api/transport.ts; src/common/localization/translator.ts; src/backend/routes/api/v1.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; src/backend/routes/api/v1/
 next-review: frontend-technology-or-rendering-boundary-change
 -->
 
@@ -294,6 +294,28 @@ Express-hosted Vite middleware/HMR implements the original normal-development ch
 The earlier manual-refresh watch substitution was corrected. Serialized authored contract/catalog regeneration
 restarts Express only after completion. Production runs coherent built artifacts, not Vite.
 Externalized SSR dependencies remain production dependencies; generated outputs stay ignored.
+
+### Authorized shared ownership and serving correction (2026-10-26)
+
+The maintainer explicitly requests a historical audit and repair of frontend duplication, shared implementations,
+separate frontend/backend/common folders, and strict protection of private source and dependencies. Private code
+therefore moves into `src/backend/`, browser-safe shared implementations and catalogs into `src/common/`, while
+Vue remains in `src/frontend/`. Shared declarations retain the Development Policy's `src/types/` owner, with browser
+contracts separated from server transaction types. Root package/lockfile and the release archive remain shared;
+the backend's compiled entry is now `dist/backend/server.js` behind the existing `npm run run` command.
+
+Native transport retirement remains authorized. Its former shared guest-flow responsibilities belong to one
+controller operation consumed by the five feature controllers, preserving their admission, private projections,
+token navigation and database boundaries. The current request separately authorizes consolidation of repeated
+permission/administrator orchestration previously deferred from the frontend migration; that earlier deferral
+remains recorded. Existing feature authority, comparison fields, locks and operation order remain constraints.
+
+The audit reproduced repository/private source and arbitrary dependency delivery through the development asset
+prefix. A single backend-owned public-file inventory now guards both development requests and the actual client
+module graph, including filesystem aliases, raw-file queries and symlinks. General dependency serving is forbidden;
+exceptions cover only the optimized admitted browser dependency graph, Vite's required browser runtime files and
+specific icon fonts. Server and SSR artifacts remain outside the installed public root. This amendment records
+the current direct authorization; repository history alone does not establish every earlier conversational approval.
 
 The approved 2026-10-07 release amendment supersedes retained-old-asset deployment: current-folder replacement, ordinary session update detection,
 compatible loaded edits, one clean idle reload and preserved mounted drafts for missing chunks/incompatible commands.

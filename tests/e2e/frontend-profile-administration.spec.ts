@@ -4,7 +4,7 @@ import type {components} from '../../src/types/api/v1';
 import {createE2ELogin} from '../factories/e2eCoreFactory';
 import {commandHeadersForE2E, expectUsableFrontendLayout, loginForE2E} from '../keywords/e2eCoreKeywords';
 import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
-import {createTranslator} from '../../src/modules/localization/translator';
+import {createTranslator} from '../../src/common/localization/translator';
 
 /** Record actual form/footer content, state, paint and raw responsive geometry. */
 function profilePresentation() {

@@ -3,7 +3,7 @@ import type {NavigationFailure, RouteLocationNormalized} from 'vue-router';
 import {decodeBootstrap} from './serializeBootstrap';
 import {createFrontendApp, initializeFrontendApp} from './createApp';
 import {hasHydrationDrafts} from './mountPreservingDrafts';
-import {createTranslator, localeManifest} from '../../modules/localization/translator';
+import {createTranslator, localeManifest} from '../../common/localization/translator';
 import type {Locale} from '../../types/LocalizationTypes';
 import type {FrontendContext} from '../../types/FrontendUiTypes';
 // Client loading and SSR links consume one frontend-owned cascade composition.

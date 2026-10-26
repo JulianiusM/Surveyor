@@ -1,9 +1,9 @@
 import {randomUUID} from 'node:crypto';
-import {ActivitySlot} from '../../src/modules/database/entities/activity/ActivitySlot';
-import {DriversItem} from '../../src/modules/database/entities/drivers/DriversItem';
-import {PackingItem} from '../../src/modules/database/entities/packing/PackingItem';
-import {Profile} from '../../src/modules/database/entities/user/Profile';
-import {User} from '../../src/modules/database/entities/user/User';
+import {ActivitySlot} from '../../src/backend/modules/database/entities/activity/ActivitySlot';
+import {DriversItem} from '../../src/backend/modules/database/entities/drivers/DriversItem';
+import {PackingItem} from '../../src/backend/modules/database/entities/packing/PackingItem';
+import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
+import {User} from '../../src/backend/modules/database/entities/user/User';
 
 let sequence = 0;
 

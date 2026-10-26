@@ -6,8 +6,8 @@ import {
     renderTrustedHelpMarkdown,
     resolveHelpAssetPath,
     validateTrustedHelpMarkdown,
-} from '../../src/controller/helpController';
-import {frontendHelpUrl, resolveContextualHelpUrl, resolveFrontendHelpQuery} from '../../src/modules/lib/helpNavigation';
+} from '../../src/backend/controller/helpController';
+import {frontendHelpUrl, resolveContextualHelpUrl, resolveFrontendHelpQuery} from '../../src/common/lib/helpNavigation';
 
 // Application behavior only: these tests also run with docs/ entirely absent.
 // Real guide wording, examples, links and images belong to tests/documentation/.

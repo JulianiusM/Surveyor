@@ -8,7 +8,7 @@ import {createResourceViaForm, expectUsableFrontendLayout, loginForE2E,
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
 import type {components} from '../../src/types/api/v1';
-import {createTranslator} from '../../src/modules/localization/translator';
+import {createTranslator} from '../../src/common/localization/translator';
 import type {Locale} from '../../src/types/LocalizationTypes';
 
 /** Test-local projection of the two real roster protocols. Choice order is

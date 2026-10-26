@@ -6,14 +6,150 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs/promises';
 import {brotliCompressSync, brotliDecompressSync, gzipSync} from 'node:zlib';
-import {frontendDevelopmentMiddleware, frontendDevelopmentServer, initializeFrontendDevelopment} from '../../src/modules/frontendDevelopment';
-import {createFrontendAssets} from '../../src/modules/frontendAssets';
-import {renderFrontend} from '../../src/modules/frontendRenderer';
+import {frontendDevelopmentMiddleware, frontendDevelopmentServer, initializeFrontendDevelopment} from '../../src/backend/modules/frontendDevelopment';
+import {createFrontendAssets} from '../../src/backend/modules/frontendAssets';
+import {renderFrontend} from '../../src/backend/modules/frontendRenderer';
 import type {FrontendBootstrap} from '../../src/types/FrontendTypes';
+import {frontendBoundary} from '../../src/backend/modules/frontendBoundary';
+import {createPublicAssets} from '../../src/backend/modules/publicAssets';
 
 afterEach(() => { vi.unstubAllEnvs(); });
 
+/** Remove only a fixture's canonical, directly owned temporary directory. */
+async function removeBoundaryFixture(directory: string, prefix: string): Promise<void> {
+    // Resolve both parents before recursive removal. A junction or an unexpected
+    // caller path must not redirect cleanup outside this explicitly named fixture.
+    const temporaryRoot = await fs.realpath(os.tmpdir());
+    const target = await fs.realpath(directory);
+    if (path.dirname(target) !== temporaryRoot || !path.basename(target).startsWith(prefix)) {
+        throw new Error('Refusing to remove an unexpected frontend fixture directory');
+    }
+    await fs.rm(target, {recursive: true, force: true});
+}
+
 describe('frontend public asset delivery', () => {
+    it('confines installed frontend and general static files to the public tree', async function confinesInstalledPublicFiles() {
+        const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-public-boundary-'));
+        const publicRoot = path.join(directory, 'public');
+        const frontendRoot = path.join(publicRoot, 'app');
+        const privateRoot = path.join(directory, 'backend');
+        const app = express();
+        const server = http.createServer(app);
+        try {
+            // Both real production static owners see junctions that would expose
+            // private bytes through plain express.static, including manifest assets.
+            await fs.mkdir(path.join(frontendRoot, '.vite'), {recursive: true});
+            await fs.mkdir(path.join(publicRoot, 'node_modules/private'), {recursive: true});
+            await fs.mkdir(privateRoot);
+            await fs.writeFile(path.join(publicRoot, 'visible.txt'), 'public fixture');
+            await fs.writeFile(path.join(privateRoot, 'private.js'), 'private fixture');
+            await fs.writeFile(path.join(privateRoot, 'private.js.br'), 'private sidecar fixture');
+            await fs.writeFile(path.join(publicRoot, 'node_modules/private/package.json'), '{"private":true}');
+            await fs.symlink(privateRoot, path.join(publicRoot, 'linked'), 'junction');
+            await fs.symlink(privateRoot, path.join(frontendRoot, 'linked'), 'junction');
+            await fs.writeFile(path.join(frontendRoot, '.vite/manifest.json'), JSON.stringify({entry: {file: 'linked/private.js'}}));
+            app.use('/app', createFrontendAssets(frontendRoot));
+            app.use('/public', createPublicAssets(publicRoot));
+            app.use('/aliased-root', createPublicAssets(path.join(publicRoot, 'linked')));
+            app.use((_req, res) => res.status(404).end());
+            await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+            const address = server.address();
+            if (!address || typeof address === 'string') throw new Error('The static boundary fixture listener has no port');
+            const origin = `http://127.0.0.1:${address.port}`;
+            const admitted = await fetch(origin + '/public/visible.txt');
+            expect(admitted.status).toBe(200);
+            expect(await admitted.text()).toBe('public fixture');
+            for (const target of ['/public/linked/private.js', '/public/linked/private.js.br',
+                '/app/linked/private.js', '/app/linked/private.js.br', '/public/node_modules/private/package.json',
+                '/aliased-root/private.js']) {
+                const denied = await fetch(origin + target, {headers: {'Accept-Encoding': 'br'}});
+                expect(denied.status, target).toBe(404);
+                expect(await denied.text(), target).not.toContain('private');
+            }
+        } finally {
+            if (server.listening) await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+            await removeBoundaryFixture(directory, 'surveyor-public-boundary-');
+        }
+    });
+
+    it('denies private files and dependency directories before real Vite HTTP transforms', async function deniesPrivateHttpFiles() {
+        const {createServer} = await import('vite');
+        const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-http-boundary with spaces-'));
+        const app = express();
+        const server = http.createServer(app);
+        try {
+            // Vite's ordinary root includes these private files. The production
+            // boundary must reject them independently of compiler/plugin routing.
+            await fs.mkdir(path.join(directory, 'src/frontend'), {recursive: true});
+            await fs.mkdir(path.join(directory, 'src/backend'), {recursive: true});
+            await fs.mkdir(path.join(directory, 'node_modules/private'), {recursive: true});
+            await fs.writeFile(path.join(directory, 'src/frontend/entry.ts'), 'export const visible = "public fixture";');
+            await fs.writeFile(path.join(directory, 'src/backend/private.ts'), 'export const secret = "private fixture";');
+            await fs.writeFile(path.join(directory, 'node_modules/private/package.json'), '{"private":true}');
+            await fs.symlink(path.join(directory, 'src/backend'), path.join(directory, 'src/frontend/linked'), 'junction');
+            const vite = await createServer({configFile: false, root: directory, base: '/app/',
+                appType: 'custom', plugins: [frontendBoundary(directory)],
+                optimizeDeps: {noDiscovery: true, include: []}, server: {middlewareMode: true, ws: {server}},
+            });
+            app.use(vite.middlewares);
+            app.use((_req, res) => res.status(404).end());
+            await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+            const address = server.address();
+            if (!address || typeof address === 'string') throw new Error('The boundary fixture listener has no port');
+            const origin = `http://127.0.0.1:${address.port}`;
+            try {
+                const admitted = await fetch(origin + '/app/src/frontend/entry.ts');
+                expect(admitted.status).toBe(200);
+                expect(await admitted.text()).toContain('public fixture');
+                // Absolute Vite URLs must work in ordinary checkouts with spaces
+                // while encoded separators/aliases still cannot widen ownership.
+                const publicFile = path.join(directory, 'src/frontend/entry.ts').split(path.sep).join('/');
+                const absolute = await fetch(origin + encodeURI(`/app/@fs/${publicFile}`));
+                expect(absolute.status).toBe(200);
+                expect(await absolute.text()).toContain('public fixture');
+                const privateFile = path.join(directory, 'src/backend/private.ts').split(path.sep).join('/');
+                for (const target of ['/app/src/backend/private.ts', '/app/src/backend/private.ts?raw',
+                    '/app/src/backend/private.ts?url', '/app/src/backend/private.ts.map',
+                    '/app/src/frontend/linked/private.ts?raw', '/app/node_modules/private/package.json',
+                    `/app/@fs/${privateFile}?raw`, '/app/@id/private', '/app/@id/__x00__src/backend/private.ts',
+                    '/app/src%2fbackend%2fprivate.ts?raw', '/app/src%5cbackend%5cprivate.ts?raw',
+                    '/app/src%252fbackend%252fprivate.ts?raw', '/app/src/frontend/%2e%2e/backend/private.ts?raw',
+                    `/app/__open-in-editor?file=${encodeURIComponent(privateFile)}`]) {
+                    const denied = await fetch(origin + target);
+                    expect(denied.status, target).toBe(404);
+                    expect(await denied.text(), target).not.toContain('private fixture');
+                }
+            } finally { await vite.close(); }
+        } finally {
+            if (server.listening) await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+            await removeBoundaryFixture(directory, 'surveyor-http-boundary with spaces-');
+        }
+    });
+
+    it('rejects private sources and dependency paths in the actual browser build graph', async function rejectsPrivateBrowserImports() {
+        const {build} = await import('vite');
+        const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-browser-boundary-'));
+        try {
+            // Compile real imports in a disposable source-shaped checkout. No
+            // database, application setup or repository source edits are needed.
+            await fs.mkdir(path.join(directory, 'src/frontend'), {recursive: true});
+            await fs.mkdir(path.join(directory, 'src/backend'), {recursive: true});
+            await fs.writeFile(path.join(directory, 'src/backend/private.ts'), 'export const secret = "private fixture";');
+            const input = path.join(directory, 'src/frontend/entry.ts');
+            await fs.writeFile(input, 'export {secret} from "../backend/private.ts";');
+            await expect(build({configFile: false, root: directory, logLevel: 'silent',
+                plugins: [frontendBoundary(directory)], build: {write: false, rollupOptions: {input}},
+            })).rejects.toThrow('Private source cannot enter the browser module graph');
+            // A junction/symlink inside the public folder cannot make a private
+            // target public. Directory junctions also work on unprivileged Windows.
+            await fs.symlink(path.join(directory, 'src/backend'), path.join(directory, 'src/frontend/linked'), 'junction');
+            await fs.writeFile(input, 'export {secret} from "./linked/private.ts";');
+            await expect(build({configFile: false, root: directory, logLevel: 'silent',
+                plugins: [frontendBoundary(directory)], build: {write: false, rollupOptions: {input}},
+            })).rejects.toThrow('Private source cannot enter the browser module graph');
+        } finally { await removeBoundaryFixture(directory, 'surveyor-browser-boundary-'); }
+    });
+
     it('negotiates prepared encodings and retains original, HEAD, Range and missing-asset delivery', async function servesPreparedEncodings() {
         const fontBytes = await fs.readFile('node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2');
         const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-frontend-assets-'));
@@ -306,6 +442,22 @@ describe('Express-integrated frontend development', () => {
             // must not capture unrelated application routes or unprefixed source files.
             const unprefixedEntry = await fetch(`${origin}/src/frontend/app/entry-client.ts`);
             expect(unprefixedEntry.status).toBe(404);
+            // The asset prefix is not an authorization boundary by itself.
+            // Exercise Vite's raw/URL transforms, filesystem/ID aliases, maps,
+            // encodings and arbitrary installed packages through actual HTTP.
+            const privateFile = path.join(projectRoot, 'src/backend/modules/settings.ts').split(path.sep).join('/');
+            for (const target of ['/app/src/backend/modules/settings.ts', '/app/src/backend/modules/settings.ts?raw',
+                '/app/src/backend/modules/settings.ts?url', '/app/src/backend/modules/settings.ts.map',
+                '/app/src/frontend/app/entry-server.ts', '/app/src/types/FrontendTypes.d.ts?raw',
+                '/app/package.json', '/app/.generated/api/v1/server.cjs?raw',
+                '/app/node_modules/express/package.json', '/app/node_modules/vite/package.json',
+                `/app/@fs/${privateFile}?raw`, '/app/@id/express', '/app/@id/__x00__src/backend/modules/settings.ts',
+                '/app/src%2fbackend%2fmodules%2fsettings.ts?raw', '/app/src%5cbackend%5cmodules%5csettings.ts?raw',
+                '/app/src%252fbackend%252fmodules%252fsettings.ts?raw', '/app/src/frontend/%2e%2e/backend/modules/settings.ts?raw']) {
+                const denied = await fetch(origin + target);
+                expect(denied.status, target).toBe(404);
+                expect(await denied.text(), target).not.toContain('sessionSecret');
+            }
         } finally {
             await frontendDevelopmentServer()?.close();
             await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

@@ -1,4 +1,4 @@
-import settings from '../src/modules/settings';
+import settings from '../src/backend/modules/settings';
 import {spawn} from 'child_process';
 
 async function main() {

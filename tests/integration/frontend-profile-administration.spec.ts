@@ -1,13 +1,13 @@
 import {randomUUID} from 'node:crypto';
 import http from 'node:http';
 import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
-import * as userService from '../../src/modules/database/services/UserService';
-import {AppDataSource} from '../../src/modules/database/dataSource';
-import {Profile} from '../../src/modules/database/entities/user/Profile';
-import {Session} from '../../src/modules/database/entities/session/Session';
-import {createTranslator} from '../../src/modules/localization/translator';
-import settings from '../../src/modules/settings';
-import {initializeFrontendRenderer} from '../../src/modules/frontendRenderer';
+import * as userService from '../../src/backend/modules/database/services/UserService';
+import {AppDataSource} from '../../src/backend/modules/database/dataSource';
+import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
+import {Session} from '../../src/backend/modules/database/entities/session/Session';
+import {createTranslator} from '../../src/common/localization/translator';
+import settings from '../../src/backend/modules/settings';
+import {initializeFrontendRenderer} from '../../src/backend/modules/frontendRenderer';
 import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
 import type {components} from '../../src/types/api/v1';
 import {createActivityPlanWithSlot, createDriversListWithItem, createIntegrationEvent, createPackingListWithItem,
@@ -16,7 +16,7 @@ import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../suppor
 import {prepareFrontendSsrModules} from '../support/frontendRenderer';
 
 let listener: http.Server | undefined;
-let application: typeof import('../../src/app')['default'] | undefined;
+let application: typeof import('../../src/backend/app')['default'] | undefined;
 let origin: string | undefined;
 
 /** The real server needs admitted persistence before installing its listener. */
@@ -60,7 +60,7 @@ async function applicationOrigin(rendererReady?: Promise<void>): Promise<string>
     // listener supplies only a local transport after database admission succeeded.
     // The runner's actual-module loader preserves the source module's default
     // export across its CJS/ESM interop without substituting any application owner.
-    application = (await vi.importActual<typeof import('../../src/app')>('../../src/app')).default;
+    application = (await vi.importActual<typeof import('../../src/backend/app')>('../../src/app')).default;
     // Normal startup prepares renderer code before listen. The suite additionally
     // prepares only its actual named lazy graphs; no request/private state is made.
     await (rendererReady ?? initializeFrontendRenderer());

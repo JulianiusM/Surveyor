@@ -1,6 +1,6 @@
 import type {components} from '../../../types/api/v1';
 import type {Translator} from '../../../types/LocalizationTypes';
-import {civilDateWeeks, formatCivilDate} from '../../../modules/lib/civilDate';
+import {civilDateWeeks, formatCivilDate} from '../../../common/lib/civilDate';
 
 /** Localize only an explicitly generated label. Literal
  * user names remain data even when they equal the old English fallback wording.

@@ -21,7 +21,7 @@ import {problemMessage} from '../../src/frontend/composables/feedback';
 import type {components} from '../../src/types/api/v1';
 import type {FrontendBootstrap} from '../../src/types/FrontendTypes';
 import {render} from '../../src/frontend/app/entry-server';
-import {frontendIdentityPageEntry} from '../../src/modules/lib/frontendIdentity';
+import {frontendIdentityPageEntry} from '../../src/common/lib/frontendIdentity';
 
 const profileId = '11111111-1111-4111-8111-111111111111';
 const eventId = '22222222-2222-4222-8222-222222222222';

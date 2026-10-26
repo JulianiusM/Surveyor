@@ -1,14 +1,14 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {MockInstance} from 'vitest';
-import mailer, {renderEmail} from '../../src/modules/email';
+import mailer, {renderEmail} from '../../src/backend/modules/email';
 import {notifyAcceptedInvoice, notifyClosedInvoice, notifyPoolShareSettlements, notifyRejectedInvoice,
-    notifySavedInvoiceChange, notifyShareSettlement, notifySubmittedInvoice, notifyTakeoverChanges} from '../../src/modules/invoice/notifications';
+    notifySavedInvoiceChange, notifyShareSettlement, notifySubmittedInvoice, notifyTakeoverChanges} from '../../src/backend/modules/invoice/notifications';
 import type {StructuredEmailContent} from '../../src/types/EmailTypes';
 import type {ParticipantRow} from '../../src/types/EventTypes';
-import type {Event} from '../../src/modules/database/entities/event/Event';
-import type {EventInvoicePool} from '../../src/modules/database/entities/event/EventInvoicePool';
-import type {EventInvoice} from '../../src/modules/database/entities/event/EventInvoice';
-import type {EventInvoiceShare} from '../../src/modules/database/entities/event/EventInvoiceShare';
+import type {Event} from '../../src/backend/modules/database/entities/event/Event';
+import type {EventInvoicePool} from '../../src/backend/modules/database/entities/event/EventInvoicePool';
+import type {EventInvoice} from '../../src/backend/modules/database/entities/event/EventInvoice';
+import type {EventInvoiceShare} from '../../src/backend/modules/database/entities/event/EventInvoiceShare';
 import type {Request} from 'express';
 
 const event = {id: 'notification-event', title: 'Shared trip'} as Event;

@@ -1,4 +1,4 @@
-import {AppDataSource, initDataSource} from '../../src/modules/database/dataSource';
+import {AppDataSource, initDataSource} from '../../src/backend/modules/database/dataSource';
 
 /**
  * Initializes the production TypeORM DataSource against the disposable test

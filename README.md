@@ -7,7 +7,7 @@ status: current
 last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
-source-anchors: package.json; package-lock.json; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/oidc.ts; migrationDataSource.ts; scripts/runMigration.ts; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tsconfig.test.json; playwright.frontend.config.ts; playwright.integration.config.ts
+source-anchors: package.json; package-lock.json; src/backend/server.ts; src/backend/app.ts; src/backend/modules/settings.ts; src/backend/modules/oidc.ts; migrationDataSource.ts; scripts/runMigration.ts; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; src/frontend/; contracts/api/v1/; src/common/locales/; src/backend/modules/frontendRenderer.ts; src/backend/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tsconfig.test.json; playwright.frontend.config.ts; playwright.integration.config.ts
 next-review: repository-command-or-help-tooling-change
 -->
 
@@ -146,7 +146,7 @@ With local login enabled, register an account, open the activation message deliv
 | `npm run server:dev` | Run only the server watcher; existing generated and built assets must already be present. |
 | `npm run server:frontend` | Watch authored API contracts, locale catalogs and the permission registry; publish readiness after ordered generation. |
 | `npm run build` | Clean `dist/`, generate shared inputs, compile server and Vue client/SSR output, compile print CSS, and copy print views/shared assets. |
-| `npm run run` | Start the compiled application from `dist/server.js`. |
+| `npm run run` | Start the compiled application from `dist/backend/server.js`. |
 | `npm run generate` | Regenerate the TypeORM index and shared API/localization consumers without connecting to a database. |
 | `npm run typecheck:frontend` | Check the Vue client and SSR TypeScript scopes. |
 | `npm run typecheck:tests` | Check the Vue-aware test import graph. |
@@ -162,21 +162,21 @@ The [Development Guide](docs/DEVELOPMENT.md) contains database safety, generated
 ## Repository map
 
 ```text
-src/server.ts                         startup sequencing and HTTP server
-src/app.ts                            Express middleware, sessions, routes, health endpoint
-src/routes/                           page routes and top-level API router
-src/controller/                       request/response orchestration
-src/middleware/                       authentication, authorization, validation, and shared flows
-src/modules/database/entities/        TypeORM entities
-src/modules/database/services/        database and transaction functions
-src/modules/database/subscribers/     TypeORM subscribers
-src/migrations/                       TypeORM migrations
+src/backend/server.ts                         startup sequencing and HTTP server
+src/backend/app.ts                            Express middleware, sessions, routes, health endpoint
+src/backend/routes/                           page routes and top-level API router
+src/backend/controller/                       request/response orchestration
+src/backend/middleware/                       authentication, authorization, validation, and shared flows
+src/backend/modules/database/entities/        TypeORM entities
+src/backend/modules/database/services/        database and transaction functions
+src/backend/modules/database/subscribers/     TypeORM subscribers
+src/backend/migrations/                       TypeORM migrations
 src/frontend/                         Vue app, components, composables and feature views
 contracts/api/v1/                     authored wire schemas
-src/locales/                          shared browser/server catalogs
+src/common/locales/                          shared browser/server catalogs
 src/types/                            shared declaration contracts (.d.ts)
 src/public/style/                     standalone print stylesheet
-src/views/                             standalone Activity/Event print templates
+src/backend/views/                             standalone Activity/Event print templates
 tests/unit/                            isolated production logic
 tests/frontend/                        client helpers/mounted Vue and isolated browser checks
 tests/integration/                     database-backed workflows and genuine isolated server-component integration

@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-06-ci-repair
 verification-scope: maintainer-authorized final-answer-only question placement routed to the development policy; prior approval, provenance, runtime Help and profile boundaries retained
-source-anchors: docs/policies/DEVELOPMENT_POLICY.md; scripts/check-documentation.mjs; scripts/tests/documentation-check.test.mjs; repository-tree; src/controller/helpController.ts; src/frontend/features/help/; src/locales/; .github/workflows/release.yml; docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md; docs/policies/documentation-check.json; docs/backlog/documentation-remediation.yml; scripts/check-help-documentation.mjs; docs/features/help/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; tests/unit/help-localization.spec.ts
+source-anchors: docs/policies/DEVELOPMENT_POLICY.md; scripts/check-documentation.mjs; scripts/tests/documentation-check.test.mjs; repository-tree; src/backend/controller/helpController.ts; src/frontend/features/help/; src/common/locales/; .github/workflows/release.yml; docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md; docs/policies/documentation-check.json; docs/backlog/documentation-remediation.yml; scripts/check-help-documentation.mjs; docs/features/help/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; tests/unit/help-localization.spec.ts
 next-review: documentation-pipeline-or-help-trust-boundary-change
 -->
 

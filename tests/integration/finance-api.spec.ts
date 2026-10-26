@@ -12,22 +12,22 @@ import invoices, {
     reviewEventFinanceInvoice, updateEventFinanceAssignments, addEventFinanceAdjustment,
     removeEventFinanceAdjustment, updateEventFinanceTakeovers,
     previewEventFinancePool, calculateEventFinancePool, rollbackEventFinancePool, notifyEventFinancePool, settleEventFinanceShare,
-} from '../../src/controller/eventPoolController';
-import * as eventService from '../../src/modules/database/services/EventService';
-import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
-import * as adminService from '../../src/modules/database/services/EntityAdminService';
-import {contractValidator} from '../../src/modules/api/contracts';
-import {decodeApiMultipartData} from '../../src/modules/api/transport';
-import {PERM} from '../../src/modules/lib/permissions';
-import {AppDataSource} from '../../src/modules/database/dataSource';
-import settings from '../../src/modules/settings';
-import eventRouter from '../../src/routes/api/v1/events';
-import {handleApiProblem} from '../../src/modules/api/problem';
-import {createTranslator} from '../../src/modules/localization/translator';
+} from '../../src/backend/controller/eventPoolController';
+import * as eventService from '../../src/backend/modules/database/services/EventService';
+import * as invoiceService from '../../src/backend/modules/database/services/EventInvoiceService';
+import * as adminService from '../../src/backend/modules/database/services/EntityAdminService';
+import {contractValidator} from '../../src/backend/modules/api/contracts';
+import {decodeApiMultipartData} from '../../src/backend/modules/api/transport';
+import {PERM} from '../../src/backend/modules/lib/permissions';
+import {AppDataSource} from '../../src/backend/modules/database/dataSource';
+import settings from '../../src/backend/modules/settings';
+import eventRouter from '../../src/backend/routes/api/v1/events';
+import {handleApiProblem} from '../../src/backend/modules/api/problem';
+import {createTranslator} from '../../src/common/localization/translator';
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
-import mailer from '../../src/modules/email';
-import type {Event} from '../../src/modules/database/entities/event/Event';
-import type {Profile} from '../../src/modules/database/entities/user/Profile';
+import mailer from '../../src/backend/modules/email';
+import type {Event} from '../../src/backend/modules/database/entities/event/Event';
+import type {Profile} from '../../src/backend/modules/database/entities/user/Profile';
 import type {SessionLike} from '../../src/types/PermissionTypes';
 import {createInvoiceSubmissionCase} from '../factories/invoiceFactory';
 import {createIntegrationEvent, persistIntegrationProfile} from '../keywords/coreDomainKeywords';

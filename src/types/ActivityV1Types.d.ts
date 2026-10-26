@@ -1,6 +1,6 @@
 import type {EntityManager} from 'typeorm';
-import type {ActivityPlan} from '../modules/database/entities/activity/ActivityPlan';
-import type {ActivitySlot} from '../modules/database/entities/activity/ActivitySlot';
+import type {ActivityPlan} from '../backend/modules/database/entities/activity/ActivityPlan';
+import type {ActivitySlot} from '../backend/modules/database/entities/activity/ActivitySlot';
 import type {SessionLike} from './PermissionTypes';
 import type {components} from './api/v1';
 

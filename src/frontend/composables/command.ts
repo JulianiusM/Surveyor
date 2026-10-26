@@ -6,7 +6,7 @@ import {ApiFailure, InvalidInputError, ObsoleteRequestError} from '../app/transp
 import type {FrontendCommandDraft, FrontendCommandFeedback, FrontendCommandOutcome, FrontendDraftState, FrontendPlainMessageKey,
     FrontendRecoveryRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
 import {useFeedbackError, useReadRetry} from './feedback';
-import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
+import {frontendDocumentUrl} from '../../common/lib/frontendIdentity';
 import type {FrontendCommandPresentation} from '../../types/FrontendFeedbackTypes';
 
 /** These collaborators are private to the mounted draft tree. No draft values or callbacks

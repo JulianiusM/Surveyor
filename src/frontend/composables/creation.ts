@@ -1,7 +1,7 @@
 import {computed, ref} from 'vue';
 import {useRoute} from 'vue-router';
 import type {FrontendCreationCollector, FrontendCreationOptions} from '../../types/FrontendCreationTypes';
-import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
+import {frontendDocumentUrl} from '../../common/lib/frontendIdentity';
 import {useActionState, useFrontend} from '../app/context';
 import {isReadDenial} from '../app/transport';
 import {useCommand} from './command';

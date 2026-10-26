@@ -268,7 +268,7 @@ function resolveReferenceLocale(value, catalogLocales) {
  * another language registry or depending on ignored generated application output. */
 function reportCatalogLocales(corpora) {
     const locales = new Set(corpora.map(corpus => corpus.locale).filter(Boolean));
-    const catalogRoot = path.join(repositoryRoot, 'src', 'locales');
+    const catalogRoot = path.join(repositoryRoot, 'src', 'common', 'locales');
     if (fs.existsSync(catalogRoot)) {
         for (const entry of fs.readdirSync(catalogRoot, {withFileTypes: true})) {
             if (entry.isFile() && entry.name.endsWith('.json')) locales.add(entry.name.slice(0, -5));
@@ -347,7 +347,7 @@ function validateAssets(corpus) {
 /** Check the canonical release-copy comparison independently of runtime implementation
  * spelling. Only application fixtures can establish how requests resolve actual sources. */
 function validateSourceBoundary() {
-    const controllerPath = path.join(repositoryRoot, 'src', 'controller', 'helpController.ts');
+    const controllerPath = path.join(repositoryRoot, 'src', 'backend', 'controller', 'helpController.ts');
     if (!fs.existsSync(controllerPath)) {
         addError(controllerPath, 'Help controller is missing');
     }

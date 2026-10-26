@@ -3,7 +3,7 @@ import {randomUUID} from 'node:crypto';
 import {writeFile} from 'node:fs/promises';
 import type {components} from '../../src/types/api/v1';
 import type {Locale} from '../../src/types/LocalizationTypes';
-import {createTranslator} from '../../src/modules/localization/translator';
+import {createTranslator} from '../../src/common/localization/translator';
 import {createE2EActivityPlan, createE2ELogin} from '../factories/e2eCoreFactory';
 import {commandHeadersForE2E, createResourceViaForm, loginForE2E, projectCreationPermissionDisclosure, readVisiblePresentation, expectUsableFrontendLayout} from './e2eCoreKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from './frontendEventE2EKeywords';

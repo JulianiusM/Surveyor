@@ -9,7 +9,7 @@ import type {ApiOperationId} from '../../types/ApiTransportTypes';
 import type {ErrorObject} from 'ajv';
 import type {FrontendInputField} from '../../types/FrontendFeedbackTypes';
 import type {InputDiagnostic} from '../../types/InputValidationTypes';
-import {fieldDiagnostic, fieldDiagnosticInput} from '../../modules/localization/inputValidation';
+import {fieldDiagnostic, fieldDiagnosticInput} from '../../common/localization/inputValidation';
 
 type Validator<T> = (value: unknown) => value is T;
 type Problem = components['schemas']['Problem'];

@@ -6,7 +6,7 @@ import {commandHeadersForE2E, createProfileForE2E, createResourceViaForm, entity
     loginForE2E, selectProfileForE2E, updateEntityDefaultsForE2E} from '../keywords/e2eCoreKeywords';
 import {createBrowserReadGate, waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
 import {frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
-import {PERM} from '../../src/modules/lib/permissions';
+import {PERM} from '../../src/backend/modules/lib/permissions';
 
 /** Obtain the real server actor rather than infer identity from a rendered label. */
 async function session(request: APIRequestContext): Promise<components['schemas']['SessionView']> {

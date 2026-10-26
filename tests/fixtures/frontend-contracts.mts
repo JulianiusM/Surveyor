@@ -2,7 +2,7 @@
 import type {components} from '../../src/types/api/v1.js';
 import type {ApiResponseBody, ApiSuccessStatus} from '../../src/types/ApiTransportTypes.js';
 import {validatePackingListView} from '../../.generated/api/v1/browser.mjs';
-import {createTranslator} from '../../src/modules/localization/translator.js';
+import {createTranslator} from '../../src/common/localization/translator.js';
 
 const patch: components['schemas']['PackingMetadataPatch'] = {description: null};
 void patch;

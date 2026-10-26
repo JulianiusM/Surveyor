@@ -8,8 +8,8 @@ import {
     resolveInvoiceAmount,
     sanitizeForEmail,
     toAmount,
-} from '../../src/modules/lib/util';
-import {DEFAULT_PERM, getInitialPerms, getPermMeta, getPresetMask, hasPerm, PERM, toMask, toMaskFromBodyValue} from '../../src/modules/lib/permissions';
+} from '../../src/backend/modules/lib/util';
+import {DEFAULT_PERM, getInitialPerms, getPermMeta, getPresetMask, hasPerm, PERM, toMask, toMaskFromBodyValue} from '../../src/backend/modules/lib/permissions';
 import type {DashboardEntities} from '../../src/types/UserTypes';
 import {createEntityBase, createExpectedEntity} from '../factories/entitiesFactory';
 import {createDateTotalsCase} from '../factories/dateTotalsFactory';

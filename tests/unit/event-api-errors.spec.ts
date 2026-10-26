@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
-import {classifyApiError, validatedProblemBody} from '../../src/modules/api/problem';
-import {APIError} from '../../src/modules/lib/errors';
+import {classifyApiError, validatedProblemBody} from '../../src/backend/modules/api/problem';
+import {APIError} from '../../src/backend/modules/lib/errors';
 
 describe('Event business rejection transport', () => {
     it.each([

@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {generateFairRecommendations} from '../../src/modules/activity/fairAssignment';
+import {generateFairRecommendations} from '../../src/backend/modules/activity/fairAssignment';
 import {
     createAutoAssignmentContext,
     createAutoAssignmentParticipant,

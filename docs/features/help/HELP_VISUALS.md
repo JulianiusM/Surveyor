@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: P11 retained component/catalog/asset ownership reconciled after native comparison retirement; authoring rules unchanged; no image regeneration or fresh visual acceptance claimed
-source-anchors: docs/user-guide/en/; docs/user-guide/de/; src/frontend/components/AppHeader.vue; src/frontend/features/packing/; src/frontend/features/surveys/; src/locales/; scripts/generate-help-visuals.mjs; .github/workflows/release.yml; tests/unit/help-documentation.spec.ts
+source-anchors: docs/user-guide/en/; docs/user-guide/de/; src/frontend/components/AppHeader.vue; src/frontend/features/packing/; src/frontend/features/surveys/; src/common/locales/; scripts/generate-help-visuals.mjs; .github/workflows/release.yml; tests/unit/help-documentation.spec.ts
 next-review: help-visual-or-visible-UI-change
 -->
 
@@ -31,7 +31,7 @@ The product documentation maintainers own the asset set. A feature maintainer id
 | Asset | Used by | Implementation sources to compare |
 |---|---|---|
 | `navigation-at-a-glance.png` | User-guide home | The article's actual rendered header from `src/frontend/components/AppHeader.vue`. |
-| `survey-recurring-pattern.png` | Surveys | The article's actual combination/answer controls: `src/frontend/features/surveys/CombinationFields.vue`, `src/frontend/features/surveys/SurveyPage.vue` and `src/locales/`. |
+| `survey-recurring-pattern.png` | Surveys | The article's actual combination/answer controls: `src/frontend/features/surveys/CombinationFields.vue`, `src/frontend/features/surveys/SurveyPage.vue` and `src/common/locales/`. |
 | `packing-shared-vs-local.png` | Packing Lists | The article's actual shared-assignment and browser-local Packed controls; the shared owner is `src/frontend/features/packing/`. |
 
 ## Authoring rules

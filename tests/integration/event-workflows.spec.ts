@@ -15,12 +15,12 @@
  */
 
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import eventController, {canBypassDeadlineWithToken, isEventFull} from '../../src/controller/eventController';
-import {Profile} from '../../src/modules/database/entities/user/Profile';
-import * as activityService from '../../src/modules/database/services/ActivityService';
-import * as driverService from '../../src/modules/database/services/DriverService';
-import * as eventService from '../../src/modules/database/services/EventService';
-import * as packingService from '../../src/modules/database/services/PackingService';
+import eventController, {canBypassDeadlineWithToken, isEventFull} from '../../src/backend/controller/eventController';
+import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
+import * as activityService from '../../src/backend/modules/database/services/ActivityService';
+import * as driverService from '../../src/backend/modules/database/services/DriverService';
+import * as eventService from '../../src/backend/modules/database/services/EventService';
+import * as packingService from '../../src/backend/modules/database/services/PackingService';
 import {
     createIntegrationEvent,
     persistIntegrationProfile,

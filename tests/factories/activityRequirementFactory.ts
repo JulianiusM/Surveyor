@@ -1,8 +1,8 @@
-import {ActivityPlan} from '../../src/modules/database/entities/activity/ActivityPlan';
-import {ActivityPlanRequirement} from '../../src/modules/database/entities/activity/ActivityPlanRequirement';
-import {ActivityPlanRequirementOverride} from '../../src/modules/database/entities/activity/ActivityPlanRequirementOverride';
-import {ActivityPlanStayRequirement} from '../../src/modules/database/entities/activity/ActivityPlanStayRequirement';
-import {ParticipantAttendance} from '../../src/modules/activity/requirements';
+import {ActivityPlan} from '../../src/backend/modules/database/entities/activity/ActivityPlan';
+import {ActivityPlanRequirement} from '../../src/backend/modules/database/entities/activity/ActivityPlanRequirement';
+import {ActivityPlanRequirementOverride} from '../../src/backend/modules/database/entities/activity/ActivityPlanRequirementOverride';
+import {ActivityPlanStayRequirement} from '../../src/backend/modules/database/entities/activity/ActivityPlanStayRequirement';
+import type {ParticipantAttendance} from '../../src/types/ActivityRequirementTypes';
 
 export function createRequirementPlan(overrides: Partial<ActivityPlan> = {}): ActivityPlan {
     return Object.assign(new ActivityPlan(), {

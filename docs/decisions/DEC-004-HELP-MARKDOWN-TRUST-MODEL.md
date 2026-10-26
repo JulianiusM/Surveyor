@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: active trusted-content decision and original enforcement history retained; selected reviewed corpora and complete English fallback aligned with shared Help owner; no runtime change
-source-anchors: src/controller/helpController.ts; .github/workflows/release.yml; tests/integration/controller-smoke-workflows.spec.ts; tests/e2e/public-availability.spec.ts; docs/policies/DOCUMENTATION_POLICY.md; docs/backlog/documentation-remediation.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; src/frontend/; src/routes/api/v1/
+source-anchors: src/backend/controller/helpController.ts; .github/workflows/release.yml; tests/integration/controller-smoke-workflows.spec.ts; tests/e2e/public-availability.spec.ts; docs/policies/DOCUMENTATION_POLICY.md; docs/backlog/documentation-remediation.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; src/frontend/; src/backend/routes/api/v1/
 next-review: help-source-or-trust-boundary-change
 -->
 
@@ -28,7 +28,7 @@ restriction holds.
 
 The current help path is fixed and release-controlled:
 
-1. `src/controller/helpController.ts` resolves the help base directory to `docs/user-guide/` relative to the application.
+1. `src/backend/controller/helpController.ts` resolves the help base directory to `docs/user-guide/` relative to the application.
 2. The help controller selects reviewed article corpora and adjacent assets within that fixed tree.
 3. A requested document is resolved inside the selected corpus and must exist as a regular file.
 4. The canonical document and versioned Help routes expose read-only `GET` operations. They provide no authoring, upload, import, or persistence endpoint.
@@ -103,7 +103,7 @@ source is enabled. Documentation alone cannot authorize that change.
 
 D14 implements this decision at four boundaries:
 
-1. `src/controller/helpController.ts` resolves Markdown and assets only from the fixed release-controlled `docs/user-guide/` tree, validates authored Markdown, strips the documentation metadata comment, rejects active HTML and unsafe destinations, and rewrites maintained guide and asset links.
+1. `src/backend/controller/helpController.ts` resolves Markdown and assets only from the fixed release-controlled `docs/user-guide/` tree, validates authored Markdown, strips the documentation metadata comment, rejects active HTML and unsafe destinations, and rewrites maintained guide and asset links.
 2. `scripts/check-help-documentation.mjs` applies the same authoring contract to every guide and reports unsupported, missing, unreferenced, or inaccessible visual assets for non-blocking maintainer review.
 3. `tests/unit/help-documentation.spec.ts` protects renderer behavior and security with synthetic fixtures; `tests/e2e/help-experience.spec.ts` protects the contextual application link. Checks of actual guide content, search examples, visuals, and workflow wording are retained separately in `tests/documentation/` and run only as advisory reports.
 4. `.github/workflows/release.yml` attempts to copy and compare the complete user-guide tree in a separate advisory step; missing files and copy failures never block release.

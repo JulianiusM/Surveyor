@@ -8,7 +8,7 @@ import {evictQueryFamilies} from '../app/queryCache';
 import {usePageEntry} from '../composables/pageEntry';
 import {usePageTitle} from '../composables/pageTitle';
 import {useReadRetryAt} from '../composables/feedback';
-import {isPlainMessageKey} from '../../modules/localization/translator';
+import {isPlainMessageKey} from '../../common/localization/translator';
 import PageMessage from './PageMessage.vue';
 import LoadingSkeleton from './LoadingSkeleton.vue';
 import StatusNotice from './StatusNotice.vue';

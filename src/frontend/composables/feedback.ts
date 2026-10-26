@@ -6,7 +6,7 @@ import type {LocalizationContext, MessageKey} from '../../types/LocalizationType
 import type {components} from '../../types/api/v1';
 import type {FrontendPlainMessageKey, FrontendProblemPresentation} from '../../types/FrontendUiTypes';
 import {validateProblem} from '../../../.generated/api/v1/browser/validateProblem.mjs';
-import {formatFieldDiagnostic, formatInputDiagnostic} from '../../modules/localization/inputValidation';
+import {formatFieldDiagnostic, formatInputDiagnostic} from '../../common/localization/inputValidation';
 import type {FrontendReadFailureDescriptor} from '../../types/FrontendFeedbackTypes';
 
 // One shared lifetime governs transient receipts in the shell and its dialogs.

@@ -6,7 +6,7 @@ import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories
 import {addEntityAdministratorForE2E, commandHeadersForE2E, createProfileForE2E, createResourceViaForm,
     entitySettingsHeadersForE2E, loginForE2E, registerGuestForE2E, selectProfileForE2E, updateEntityAdministratorForE2E,
     updateEntityDefaultKeysForE2E, updateEntityDefaultsForE2E, updateEntityEventForE2E, updateEntityMetadataForE2E} from '../keywords/e2eCoreKeywords';
-import {PERM} from '../../src/modules/lib/permissions';
+import {PERM} from '../../src/backend/modules/lib/permissions';
 import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 

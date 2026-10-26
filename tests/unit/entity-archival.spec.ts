@@ -1,16 +1,16 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {
     archiveKey, automaticArchiveCutoff, isEffectivelyArchived, isHiddenInOverview,
-} from '../../src/modules/archive/policy';
+} from '../../src/backend/modules/archive/policy';
 
 // These cases exercise pure policy and runner coordination only. Replace the runner's
 // persistence boundary so no unit test can connect to or mutate a configured database;
 // the integration suite separately exercises the real archival service and its transactions.
 const archiveExpiredEntities = vi.hoisted(() => vi.fn());
-vi.mock('../../src/modules/database/services/EntityLifecycleService', () => ({archiveExpiredEntities}));
-vi.mock('../../src/modules/settings', () => ({default: {value: {autoArchiveEnabled: true, autoArchiveAfterDays: 30}}}));
-import settings from '../../src/modules/settings';
-import {runEntityArchival, startEntityArchivalJob} from '../../src/modules/entityArchival';
+vi.mock('../../src/backend/modules/database/services/EntityLifecycleService', () => ({archiveExpiredEntities}));
+vi.mock('../../src/backend/modules/settings', () => ({default: {value: {autoArchiveEnabled: true, autoArchiveAfterDays: 30}}}));
+import settings from '../../src/backend/modules/settings';
+import {runEntityArchival, startEntityArchivalJob} from '../../src/backend/modules/entityArchival';
 
 describe('archival calendar policy', () => {
     it('waits until the day after an inclusive end date and the full configured delay', () => {

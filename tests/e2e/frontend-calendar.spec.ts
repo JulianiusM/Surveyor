@@ -1,7 +1,7 @@
 import {expect, test, type Locator, type Page, type TestInfo} from '@playwright/test';
 import type {components} from '../../src/types/api/v1';
 import type {Locale} from '../../src/types/LocalizationTypes';
-import {createTranslator} from '../../src/modules/localization/translator';
+import {createTranslator} from '../../src/common/localization/translator';
 import {captureActivityPresentation} from '../keywords/frontendActivityE2EKeywords';
 import {updateEntityMetadataForE2E} from '../keywords/e2eCoreKeywords';
 import {createAdvancedActivityForE2E, readActivityRecommendationsForE2E} from '../keywords/frontendActivityAdvancedE2EKeywords';

@@ -1,11 +1,11 @@
 import {describe, expect, it} from 'vitest';
-import eventController, {getEventLinkOptions} from '../../src/controller/eventController';
-import {createProfile, deactivateProfile, deleteAccount, updateProfile} from '../../src/controller/userController';
-import {normalizeBasicProperties} from '../../src/controller/entityAdminController';
-import type {Event} from '../../src/modules/database/entities/event/Event';
-import {APIError, ValidationError} from '../../src/modules/lib/errors';
-import {classifyApiError, declaredApiProblem, validatedProblemBody} from '../../src/modules/api/problem';
-import {contractValidator} from '../../src/modules/api/contracts';
+import eventController, {getEventLinkOptions} from '../../src/backend/controller/eventController';
+import {createProfile, deactivateProfile, deleteAccount, updateProfile} from '../../src/backend/controller/userController';
+import {normalizeBasicProperties} from '../../src/backend/controller/entityAdminController';
+import type {Event} from '../../src/backend/modules/database/entities/event/Event';
+import {APIError, ValidationError} from '../../src/backend/modules/lib/errors';
+import {classifyApiError, declaredApiProblem, validatedProblemBody} from '../../src/backend/modules/api/problem';
+import {contractValidator} from '../../src/backend/modules/api/contracts';
 import type {PermView, SessionLike} from '../../src/types/PermissionTypes';
 
 const event = {id: '11111111-1111-4111-8111-111111111111'} as Event;

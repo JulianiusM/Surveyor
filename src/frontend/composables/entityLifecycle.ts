@@ -7,7 +7,7 @@ import type {useCommand} from './command';
 import type {EntityAutomationMessages, EntityLifecycleOperations, EntityRemovalRequest} from '../../types/FrontendEntitySettingsTypes';
 import {useActionState, useFrontend} from '../app/context';
 import {overviewKeys} from '../app/queryKeys';
-import {frontendOverviewPath} from '../../modules/lib/frontendIdentity';
+import {frontendOverviewPath} from '../../common/lib/frontendIdentity';
 
 // These existing Event/Activity messages describe one shared schedule action.
 // A feature may supply its established override without duplicating its policy.

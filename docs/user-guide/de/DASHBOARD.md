@@ -7,7 +7,7 @@ status: current
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
-source-anchors: src/locales/de.json; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/overview/; src/locales/; src/frontend/; src/controller/helpController.ts
+source-anchors: src/common/locales/de.json; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/overview/; src/common/locales/; src/frontend/; src/backend/controller/helpController.ts
 heading-anchors: 1:your-overview; 2:open-your-overview; 2:check-the-active-profile; 2:understand-the-two-collections; 2:find-an-item; 3:search; 3:filter-by-type; 2:read-and-open-a-card; 2:open-an-event-s-linked-entities; 2:find-archived-and-hidden-items; 2:hide-or-show-an-item-only-for-yourself; 2:archive-or-restore-for-everyone; 2:use-owner-actions; 2:create-a-new-item; 2:navigation-at-a-glance; 2:troubleshooting; 3:an-expected-item-is-missing; 3:an-overview-page-could-not-load; 3:duplicate-or-delete-is-missing; 3:both-collections-are-empty; 2:related-guides
 next-review: overview-or-navigation-visible-UI-change
 production-reference: 2dfa257 native business comparator with current German migrated controls and approved exceptions; not an installed production commit

@@ -3,8 +3,8 @@ import {validateSessionView} from '../../../.generated/api/v1/browser/validateSe
 import {validateProblem} from '../../../.generated/api/v1/browser/validateProblem.mjs';
 import {validatePageEntryOutcome} from '../../../.generated/api/v1/browser/validatePageEntryOutcome.mjs';
 import {validateEntryNotice} from '../../../.generated/api/v1/browser/validateEntryNotice.mjs';
-import {frontendIdentityFeedback} from '../../modules/lib/frontendIdentity';
-import {isPlainMessageKey} from '../../modules/localization/translator';
+import {frontendIdentityFeedback} from '../../common/lib/frontendIdentity';
+import {isPlainMessageKey} from '../../common/localization/translator';
 
 /** Every declared field has one validation owner. The required mapped keys deliberately
  * include optional bootstrap properties: a new renderer field must also define its browser

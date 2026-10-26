@@ -1,0 +1,182 @@
+/*
+ * Copyright 2026 Julian Malovanij
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
+import type {InvoicePoolCalculationSnapshot, InvoicePoolDistribution, InvoicePoolStatus} from "../../../../../types/InvoicePoolTypes";
+import {currencyTransformer} from "../../transformers";
+import {UuidBase} from "../abstract/TrackedBase";
+import {Event} from "./Event";
+import {EventInvoice} from "./EventInvoice";
+import {EventInvoiceShare} from "./EventInvoiceShare";
+import {EventInvoiceSurcharge} from "./EventInvoiceSurcharge";
+import {EventPoolAssignment} from "./EventPoolAssignment";
+import {EventPoolTakeover} from "./EventPoolTakeover";
+
+export const InvoicePoolDistributions = ['EQUAL', 'TIME_BASED', 'NIGHTS'];
+
+@Entity("event_invoice_pools", {schema: "surveyor"})
+export class EventInvoicePool extends UuidBase {
+    @ManyToOne(() => Event, (event) => event.eventRegBypassLinks, {onDelete: "CASCADE", onUpdate: "CASCADE"})
+    @JoinColumn([{name: "event_id", referencedColumnName: "id"}])
+    event!: Event;
+
+    // Store the foreign key for quick filtering without loading the relation
+    @RelationId((pool: EventInvoicePool) => pool.event)
+    eventId!: string;
+
+    @Column("varchar", {name: "name", length: 255})
+    name!: string;
+
+    @Column("text", {name: "description", nullable: true})
+    description?: string | null;
+
+    // ORGANIZER_ONLY accepts organizer costs while participant submissions are disabled. Both
+    // uncalculated states may be created directly and closed without a submission-access transition.
+    @Column("enum", {name: "status", enum: ["OPEN", "CLOSED", "ORGANIZER_ONLY"], default: "OPEN"})
+    status!: InvoicePoolStatus;
+
+    @Column("tinyint", {name: "needs_recalculation", default: 0})
+    needsRecalculation!: boolean;
+
+    // Reject calculations based on inputs that changed while the calculation was running.
+    @Column("int", {name: "calculation_revision", unsigned: true, default: 0})
+    calculationRevision!: number;
+
+    @Column("json", {name: "calculation_snapshot", nullable: true})
+    calculationSnapshot!: InvoicePoolCalculationSnapshot | null;
+
+    @Column("tinyint", {name: "send_calculation_emails", default: 1})
+    sendCalculationEmails!: boolean;
+
+    @Column("tinyint", {name: "round_up_shares", default: 1})
+    roundUpShares!: boolean;
+
+    @Column("enum", {name: "distribution_method", enum: InvoicePoolDistributions, default: "EQUAL"})
+    distributionMethod!: InvoicePoolDistribution;
+
+    @Column("tinyint", {
+        name: "is_default",
+        default: 0
+    })
+    isDefault!: boolean;
+
+    @Column("tinyint", {
+        name: "assign_all",
+        default: 1
+    })
+    assignAll!: boolean;
+
+    // Toggle whether the submitter's invoices reduce their own share during distribution
+    @Column("tinyint", {
+        name: "subtract_personal_invoices",
+        default: 1
+    })
+    subtractPersonalInvoices!: boolean;
+
+    @Column("decimal", {
+        name: "total_amount",
+        precision: 10,
+        scale: 2,
+        default: "0.00",
+        transformer: currencyTransformer
+    })
+    totalAmount!: number;
+
+    @Column("decimal", {
+        name: "invoice_amount",
+        precision: 10,
+        scale: 2,
+        default: "0.00",
+        transformer: currencyTransformer
+    })
+    invoiceAmount!: number;
+
+    @Column("decimal", {
+        name: "open_amount",
+        precision: 10,
+        scale: 2,
+        default: "0.00",
+        transformer: currencyTransformer
+    })
+    openAmount!: number;
+
+    @Column("decimal", {
+        name: "outstanding_amount",
+        precision: 10,
+        scale: 2,
+        default: "0.00",
+        transformer: currencyTransformer
+    })
+    outstandingAmount!: number;
+
+    // Portion of unpaid shares where participants have overpaid and are owed a payout
+    @Column("decimal", {
+        name: "credit_amount",
+        precision: 10,
+        scale: 2,
+        default: "0.00",
+        transformer: currencyTransformer
+    })
+    creditAmount!: number;
+
+    // Additional per-participant charges added before closing the pool
+    @Column("decimal", {
+        name: "additional_amount",
+        precision: 10,
+        scale: 2,
+        default: "0.00",
+        transformer: currencyTransformer
+    })
+    additionalAmount!: number;
+
+    // Portion of the surcharges that is removed from the shared pool total
+    @Column("decimal", {
+        name: "surcharge_offset_amount",
+        precision: 10,
+        scale: 2,
+        default: "0.00",
+        transformer: currencyTransformer
+    })
+    surchargeOffsetAmount!: number;
+
+    // Signed invoice total minus adjustments redistributed within the pool.
+    @Column("decimal", {
+        name: "payable_amount",
+        precision: 10,
+        scale: 2,
+        default: "0.00",
+        transformer: currencyTransformer
+    })
+    payableAmount!: number;
+
+    @Column("timestamp", {name: "closed_at", nullable: true})
+    closedAt?: Date | null;
+
+    @OneToMany(() => EventInvoice, (invoice) => invoice.pool)
+    invoices!: EventInvoice[];
+
+    @OneToMany(() => EventPoolAssignment, (assignment) => assignment.pool)
+    assignments!: EventPoolAssignment[];
+
+    @OneToMany(() => EventInvoiceShare, (share) => share.pool)
+    shares!: EventInvoiceShare[];
+
+    @OneToMany(() => EventPoolTakeover, (takeover) => takeover.pool)
+    takeovers!: EventPoolTakeover[];
+
+    @OneToMany(() => EventInvoiceSurcharge, (surcharge) => surcharge.pool)
+    surcharges!: EventInvoiceSurcharge[];
+}

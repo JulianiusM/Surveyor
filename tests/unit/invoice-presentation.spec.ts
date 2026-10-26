@@ -1,12 +1,12 @@
 import {describe, expect, it} from 'vitest';
 import {formatInvoiceMoney, invoiceAdjustmentRows, invoiceCalculationLines, invoicePayerCalculation, invoiceBalanceCaption,
     invoicePoolCalculation, invoicePoolCalculationBreakdown, invoicePoolSummary, invoiceSettlementRows, invoiceShareColumns,
-    invoiceShareComponents, presentInvoiceShare, sumInvoiceAdjustments, invoiceSettledShareNotice} from '../../src/modules/invoice/presentation';
-import {getInvoiceCatalog, invoiceText} from '../../src/modules/invoice/wording';
-import {createTranslator} from '../../src/modules/localization/translator';
+    invoiceShareComponents, presentInvoiceShare, sumInvoiceAdjustments, invoiceSettledShareNotice} from '../../src/backend/modules/invoice/presentation';
+import {getInvoiceCatalog, invoiceText} from '../../src/backend/modules/invoice/wording';
+import {createTranslator} from '../../src/common/localization/translator';
 import type {MessageKey, MessageParameters} from '../../src/types/LocalizationTypes';
 import type {InvoiceTextFormatter} from '../../src/types/InvoicePoolTypes';
-import {invoiceAppliedTakeovers, invoiceHasPendingTakeovers, invoiceHasAppliedTakeoverEvidence} from '../../src/modules/invoice/coverage';
+import {invoiceAppliedTakeovers, invoiceHasPendingTakeovers, invoiceHasAppliedTakeoverEvidence} from '../../src/backend/modules/invoice/coverage';
 import type {InvoiceAdjustmentInput, InvoiceCalculationExplanation, InvoiceCalculationShare,
     InvoicePoolSummaryInput, InvoiceAppliedTakeoversInput, InvoiceCalculationOverview} from '../../src/types/InvoicePoolTypes';
 

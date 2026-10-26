@@ -7,7 +7,7 @@ import {describe, expect, it} from 'vitest';
  * disposable database setup or another suite's established UTC contract. */
 function calendarComparisons() {
     const script = `
-        const {projectActivityScheduleWeeks} = require('./src/controller/activityController');
+        const {projectActivityScheduleWeeks} = require('./src/backend/controller/activityController');
         const {activityCreationWeeks, activityDateLabel, activityDayLabel} = require('./src/frontend/features/activity/presentation');
         const {formatEventCivilDate, formatEventDate, formatEventTimestamp} = require('./src/frontend/features/event/presentation');
         const results = [];

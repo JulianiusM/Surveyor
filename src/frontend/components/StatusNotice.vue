@@ -2,7 +2,7 @@
 import {computed, inject, ref} from 'vue';
 import type {MessageKey} from '../../types/LocalizationTypes';
 import type {FrontendNoticeAction} from '../../types/FrontendFeedbackTypes';
-import {createTranslator, formatReadTime} from '../../modules/localization/translator';
+import {createTranslator, formatReadTime} from '../../common/localization/translator';
 import {frontendContextKey, useClientInitialization, useFrontend} from '../app/context';
 import {isElementVisible, noticeTargetKey, readFailureMessage, useTransientNotice} from '../composables/feedback';
 import {useNoticePresentation} from '../composables/noticePresentation';

@@ -1,12 +1,12 @@
-import * as invoiceOperations from '../../src/modules/invoice/invoiceOperations';
+import * as invoiceOperations from '../../src/backend/modules/invoice/invoiceOperations';
 import type {Request} from 'express';
 import {afterAll, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
-import eventPoolController from '../../src/controller/eventPoolController';
-import type {Profile} from '../../src/modules/database/entities/user/Profile';
-import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
-import * as eventService from '../../src/modules/database/services/EventService';
-import * as userService from '../../src/modules/database/services/UserService';
-import mailer from '../../src/modules/email';
+import eventPoolController from '../../src/backend/controller/eventPoolController';
+import type {Profile} from '../../src/backend/modules/database/entities/user/Profile';
+import * as invoiceService from '../../src/backend/modules/database/services/EventInvoiceService';
+import * as eventService from '../../src/backend/modules/database/services/EventService';
+import * as userService from '../../src/backend/modules/database/services/UserService';
+import mailer from '../../src/backend/modules/email';
 import {createIntegrationEvent, persistIntegrationProfile, registerEventAttendance} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 

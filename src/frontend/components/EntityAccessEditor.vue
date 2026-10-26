@@ -5,7 +5,7 @@ import type {components} from '../../types/api/v1';
 import type {MessageKey} from '../../types/LocalizationTypes';
 import type {FrontendMetadataSnapshot} from '../../types/FrontendUiTypes';
 import type {EntityAccessEditorProps} from '../../types/FrontendEntityAccessTypes';
-import {permissionLabel as translatedPermissionLabel} from '../../modules/localization/permissionLabels';
+import {permissionLabel as translatedPermissionLabel} from '../../common/localization/permissionLabels';
 import {useActionState, useFrontend, refreshInterval} from '../app/context';
 import {isReadDenial} from '../app/transport';
 import {retireQueryFamily, useQueryAdmission} from '../app/queryCache';

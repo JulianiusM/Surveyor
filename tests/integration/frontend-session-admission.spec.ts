@@ -4,11 +4,11 @@ import type {NextFunction, Request, Response} from 'express';
 import session from 'express-session';
 import flash from 'express-flash';
 import http from 'node:http';
-import {captureApiActor, requireApiContext, sessionView} from '../../src/modules/api/session';
-import {handleApiProblem} from '../../src/modules/api/problem';
-import {persistSession, readStoredSession} from '../../src/modules/lib/session';
-import {asyncHandler} from '../../src/modules/lib/asyncHandler';
-import settings from '../../src/modules/settings';
+import {captureApiActor, requireApiContext, sessionView} from '../../src/backend/modules/api/session';
+import {handleApiProblem} from '../../src/backend/modules/api/problem';
+import {persistSession, readStoredSession} from '../../src/backend/modules/lib/session';
+import {asyncHandler} from '../../src/backend/modules/lib/asyncHandler';
+import settings from '../../src/backend/modules/settings';
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 
 const contextA = 'server-context-a-12345678901234567890';

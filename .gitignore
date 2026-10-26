@@ -285,11 +285,11 @@ src/frontend/styles/timezone-select.css
 src.zip
 /playwright.config.js
 /scripts/e2e.db.init.js
-/src/modules/database/__index__.ts
+/src/backend/modules/database/__index__.ts
 /.generated/
 /src/types/api/
 /src/types/LocalizationTypes.d.ts
-/src/modules/localization/generated/
+/src/common/localization/generated/
 /uploads/
 # Generated application-test and advisory documentation reports.
 /artifacts/

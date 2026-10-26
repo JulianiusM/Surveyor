@@ -7,7 +7,7 @@ status: current
 last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: Vitest 5 mock-history compatibility and existing fork worker contract reconciled; prior P11 routing, Vue rendering, native browser retirement and inherited domain and database safety retained; no deployment or exhaustive verification claim
-source-anchors: package.json; src/app.ts; src/frontend/; src/routes/; src/controller/; src/modules/database/; src/modules/api/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
+source-anchors: package.json; src/backend/app.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: test-layout-command-or-help-validation-change
 -->
 
@@ -111,7 +111,7 @@ npm test
 integration. The runner configuration owns this selection once.
 
 The normal Vitest package scripts have pre-hooks that run `npm run generate`, including the unit, frontend and quick
-commands. Generation prepares `src/modules/database/__index__.ts` and authored API/localization consumers without
+commands. Generation prepares `src/backend/modules/database/__index__.ts` and authored API/localization consumers without
 connecting to a database. Direct runner invocations bypass package hooks; prepare current inputs after checkout or an
 authored input change. The scripts in `package.json` own the exact preparation sequence.
 
@@ -176,7 +176,7 @@ A current factory-backed pattern is:
 
 ```typescript
 import {describe, expect, it} from 'vitest';
-import {buildDateTotals} from '../../src/modules/lib/util';
+import {buildDateTotals} from '../../src/backend/modules/lib/util';
 import {createDateTotalsCase} from '../factories/dateTotalsFactory';
 
 describe('event registration date totals', () => {
@@ -279,7 +279,7 @@ Playwright is configured for Chromium. Its managed web server runs:
 npm run e2e:init
 ```
 
-That command initializes the E2E database and starts `dist/server.js`; it does not build the application. Build first.
+That command initializes the E2E database and starts `dist/backend/server.js`; it does not build the application. Build first.
 
 The E2E suite currently uses `APIRequestContext` heavily for focused HTTP workflows. This is still E2E coverage because requests pass through the real built application, routes, middleware, session store, and database.
 

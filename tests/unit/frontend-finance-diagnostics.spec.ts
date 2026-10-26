@@ -1,13 +1,13 @@
 import {describe, expect, it} from 'vitest';
-import type {EventInvoicePool} from '../../src/modules/database/entities/event/EventInvoicePool';
-import type {EventRegistration} from '../../src/modules/database/entities/event/EventRegistration';
-import {preparePoolCalculation} from '../../src/modules/invoice/calculation';
+import type {EventInvoicePool} from '../../src/backend/modules/database/entities/event/EventInvoicePool';
+import type {EventRegistration} from '../../src/backend/modules/database/entities/event/EventRegistration';
+import {preparePoolCalculation} from '../../src/backend/modules/invoice/calculation';
 import {prepareTakeoverRequest, prepareSurchargeRequest, prepareOrganizerInvoice, prepareSubmittedInvoice,
-    prepareInvoiceAcceptance, preparePoolAssignments} from '../../src/modules/invoice/requests';
-import {assertConfirmedInvoiceChange, assertPositiveInvoiceAmount} from '../../src/modules/invoice/validation';
-import {invoiceText} from '../../src/modules/invoice/wording';
-import {APIError} from '../../src/modules/lib/errors';
-import {classifyApiError, validatedProblemBody} from '../../src/modules/api/problem';
+    prepareInvoiceAcceptance, preparePoolAssignments} from '../../src/backend/modules/invoice/requests';
+import {assertConfirmedInvoiceChange, assertPositiveInvoiceAmount} from '../../src/backend/modules/invoice/validation';
+import {invoiceText} from '../../src/backend/modules/invoice/wording';
+import {APIError} from '../../src/backend/modules/lib/errors';
+import {classifyApiError, validatedProblemBody} from '../../src/backend/modules/api/problem';
 
 /** Exercise actual domain rejections and their transport projection together.
  * Pure calculation/request inputs need no persistence or replacement services. */

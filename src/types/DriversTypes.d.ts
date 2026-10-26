@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {DriversItem} from "../modules/database/entities/drivers/DriversItem";
+import {DriversItem} from "../backend/modules/database/entities/drivers/DriversItem";
 
 export type EnrichedDriversItem = DriversItem & {
     assignedCount: number;

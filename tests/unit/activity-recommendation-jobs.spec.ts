@@ -1,11 +1,11 @@
 import {describe, expect, it} from 'vitest';
-import type {AutoAssignmentContext} from '../../src/modules/activity/autoAssignment';
+import type {AutoAssignmentContext} from '../../src/backend/modules/activity/autoAssignment';
 import {
     RecommendationJobCoordinator,
     RecommendationJobView,
     fingerprintRecommendationContext,
-} from '../../src/modules/activity/recommendationJobs';
-import {APIError} from '../../src/modules/lib/errors';
+} from '../../src/backend/modules/activity/recommendationJobs';
+import {APIError} from '../../src/backend/modules/lib/errors';
 import {createAutoAssignmentContext} from '../factories/activityAutoAssignmentFactory';
 
 function createJobContext(): AutoAssignmentContext {

@@ -3,7 +3,7 @@ import {writeFile} from 'node:fs/promises';
 import {expectEmbeddedFrontendRefresh, expectUsableFrontendLayout, loginForE2E, readProfileWorkflowFixtureForE2E,
     readVisiblePresentation, withProfileWorkflowFixtureForE2E} from '../keywords/e2eCoreKeywords';
 import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
-import {createTranslator} from '../../src/modules/localization/translator';
+import {createTranslator} from '../../src/common/localization/translator';
 
 /** Snapshot the real built workflow geometry for recorded visual review. */
 function workflowPresentation() {

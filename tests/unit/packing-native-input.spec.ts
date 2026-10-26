@@ -1,9 +1,9 @@
 import {describe, expect, it} from 'vitest';
-import packingController from '../../src/controller/packingController';
-import {APIError, ValidationError} from '../../src/modules/lib/errors';
-import {ApiProblem} from '../../src/modules/api/problem';
-import {normalizePackingMetadataPatch} from '../../src/controller/packingController';
-import {validateApiInput} from '../../src/modules/api/transport';
+import packingController from '../../src/backend/controller/packingController';
+import {APIError, ValidationError} from '../../src/backend/modules/lib/errors';
+import {ApiProblem} from '../../src/backend/modules/api/problem';
+import {normalizePackingMetadataPatch} from '../../src/backend/controller/packingController';
+import {validateApiInput} from '../../src/backend/modules/api/transport';
 
 /** Exercise the real native form adapter without opening a database or creating records. */
 function form(item: Record<string, unknown> = {}, root: Record<string, unknown> = {}) {

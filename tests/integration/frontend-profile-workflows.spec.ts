@@ -1,22 +1,22 @@
 import http from 'node:http';
 import {randomUUID} from 'node:crypto';
 import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
-import {AppDataSource} from '../../src/modules/database/dataSource';
-import {User} from '../../src/modules/database/entities/user/User';
-import {Guest} from '../../src/modules/database/entities/user/Guest';
-import {Session} from '../../src/modules/database/entities/session/Session';
+import {AppDataSource} from '../../src/backend/modules/database/dataSource';
+import {User} from '../../src/backend/modules/database/entities/user/User';
+import {Guest} from '../../src/backend/modules/database/entities/user/Guest';
+import {Session} from '../../src/backend/modules/database/entities/session/Session';
 import type {SessionData} from 'express-session';
-import * as userService from '../../src/modules/database/services/UserService';
-import mailer from '../../src/modules/email';
-import settings from '../../src/modules/settings';
+import * as userService from '../../src/backend/modules/database/services/UserService';
+import mailer from '../../src/backend/modules/email';
+import settings from '../../src/backend/modules/settings';
 import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
 import type {FrontendBootstrap} from '../../src/types/FrontendTypes';
 import type {components, operations} from '../../src/types/api/v1';
 import {registerLocalAccount} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 import {prepareFrontendSsrModules} from '../support/frontendRenderer';
-import {contractValidator} from '../../src/modules/api/contracts';
-import {createTranslator} from '../../src/modules/localization/translator';
+import {contractValidator} from '../../src/backend/modules/api/contracts';
+import {createTranslator} from '../../src/common/localization/translator';
 
 interface DocumentResponse {status: number; headers: Headers; text: string}
 interface HttpSubmission {
@@ -94,7 +94,7 @@ async function prepareApplicationListener(rendererReady: Promise<void>): Promise
     // sessions and persistence remain intact, including native partial failures.
     vi.spyOn(mailer, 'sendMigrationEmail').mockResolvedValue();
     vi.spyOn(mailer, 'sendDeletionEmail').mockResolvedValue();
-    const application = (await vi.importActual<typeof import('../../src/app')>('../../src/app')).default;
+    const application = (await vi.importActual<typeof import('../../src/backend/app')>('../../src/app')).default;
     // Module preparation is independent of persistence. Its failure must prevent
     // HTTP readiness while the shared hook still awaits both preparation branches.
     await rendererReady;

@@ -1,21 +1,21 @@
 import {Request} from 'express';
 import {randomUUID} from 'node:crypto';
-import activityController from '../../src/controller/activityController';
-import driversController from '../../src/controller/driversController';
-import eventController from '../../src/controller/eventController';
-import packingController from '../../src/controller/packingController';
-import surveyController from '../../src/controller/surveyController';
-import {AppDataSource} from '../../src/modules/database/dataSource';
-import {DriversItem} from '../../src/modules/database/entities/drivers/DriversItem';
-import {PackingItem} from '../../src/modules/database/entities/packing/PackingItem';
-import {SurveyCombination} from '../../src/modules/database/entities/surveys/SurveyCombination';
-import {Profile} from '../../src/modules/database/entities/user/Profile';
-import {User} from '../../src/modules/database/entities/user/User';
-import * as driverService from '../../src/modules/database/services/DriverService';
-import * as eventService from '../../src/modules/database/services/EventService';
-import * as packingService from '../../src/modules/database/services/PackingService';
-import * as surveyService from '../../src/modules/database/services/SurveyService';
-import * as userService from '../../src/modules/database/services/UserService';
+import activityController from '../../src/backend/controller/activityController';
+import driversController from '../../src/backend/controller/driversController';
+import eventController from '../../src/backend/controller/eventController';
+import packingController from '../../src/backend/controller/packingController';
+import surveyController from '../../src/backend/controller/surveyController';
+import {AppDataSource} from '../../src/backend/modules/database/dataSource';
+import {DriversItem} from '../../src/backend/modules/database/entities/drivers/DriversItem';
+import {PackingItem} from '../../src/backend/modules/database/entities/packing/PackingItem';
+import {SurveyCombination} from '../../src/backend/modules/database/entities/surveys/SurveyCombination';
+import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
+import {User} from '../../src/backend/modules/database/entities/user/User';
+import * as driverService from '../../src/backend/modules/database/services/DriverService';
+import * as eventService from '../../src/backend/modules/database/services/EventService';
+import * as packingService from '../../src/backend/modules/database/services/PackingService';
+import * as surveyService from '../../src/backend/modules/database/services/SurveyService';
+import * as userService from '../../src/backend/modules/database/services/UserService';
 import {WithRequired} from "../../src/types/UtilTypes";
 import {
     createActivitySlotEntity,

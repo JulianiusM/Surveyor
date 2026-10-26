@@ -1,14 +1,14 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import activityController from '../../src/controller/activityController';
-import {changeEntityEvent} from '../../src/controller/entityAdminController';
-import {buildPlanRecommendationContext, readActivityRequirements, saveActivityRequirements, saveGeneratedRecommendations} from '../../src/controller/activityController';
-import {ActivityPlan} from '../../src/modules/database/entities/activity/ActivityPlan';
-import {Profile} from '../../src/modules/database/entities/user/Profile';
-import {AppDataSource} from '../../src/modules/database/dataSource';
-import * as activityService from '../../src/modules/database/services/ActivityService';
-import * as lifecycleService from '../../src/modules/database/services/EntityLifecycleService';
-import * as recommendationService from '../../src/modules/database/services/ActivityRecommendationService';
-import * as requirementService from '../../src/modules/database/services/ActivityRequirementService';
+import activityController from '../../src/backend/controller/activityController';
+import {changeEntityEvent} from '../../src/backend/controller/entityAdminController';
+import {buildPlanRecommendationContext, readActivityRequirements, saveActivityRequirements, saveGeneratedRecommendations} from '../../src/backend/controller/activityController';
+import {ActivityPlan} from '../../src/backend/modules/database/entities/activity/ActivityPlan';
+import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
+import {AppDataSource} from '../../src/backend/modules/database/dataSource';
+import * as activityService from '../../src/backend/modules/database/services/ActivityService';
+import * as lifecycleService from '../../src/backend/modules/database/services/EntityLifecycleService';
+import * as recommendationService from '../../src/backend/modules/database/services/ActivityRecommendationService';
+import * as requirementService from '../../src/backend/modules/database/services/ActivityRequirementService';
 import {createStayRequirementSchedule} from '../factories/activityRequirementFactory';
 import {
     assignActivitySlot,

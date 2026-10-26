@@ -6,8 +6,8 @@ owner: architecture maintainers
 status: current
 last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved local browser assets, responsiveness and dependency compatibility scope reconciled; startup renderer module readiness and prior P11 routing, Vue rendering and native browser retirement guidance retained alongside inherited domain and database safety; no deployment or exhaustive verification claim
-source-anchors: package.json; src/app.ts; src/server.ts; src/modules/frontendAssets.ts; src/modules/frontendRenderer.ts; src/frontend/; src/routes/; src/controller/; src/modules/database/; src/modules/api/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
+verification-scope: authorized backend/frontend/common source ownership, shared admission/administration and private/public serving boundaries reconciled; prior rendering, responsiveness and domain contracts retained; no deployment or exhaustive verification claim
+source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: architecture-or-help-delivery-change
 -->
 
@@ -65,13 +65,13 @@ The lockfile is authoritative for exact installed dependency versions. The impor
 
 ## Startup sequence
 
-`src/server.ts` is the runtime entry point. Startup is intentionally ordered:
+`src/backend/server.ts` is the runtime entry point. Startup is intentionally ordered:
 
 1. `settings.read()` loads configuration.
 2. `initDataSource()` initializes the production TypeORM `DataSource` with `synchronize: false`.
 3. `startInvoiceRetentionJob()` performs an immediate invoice cleanup and installs the hourly timer.
 4. `startEntityArchivalJob()` validates archival settings, performs an initial sweep when enabled, and installs its separate hourly timer.
-5. `src/app.ts` is loaded only after the database exists, because application construction obtains the TypeORM session repository.
+5. `src/backend/app.ts` is loaded only after the database exists, because application construction obtains the TypeORM session repository.
 6. Frontend development initialization retains Vite's source warmup when enabled; installed releases load the built SSR renderer's code without rendering a request.
 7. An HTTP server listens on the configured application port.
 
@@ -79,7 +79,7 @@ A failure in any step logs the error and terminates the process. There is no deg
 
 ### Configuration boundary
 
-`src/modules/settings.ts` owns runtime configuration. The effective order is:
+`src/backend/modules/settings.ts` owns runtime configuration. The effective order is:
 
 ```text
 built-in defaults < CSV settings file < environment overrides
@@ -91,7 +91,7 @@ The runtime `DataSource` reads the initialized settings store. TypeORM command-l
 
 ## HTTP application and request pipeline
 
-`src/app.ts` constructs the Express application in this order:
+`src/backend/app.ts` constructs the Express application in this order:
 
 1. Disable the `X-Powered-By` header.
 2. Configure Pug views under the compiled `views` directory.
@@ -125,10 +125,10 @@ The explicit document router and versioned API expose these public route familie
 /guest     guest recovery and guest-account actions
 ```
 
-Feature routers are not auto-discovered. Versioned adapters are mounted by `src/routes/api/v1.ts`.
-`src/app.ts` mounts the domain routers explicitly. Each domain owns its document routes, parameter loaders and
-exports. `src/routes/frontend.ts` contains shared admission, bootstrap, feedback and error helpers, without route
-registrations; `src/routes/outputs.ts` shares authorized header-file delivery. Specific creation and capability
+Feature routers are not auto-discovered. Versioned adapters are mounted by `src/backend/routes/api/v1.ts`.
+`src/backend/app.ts` mounts the domain routers explicitly. Each domain owns its document routes, parameter loaders and
+exports. `src/backend/routes/frontend.ts` contains shared admission, bootstrap, feedback and error helpers, without route
+registrations; `src/backend/routes/outputs.ts` shares authorized header-file delivery. Specific creation and capability
 routes precede resource parameters, and the application 404 follows every domain mount.
 
 Client route records use the same domain organization under `src/frontend/routes/`. Its index composes those
@@ -140,15 +140,20 @@ mixing domain declarations with Router lifecycle and recovery code.
 
 The codebase uses practical layers rather than a framework-enforced domain architecture. Its database service layer is organized as functional modules, not service classes.
 
+Private application code lives under `src/backend/`; Vue presentation lives under `src/frontend/`.
+Browser-safe implementations used by both belong under `src/common/`, including localization and the pure Activity
+requirements engine. Shared declaration-only contracts retain their policy-owned `src/types/` directory; browser
+identity declarations are separate from server transaction contracts. `src/public/` contains only public static assets.
+
 ### Routes
 
-`src/routes/` defines URL shape, middleware order, request validation, controller invocation, redirects, and response
+`src/backend/routes/` defines URL shape, middleware order, request validation, controller invocation, redirects, and response
 selection. Explicit document routes and versioned API routes use the owners described above. Protected print, PDF and
 proof downloads retain controller authorization at their owning domain routes. Proof links use the Event domain;
 the versioned API keeps its separate context-protected download operation.
 
 
-Asynchronous handlers are wrapped with `asyncHandler` or `asyncParamHandler` from `src/modules/lib/asyncHandler.ts`, allowing the centralized error chain to handle rejected promises.
+Asynchronous handlers are wrapped with `asyncHandler` or `asyncParamHandler` from `src/backend/modules/lib/asyncHandler.ts`, allowing the centralized error chain to handle rejected promises.
 
 Canonical document routes admit each feature through its shared controller entry operation. Versioned feature
 routers expose creation, duplication projections, guest entry and lifecycle commands through the same controller
@@ -157,7 +162,7 @@ participation/ownership model without joining the general permission system.
 
 ### Controllers
 
-`src/controller/` contains request/response orchestration and feature-level normalization. Controllers commonly:
+`src/backend/controller/` contains request/response orchestration and feature-level normalization. Controllers commonly:
 
 - normalize or validate posted values;
 - enforce business rules and authorization, including checks against locked database snapshots, delegating complex feature logic to existing feature modules;
@@ -170,7 +175,7 @@ Most feature controllers export a plain object of functions; other controllers u
 
 ### Database services
 
-`src/modules/database/services/` is the pure database abstraction layer (DBAL). It exports repository queries, locks,
+`src/backend/modules/database/services/` is the pure database abstraction layer (DBAL). It exports repository queries, locks,
 transactions, and persistence functions. Business rules, authorization decisions, and input checks belong to
 controllers and their dedicated business modules. Services do not throw `APIError`, `ExpectedError`, or other errors tied to an HTTP/UI context.
 Callers import the module namespace or named functions.
@@ -184,7 +189,7 @@ conflicts, capacity, or lifecycle state should reject the operation. Native data
 ### Feature modularization and source ownership
 
 Complex business logic belongs in the corresponding feature folder when that boundary improves maintainability,
-as established by activity recommendations and `src/modules/invoice/`. Keep request orchestration in the existing
+as established by activity recommendations and `src/backend/modules/invoice/`. Keep request orchestration in the existing
 controller and pure persistence in the existing DBAL. Reuse coherent modules rather than introduce parallel services
 or controllers. Re-exporting imported values, functions, or types is forbidden; consumers import their actual owner.
 
@@ -204,9 +209,9 @@ typography, and interaction patterns throughout a feature. Exports follow the sa
 
 ### Entities, migrations, and subscribers
 
-TypeORM entities are under `src/modules/database/entities/`, migrations under `src/migrations/`, and subscribers under `src/modules/database/subscribers/`.
+TypeORM entities are under `src/backend/modules/database/entities/`, migrations under `src/backend/migrations/`, and subscribers under `src/backend/modules/database/subscribers/`.
 
-`scripts/genTypeormIdx.ts` discovers these classes and generates `src/modules/database/__index__.ts`. That generated file is ignored by Git and consumed by both runtime and migration datasources. `npm run generate` runs before builds and the principal Vitest commands, but it must be run explicitly before standalone TypeORM commands on a clean clone.
+`scripts/genTypeormIdx.ts` discovers these classes and generates `src/backend/modules/database/__index__.ts`. That generated file is ignored by Git and consumed by both runtime and migration datasources. `npm run generate` runs before builds and the principal Vitest commands, but it must be run explicitly before standalone TypeORM commands on a clean clone.
 
 The production datasource always uses `synchronize: false`. Empty disposable development databases and guarded
 test/E2E setup retain their schema-synchronization workflows. For a confirmed empty production database that has
@@ -220,7 +225,7 @@ projection checks. Shared permission middleware remains available for standalone
 to authorize its own operation. Versioned adapters validate generated inputs and encode structured `ApiProblem`
 responses without exposing parser details or private submitted values.
 
-Expected workflow failures keep their existing error contracts in `src/modules/lib/errors.ts`.
+Expected workflow failures keep their existing error contracts in `src/backend/modules/lib/errors.ts`.
 The canonical frontend router renders ordinary page errors as request-local Vue documents. The generic error
 handler is a localized plain-text fallback that needs neither rendering nor a session and remains private/no-store;
 API parse errors retain their JSON boundary. Controller operations, not route visibility or components, enforce
@@ -234,7 +239,7 @@ Surveyor separates an authentication record from the profile acting in the appli
 
 A local `User` can own several `Profile` records. Local registration creates an inactive account, sends an activation token by email, and requires activation before login. Password reset also uses email tokens.
 
-OIDC is implemented directly in `src/modules/oidc.ts`:
+OIDC is implemented directly in `src/backend/modules/oidc.ts`:
 
 1. Discover the provider with `openid-client`.
 2. Generate PKCE material and state for each authorization request; use a nonce when provider metadata requires the compatibility path.
@@ -279,7 +284,7 @@ Surveys primarily coordinate recurring monthly patterns represented by weekday p
 
 Events own date boundaries, capacity, registration/deadline policy, dietary data, participants, linked activity/packing/drivers resources, and invoice pools. Invoice pools coordinate accepted costs, participant factors, takeovers, signed adjustments, shares, and recorded settlements. Read-only previews share the calculation logic with transactional recalculation. Closed-pool edits mark the saved calculation stale while payment recording remains available; recalculation carries previous payments/refunds as credits against new balances. Revision checks protect previews against concurrent input or settlement changes. Calculation snapshots support rollback of pool-local inputs without rewriting payment records or external event/invoice data. Configurable calculation notifications and later settlement emails use saved payment states. Proof files live on the filesystem while records and review history live in MariaDB. See [Development Guide](DEVELOPMENT.md#invoice-pool-calculation-and-saved-changes) for the arithmetic and rollback contract.
 
-`eventPoolController.ts` orchestrates the invoice business modules in `src/modules/invoice/`, including calculation,
+`eventPoolController.ts` orchestrates the invoice business modules in `src/backend/modules/invoice/`, including calculation,
 locked pool/invoice/coverage operations, request normalization, notifications, presentation, exports, and proof retention.
 The existing `EventInvoiceService.ts` remains pure DBAL. Shared type-only contracts live in
 `src/types/InvoicePoolTypes.d.ts`; no forwarding or barrel exports bridge old and new paths.
@@ -435,7 +440,7 @@ A drivers-list row represents a ride offered by the profile that created it. Pas
 
 Identity services manage activation, password reset, OIDC links, guest tokens/recovery, profile creation/default selection, profile migration, and deletion. Relationships throughout the collaboration domains use profiles as the human actor.
 
-`src/modules/email.ts` owns message rendering and SMTP delivery. Its required named recipient contract provides a
+`src/backend/modules/email.ts` owns message rendering and SMTP delivery. Its required named recipient contract provides a
 Nodemailer Address object for the To header and a single personal greeting before the heading in both HTML and plain
 text. Callers supply actual account, guest, or profile names. HTML text escaping and HTTP(S)-only action links apply
 centrally to every notification. Shared email declarations live in `src/types/EmailTypes.d.ts`; callers import their
@@ -447,7 +452,7 @@ without those options retain their established message layout.
 ### Request-local rendering and initialization
 
 `src/frontend/app/createApp.ts` constructs the same Vue tree for server rendering and browser hydration.
-`src/modules/frontendRenderer.ts` is the existing Express renderer owner; it supplies authorized bootstrap data
+`src/backend/modules/frontendRenderer.ts` is the existing Express renderer owner; it supplies authorized bootstrap data
 and coherent built manifest assets without making HTTP calls to its own application. Each request owns its app,
 router, QueryClient, locale instance and bootstrap. Private state never lives in a module singleton or persisted cache.
 
@@ -771,6 +776,13 @@ The frontend feedback owner supplies notice lifetime; existing backend/domain/ca
 Logo/favicon image assets and third-party Bootstrap/icons retain their real consumers independently of application
 presentation code. Express-hosted Vite middleware supplies development HMR; production uses coherent built artifacts.
 
+The backend-owned `frontendBoundary.ts` applies one explicit public-file inventory to development HTTP delivery and
+the client module graph. Private backend files, SSR entry code, declarations, raw catalogs and repository files are
+not development assets, including through raw-file queries or filesystem aliases. Resolved filesystem ownership
+also rejects symlinks to private files. Dependencies are served only as the actual optimized browser graph, the
+specific Vite browser runtime files and the two Bootstrap Icons font files; `node_modules` is never a static root.
+Installed releases serve only their public assets, with server/SSR output outside that root.
+
 ## Persistence and lifecycle boundaries
 
 ### Entity archival and personal visibility
@@ -885,7 +897,7 @@ Before merging a change, trace it across the boundaries it affects:
 
 The in-app help subsystem is intentionally separate from mutable application data:
 
-1. `src/controller/helpController.ts` selects reviewed articles and adjacent assets inside the fixed `docs/user-guide/` tree, using the shared catalog's supported corpus mapping.
+1. `src/backend/controller/helpController.ts` selects reviewed articles and adjacent assets inside the fixed `docs/user-guide/` tree, using the shared catalog's supported corpus mapping.
 2. A fixed task-group map orders the guides. The same catalog drives the sidebar and server-side search.
 3. Markdown is checked against the DEC-004 authoring contract, converted with Marked, given stable heading IDs, and returned with a level-two/level-three table of contents.
 4. Existing Help adapters map logical topics and assets to their declared routes. Path-containment and filename checks prevent request-controlled traversal; requests never choose a filesystem root.

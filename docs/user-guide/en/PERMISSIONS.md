@@ -7,7 +7,7 @@ status: current
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: Creation and duplication permission instructions reconciled with the shared collapsed disclosure and exact localized labels; existing task guidance, anchors and image bytes retained. Source review only; no new full-article browser verification claimed.
-source-anchors: src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/permissionEngine.ts; src/modules/lib/permissions.ts; src/middleware/permissionMiddleware.ts; src/middleware/adminApiFactory.ts; src/modules/database/services/EntityAdminService.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/components/permissions/CreationPermissions.vue; src/frontend/; src/locales/
+source-anchors: src/backend/controller/entityAdminController.ts; src/backend/modules/archive/policy.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/modules/permissionEngine.ts; src/backend/modules/lib/permissions.ts; src/backend/middleware/permissionMiddleware.ts; src/backend/middleware/adminApiFactory.ts; src/backend/modules/database/services/EntityAdminService.ts; src/backend/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/components/permissions/CreationPermissions.vue; src/frontend/; src/common/locales/
 next-review: permission-or-entity-settings-behavior-change
 production-reference: 2dfa257 native frontend documentation; not an installed production commit
 -->

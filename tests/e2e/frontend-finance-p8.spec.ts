@@ -5,7 +5,7 @@ import type {components} from '../../src/types/api/v1';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
 import {dismissFrontendSuccessNotifications, expectUsableFrontendLayout, readSecondaryInstructionColors, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
-import {createTranslator} from '../../src/modules/localization/translator';
+import {createTranslator} from '../../src/common/localization/translator';
 
 test.use({actionTimeout: 10_000});
 

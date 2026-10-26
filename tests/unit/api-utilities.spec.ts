@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {coerceLimit, SQL_ALLOW_LIST} from '../../src/modules/lib/util';
+import {coerceLimit, SQL_ALLOW_LIST} from '../../src/backend/modules/lib/util';
 import {createQueryLimitCase} from '../factories/queryLimitFactory';
 
 describe('API contract behavior suite', () => {

@@ -1,5 +1,5 @@
-import type {FairAssignmentContext, FairAssignmentSlot} from '../../src/modules/activity/fairAssignment';
-import type {ParticipantAttendance} from '../../src/modules/activity/requirements';
+import type {FairAssignmentContext, FairAssignmentSlot} from '../../src/backend/modules/activity/fairAssignment';
+import type {ParticipantAttendance} from '../../src/types/ActivityRequirementTypes';
 import {
     createRoleRequirement,
     createStayRequirement,

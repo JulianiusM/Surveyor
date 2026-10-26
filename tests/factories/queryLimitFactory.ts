@@ -1,4 +1,4 @@
-import type {coerceLimit} from '../../src/modules/lib/util';
+import type {coerceLimit} from '../../src/backend/modules/lib/util';
 
 export interface QueryLimitCase {
     description: string;

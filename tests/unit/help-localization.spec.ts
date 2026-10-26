@@ -29,10 +29,10 @@ vi.mock('node:fs', async importOriginal => {
 
 // Runtime discovery is exercised with an additional catalog language without
 // committing a fake supported language or modifying generated production output.
-vi.mock('../../src/modules/localization/generated/manifest.json', async importOriginal => {
+vi.mock('../../src/common/localization/generated/manifest.json', async importOriginal => {
     // Vitest exposes the JSON import as an ESM default; its shape still comes
     // directly from generated output rather than a handwritten catalog contract.
-    const original = await importOriginal<{default: typeof import('../../src/modules/localization/generated/manifest.json')}>();
+    const original = await importOriginal<{default: typeof import('../../src/common/localization/generated/manifest.json')}>();
     return {default: {...original.default,
         locales: [...original.default.locales, {locale: 'nl', nativeName: 'Nederlands', direction: 'ltr'}],
         helpSources: {...original.default.helpSources, nl: 'nl'}}};
@@ -46,7 +46,7 @@ import {
     resolveHelpAssetPath,
     resolveHelpAssetSource,
     validateTrustedHelpMarkdown,
-} from '../../src/controller/helpController';
+} from '../../src/backend/controller/helpController';
 
 // Specify the approved release layout independently of the production selector.
 // Fixtures placed through that selector could accidentally bless a staged-source regression.

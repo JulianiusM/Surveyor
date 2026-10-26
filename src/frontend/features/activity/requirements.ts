@@ -1,8 +1,8 @@
 import type {components} from '../../../types/api/v1';
 import type {ActivityRequirementConfiguration, ActivityRequirementCoverage, ActivityRequirementDraft} from '../../../types/FrontendActivityRequirementTypes';
 import type {Translator} from '../../../types/LocalizationTypes';
-import {applyRounding, calculateRequirementAnalysis, countInclusiveDays} from '../../../modules/activity/requirements';
-import type {RequirementAnalysisInput} from '../../../modules/activity/requirements';
+import {applyRounding, calculateRequirementAnalysis, countInclusiveDays} from '../../../common/activity/requirements';
+import type {RequirementAnalysisInput} from '../../../types/ActivityRequirementTypes';
 
 /** Copy the local-minute editor projection; timestamps remain ISO on the wire. */
 function localDeadline(value: string | null): string {

@@ -7,7 +7,7 @@ status: current
 last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: P11 source-owner and Help-link reconciliation; existing domain behavior and decisions retained; no new execution claim
-source-anchors: src/types/EntityPropertyTypes.d.ts; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/frontend-core.spec.ts; src/controller/entityAdminController.ts; src/modules/database/services/UserService.ts; src/modules/lib/permissions.ts; src/modules/permissionEngine.ts; src/types/PermissionTypes.d.ts; src/middleware/permissionMiddleware.ts; src/modules/database/services/EntityAdminService.ts; src/modules/database/entities/permissions/EntityPermissions.ts; src/modules/database/entities/permissions/EntityAdminAssignment.ts; src/frontend/components/EntityAccessEditor.vue; src/routes/api/v1/
+source-anchors: src/types/EntityPropertyTypes.d.ts; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/frontend-core.spec.ts; src/backend/controller/entityAdminController.ts; src/backend/modules/database/services/UserService.ts; src/backend/modules/lib/permissions.ts; src/backend/modules/permissionEngine.ts; src/types/PermissionTypes.d.ts; src/backend/middleware/permissionMiddleware.ts; src/backend/modules/database/services/EntityAdminService.ts; src/backend/modules/database/entities/permissions/EntityPermissions.ts; src/backend/modules/database/entities/permissions/EntityAdminAssignment.ts; src/frontend/components/EntityAccessEditor.vue; src/backend/routes/api/v1/
 next-review: D12,D14
 -->
 
@@ -102,9 +102,9 @@ The administrator picker uses `searchUsersSecure`, which inner-joins `Profile.us
 
 ## Generated permission-bit reference
 
-The rows below are generated from the order and values in `PERM` in `src/modules/lib/permissions.ts`. Descriptions are maintained interpretations of current route and view usage.
+The rows below are generated from the order and values in `PERM` in `src/backend/modules/lib/permissions.ts`. Descriptions are maintained interpretations of current route and view usage.
 
-<!-- generated-from: src/modules/lib/permissions.ts#PERM -->
+<!-- generated-from: src/backend/modules/lib/permissions.ts#PERM -->
 | Key | UI label | Value | Hex | Category | Current contract |
 |---|---|---:|---:|---|---|
 | `EDIT_TITLE` | Edit Title | 1 | `0x1` | Editing | Entity title mutation; item-title routes may instead use an item permission with parent fallback. |
@@ -142,9 +142,9 @@ The rows below are generated from the order and values in `PERM` in `src/modules
 
 ## Generated preset reference
 
-The rows below are generated from `DEFAULT_PERM` in `src/modules/lib/permissions.ts`.
+The rows below are generated from `DEFAULT_PERM` in `src/backend/modules/lib/permissions.ts`.
 
-<!-- generated-from: src/modules/lib/permissions.ts#DEFAULT_PERM -->
+<!-- generated-from: src/backend/modules/lib/permissions.ts#DEFAULT_PERM -->
 | Key | UI label | Value | Hex | Members |
 |---|---|---:|---:|---|
 | `FULL_EDIT` | Full Edit | 15 | `0xf` | `EDIT_TITLE`, `EDIT_DESC`, `EDIT_CAPACITY`, `EDIT_META` |
@@ -288,7 +288,7 @@ When changing a permission bit, predicate, default, preset, route guard, or UI c
 
 The D03 documentation package validates:
 
-- Exact permission keys, values, labels, preset membership, and initial defaults against `src/modules/lib/permissions.ts`.
+- Exact permission keys, values, labels, preset membership, and initial defaults against `src/backend/modules/lib/permissions.ts`.
 - Cumulative source combinations against `computeMaskFor`.
 - Linked and unlinked page admission against the feature controller entry operations and their canonical document/API consumers.
 - Parent fallback examples against the shared permission engine and the relevant feature controller operation.
