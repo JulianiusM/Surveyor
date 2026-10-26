@@ -5,6 +5,10 @@ import type {ViteDevServer} from 'vite';
 
 let developmentServer: ViteDevServer | undefined;
 
+/** Source URLs shared by document delivery and startup preparation. */
+export const frontendDevelopmentAssets = {script: '/src/frontend/app/entry-client.ts',
+    styles: ['/src/frontend/styles/application.sass'], modules: [] as string[]};
+
 /** Development is explicit: installed releases never import Vite or need dev dependencies.
  * Its middleware and WebSocket share Express's HTTP server and session origin. */
 export async function initializeFrontendDevelopment(server: Server): Promise<void> {
@@ -20,6 +24,22 @@ export async function initializeFrontendDevelopment(server: Server): Promise<voi
         appType: 'custom',
         server: {middlewareMode: true, ws: {server}},
     });
+    try {
+        // Prepare the exact document assets before advertising HTTP readiness.
+        // A linked stylesheet uses Vite's direct CSS representation; warming its
+        // JavaScript wrapper would compile Sass again on the first browser visit.
+        const client = viteServer.environments.client;
+        await client.transformRequest(frontendDevelopmentAssets.script);
+        for (const style of frontendDevelopmentAssets.styles) {
+            await client.transformRequest(style + '?direct');
+        }
+        await client.waitForRequestsIdle();
+    } catch (error) {
+        // A failed source graph must not leave a watcher/WebSocket server alive
+        // or let bootstrap report a usable application after a compile failure.
+        await viteServer.close();
+        throw error;
+    }
     developmentServer = viteServer;
     server.once('close', () => {
         if (developmentServer === viteServer) developmentServer = undefined;

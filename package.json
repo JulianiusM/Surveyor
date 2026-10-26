@@ -8,8 +8,8 @@
     "pretest:integration": "npm run generate",
     "pretest:ci": "npm run generate",
     "run": "node dist/backend/server.js",
-    "server:dev": "cross-env NODE_ENV=development SURVEYOR_FRONTEND_DEV=1 nodemon --watch src --watch .generated/frontend-ready.json --ignore src/frontend --ignore src/public --ignore src/types --ignore src/common/locales --ignore src/common/localization/generated --ignore src/backend/modules/lib/permissions.ts --ignore src/backend/modules/invoice/locales/en.ts --ext ts,js,json --delay 500ms --exec \"ts-node --project tsconfig.server.json src/backend/server.ts\"",
-    "server": "npm run build && concurrently \"npm run server:dev\" \"npm run server:frontend\"",
+    "server:dev": "cross-env NODE_ENV=development SURVEYOR_FRONTEND_DEV=1 nodemon --watch src --watch .generated/frontend-ready.json --ignore src/frontend --ignore src/public --ignore src/types --ignore src/common/locales --ignore src/common/localization/generated --ignore src/backend/modules/lib/permissions.ts --ignore src/backend/modules/invoice/locales/en.ts --ext ts,js,json --delay 500ms --exec \"ts-node --transpile-only --project tsconfig.server.json src/backend/server.ts\"",
+    "server": "npm run prepare:dev && concurrently \"npm run server:dev\" \"npm run server:frontend\"",
     "typeorm": "ts-node --project tsconfig.server.json scripts/runMigration.ts",
     "typeorm:drop": "npm run typeorm -- schema:drop migrationDataSource.ts",
     "typeorm:sync": "npm run typeorm -- schema:sync migrationDataSource.ts",
@@ -58,7 +58,8 @@
     "pretypecheck:tests": "npm run generate",
     "typecheck:tests": "vue-tsc --project tsconfig.test.json --noEmit",
     "typecheck:frontend": "vue-tsc --project tsconfig.frontend.json --noEmit && vue-tsc --project tsconfig.frontend-ssr.json --noEmit",
-    "server:frontend": "node scripts/watch-frontend-inputs.mjs"
+    "server:frontend": "node scripts/watch-frontend-inputs.mjs",
+    "prepare:dev": "cross-env TS_NODE_TRANSPILE_ONLY=1 npm run generate && npm run build:print"
   },
   "overrides": {
     "openapi-typescript": {

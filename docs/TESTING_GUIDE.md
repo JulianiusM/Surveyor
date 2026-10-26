@@ -44,6 +44,10 @@ HTTP. Anonymous reads and rejected inputs keep persistence outside the boundary;
 early parser errors and generated admission without claiming authenticated workflows or database rollback.
 The isolated generic-error fixture separately exercises last-resort delivery when API projection or localization fails.
 
+The development runtime fixture follows the Vue export-helper import emitted by a real component and rejects
+neighboring/private aliases. Successful entry/component fetches alone do not establish browser initialization;
+actual source-server browser checks must also observe hydration and module delivery errors.
+
 The test file suffix is `*.spec.ts`. Runner configuration and the repository tree are the source of truth for inventory; do not hard-code test counts in documentation.
 
 ## Safety first

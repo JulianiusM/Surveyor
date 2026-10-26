@@ -72,7 +72,7 @@ The lockfile is authoritative for exact installed dependency versions. The impor
 3. `startInvoiceRetentionJob()` performs an immediate invoice cleanup and installs the hourly timer.
 4. `startEntityArchivalJob()` validates archival settings, performs an initial sweep when enabled, and installs its separate hourly timer.
 5. `src/backend/app.ts` is loaded only after the database exists, because application construction obtains the TypeORM session repository.
-6. Frontend development initialization retains Vite's source warmup when enabled; installed releases load the built SSR renderer's code without rendering a request.
+6. Source development awaits Vite's client entry, direct document CSS, static imports and SSR definitions; installed releases load the built SSR renderer's code. Neither initialization renders a request; lazy domain views remain demand loaded.
 7. An HTTP server listens on the configured application port.
 
 A failure in any step logs the error and terminates the process. There is no degraded database-free mode.
@@ -816,6 +816,8 @@ the client module graph. Private backend files, SSR entry code, declarations, ra
 not development assets, including through raw-file queries or filesystem aliases. Resolved filesystem ownership
 also rejects symlinks to private files. Dependencies are served only as the actual optimized browser graph, the
 specific Vite browser runtime files and the two Bootstrap Icons font files; `node_modules` is never a static root.
+The exact Vue compiler virtual export-helper ID is also admitted: the Vue plugin supplies its fixed code, without
+resolving a file or package. Arbitrary virtual IDs and neighboring aliases remain denied.
 Installed releases serve only their public assets, with server/SSR output outside that root.
 
 ## Persistence and lifecycle boundaries

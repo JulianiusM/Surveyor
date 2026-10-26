@@ -121,10 +121,16 @@ Use it only after independently confirming that the selected database is disposa
 npm run server
 ```
 
-`npm run server` performs a full build and then runs:
+`npm run server` prepares generated database/API/localization inputs and standalone print CSS once, then runs:
 
 - Express under Nodemon through `npm run server:dev`, with Vite middleware/HMR; and
 - serialized contract/catalog generation under `npm run server:frontend`.
+
+Source development uses ts-node's transpile-only mode with the server compiler's decorator settings. Run the strict
+server/frontend checks separately; release builds retain their full compilation, type checks and asset compression.
+Development does not build or consume release client/SSR bundles. Before listening, it prepares the document's client
+entry, linked stylesheet as direct CSS, static imports and source SSR definitions through Vite. Lazy domain views
+remain demand loaded. Document delivery and warmup consume the same development asset inventory.
 
 Authored inputs are `contracts/api/v1/`, `src/common/locales/` and the exact permission registry
 `src/backend/modules/lib/permissions.ts`. The watcher observes the registry's parent so atomic editor replacement remains
@@ -189,8 +195,9 @@ docs/                              maintainer and operator documentation
 
 | Command | Behavior |
 |---|---|
-| `npm run server` | Full build, then Express/Vite HMR and ordered authored-input generation. |
-| `npm run server:dev` | Nodemon + ts-node server only. It assumes generated database metadata and required assets already exist. |
+| `npm run server` | Prepare source-development inputs, then Express/Vite HMR and ordered authored-input generation. |
+| `npm run prepare:dev` | Generate database/API/localization inputs and print CSS without release builds or type checking. |
+| `npm run server:dev` | Nodemon + transpile-only ts-node server. It assumes generated database metadata and required assets already exist. |
 | `npm run server:frontend` | Watch contracts, catalogs and permission declarations; publish successful generation readiness. |
 | `npm run build` | Clean `dist/`, generate shared inputs, compile server and Vue client/SSR output, compile print CSS, then copy print views/shared assets. |
 | `npm run build:clean` | Remove only the verified repository `dist/` output before the complete build. |

@@ -50,6 +50,10 @@ export function isFrontendDevelopmentRequest(server: ViteDevServer, url: string)
     const source = pathname.slice(server.config.base.length);
     if (source.split('/').some(segment => segment === '.' || segment === '..' || segment === '')) return false;
     if (source === '@vite/client' || source === '@vite/env') return true;
+    // Vue's compiler imports this fixed virtual helper from transformed SFCs.
+    // Its plugin supplies code directly; it cannot resolve a requested file or
+    // package. Keep this exact exception separate from arbitrary module aliases.
+    if (source === '@id/__x00__plugin-vue:export-helper') return true;
     // Arbitrary @id aliases can ask Vite to resolve an otherwise private module.
     // Filesystem aliases still use the exact same resolved ownership check below.
     if (source.startsWith('@id/')) return false;

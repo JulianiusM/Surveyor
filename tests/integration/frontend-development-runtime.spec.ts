@@ -361,6 +361,12 @@ describe('Express-integrated frontend development', () => {
             expect(sourceStyles.map(source => new URL(source, origin).pathname)).toEqual([
                 '/app/src/frontend/styles/application.sass',
             ]);
+            // HTTP readiness must include the linked CSS representation. Vite's
+            // JavaScript style wrapper has a different cache key and cannot
+            // prevent a cold Sass compilation at the first stylesheet request.
+            const directStyle = await frontendDevelopmentServer()!.environments.client.moduleGraph
+                .getModuleByUrl('/src/frontend/styles/application.sass?direct');
+            expect(directStyle?.transformResult?.code).toContain('.frontend-app');
             const stylesheet = await fetch(new URL(sourceStyles[0]!, origin), {headers: {Accept: 'text/css'}});
             expect(stylesheet.status).toBe(200);
             expect(stylesheet.headers.get('content-type')).toContain('css');
@@ -430,7 +436,20 @@ describe('Express-integrated frontend development', () => {
             expect(identityHtml).not.toContain('id="username"');
             const component = await fetch(`${origin}/app/src/frontend/features/help/HelpPage.vue`);
             expect(component.status).toBe(200);
-            expect(await component.text()).toContain('__VUE_HMR_RUNTIME__');
+            const componentSource = await component.text();
+            expect(componentSource).toContain('__VUE_HMR_RUNTIME__');
+            // A valid entry/component response does not prove that its imports can
+            // execute. Follow the compiler-authored virtual helper in the actual
+            // transformed SFC, rather than testing an unrelated hardcoded URL.
+            const helperImport = componentSource.match(/from\s+["']([^"']*plugin-vue:export-helper)["']/u)?.[1];
+            expect(helperImport).toBeDefined();
+            const helperUrl = new URL(helperImport!, component.url);
+            expect(helperUrl.origin).toBe(origin);
+            expect(helperUrl.pathname).toBe('/app/@id/__x00__plugin-vue:export-helper');
+            const helper = await fetch(helperUrl);
+            expect(helper.status).toBe(200);
+            expect(helper.headers.get('content-type')).toContain('javascript');
+            expect(await helper.text()).toContain('export default');
             const websocket = frontendDevelopmentServer()?.config.server.ws;
             if (!websocket) throw new Error('Expected the development WebSocket configuration');
             expect(websocket.server).toBe(server);
@@ -452,6 +471,7 @@ describe('Express-integrated frontend development', () => {
                 '/app/package.json', '/app/.generated/api/v1/server.cjs?raw',
                 '/app/node_modules/express/package.json', '/app/node_modules/vite/package.json',
                 `/app/@fs/${privateFile}?raw`, '/app/@id/express', '/app/@id/__x00__src/backend/modules/settings.ts',
+                '/app/@id/__x00__plugin-vue:export-helper-private', '/app/@id/__x00__plugin-vue:export-helper/secret',
                 '/app/src%2fbackend%2fmodules%2fsettings.ts?raw', '/app/src%5cbackend%5cmodules%5csettings.ts?raw',
                 '/app/src%252fbackend%252fmodules%252fsettings.ts?raw', '/app/src/frontend/%2e%2e/backend/modules/settings.ts?raw']) {
                 const denied = await fetch(origin + target);

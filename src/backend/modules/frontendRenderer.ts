@@ -4,7 +4,7 @@ import {pathToFileURL} from 'node:url';
 import type {Response} from 'express';
 import type {FrontendBootstrap, FrontendRenderResult, FrontendPreparedDocument} from '../../types/FrontendTypes';
 import {createTranslator, localeManifest} from '../../common/localization/translator';
-import {frontendDevelopmentServer} from './frontendDevelopment';
+import {frontendDevelopmentAssets, frontendDevelopmentServer} from './frontendDevelopment';
 import settings from './settings';
 
 interface AssetChunk {file: string; name?: string; isDynamicEntry?: boolean; css?: string[]; imports?: string[]}
@@ -21,12 +21,14 @@ async function loadInstalledFrontendRenderer(): Promise<FrontendRenderer> {
     return await import(pathToFileURL(path.join(distribution, 'frontend-server/entry-server.mjs')).href) as FrontendRenderer;
 }
 
-/** Move installed renderer import/parse work before HTTP readiness. Source
- * development keeps Vite's own warmup and module invalidation lifecycle. */
+/** Load renderer definitions before HTTP readiness in either runtime. Vite owns
+ * source invalidation; installed releases retain Node's ordinary module cache. */
 export async function initializeFrontendRenderer(): Promise<void> {
     // Import definitions only: no router resolution, session, query or render.
-    // A missing/broken release artifact fails the existing startup error path.
-    if (!frontendDevelopmentServer()) await loadInstalledFrontendRenderer();
+    // Missing/broken renderer code fails the existing startup error path.
+    const development = frontendDevelopmentServer();
+    if (development) await development.ssrLoadModule('/src/frontend/app/entry-server.ts');
+    else await loadInstalledFrontendRenderer();
 }
 
 /** Escape plain text for HTML; bootstrap JSON has its own script-element serializer. */
@@ -165,8 +167,7 @@ export async function prepareFrontend(res: Response, url: string, bootstrap: Fro
         ? await development.ssrLoadModule('/src/frontend/app/entry-server.ts') as FrontendRenderer
         : await loadInstalledFrontendRenderer();
     const rendered = await renderer.render(url, bootstrap);
-    const assets = development ? {script: '/src/frontend/app/entry-client.ts',
-        styles: ['/src/frontend/styles/application.sass'], modules: []} : clientAssets(rendered.routeComponentNames);
+    const assets = development ? frontendDevelopmentAssets : clientAssets(rendered.routeComponentNames);
     const locale = bootstrap.session.locale;
     const direction = localeManifest.find(entry => entry.locale === locale)?.direction ?? 'ltr';
     res.set('Cache-Control', 'private, no-store').set('Content-Language', locale);

@@ -37,7 +37,7 @@ async function bootstrap() {
         const {default: app} = await require('./app');
         const server = http.createServer(app);
         await initializeFrontendDevelopment(server);
-        // Prepare installed renderer code before the first visitor waits for its
+        // Prepare renderer definitions before the first visitor waits for their
         // import. Each document still owns a fresh request-local application.
         await initializeFrontendRenderer();
         server.listen(settings.value.appPort, () => {

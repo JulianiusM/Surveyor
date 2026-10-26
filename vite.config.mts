@@ -64,10 +64,6 @@ export default defineConfig(({isSsrBuild}) => ({
     // modules. A request cannot discover or prebundle another installed package.
     optimizeDeps: {noDiscovery: true, include: frontendBrowserDependencies},
     server: {
-        // Compile the shared entry and pre-JavaScript stylesheet before a first
-        // browser visit pays for the cold source transform waterfall.
-        warmup: {clientFiles: ['src/frontend/app/entry-client.ts', 'src/frontend/styles/application.sass'],
-            ssrFiles: ['src/frontend/app/entry-server.ts']},
         watch: {
             // API validators and catalog resources are published together by the
             // authored-input watcher, then its ready marker restarts Express/Vite.
