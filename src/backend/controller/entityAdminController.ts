@@ -30,15 +30,13 @@ import * as eventService from '../modules/database/services/EventService';
 import * as lifecycleService from '../modules/database/services/EntityLifecycleService';
 import * as userService from '../modules/database/services/UserService';
 import {APIError} from '../modules/lib/errors';
-import {getInitialPerms, getPermMeta, getPresets, getPresetMask, PERM, toMask} from "../modules/lib/permissions";
-import {safeFrontendReturn} from '../../common/lib/frontendIdentity';
-import {getAccountPageEntry, hasAccountProfile} from './accountAdmission';
+import {getPermMeta, getPresets, getPresetMask, PERM, toMask} from "../modules/lib/permissions";
 import {requireSessionProfileId} from '../modules/lib/session';
-import {evaluateEntities, evaluateSubject, saveDefaultPermsFromBody} from '../modules/permissionEngine';
+import {evaluateEntities, evaluateSubject} from '../modules/permissionEngine';
 import type {BasicEntityPropertyPatch, EntityEventChangeResult, EntityMutationCompletion, EntityPropertyField, EntityPropertyPresentation} from '../../types/EntityPropertyTypes';
 import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, ArchiveState, ArchiveTarget, LockedArchiveContext} from '../../types/ArchiveTypes';
-import type {EntityAdministratorCommand, EntityAdministratorOutcome, EntityAdministratorReview, EntityDescriptor, EntityPermissionReviewContext, PermType, PermView, SessionLike} from '../../types/PermissionTypes';
-import type {Entity, EntityBase, EntityResourceEntry, EntityResourceEntryOptions, EntityViewAdmission} from '../../types/UserTypes';
+import type {EntityAdministratorCommand, EntityAdministratorOutcome, EntityDescriptor, PermType, PermView, SessionLike} from '../../types/PermissionTypes';
+import type {Entity, EntityBase, EntityViewAdmission} from '../../types/UserTypes';
 import type {CombEntityType, EntityType} from "../../types/UtilTypes";
 
 // One closed field policy drives both renderer projection and request authorization.
@@ -70,26 +68,6 @@ const entityMethodPermissions = {
  * evaluation; choosing one method never grants another method's authority. */
 export function entityMethodPermission(method: keyof typeof entityMethodPermissions): PermType {
     return entityMethodPermissions[method];
-}
-
-/** Preserve account-only creation and each feature's existing profile-first diagnostic. */
-export function requireEntityCreation(type: EntityType, session: SessionLike): void {
-    // Event's original contract checks the profile object; the other features
-    // require its identifier. Retain that distinction without duplicating the rule.
-    if (type === 'event' ? !session.profile : !session.profile?.id) throw new ApiProblem('AUTH_REQUIRED');
-    if (!hasAccountProfile(session)) throw new ApiProblem('FORBIDDEN');
-}
-
-/** Resolve creation/login navigation once, preserving the exact admitted duplicate return. */
-export function getEntityCreationAdmission(type: EntityType, session: SessionLike,
-    returnTo?: unknown): components['schemas']['PageEntryOutcome'] {
-    const target = safeFrontendReturn(returnTo ?? `/${type}/create`);
-    return getAccountPageEntry(session, '/users/login', target);
-}
-
-/** Public form definitions share the maintained audience matrix; Surveys remain excluded. */
-export function getEntityCreationContext(type: Exclude<EntityType, 'survey'>): components['schemas']['PackingCreateContext'] {
-    return {defaults: completeDefaults(getInitialPerms(type)), ...permissionDefinitions()};
 }
 
 /** Hash canonical machine data; translated labels do not change edit evidence. */
@@ -422,46 +400,6 @@ export async function getEntityViewAdmission(type: EntityType, entity: Pick<Enti
     return permissions.has('ACCESS_VIEW') ? 'render' : 'event-registration-required';
 }
 
-/** Project only the public guest-registration identity, never root settings or owner data. */
-export function projectGuestEntry(entity: Pick<EntityBase, 'id' | 'title'>, resourceId = entity.id): components['schemas']['GuestEntry'] {
-    return {id: resourceId, title: entity.title};
-}
-
-/**
- * Coordinate resource and guest-page admission for every entity without loading protected
- * content or changing identity. Feature controllers supply their current root/snapshot;
- * Event administration retains its additional method grant in the Event controller.
- */
-export async function getEntityResourceEntry(type: EntityType, entity: EntityBase | null,
-    view: 'detail' | 'guest', session: SessionLike, options: EntityResourceEntryOptions = {}): Promise<EntityResourceEntry> {
-    // Existence precedes admission. Only the selected feature's established message
-    // leaves this boundary when its nullable DBAL read did not find the root.
-    if (!entity) return {entry: {kind: 'denied', status: 404, messageKey: `${type}.notFound`}, guest: null};
-    const detailUrl = `/${type}/${encodeURIComponent(options.resourceId ?? entity.id)}`;
-    const suffix = options.query?.size ? `?${options.query}` : '';
-
-    // Guest pages intentionally reveal the public title before linked-event admission.
-    // Existing profiles return to detail, preserving opaque Event navigation tokens.
-    if (view === 'guest') {
-        return session.profile
-            ? {entry: {kind: 'redirect', url: `${detailUrl}${suffix}`, notice: null}, guest: null}
-            : {entry: {kind: 'render'}, guest: projectGuestEntry(entity, type === 'activity' ? options.resourceId : undefined)};
-    }
-
-    // Surveys and Events have standalone profile admission. Linked child resources
-    // reuse the security owner and its caller's transaction for membership/grants.
-    const admission = type === 'survey' || type === 'event'
-        ? session.profile ? 'render' : 'guest'
-        : await getEntityViewAdmission(type, entity, session, options.manager);
-    if (admission === 'guest') {
-        return {entry: {kind: 'redirect', url: `${detailUrl}/guest${suffix}`, notice: null}, guest: null};
-    }
-    if (admission === 'event-registration-required') {
-        return {entry: {kind: 'denied', status: 400, messageKey: `${type}.eventRegistrationRequired`}, guest: null};
-    }
-    return {entry: {kind: 'render'}, guest: null};
-}
-
 /** Boolean compatibility adapter for existing direct callers and reassociation redirects. */
 export async function canAccessEntityView(type: EntityType, entity: Pick<EntityBase, 'id' | 'ownerId' | 'eventId'>, session: SessionLike): Promise<boolean> {
     return await getEntityViewAdmission(type, entity, session) === 'render';
@@ -500,109 +438,6 @@ export async function applyEntityAdministrator(
         await entityAdminService.updateAdminPerms(entityType, entityId, profileId, approved.mask!, manager);
     }
     return 'saved';
-}
-
-/** Name audience hashes once for full settings, narrow baselines and sparse writes. */
-export function permissionDefaultComparisonValues(defaults: components['schemas']['PermissionDefaults']): Record<string, number> {
-    return Object.fromEntries(Object.entries(defaults).map(([audience, mask]) => [`default:${audience}`, mask]));
-}
-
-/** Preserve each feature's released comparison scope, including Event's broader public baseline. */
-function permissionDefaultsToken(type: Exclude<EntityType, 'survey'>, id: string, session: SessionLike,
-    defaults: components['schemas']['PermissionDefaults'], headerImg?: string | null): string {
-    // Public comparison contexts bind their exact field set. Event's released
-    // baseline includes these extra fields even for an audience-only command.
-    return comparisonToken(`${type}-settings`, id, session, {
-        ...(type === 'event' ? {header: headerImg ?? null} : {}),
-        ...permissionDefaultComparisonValues(defaults),
-        ...(type === 'event' ? {newAdmin: null} : {}),
-    });
-}
-
-/** Read only audience masks after the caller's method admission, retaining its snapshot. */
-export async function readEntityPermissionDefaults(type: Exclude<EntityType, 'survey'>, id: string, session: SessionLike,
-    context: EntityPermissionReviewContext = {}): Promise<components['schemas']['PackingDefaultsBaseline']> {
-    const defaultPermissions = completeDefaults(await entityAdminService.getDefaultPerms(type, id, context.manager));
-    return {defaultPermissions, editToken: permissionDefaultsToken(type, context.comparisonId ?? id, session, defaultPermissions, context.headerImg)};
-}
-
-/**
- * Compare and persist only submitted audience masks after feature admission. The caller
- * retains its existing lock/transaction boundary; omission never clears another audience.
- */
-export async function updateEntityPermissionDefaults(type: Exclude<EntityType, 'survey'>, id: string,
-    body: components['schemas']['PermissionDefaultsPatch'], session: SessionLike, token?: string,
-    context: EntityPermissionReviewContext = {}): Promise<components['schemas']['MutationResult']> {
-    // Current comparison evidence comes from the same snapshot as the caller's grant.
-    const baseline = await readEntityPermissionDefaults(type, id, session, context);
-    requireFieldComparison(token, baseline.editToken, Object.keys(body).map(key => `default:${key}`));
-
-    // Reuse the established mask collector/DBAL without changing its write ordering.
-    await saveDefaultPermsFromBody(type, id, {defaultPerms: body}, {manager: context.manager, inputFormat: 'masks'});
-    return {changed: Object.keys(body).some(key => body[key as keyof typeof body] !== baseline.defaultPermissions[key as keyof typeof baseline.defaultPermissions])};
-}
-
-/** Existing zero masks compare their grant; only an absent grant compares newAdmin. */
-export function entityAdministratorEditToken(type: Exclude<EntityType, 'survey'>, id: string, profileId: string,
-    mask: number | null, session: SessionLike): string {
-    return mask === null ? comparisonToken(`${type}-settings`, id, session, {newAdmin: null})
-        : comparisonToken(`${type}-admin`, `${id}:${profileId}`, session, {mask});
-}
-
-/** Disclose one target's grant only after the feature's authority check and profile validation. */
-export async function readEntityAdministratorBaseline(type: Exclude<EntityType, 'survey'>, id: string, profileId: string,
-    session: SessionLike, context: EntityPermissionReviewContext = {}): Promise<components['schemas']['PackingAdminBaseline']> {
-    if (!await userService.getProfileById(profileId, context.manager)) throw new ApiProblem('NOT_FOUND');
-    const current = await entityAdminService.getAdminGrant(type, id, profileId, context.manager);
-    const mask = current?.perms ?? null;
-    return {mask, editToken: entityAdministratorEditToken(type, context.comparisonId ?? id, profileId, mask, session)};
-}
-
-/**
- * Review the current grant and select persistence without changing profile-validation order.
- * Locked callers invoke this inside the shared owner's profile-first callback; Activity
- * retains its established review-before-profile sequence and unmodified transaction boundary.
- */
-export async function reviewEntityAdministrator(type: Exclude<EntityType, 'survey'>, id: string, profileId: string,
-    mask: number | null, session: SessionLike, token?: string, context: EntityPermissionReviewContext = {}): Promise<EntityAdministratorReview> {
-    // An existing zero mask is distinct from the absent-row marker.
-    const current = await entityAdminService.getAdminGrant(type, id, profileId, context.manager);
-    const previousMask = current?.perms ?? null;
-    requireFieldComparison(token, entityAdministratorEditToken(type, context.comparisonId ?? id, profileId, previousMask, session), [current ? 'mask' : 'newAdmin']);
-
-    // Only explicit null removes a grant; numeric zero remains a stored grant.
-    const command: EntityAdministratorCommand = mask === null ? {kind: 'remove'}
-        : {kind: current ? 'update' : 'add', mask, createdBy: session.profile?.userId};
-    return {previousMask, command};
-}
-
-/** Classify the existing controller outcome at the versioned boundary only. */
-export function requireVersionedAdministratorOutcome(outcome: EntityAdministratorOutcome): void {
-    // Direct adapters keep their existing messages; only these versioned callers
-    // classify the same domain evidence into the established structured problem.
-    if (outcome === 'profile-missing') throw new ApiProblem('NOT_FOUND');
-    if (outcome === 'mask-required') throw new ApiProblem('VALIDATION_FAILED');
-}
-
-/**
- * Apply a reviewed grant after the caller's locked method admission. Profile validation
- * precedes grant disclosure/comparison, and the existing DBAL remains the persistence owner.
- */
-export async function setReviewedEntityAdministrator(type: Exclude<EntityType, 'survey'>, id: string, profileId: string,
-    mask: number | null, session: SessionLike, token?: string, context: EntityPermissionReviewContext = {}): Promise<components['schemas']['MutationResult']> {
-    let previousMask: number | null = null;
-    /** Review current evidence only after the existing shared profile admission. */
-    async function reviewCurrentGrant(): Promise<EntityAdministratorCommand> {
-        const reviewed = await reviewEntityAdministrator(type, id, profileId, mask, session, token, context);
-        previousMask = reviewed.previousMask;
-        return reviewed.command;
-    }
-
-    // Shared persistence invokes the review while the caller's locks remain held.
-    const outcome = await applyEntityAdministrator(type, id, profileId,
-        mask === null ? {kind: 'remove'} : {kind: 'add', mask, createdBy: session.profile?.userId}, context.manager, reviewCurrentGrant);
-    requireVersionedAdministratorOutcome(outcome);
-    return {changed: previousMask !== mask};
 }
 
 /** Direct adapters preserve the original profile-first errors and operation receipts. */

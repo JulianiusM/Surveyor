@@ -11,6 +11,7 @@ import {usePageTitle} from '../../composables/pageTitle';
 import {readPacked, writePacked} from './packed';
 import {listProblemKey, useListCommands, useListDetail} from '../../composables/listDetail';
 import {useListReorder} from '../../composables/listReorder';
+import {useListActions} from '../../composables/listActions';
 import {usePendingFocus} from '../../composables/pendingFocus';
 import ActionButton from '../../components/ActionButton.vue';
 import InlineCell from '../../components/InlineCell.vue';
@@ -84,6 +85,21 @@ const {command, blocked, readAction, retryAt, refresh, retireSettingsAccess, rev
     dirty: () => quickAddDirty.value,
     unknownMessage: 'draft.leaveUnknown',
     problemKey: listProblemKey,
+});
+const {assign, removeItem, removeAssignment, addItem} = useListActions({
+    command, pendingControl,
+    assign: (itemId, assigned, scope) => api.assign(listId.value, itemId, assigned, scope),
+    removeItem: (itemId, scope) => api.deleteItem(listId.value, itemId, scope),
+    removeAssignment: (assignmentId, scope) => api.removeAssignment(listId.value, assignmentId, scope),
+    addItem(scope) {
+        // Keep Packing's raw Quick Add fields and optional blank-capacity default.
+        // Collection-row trimming belongs to the separate root-creation workflow.
+        return api.addItem(listId.value, {title: freshItem.title, description: freshItem.description,
+            maxAssignees: Number(freshItem.maxAssignees) || 1, requiredByAll: false}, scope);
+    },
+    resetItem() { Object.assign(freshItem, {title: '', description: '', maxAssignees: 1}); },
+    messages: {assigned: 'packing.itemAssigned', unassigned: 'packing.itemUnassigned',
+        confirmDelete: 'packing.confirmDeleteItem', deleted: 'packing.itemDeleted'},
 });
 const changingRequired = computed(() => command.pending.value && pendingControl.value?.kind === 'required');
 usePendingFocus({element: requiredControl, pending: changingRequired, isAvailable: command.action.isAvailable});
@@ -260,19 +276,6 @@ async function patch(
     ));
 }
 
-/** Submit the desired opposite membership of the admitted row, not a body actor.
- * The server owns idempotency and capacity; unknown delivery is reviewed through
- * the shared command owner instead of automatically toggled or retried. */
-async function assign(item: Item): Promise<void> {
-    if (!command.action.isAvailable()) return;
-    // Capture this admitted row's control before its desired-state command can
-    // replace membership during the saved refresh.
-    pendingControl.value = {kind: 'assign', id: item.id};
-    try {
-        await command.run((scope) => api.assign(listId.value, item.id, !item.selfAssigned, scope), true, false,
-            {success: item.selfAssigned ? 'packing.itemUnassigned' : 'packing.itemAssigned'});
-    } finally { pendingControl.value = null; }
-}
 /** Capture the requested Everyone value while displaying the last admitted row.
  * The existing item token protects this sparse write; a later admitted list read
  * supplies a replacement shared value, rather than an optimistic checkbox. */
@@ -291,59 +294,6 @@ async function toggleRequired(item: Item, event: Event): Promise<void> {
             api.updateItem(listId.value, item.id, {requiredByAll: value}, item.editToken, scope),
             true, false, {success: 'common.updated'},
         );
-    } finally { pendingControl.value = null; }
-}
-/** Item deletion needs deliberate confirmation before its independently authorized command. */
-async function removeItem(item: Item): Promise<void> {
-    // Confirmation precedes both presentation ownership and dispatch. A blocked
-    // sibling gesture cannot overwrite the active command's initiating row.
-    if (command.action.isAvailable() && window.confirm(messages.value.t('packing.confirmDeleteItem'))) {
-        pendingControl.value = {kind: 'delete', id: item.id};
-        try {
-            await command.run((scope) => api.deleteItem(listId.value, item.id, scope), true, false,
-                {success: 'packing.itemDeleted'});
-        } finally { pendingControl.value = null; }
-    }
-}
-/** Remove one admitted saved assignment without touching the Quick Add draft. */
-async function removeAssignment(assignmentId: string): Promise<void> {
-    // Manager removal submits immediately; its server permission/ownership
-    // checks remain authoritative and the shared command still prevents replay.
-    if (!command.action.isAvailable()) return;
-    pendingControl.value = {kind: 'assignment', id: assignmentId};
-    try {
-        await command.run((scope) => api.removeAssignment(listId.value, assignmentId, scope), true, false,
-            {success: 'common.removed'});
-    } finally { pendingControl.value = null; }
-}
-/** Submit the Quick Add draft once through the shared creation command.
- * Only a confirmed result clears the entered fields; a missing response retains
- * both that draft and explicit review, since a read cannot identify its new row. */
-async function addItem(): Promise<void> {
-    if (!command.action.isAvailable()) return;
-    pendingControl.value = {kind: 'add'};
-    try {
-        const result = await command.run((scope) =>
-            api.addItem(
-                listId.value,
-                {
-                    // Quick-add posts raw form values. Creation's collection-row
-                    // trimming is a different workflow; a blank optional capacity uses one.
-                    title: freshItem.title,
-                    description: freshItem.description,
-                    maxAssignees: Number(freshItem.maxAssignees) || 1,
-                    requiredByAll: false,
-                },
-                scope,
-            ),
-            true,
-            true,
-            {success: 'common.added'},
-        );
-
-        // Confirmation still counts when the follow-up read fails. Unknown delivery
-        // yields no result here and must keep the captured creation draft for review.
-        if (result) Object.assign(freshItem, {title: '', description: '', maxAssignees: 1});
     } finally { pendingControl.value = null; }
 }
 

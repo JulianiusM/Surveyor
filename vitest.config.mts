@@ -36,6 +36,7 @@ process.env.TZ = 'UTC';
 const databaseFreeIntegrationFiles = [
     'tests/integration/frontend-development-runtime.spec.ts',
     'tests/integration/frontend-session-admission.spec.ts',
+    'tests/integration/shared-entity-routing.spec.ts',
 ];
 
 export default defineConfig({

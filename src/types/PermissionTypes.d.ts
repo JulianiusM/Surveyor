@@ -40,19 +40,6 @@ export type EntityAdministratorCommand = {
 /** Domain evidence; each transport retains its own existing error presentation. */
 export type EntityAdministratorOutcome = 'saved' | 'profile-missing' | 'mask-required';
 
-/** Current grant evidence and its selected operation stay in the caller's transaction. */
-export interface EntityAdministratorReview {
-    previousMask: number | null;
-    command: EntityAdministratorCommand;
-}
-
-/** Reuse the caller's snapshot/locks and Event's established broader comparison fields. */
-export interface EntityPermissionReviewContext {
-    manager?: EntityManager;
-    headerImg?: string | null;
-    comparisonId?: string;
-}
-
 export type GetResource = (req: Request) => any;
 export type GetAdditional = (req: Request) => any[];
 export type EntityGetter = (req: Request) => Promise<EntityDescriptor> | EntityDescriptor;

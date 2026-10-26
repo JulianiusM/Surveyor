@@ -5,21 +5,22 @@
 
 import {Router, type ErrorRequestHandler, type Request, type Response} from 'express';
 import * as activityApi from '../../../controller/activityController';
-import type {components} from '../../../../types/api/v1';
-import type {PreparedApiJsonResponse} from '../../../../types/ApiTransportTypes';
 import type {ActivitySimpleMutationOperation} from '../../../../types/ActivityV1Types';
 import {ApiProblem, declaredApiProblem} from '../../../modules/api/problem';
 import {APIError} from '../../../modules/lib/errors';
 import {RecommendationQueueFullError} from '../../../modules/activity/recommendationJobs';
 import {requireApiContext} from '../../../modules/api/session';
-import {decodeApiMultipartData, decodeApiMultipartImage, prepareValidatedJson, receiveApiUpload, sendPreparedJson, sendStoredApiBinary, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
+import {prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
-import {prepareFileUploader, removeImage} from '../../../modules/lib/fileCommons';
-import {searchLimiter} from '../../../middleware/adminApiFactory';
-import settings from '../../../modules/settings';
+import {createEntityAdminApiRouter, createEntityArchiveApiRouter, createEntityPropertyApiRouter,
+    createUserSearchApiRouter} from '../../../middleware/adminApiFactory';
+import {createGuestFlowApiRouter} from '../../../middleware/guestFlowFactory';
+import {activityFlow} from '../../activityFlow';
+import {createEntityHeaderUpdateRouter} from '../../../middleware/entityHeaderUpdateHandler';
+import {attachAssignRoleRoutes} from '../../../middleware/assignFlowFactory';
 
 const router = Router();
-const uploadHeader = prepareFileUploader(settings.value.headerImgDir).single('image');
+router.use(createGuestFlowApiRouter(activityFlow));
 
 /** Existing basic operations keep their existing transaction/order guarantees.
  * Prepare their invariant receipt before invoking the business owner; delivery
@@ -31,100 +32,25 @@ async function sendActivityMutation(req: Request, res: Response, operation: Acti
     sendPreparedJson(req, res, prepared);
 }
 
-router.get('/create-entry', asyncHandler(async function getActivityCreateEntry(req, res) {
-    const actor = await requireApiContext(req, res);
-    validateOperationRequest(req, 'getActivityCreateEntry');
-    sendValidatedJson(req, res, 'getActivityCreateEntry', 200, await activityApi.readActivityCreateEntry(actor, req.query.returnTo, req.query.eventId));
-}));
-
-router.get('/create-context', asyncHandler(async function getActivityCreateContext(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    validateOperationRequest(req, 'getActivityCreateContext');
-    sendValidatedJson(req, res, 'getActivityCreateContext', 200, activityApi.readActivityCreateContext(actor));
-}));
-
-router.get('/events', asyncHandler(async function searchActivityEvents(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    validateOperationRequest(req, 'searchActivityEvents');
-    sendValidatedJson(req, res, 'searchActivityEvents', 200, await activityApi.searchActivityEvents(req.query, actor));
-}));
-
-router.post('/', asyncHandler(async function createActivityPlan(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    activityApi.readActivityCreateContext(actor);
-    let committed = false;
-    let prepared: PreparedApiJsonResponse;
-    try {
-        await receiveApiUpload(req, res, uploadHeader);
-        validateOperationRequest(req, 'createActivityPlan', body => decodeApiMultipartData(body, req.file));
-        function retainPersistedImage(): void { committed = true; }
-        function prepareCreated(data: components['schemas']['ActivityCreated']): void {
-            prepared = prepareValidatedJson(req, 'createActivityPlan', 201, data);
-        }
-        await activityApi.createActivityPlan(req.body.data as components['schemas']['ActivityCreateInput'], req.file, actor, prepareCreated, retainPersistedImage);
-        sendPreparedJson(req, res, prepared!);
-    } finally {
-        // A persisted upload belongs to the plan even when delivery is interrupted.
-        if (!committed && req.file) removeImage(req.file.path);
-    }
-}));
-
-router.get('/:planId/entry', asyncHandler(async function getActivityResourceEntry(req, res) {
-    const actor = await requireApiContext(req, res);
-    validateOperationRequest(req, 'getActivityResourceEntry');
-    sendValidatedJson(req, res, 'getActivityResourceEntry', 200,
-        await activityApi.readActivityResourceEntry(String(req.params.planId), req.query.view as 'detail' | 'guest', actor));
-}));
-
-router.get('/:planId', asyncHandler(async function getActivityPlan(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    validateOperationRequest(req, 'getActivityPlan');
-    const result = await activityApi.readActivityPlan(String(req.params.planId), actor);
-    sendValidatedJson(req, res, 'getActivityPlan', 200, result.data, result.etag);
-}));
-
-router.get('/:planId/duplicate', asyncHandler(async function getActivityDuplicate(req, res) {
-    const actor = await requireApiContext(req, res);
-    validateOperationRequest(req, 'getActivityDuplicate');
-    sendValidatedJson(req, res, 'getActivityDuplicate', 200, await activityApi.readActivityDuplicate(String(req.params.planId), actor, req.query.eventId));
-}));
-
-router.get('/:planId/metadata', asyncHandler(async function getActivityMetadata(req, res) {
-    const actor = await requireApiContext(req, res);
-    validateOperationRequest(req, 'getActivityMetadata');
-    const result = await activityApi.readActivityMetadata(String(req.params.planId), actor);
-    sendValidatedJson(req, res, 'getActivityMetadata', 200, result.data, result.etag);
-}));
-
-router.patch('/:planId/metadata', asyncHandler(async function updateActivityMetadata(req, res) {
-    const actor = await requireApiContext(req, res);
-    // Apply granted metadata and prepare its DTO inside the existing root transaction.
-    validateOperationRequest(req, 'updateActivityMetadata');
-    let prepared: PreparedApiJsonResponse;
-    function prepareMetadata(data: components['schemas']['ActivityMetadata']): void {
-        prepared = prepareValidatedJson(req, 'updateActivityMetadata', 200, data);
-    }
-    const result = await activityApi.patchActivityMetadata(String(req.params.planId), req.body, actor, req.get('If-Match'), prepareMetadata);
-    res.set('ETag', result.etag);
-    sendPreparedJson(req, res, prepared!);
-}));
+createEntityPropertyApiRouter<'activity'>(router, {
+    entityType: 'activity', parameter: 'planId',
+    read: {operation: 'getActivityMetadata', requireProfile: false,
+        read: ({id, actor}) => activityApi.readActivityMetadata(id, actor)},
+    update: {operation: 'updateActivityMetadata', requireProfile: false, delivery: 'controller',
+        async execute({id, body, actor, ifMatch}, prepare) {
+            const result = await activityApi.patchActivityMetadata(id, body, actor, ifMatch, prepare);
+            return {etag: result.etag};
+        }},
+    event: {operation: 'updateActivityEvent', requireProfile: true, delivery: 'controller',
+        async execute({id, body, actor, ifMatch}, prepare) {
+            await activityApi.changeActivityEvent(id, body, actor, ifMatch, prepare);
+        }},
+});
 
 router.get('/:planId/settings', asyncHandler(async function getActivitySettings(req, res) {
     const actor = await requireApiContext(req, res, true);
     validateOperationRequest(req, 'getActivitySettings');
     sendValidatedJson(req, res, 'getActivitySettings', 200, await activityApi.readActivitySettings(String(req.params.planId), actor));
-}));
-
-router.put('/:planId/event', asyncHandler(async function updateActivityEvent(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    // Delegate current parent authority and prepare the admission result inside the shared relink transaction.
-    validateOperationRequest(req, 'updateActivityEvent');
-    let prepared: PreparedApiJsonResponse;
-    function prepareEvent(data: components['schemas']['ActivityEventChanged']): void {
-        prepared = prepareValidatedJson(req, 'updateActivityEvent', 200, data);
-    }
-    await activityApi.changeActivityEvent(String(req.params.planId), req.body, actor, req.get('If-Match'), prepareEvent);
-    sendPreparedJson(req, res, prepared!);
 }));
 
 router.get('/:planId/default-permissions', asyncHandler(async function getActivityDefaultsBaseline(req, res) {
@@ -134,12 +60,20 @@ router.get('/:planId/default-permissions', asyncHandler(async function getActivi
     sendValidatedJson(req, res, 'getActivityDefaultsBaseline', 200, result, result.editToken);
 }));
 
-router.get('/:planId/admins/:profileId/edit-baseline', asyncHandler(async function getActivityAdminBaseline(req, res) {
-    const actor = await requireApiContext(req, res);
-    validateOperationRequest(req, 'getActivityAdminBaseline');
-    const result = await activityApi.readActivityAdminBaseline(String(req.params.planId), String(req.params.profileId), actor);
-    sendValidatedJson(req, res, 'getActivityAdminBaseline', 200, result, result.editToken);
-}));
+createEntityAdminApiRouter<'activity'>(router, {
+    entityType: 'activity', parameter: 'planId',
+    baseline: {operation: 'getActivityAdminBaseline', requireProfile: false,
+        async read({id, profileId, actor}) {
+            const data = await activityApi.readActivityAdminBaseline(id, profileId, actor);
+            return {data, etag: data.editToken};
+        }},
+    add: {operation: 'addActivityAdmin', requireProfile: false, delivery: 'invariant', result: {changed: true},
+        execute: ({id, body, actor, ifMatch}) => activityApi.setActivityAdmin(id, body.profileId, body.mask, actor, ifMatch)},
+    update: {operation: 'updateActivityAdmin', requireProfile: false, delivery: 'invariant', result: {changed: true},
+        execute: ({id, profileId, body, actor, ifMatch}) => activityApi.setActivityAdmin(id, profileId, body.mask, actor, ifMatch)},
+    remove: {operation: 'deleteActivityAdmin', requireProfile: false, delivery: 'invariant', result: {changed: true},
+        execute: ({id, profileId, actor, ifMatch}) => activityApi.setActivityAdmin(id, profileId, null, actor, ifMatch)},
+});
 
 router.get('/:planId/header/edit-baseline', asyncHandler(async function getActivityHeaderBaseline(req, res) {
     const actor = await requireApiContext(req, res);
@@ -168,33 +102,6 @@ router.put('/:planId/default-permissions', asyncHandler(async function updateAct
     validateOperationRequest(req, 'updateActivityDefaults');
     await sendActivityMutation(req, res, 'updateActivityDefaults', async function performMutation() {
         await activityApi.setActivityDefaults(String(req.params.planId), req.body, actor, req.get('If-Match'));
-    });
-}));
-
-router.post('/:planId/admins', asyncHandler(async function addActivityAdmin(req, res) {
-    const actor = await requireApiContext(req, res);
-    // Check the reviewed grant before the shared administrator owner adds it.
-    validateOperationRequest(req, 'addActivityAdmin');
-    await sendActivityMutation(req, res, 'addActivityAdmin', async function performMutation() {
-        await activityApi.setActivityAdmin(String(req.params.planId), req.body.profileId, req.body.mask, actor, req.get('If-Match'));
-    });
-}));
-
-router.patch('/:planId/admins/:profileId', asyncHandler(async function updateActivityAdmin(req, res) {
-    const actor = await requireApiContext(req, res);
-    // Compare this administrator mask before the shared update operation.
-    validateOperationRequest(req, 'updateActivityAdmin');
-    await sendActivityMutation(req, res, 'updateActivityAdmin', async function performMutation() {
-        await activityApi.setActivityAdmin(String(req.params.planId), String(req.params.profileId), req.body.mask, actor, req.get('If-Match'));
-    });
-}));
-
-router.delete('/:planId/admins/:profileId', asyncHandler(async function deleteActivityAdmin(req, res) {
-    const actor = await requireApiContext(req, res);
-    // Remove only the reviewed scoped administrator grant.
-    validateOperationRequest(req, 'deleteActivityAdmin');
-    await sendActivityMutation(req, res, 'deleteActivityAdmin', async function performMutation() {
-        await activityApi.setActivityAdmin(String(req.params.planId), String(req.params.profileId), null, actor, req.get('If-Match'));
     });
 }));
 
@@ -234,14 +141,14 @@ router.put('/:planId/slot-order', asyncHandler(async function updateActivityOrde
     });
 }));
 
-router.put('/:planId/slots/:slotId/self-assignment', asyncHandler(async function setActivityAssignment(req, res) {
-    const actor = await requireApiContext(req, res);
-    // Delegate desired self membership, named roles and exact warning confirmation.
-    validateOperationRequest(req, 'setActivityAssignment');
-    await sendActivityMutation(req, res, 'setActivityAssignment', async function performMutation() {
-        await activityApi.setActivityAssignment(String(req.params.planId), String(req.params.slotId), req.body, actor);
-    });
-}));
+attachAssignRoleRoutes(router, {
+    path: '/:planId/slots/:slotId/self-assignment',
+    entityParameter: 'planId', itemParameter: 'slotId', requireProfile: false,
+    // The combined command retains named-role choice, warning confirmation and
+    // the original invariant acknowledgement prepared before its business call.
+    command: {operation: 'setActivityAssignment', delivery: 'invariant', result: {changed: true},
+        execute: ({entityId, itemId, actor, body}) => activityApi.setActivityAssignment(entityId, itemId, body, actor)},
+});
 
 router.delete('/:planId/assignments/:assignmentId', asyncHandler(async function removeActivityAssignment(req, res) {
     const actor = await requireApiContext(req, res);
@@ -288,63 +195,34 @@ router.delete('/:planId/text-fields/:textFieldId', asyncHandler(async function d
     });
 }));
 
-router.post('/:planId/archive', asyncHandler(async function archiveActivityPlan(req, res) {
-    const actor = await requireApiContext(req, res);
-    // Archive through the shared lifecycle owner while retaining records and files.
-    validateOperationRequest(req, 'archiveActivityPlan');
-    await sendActivityMutation(req, res, 'archiveActivityPlan', async function performMutation() {
-        await activityApi.setActivityArchived(String(req.params.planId), true, actor);
-    });
-}));
+createEntityArchiveApiRouter<'activity'>(router, {
+    entityType: 'activity', parameter: 'planId',
+    archive: {operation: 'archiveActivityPlan', requireProfile: false, delivery: 'invariant', result: {changed: true},
+        execute: ({id, actor}) => activityApi.setActivityArchived(id, true, actor)},
+    restore: {operation: 'restoreActivityPlan', requireProfile: false, delivery: 'invariant', result: {changed: true},
+        execute: ({id, actor}) => activityApi.setActivityArchived(id, false, actor)},
+    automatic: {operation: 'setActivityAutomaticArchival', requireProfile: true, delivery: 'invariant', result: {changed: true},
+        execute: ({id, body, actor}) => activityApi.setActivityAutomaticArchival(id, body, actor)},
+});
 
-router.put('/:planId/automatic-archive', asyncHandler(async function setActivityAutomaticArchival(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    // Scheduling remains distinct from archive/restore: only the existing shared
-    // owner decides whether this root has an independent automatic schedule.
-    validateOperationRequest(req, 'setActivityAutomaticArchival');
-    await sendActivityMutation(req, res, 'setActivityAutomaticArchival', async function setSchedule() {
-        await activityApi.setActivityAutomaticArchival(String(req.params.planId), req.body, actor);
-    });
-}));
+createEntityHeaderUpdateRouter(router, {
+    parameter: 'planId', uploadOperation: 'uploadActivityHeader', deleteOperation: 'deleteActivityHeader',
+    requireProfile: false, admitUpload: activityApi.readActivityHeaderBaseline,
+    command: {
+        receipt: 'before-write',
+        execute({id, file, actor, ifMatch}) {
+            return activityApi.setActivityHeader(id, file, actor, ifMatch);
+        },
+    },
+});
 
-router.post('/:planId/restore', asyncHandler(async function restoreActivityPlan(req, res) {
-    const actor = await requireApiContext(req, res);
-    // Restore through the shared lifecycle owner and preserve inherited event state.
-    validateOperationRequest(req, 'restoreActivityPlan');
-    await sendActivityMutation(req, res, 'restoreActivityPlan', async function performMutation() {
-        await activityApi.setActivityArchived(String(req.params.planId), false, actor);
-    });
-}));
-
-router.delete('/:planId', asyncHandler(async function deleteActivityPlan(req, res) {
-    const actor = await requireApiContext(req, res);
-    // Require profile ownership before existing permanent deletion.
-    validateOperationRequest(req, 'deleteActivityPlan');
-    await sendActivityMutation(req, res, 'deleteActivityPlan', async function performMutation() {
-        await activityApi.deleteActivityPlan(String(req.params.planId), actor);
-    });
-}));
-
-router.delete('/:planId/header', asyncHandler(async function deleteActivityHeader(req, res) {
-    const actor = await requireApiContext(req, res);
-    // Compare the reviewed header before image removal and cleanup.
-    validateOperationRequest(req, 'deleteActivityHeader');
-    await sendActivityMutation(req, res, 'deleteActivityHeader', async function performMutation() {
-        await activityApi.setActivityHeader(String(req.params.planId), undefined, actor, req.get('If-Match'));
-    });
-}));
-
-/** Profile discovery retains the existing per-IP limiter after authoritative context admission. */
-async function admitProfileSearch(req: Request, res: Response, next: import('express').NextFunction): Promise<void> {
-    await requireApiContext(req, res);
-    validateOperationRequest(req, 'searchActivityProfiles');
-    next();
-}
-
-router.get('/:planId/profiles', asyncHandler(admitProfileSearch), searchLimiter, asyncHandler(async function searchActivityProfiles(req, res) {
-    sendValidatedJson(req, res, 'searchActivityProfiles', 200,
-        await activityApi.searchActivityProfiles(String(req.params.planId), String(req.query.q ?? ''), req.apiActor!));
-}));
+createUserSearchApiRouter<'activity'>(router, {
+    entityType: 'activity', parameter: 'planId',
+    search: {operation: 'searchActivityProfiles', requireProfile: false,
+        async read({id, query, actor}) {
+            return {data: await activityApi.searchActivityProfiles(id, String(query.q ?? ''), actor)};
+        }},
+});
 
 router.post('/:planId/slots/:slotId/warnings', asyncHandler(async function previewActivityAssignment(req, res) {
     const actor = await requireApiContext(req, res, true);
@@ -360,34 +238,6 @@ router.post('/:planId/text-fields', asyncHandler(async function addActivityTextF
     await sendActivityMutation(req, res, 'addActivityTextField', async function createText() {
         await activityApi.createActivityTextField(String(req.params.planId), req.body, actor);
     });
-}));
-
-router.put('/:planId/header', asyncHandler(async function uploadActivityHeader(req, res) {
-    const actor = await requireApiContext(req, res);
-    // Reject forbidden upload callers before writing bytes; the feature owner
-    // independently authorizes its existing image operation after decoding.
-    await activityApi.readActivityHeaderBaseline(String(req.params.planId), actor);
-    let committed = false;
-    try {
-        await receiveApiUpload(req, res, uploadHeader);
-        validateOperationRequest(req, 'uploadActivityHeader', body => decodeApiMultipartImage(body, req.file));
-        if (!req.file) throw new ApiProblem('UPLOAD_INVALID');
-        await sendActivityMutation(req, res, 'uploadActivityHeader', async function replaceHeader() {
-            await activityApi.setActivityHeader(String(req.params.planId), req.file, actor, req.get('If-Match'));
-            committed = true;
-        });
-    } finally {
-        // Delivery failure after persistence does not delete the plan's new image.
-        if (!committed && req.file) removeImage(req.file.path);
-    }
-}));
-
-router.get('/:planId/header', asyncHandler(async function getActivityHeader(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    validateOperationRequest(req, 'getActivityHeader');
-    const storedPath = await activityApi.readActivityHeaderPath(String(req.params.planId), actor);
-    // Resolve and confine the stored reference before accessing its bytes.
-    await sendStoredApiBinary(req, res, 'getActivityHeader', 200, settings.value.headerImgDir, storedPath);
 }));
 
 router.get('/:planId/requirements', asyncHandler(async function getActivityRequirements(req, res) {

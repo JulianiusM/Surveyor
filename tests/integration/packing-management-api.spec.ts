@@ -9,6 +9,7 @@ import * as adminService from '../../src/backend/modules/database/services/Entit
 import * as packingService from '../../src/backend/modules/database/services/PackingService';
 import * as userService from '../../src/backend/modules/database/services/UserService';
 import * as packing from '../../src/backend/controller/packingController';
+import {packingFlow} from '../../src/backend/routes/packingFlow';
 import {readOverview, setOverviewVisibility} from '../../src/backend/modules/overview/api';
 import packingController from '../../src/backend/controller/packingController';
 import {archiveEntity, changeEntityEvent, getEntityViewAdmission, restoreEntity} from '../../src/backend/controller/entityAdminController';
@@ -120,7 +121,7 @@ describe('complete versioned packing management', () => {
 
         for (const eventId of [undefined, '', 'invalid-initial-selection', randomUUID(), forbidden, allowed]) {
             const native = await readEventLinkSelection(eventId, currentActor);
-            const entry = await packing.readPackingCreateEntry(currentActor, undefined, eventId);
+            const entry = await packingFlow.readCreateEntry(currentActor, undefined, eventId);
             const duplicate = await packing.readPackingDuplicate(id, currentActor, eventId);
             const expectedId = eventId === allowed ? allowed : null;
             expect(native?.id ?? null).toBe(expectedId);
@@ -136,10 +137,10 @@ describe('complete versioned packing management', () => {
         // Discovery/admission is a current read, never a lasting attachment grant.
         // A later revocation removes the new URL seed without changing the source.
         await adminService.addAdmin('event', forbidden, owner.id, PERM.MANAGE_ASSIGNMENTS);
-        expect((await packing.readPackingCreateEntry(currentActor, undefined, forbidden)).selectedEvent?.id).toBe(forbidden);
+        expect((await packingFlow.readCreateEntry(currentActor, undefined, forbidden)).selectedEvent?.id).toBe(forbidden);
         await adminService.removeAdmin('event', forbidden, owner.id);
         expect((await packing.readPackingDuplicate(id, currentActor, forbidden)).selectedEvent).toBeNull();
-        expect((await packing.readPackingCreateEntry({}, undefined, allowed)).selectedEvent).toBeNull();
+        expect((await packingFlow.readCreateEntry({}, undefined, allowed)).selectedEvent).toBeNull();
     });
 
     it('preserves cleared item titles through detail and duplicate reads without weakening creation or root metadata', async () => {

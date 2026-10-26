@@ -1,5 +1,6 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import * as eventApi from '../../src/backend/controller/eventController';
+import {eventFlow} from '../../src/backend/routes/eventFlow';
 import eventController from '../../src/backend/controller/eventController';
 import {getEntityPropertyPresentation} from '../../src/backend/controller/entityAdminController';
 import * as eventService from '../../src/backend/modules/database/services/EventService';
@@ -230,18 +231,18 @@ describe('versioned Event projections and native operation adoption', () => {
         const id = await createEvent('Independent Event grants');
         await eventService.register(id, '2027-06-01', '2027-06-03', participant.id);
         await adminService.addAdmin('event', id, editor.id, PERM.ACCESS_ADMIN);
-        expect((await eventApi.readEventResourceEntry(id, 'admin', sessionFor(editor))).entry.kind).toBe('render');
+        expect((await eventFlow.readResourceEntry(id, 'admin', sessionFor(editor))).entry.kind).toBe('render');
         await expect(eventApi.readEventParticipants(id, sessionFor(editor))).rejects.toMatchObject({status: 403});
 
         await adminService.updateAdminPerms('event', id, editor.id, PERM.ACCESS_PARTICIPANTS);
-        expect((await eventApi.readEventResourceEntry(id, 'admin', sessionFor(editor))).entry)
+        expect((await eventFlow.readResourceEntry(id, 'admin', sessionFor(editor))).entry)
             .toMatchObject({kind: 'denied', status: 403});
         const roster = await eventApi.readEventParticipants(id, sessionFor(editor));
         expect(contractValidator('EventParticipants')(roster)).toBe(true);
         expect(roster.participants).toHaveLength(1);
         await expect(eventApi.removeEventRegistration(id, roster.participants[0].id, sessionFor(editor)))
             .rejects.toMatchObject({status: 403});
-        expect((await eventApi.readEventResourceEntry(id, 'detail', sessionFor(editor))).entry.kind).toBe('render');
+        expect((await eventFlow.readResourceEntry(id, 'detail', sessionFor(editor))).entry.kind).toBe('render');
     });
 
     it('preserves local deadline meaning and omitted metadata through a title-only locked update', async () => {
@@ -367,9 +368,9 @@ describe('versioned Event projections and native operation adoption', () => {
         const id = await createEvent('Token continuity');
         await eventService.updateEventProperties(id, {bindingDeadline: '2000-01-01T00:00:00Z'});
         const link = await eventApi.addEventRegistrationLink(id, {maxUses: 5}, sessionFor(owner));
-        expect((await eventApi.readEventResourceEntry(id, 'detail', {}, link.token)).entry)
+        expect((await eventFlow.readResourceEntry(id, 'detail', {}, link.token)).entry)
             .toMatchObject({kind: 'redirect', url: `/event/${id}/guest?regToken=${link.token}`});
-        expect((await eventApi.readEventResourceEntry(id, 'guest', {}, link.token)).guest).toEqual({id, title: 'Token continuity'});
+        expect((await eventFlow.readResourceEntry(id, 'guest', {}, link.token)).guest).toEqual({id, title: 'Token continuity'});
         expect(await eventApi.canBypassDeadlineWithToken(id, link.token)).toEqual({ok: true, linkId: link.id});
         const nativeLink = (await eventService.listDeadlineBypassLinks(id))[0];
         expect(nativeLink.usedCount).toBe(0);
@@ -413,10 +414,10 @@ describe('versioned Event projections and native operation adoption', () => {
         expect((await eventApi.readEventParticipants(id, {})).participants).toEqual([]);
         const administrator = await eventApi.readEventAdminBaseline(id, editor.id, sessionFor(owner));
         await eventApi.setEventAdmin(id, editor.id, PERM.ACCESS_ADMIN, sessionFor(owner), administrator.editToken);
-        expect((await eventApi.readEventResourceEntry(id, 'admin', sessionFor(editor))).entry.kind).toBe('render');
+        expect((await eventFlow.readResourceEntry(id, 'admin', sessionFor(editor))).entry.kind).toBe('render');
         const saved = await eventApi.readEventAdminBaseline(id, editor.id, sessionFor(owner));
         await eventApi.setEventAdmin(id, editor.id, null, sessionFor(owner), saved.editToken);
-        expect((await eventApi.readEventResourceEntry(id, 'admin', sessionFor(editor))).entry.kind).toBe('denied');
+        expect((await eventFlow.readResourceEntry(id, 'admin', sessionFor(editor))).entry.kind).toBe('denied');
     });
 
     it('retains organizer owner actions for Activity and Drivers children independently of participant cards', async () => {

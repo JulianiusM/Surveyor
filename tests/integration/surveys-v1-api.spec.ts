@@ -1,6 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import * as surveys from '../../src/backend/controller/surveyController';
+import {surveyFlow} from '../../src/backend/routes/surveyFlow';
 import {contractValidator} from '../../src/backend/modules/api/contracts';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
 import {Survey} from '../../src/backend/modules/database/entities/surveys/Survey';
@@ -148,7 +149,7 @@ describe('versioned Survey production operations', () => {
         expect(await surveys.readSurveyDuplicate(id, actor(guest))).toMatchObject({
             title: creation().title, combinations: creation().combinations,
         });
-        expect(surveys.readSurveyCreateEntry(actor(guest), `/survey/${id}/duplicate`).entry)
+        expect((await surveyFlow.readCreateEntry(actor(guest), `/survey/${id}/duplicate`)).entry)
             .toMatchObject({kind: 'redirect'});
         await expect(surveys.createSurvey(creation(), undefined, actor(guest))).rejects.toMatchObject({status: 403});
     });

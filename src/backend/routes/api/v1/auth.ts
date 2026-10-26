@@ -1,17 +1,17 @@
 import {Router, type Request, type Response} from 'express';
 import * as userController from '../../../controller/userController';
-import {readPackingGuestEntry} from '../../../controller/packingController';
-import {readDriversGuestEntry} from '../../../controller/driversController';
-import {readSurveyGuestEntry} from '../../../controller/surveyController';
-import {readActivityGuestEntry} from '../../../controller/activityController';
-import {readEventGuestEntry} from '../../../controller/eventController';
+import {createGuestFlowGuestRouter} from '../../../middleware/guestFlowFactory';
+import {packingFlow} from '../../packingFlow';
+import {driversFlow} from '../../driversFlow';
+import {surveyFlow} from '../../surveyFlow';
+import {activityFlow} from '../../activityFlow';
+import {eventFlow} from '../../eventFlow';
 import {ApiProblem} from '../../../modules/api/problem';
-import {committedSessionView, prepareAccountRegistrationReplies, prepareGuestIdentityReplies, prepareIdentityReply, requireApiContext} from '../../../modules/api/session';
+import {committedSessionView, prepareAccountRegistrationReplies, prepareIdentityReply, requireApiContext} from '../../../modules/api/session';
 import {prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import settings from '../../../modules/settings';
-import type {ApiOperationId, PreparedApiJsonResponse} from '../../../../types/ApiTransportTypes';
-import type {RegistrationEmailDelivery} from '../../../../types/IdentityTypes';
+import type {ApiOperationId} from '../../../../types/ApiTransportTypes';
 import type {components} from '../../../../types/api/v1';
 
 const router = Router();
@@ -270,86 +270,12 @@ router.post('/profiles', asyncHandler(async function createIdentityProfile(req, 
     sendPreparedJson(req, res, reply);
 }));
 
-router.get('/packing-lists/:listId/guest', asyncHandler(async function getPackingGuestEntry(req, res) {
-    await admit(req, res, 'getPackingGuestEntry');
-    sendValidatedJson(req, res, 'getPackingGuestEntry', 200, await readPackingGuestEntry(String(req.params.listId)));
-}));
-
-router.post('/packing-lists/:listId/guest', asyncHandler(async function registerPackingGuest(req, res) {
-    await admit(req, res, 'registerPackingGuest');
-    const list = await readPackingGuestEntry(String(req.params.listId));
-    await registerGuestForEntry(req, res, `/packing/${list.id}`, 'registerPackingGuest');
-
-}));
-
-router.get('/drivers-lists/:listId/guest', asyncHandler(async function getDriversGuestEntry(req, res) {
-    await admit(req, res, 'getDriversGuestEntry');
-    sendValidatedJson(req, res, 'getDriversGuestEntry', 200, await readDriversGuestEntry(String(req.params.listId)));
-}));
-
-router.post('/drivers-lists/:listId/guest', asyncHandler(async function registerDriversGuest(req, res) {
-    await admit(req, res, 'registerDriversGuest');
-    const list = await readDriversGuestEntry(String(req.params.listId));
-    await registerGuestForEntry(req, res, `/drivers/${list.id}`, 'registerDriversGuest');
-
-}));
-
-router.get('/surveys/:surveyId/guest', asyncHandler(async function getSurveyGuestEntry(req, res) {
-    await admit(req, res, 'getSurveyGuestEntry');
-    sendValidatedJson(req, res, 'getSurveyGuestEntry', 200, await readSurveyGuestEntry(String(req.params.surveyId)));
-}));
-
-/** Survey entry adopts the existing guest identity completion without adding
- * event membership or a second session/registration owner. */
-router.post('/surveys/:surveyId/guest', asyncHandler(async function registerSurveyGuest(req, res) {
-    await admit(req, res, 'registerSurveyGuest');
-    const survey = await readSurveyGuestEntry(String(req.params.surveyId));
-    await registerGuestForEntry(req, res, `/survey/${survey.id}`, 'registerSurveyGuest');
-}));
-
-/** Activity guest entry uses the existing identity transaction and plan admission. */
-router.get('/activity-plans/:planId/guest', asyncHandler(async function getActivityGuestEntry(req, res) {
-    await admit(req, res, 'getActivityGuestEntry');
-    sendValidatedJson(req, res, 'getActivityGuestEntry', 200, await readActivityGuestEntry(String(req.params.planId)));
-}));
-
-router.post('/activity-plans/:planId/guest', asyncHandler(async function registerActivityGuest(req, res) {
-    await admit(req, res, 'registerActivityGuest');
-    const plan = await readActivityGuestEntry(String(req.params.planId));
-    await registerGuestForEntry(req, res, `/activity/${plan.id}`, 'registerActivityGuest');
-}));
-
-router.get('/events/:eventId/guest', asyncHandler(async function getEventGuestEntry(req, res) {
-    await admit(req, res, 'getEventGuestEntry');
-    sendValidatedJson(req, res, 'getEventGuestEntry', 200, await readEventGuestEntry(String(req.params.eventId)));
-}));
-
-router.post('/events/:eventId/guest', asyncHandler(async function registerEventGuest(req, res) {
-    await admit(req, res, 'registerEventGuest');
-    const event = await readEventGuestEntry(String(req.params.eventId));
-    // The opaque registration token remains only a return destination until a
-    // later explicit attendance submission; guest creation never consumes it.
-    const token = typeof req.query.regToken === 'string' ? `?${new URLSearchParams({regToken: req.query.regToken})}` : '';
-    await registerGuestForEntry(req, res, `/event/${event.id}${token}`, 'registerEventGuest');
-}));
-
-/**
- * Share identity registration completion across actual feature guest consumers.
- * Each caller already validated its operation and resolved its public entry;
- * this owner prepares delivery outcomes and adopts only the committed Session.
- */
-async function registerGuestForEntry(req: Request, res: Response, next: string,
-    operation: 'registerPackingGuest' | 'registerEventGuest' | 'registerDriversGuest' | 'registerSurveyGuest' | 'registerActivityGuest'): Promise<void> {
-    const body = req.body as components['schemas']['GuestRegistrationInput'];
-    /** Prepare both SMTP outcomes before identity/session persistence commits. */
-    function prepareGuestReply(staged: Request['session'], personalLink: string): Record<RegistrationEmailDelivery, PreparedApiJsonResponse> {
-        return prepareGuestIdentityReplies(req, staged, personalLink, operation);
-    }
-    // The existing controller owns guest identity, durable context and delivery.
-    const committed = await userController.registerGuestWithSession(body.username, body.email ?? undefined, req,
-        {frontend: true, next, context: req.apiActor!.context, prepareResult: prepareGuestReply});
-    req.session = committed.session;
-    sendPreparedJson(req, res, committed.result);
-}
+// Retain the original identity-router order and error boundary. The configured
+// factory creates each endpoint and owns completion; these are only explicit mounts.
+router.use('/packing-lists', createGuestFlowGuestRouter(packingFlow));
+router.use('/drivers-lists', createGuestFlowGuestRouter(driversFlow));
+router.use('/surveys', createGuestFlowGuestRouter(surveyFlow));
+router.use('/activity-plans', createGuestFlowGuestRouter(activityFlow));
+router.use('/events', createGuestFlowGuestRouter(eventFlow));
 
 export default router;

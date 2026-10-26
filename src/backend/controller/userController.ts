@@ -18,7 +18,6 @@ import {Request} from "express";
 import type {EntityManager} from 'typeorm';
 import * as lifecycleService from '../modules/database/services/EntityLifecycleService';
 import {requireLockedArchiveRoot} from './entityAdminController';
-import {getAccountPageEntry, hasAccountProfile} from './accountAdmission';
 import Joi from 'joi';
 import {Guest} from "../modules/database/entities/user/Guest";
 import type {Session} from '../modules/database/entities/session/Session';
@@ -46,6 +45,22 @@ import {evaluateEntities} from "../modules/permissionEngine";
 import type {components, operations} from '../../types/api/v1';
 
 const CREATE_TEMPLATE = 'users/register';
+
+/** Direct creation admits an account with an active profile; a guest remains a separate identity. */
+export function hasAccountProfile(session: SessionLike): boolean {
+    return Boolean(session.auth?.user && session.profile);
+}
+
+/**
+ * Project the established account-only admission for any feature. Adapters supply
+ * their own bounded login/return URLs; this decision never depends on a browser's session guess.
+ * The creation command independently repeats account admission before doing work.
+ */
+export function getAccountPageEntry(session: SessionLike, loginUrl: string, returnTo: string): components['schemas']['PageEntryOutcome'] {
+    if (hasAccountProfile(session)) return {kind: 'render'};
+    return {kind: 'redirect', url: `${loginUrl}?next=${encodeURIComponent(returnTo)}`,
+        notice: {kind: 'info', messageKey: 'auth.accountRequired'}};
+}
 
 const LOGIN_TEMPLATE = 'users/login';
 

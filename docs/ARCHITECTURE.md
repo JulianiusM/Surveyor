@@ -6,7 +6,7 @@ owner: architecture maintainers
 status: current
 last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: authorized backend/frontend/common source ownership, shared admission/administration and private/public serving boundaries reconciled; prior rendering, responsiveness and domain contracts retained; no deployment or exhaustive verification claim
+verification-scope: source separation and strict serving scope recorded; rejected shared admission/administration acceptance claim corrected after explicit maintainer repudiation; prior rendering, responsiveness and domain contracts retained; no replacement architecture acceptance, deployment or exhaustive verification claim
 source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: architecture-or-help-delivery-change
 -->
@@ -127,7 +127,12 @@ The explicit document router and versioned API expose these public route familie
 
 Feature routers are not auto-discovered. Versioned adapters are mounted by `src/backend/routes/api/v1.ts`.
 `src/backend/app.ts` mounts the domain routers explicitly. Each domain owns its document routes, parameter loaders and
-exports. `src/backend/routes/frontend.ts` contains shared admission, bootstrap, feedback and error helpers, without route
+exports, configuring `guestFlowFactory` for common entity routes and adding its distinct outputs. Matching document,
+versioned API and guest-registration routers consume the same domain flow configuration.
+The versioned identity router mounts guest-registration subrouters before the feature API mounts. Their errors reach
+the common API problem handler without entering feature-specific error handlers. Event's finance router remains
+nested in its feature API router.
+`src/backend/routes/frontend.ts` contains shared admission, bootstrap, feedback and error helpers, without route
 registrations; `src/backend/routes/outputs.ts` shares authorized header-file delivery. Specific creation and capability
 routes precede resource parameters, and the application 404 follows every domain mount.
 
@@ -155,10 +160,21 @@ the versioned API keeps its separate context-protected download operation.
 
 Asynchronous handlers are wrapped with `asyncHandler` or `asyncParamHandler` from `src/backend/modules/lib/asyncHandler.ts`, allowing the centralized error chain to handle rejected promises.
 
-Canonical document routes admit each feature through its shared controller entry operation. Versioned feature
-routers expose creation, duplication projections, guest entry and lifecycle commands through the same controller
-owners. Standalone header images and exports retain their document output adapters. Surveys keep their own
-participation/ownership model without joining the general permission system.
+`guestFlowFactory` creates the common creation, duplication, guest, detail, deletion and header-download routes.
+It coordinates request middleware and delivery through typed domain hooks; existing controllers retain page/method
+authorization, feature operations and their existing DBAL snapshots/transactions. `entityHeaderUpdateHandler`
+registers the common image mutation pipeline; `assignFlowFactory` registers list self-assignment and Activity's
+combined self-membership/role command. These middleware owners preserve each feature's response-preparation and
+upload-cleanup timing rather than imposing another transaction. Standalone images and exports retain authorized
+document output adapters. Surveys keep their distinct participation/ownership model without joining the general
+permission system. `entityAdminController` retains its administration, property, permission and archival duties;
+ordinary guest and creation workflow composition does not belong there.
+
+`adminApiFactory` composes the existing administrator, property, archive/restore and scoped profile-search routes.
+Its typed callbacks invoke the existing feature operations, retaining their admission, comparison tokens and response
+preparation. Survey has no administrator/search routes; Event retains its distinct metadata adapter. Settings and
+default-permission handlers remain feature-owned. `referrerUpdater` preserves a valid internal return for login,
+registration and logout when no explicit destination was supplied, using the shared safe-return validation.
 
 ### Controllers
 
@@ -621,7 +637,7 @@ not disclose a roster or finance aggregate. Registration alone spends a supplied
 duplication use the ordinary generated multipart command and shared Vue creation/navigation owners, preserving
 native preprocessing, upload, creation and permission initialization in their existing order. Event creation and the
 `EntityListCreation` used by Packing, Drivers and Activity adopt `useCreationCommand`; Settings, Overview and Event-child deletion
-adopt `useEntityRemoval`. Packing/Drivers also share `BasicEntityMetadataFields`, `useListDetail`, `useListReorder`,
+adopt `useEntityRemoval`. Packing/Drivers also share `BasicEntityMetadataFields`, `useListDetail`, `useListReorder`, `useListActions`,
 `EntityAssignees` and `EntityAssignmentActions`, retaining Packing's checklist/Everyone behavior and Drivers' distinct
 driver/passenger meanings in their feature owners. Activity also adopts `EntityAssignees`; its remove-control slot
 preserves native spacing and data hooks under the shared disclosed-identity guard. `AppTabList` shares native tab
@@ -633,6 +649,9 @@ generated operations. Packing/Drivers/Survey/Activity compose `useListCommands` 
 cooldowns, explicit stale recovery, guarded post-command refresh and deliberate unknown-creation review. Features
 inject their actual fresh read and dirty policy, including Survey's ballot merge; Packing/Drivers/Activity opt into their
 common permission wording and shared denial notifications. The composition keeps no second snapshot/draft and never repeats a mutation.
+`useListActions` owns Packing and Drivers' matching membership, removal and Quick Add orchestration through the existing command
+owner. Each feature supplies its actual operations, live submitted values and confirmed draft reset; Packing's
+personal checklist and Everyone switch remain in its page.
 `EntityListCounters` shares Packing/Drivers' admitted counter panel; `RefreshButton` supplies integrated Refresh
 in the owning heading for entity details, Event administration, Finance, Help and profile workflows through each existing read owner.
 `PageHeading` keeps entity and profile titles centered with independent parent navigation and actions.

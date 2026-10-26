@@ -14,14 +14,12 @@
  * limitations under the License.
  */
 
+import {hasAccountProfile} from './userController';
+import {getInitialPerms} from '../modules/lib/permissions';
 import {Request} from "express";
 import type {EntityManager} from 'typeorm';
 import {
-    readEntityAdministratorBaseline,
-    readEntityPermissionDefaults,
-    setReviewedEntityAdministrator,
-    updateEntityPermissionDefaults,
-    permissionDefaultComparisonValues,
+    applyEntityAdministrator,
     comparisonToken,
     comparisonActor,
     classifyArchiveCommandError,
@@ -37,18 +35,13 @@ import {
     getArchivePresentations,
     getAuthorizedEventUrl,
     getEntityViewAdmission,
-    getEntityResourceEntry,
-    getEntityCreationAdmission,
-    getEntityCreationContext,
     normalizeBasicProperties,
     projectCurrentEntityEvent,
-    projectGuestEntry,
-    requireEntityCreation,
     restoreEntity,
 } from './entityAdminController';
 import {authorizeEventLink, getEventLinkOptions, readEventLinkSelection} from './eventController';
 import type {components} from '../../types/api/v1';
-import type {PermissionFieldRule, PermEngineCaches, PermView} from '../../types/PermissionTypes';
+import type {EntityAdministratorCommand, PermissionFieldRule, PermEngineCaches, PermView} from '../../types/PermissionTypes';
 import type {LockedArchiveContext} from '../../types/ArchiveTypes';
 import type {EventLinkOption} from '../../types/EventTypes';
 import type {Event} from '../modules/database/entities/event/Event';
@@ -992,53 +985,22 @@ async function withPackingManagement<T>(id: string, session: SessionLike,
     return lifecycleService.withLockedArchiveTarget({type: 'packing', id}, manageLocked);
 }
 
-/**
- * Project account-only creation admission without requiring a profile at the API
- * transport boundary. Public duplicate GET deliberately remains independently grantable;
- * its later submission asks this operation with the exact duplicate URL as returnTo.
- */
-export async function readPackingCreateEntry(session: SessionLike, returnTo?: unknown, eventId?: unknown): Promise<components['schemas']['PackingCreateEntry']> {
-    const entry = getEntityCreationAdmission('packing', session, returnTo);
-    // An initial URL is context, not a draft selection. Match the form by
-    // omitting missing/forbidden events before the client captures its baseline.
-    const selected = entry.kind === 'render' ? await readEventLinkSelection(eventId, session) : null;
-    const selectedEvent = selected ? projectPackingEventOption(selected) : null;
-    // Ordinary reads retain their previous wire shape so a mounted compatible
-    // client can still admit and finish an existing draft after folder replacement.
-    return {entry, context: entry.kind === 'render' ? getEntityCreationContext('packing') : null,
-        ...(eventId !== undefined ? {selectedEvent} : {})};
+/** Creation POST requires an account, including when a public/guest duplicate GET supplied its draft. */
+export function requirePackingCreation(session: SessionLike): void {
+    actorId(session);
+    if (!hasAccountProfile(session)) throw new ApiProblem('FORBIDDEN');
 }
 
-/**
- * Public guest-title reads and registration share this feature-owned projection. They
- * deliberately do not apply the page-entry redirect for an already authenticated actor:
- * that redirect belongs to guest-page admission, not the existing registration command.
- * Missing-row policy remains here while the database service returns nullable evidence.
- */
-export async function readPackingGuestEntry(id: string): Promise<components['schemas']['GuestEntry']> {
-    return projectGuestEntry(requireList(await packingService.getPackingListById(id)));
-}
-
-/**
- * Read only the current root and shared page policy in one snapshot. Detail admission
- * discloses no protected rows; guest entry discloses exactly the public title.
- * Both initial HTML and client navigation consume this operation, while subsequent
- * projection/command operations independently authorize their own current snapshot.
- */
-export async function readPackingResourceEntry(id: string, view: 'detail' | 'guest', session: SessionLike): Promise<components['schemas']['PackingResourceEntry']> {
-    /** Retain the read snapshot while the common flow evaluates current admission. */
-    async function readEntry(manager: EntityManager, list: PackingList | null): Promise<components['schemas']['PackingResourceEntry']> {
-        // This manager keeps linked-event membership and grants in the same snapshot.
-        return getEntityResourceEntry('packing', list, view, session, {manager});
-    }
-    return packingService.withPackingReadSnapshot(id, readEntry);
+/** Public form definitions contain no resource data; duplicate GET can use them without an account. */
+export function packingFormContext(): components['schemas']['PackingCreateContext'] {
+    return {defaults: completeDefaults(getInitialPerms('packing')), ...permissionDefinitions()};
 }
 
 /** An initial creation form still requires the admitted account profile;
  * public duplication has its separate access to the same static definitions. */
 export function readPackingCreateContext(session: SessionLike): components['schemas']['PackingCreateContext'] {
-    requireEntityCreation('packing', session);
-    return getEntityCreationContext('packing');
+    requirePackingCreation(session);
+    return packingFormContext();
 }
 
 /** A multipart creation is one command: all rows/defaults commit together, never a half-created image step. */
@@ -1047,7 +1009,7 @@ export async function createPackingList(
     file: Express.Multer.File | undefined,
     session: SessionLike
 ): Promise<components['schemas']['PackingCreated']> {
-    requireEntityCreation('packing', session);
+    requirePackingCreation(session);
     checkNewImage(file);
     /** The optional parent is already locked. Apply shared attachment admission
      * before committing the root, initial rows and authored defaults together. */
@@ -1080,7 +1042,7 @@ export async function readPackingDuplicate(id: string, session: SessionLike, eve
             defaultPermissions: completeDefaults(await adminService.getDefaultPerms('packing', id, manager)),
             // The source's parent is deliberately excluded. Only a separately
             // admitted URL selection may seed the destination creation draft.
-            formContext: getEntityCreationContext('packing'),
+            formContext: packingFormContext(),
             ...(eventId !== undefined ? {selectedEvent: selected ? projectPackingEventOption(selected) : null} : {})};
     });
 }
@@ -1288,9 +1250,24 @@ export async function updatePackingDefaults(
     return withPackingManagement(id, session, async function saveDefaults(manager, list, permissions) {
         if (!mayPerformPackingMethod(permissions, 'managePermissions')) throw new ApiProblem('FORBIDDEN');
 
-        // The common owner retains sparse comparison/write semantics in this transaction.
-        return updateEntityPermissionDefaults('packing', id, body, session, token, {manager, comparisonId: list.id});
+        // Omitted audiences remain untouched, including in the comparison step.
+        const current = completeDefaults(await adminService.getDefaultPerms('packing', id, manager));
+        requireFieldComparison(token, defaultsEditToken(list, session, current), Object.keys(body).map(key => `default:${key}`));
+
+        await updateSettings(id, {defaultPerms: body}, manager, 'masks');
+        return {changed: Object.keys(body).some(key => body[key as keyof typeof body] !== current[key as keyof typeof current])};
     });
+}
+
+/** Compare only audience masks; no header or parent hashes enter a public access baseline. */
+function defaultComparisonValues(defaults: components['schemas']['PermissionDefaults']): Record<string, number> {
+    return Object.fromEntries(Object.entries(defaults).map(([audience, value]) => [`default:${audience}`, value]));
+}
+
+/** Reuse the full settings comparison scope with only audience field hashes,
+ * so existing profile settings tokens and narrow public baselines both work. */
+function defaultsEditToken(list: PackingList, session: SessionLike, defaults: components['schemas']['PermissionDefaults']): string {
+    return comparisonToken('packing-settings', list.id, session, defaultComparisonValues(defaults));
 }
 
 /** Independently granted permission management discloses its audience masks alone. */
@@ -1298,9 +1275,17 @@ export async function readPackingDefaultsBaseline(id: string, session: SessionLi
     async function readDefaults(manager: EntityManager, row: PackingList | null) {
         const list = requireList(row);
         if (!mayPerformPackingMethod(await packingPermissions(manager, list, session), 'managePermissions')) throw new ApiProblem('FORBIDDEN');
-        return readEntityPermissionDefaults('packing', id, session, {manager, comparisonId: list.id});
+        const defaultPermissions = completeDefaults(await adminService.getDefaultPerms('packing', id, manager));
+        return {defaultPermissions, editToken: defaultsEditToken(list, session, defaultPermissions)};
     }
     return packingService.withPackingReadSnapshot(id, readDefaults);
+}
+
+/** Existing and absent grants retain their original comparison scopes. A zero
+ * mask is an existing grant; only null selects the new-administrator marker. */
+function administratorEditToken(list: PackingList, profileId: string, mask: number | null, session: SessionLike): string {
+    return mask === null ? comparisonToken('packing-settings', list.id, session, {newAdmin: null})
+        : comparisonToken('packing-admin', `${list.id}:${profileId}`, session, {mask});
 }
 
 /** Check method authority before target existence, then disclose only that target's
@@ -1310,8 +1295,12 @@ export async function readPackingAdminBaseline(id: string, profileId: string, se
         const list = requireList(row);
         if (!mayPerformPackingMethod(await packingPermissions(manager, list, session), 'managePermissions')) throw new ApiProblem('FORBIDDEN');
 
-        // Profile validation and the minimal grant projection share one controller owner.
-        return readEntityAdministratorBaseline('packing', id, profileId, session, {manager, comparisonId: list.id});
+        // Match the shared administrator owner: missing profile precedes grant
+        // comparison, while an existing zero mask differs from an absent row.
+        if (!await userService.getProfileById(profileId, manager)) throw new ApiProblem('NOT_FOUND');
+        const current = await adminService.getAdminGrant('packing', id, profileId, manager);
+        const mask = current?.perms ?? null;
+        return {mask, editToken: administratorEditToken(list, profileId, mask, session)};
     }
     return packingService.withPackingReadSnapshot(id, readAdministrator);
 }
@@ -1332,8 +1321,27 @@ export async function setPackingAdmin(
     return withPackingManagement(id, session, async function saveAdmin(manager, list, permissions) {
         // Require permission before disclosing profile or administrator evidence.
         if (!mayPerformPackingMethod(permissions, 'managePermissions')) throw new ApiProblem('FORBIDDEN');
-        // The shared controller validates the profile before reviewing this locked grant.
-        return setReviewedEntityAdministrator('packing', id, profileId, mask, session, token, {manager, comparisonId: list.id});
+        const reviewed: {mask: number | null} = {mask: null};
+
+        async function validateReviewedGrant(): Promise<EntityAdministratorCommand> {
+            const current = await adminService.getAdminGrant('packing', id, profileId, manager);
+            reviewed.mask = current?.perms ?? null;
+
+            // Existing rows compare their own mask; an absent row compares the
+            // settings baseline. Shared profile validation precedes this evidence.
+            requireFieldComparison(token, administratorEditToken(list, profileId, current?.perms ?? null, session), [current ? 'mask' : 'newAdmin']);
+            return mask === null ? {kind: 'remove'}
+                : {kind: current ? 'update' : 'add', mask, createdBy: session.profile?.userId};
+        }
+
+        // The reviewed row selects create versus update before shared persistence.
+        // Explicit zero remains a stored grant; only a null command removes the row.
+        const outcome = await applyEntityAdministrator('packing', id, profileId,
+            mask === null ? {kind: 'remove'} : {kind: 'add', mask, createdBy: session.profile?.userId}, manager, validateReviewedGrant);
+        if (outcome === 'profile-missing') throw new ApiProblem('NOT_FOUND');
+        if (outcome === 'mask-required') throw new ApiProblem('VALIDATION_FAILED');
+        if (mask === null) return {changed: reviewed.mask !== null};
+        return {changed: reviewed.mask !== mask};
     });
 }
 
@@ -1494,7 +1502,7 @@ async function settingsEditToken(manager: EntityManager, list: PackingList, sess
     // unless this actor may view/manage them, just as the visible administrator matrix is omitted.
     const defaults = includeAccess ? completeDefaults(await adminService.getDefaultPerms('packing', list.id, manager)) : null;
     return comparisonToken('packing-settings', list.id, session, {
-        ...(defaults ? permissionDefaultComparisonValues(defaults) : {}),
+        ...(defaults ? defaultComparisonValues(defaults) : {}),
         header: list.headerImg ?? null, eventId: list.eventId ?? null, ...(includeAccess ? {newAdmin: null} : {}),
     });
 }

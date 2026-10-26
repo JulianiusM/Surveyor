@@ -163,6 +163,37 @@ describe('Drivers production frontend consumers', () => {
         expect(writes).toEqual([`PUT /api/v1/drivers-lists/${listId}/items/${itemId}/self-assignment`]);
     });
 
+    it('keeps the initiating list control busy and focused when a blocked sibling emits another assignment', async () => {
+        let complete!: (response: Response) => void;
+        const {wrapper, request} = await mounted(DriversPage, async request => {
+            if (request.method === 'PUT') return new Promise<Response>(resolve => {complete = resolve;});
+            return json(list);
+        });
+        await wrapper.get('#quick-description').setValue('Keep this separate offer draft');
+        const assignments = wrapper.findAllComponents(EntityAssignmentActions);
+        const first = assignments[0]!.get<HTMLButtonElement>('button');
+        first.element.focus();
+        await first.trigger('click');
+        await flushPromises();
+        expect(first.attributes('aria-busy')).toBe('true');
+        expect(assignments[1]!.get('button').attributes('aria-busy')).toBe('false');
+
+        // A delayed child event must still meet the parent's current admission.
+        // It cannot replace the active initiator merely because it was rendered earlier.
+        assignments[1]!.vm.$emit('toggle');
+        await flushPromises();
+        expect(first.attributes('aria-busy')).toBe('true');
+        expect(assignments[1]!.get('button').attributes('aria-busy')).toBe('false');
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'PUT')).toHaveLength(1);
+
+        complete(json({listId, itemId, selfAssigned: true, assignedCount: 2, maxAssignees: 2}));
+        await flushPromises();
+        expect(first.attributes('aria-busy')).toBe('false');
+        expect(document.activeElement).toBe(first.element);
+        expect(wrapper.get<HTMLInputElement>('#quick-description').element.value).toBe('Keep this separate offer draft');
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'POST')).toHaveLength(0);
+    });
+
     it('retains and deliberately reviews an uncertain default ride offer without replay', async () => {
         const bodies: unknown[] = [];
         vi.stubGlobal('confirm', vi.fn(() => true));

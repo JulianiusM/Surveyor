@@ -1,7 +1,5 @@
-import {Router} from 'express';
-import type {Request, Response} from 'express';
-import eventController, {eventMethodPermission, readEventCreateEntry, readEventDuplicate,
-    readEventResourceEntry, readEventHeaderPath} from '../controller/eventController';
+import type {Request} from 'express';
+import eventController, {eventMethodPermission} from '../controller/eventController';
 import invoiceController, {readEventInvoiceProof} from '../controller/eventPoolController';
 import {paramHandler} from '../middleware/paramHandler';
 import {isLoggedIn, requirePermission} from '../middleware/permissionMiddleware';
@@ -13,51 +11,16 @@ import type {EntityDescriptor} from '../../types/PermissionTypes';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {captureApiActor} from '../modules/api/session';
 import {handleApiProblem} from '../modules/api/problem';
-import {renderFrontend} from '../modules/frontendRenderer';
-import {bootstrap, applyPageEntry} from './frontend';
-import {createHeaderHandler} from './outputs';
+import {createGuestFlowHeaderRouter, createGuestFlowRouter} from '../middleware/guestFlowFactory';
+import {eventFlow} from './eventFlow';
 
-const router = Router();
+const router = createGuestFlowRouter(eventFlow);
 
 // Export parameters have their own loader; page and header reads retain their
 // controller-owned admission without an extra parent lookup.
 paramHandler('id', router, eventService.getEventById, 'event');
 
-router.get('/create', asyncHandler(renderCreation));
-router.get('/:eventId/duplicate', asyncHandler(renderDuplicate));
-for (const [path, view] of [['/:eventId', 'detail'], ['/:eventId/guest', 'guest'], ['/:eventId/admin', 'admin']] as const) {
-    /** Detail, guest and administration retain their registered intent even
-     * when Express accepts a different case or trailing-slash spelling. */
-    router.get(path, asyncHandler(async function renderEvent(req, res) {
-        const state = await bootstrap(req);
-        // Controller admission remains independent for every view. Query
-        // capabilities are forwarded unchanged and never select the view.
-        const token = typeof req.query.regToken === 'string' ? req.query.regToken : undefined;
-        const entry = await readEventResourceEntry(String(req.params.eventId), view, await captureApiActor(req), token);
-        state.eventEntry = entry;
-        if (await applyPageEntry(req, res, state, entry.entry)) return;
-        await renderFrontend(res, req.originalUrl, state);
-    }));
-}
-
-/** Existing account-only creation carries its exact return URL through login. */
-async function renderCreation(req: Request, res: Response): Promise<void> {
-    const state = await bootstrap(req);
-    const form = readEventCreateEntry(await captureApiActor(req), req.originalUrl);
-    if (await applyPageEntry(req, res, state, form.entry)) return;
-    if (form.context) state.eventCreateContext = form.context;
-    await renderFrontend(res, req.originalUrl, state);
-}
-
-/** Duplication reads only source form values under its independent grant. */
-async function renderDuplicate(req: Request, res: Response): Promise<void> {
-    const state = await bootstrap(req);
-    state.eventDuplicate = await readEventDuplicate(String(req.params.eventId), await captureApiActor(req));
-    state.pageEntry = {kind: 'render'};
-    await renderFrontend(res, req.originalUrl, state);
-}
-
-router.get('/:headerId/header', createHeaderHandler(readEventHeaderPath));
+router.use(createGuestFlowHeaderRouter(eventFlow));
 
 /** Open saved proofs as ordinary document links. The controller owns current
  * actor, pool and invoice admission before resolving the confined stored file. */

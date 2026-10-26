@@ -15,13 +15,12 @@
  */
 
 // controllers/eventController.ts
+import {hasAccountProfile} from './userController';
 import {Request} from "express";
 import {
-    readEntityAdministratorBaseline, readEntityPermissionDefaults, setReviewedEntityAdministrator,
-    updateEntityPermissionDefaults, permissionDefaultComparisonValues,
-    archiveEntity, assertEditableEntityFields, classifyArchiveCommandError, comparisonToken, completeDefaults,
+    applyEntityAdministrator, archiveEntity, assertEditableEntityFields, classifyArchiveCommandError, comparisonToken, completeDefaults,
     entityMethodPermission, getArchivePresentations, getArchiveView, getEntityPropertyPresentation, permissionDefinitions,
-    getEntityCreationAdmission, getEntityCreationContext, getEntityResourceEntry, projectGuestEntry, requireEntityCreation, requireFieldComparison, restoreEntity, setAutomaticArchival,
+    requireFieldComparison, restoreEntity, setAutomaticArchival,
 } from "./entityAdminController";
 import crypto from 'node:crypto';
 import path from 'node:path';
@@ -49,7 +48,7 @@ import {archiveKey} from '../modules/archive/policy';
 import {ApiProblem} from '../modules/api/problem';
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {checkNewImage, performImageSwap, removeImage} from "../modules/lib/fileCommons";
-import {PERM} from '../modules/lib/permissions';
+import {getInitialPerms, PERM} from '../modules/lib/permissions';
 import {
     buildDateTotals,
     convertToSingleList,
@@ -64,7 +63,7 @@ import {can, evaluateEntities, evaluateSubject, getEntityPermissionQueryScope, i
 import {requireSessionProfileId} from '../modules/lib/session';
 import {projectOverviewCard} from '../modules/overview/api';
 import type {DIETARY, EventLinkOption, EventLinkOptionsQuery, EventLinkOptionsResult, EventMethod} from "../../types/EventTypes";
-import type {PermBundle, PermType, PermView, SessionLike} from "../../types/PermissionTypes";
+import type {EntityAdministratorCommand, PermBundle, PermType, PermView, SessionLike} from "../../types/PermissionTypes";
 import type {components} from '../../types/api/v1';
 import type {ApiResponsePreparer} from '../../types/ApiTransportTypes';
 import type {EntityMutationOutcome} from '../../types/EntityPropertyTypes';
@@ -333,7 +332,7 @@ async function afterCreateItems(id: string, data: any, inputFormat?: 'permission
  */
 export async function createEvent(body: components['schemas']['EventCreateInput'], file: Express.Multer.File | undefined,
     session: SessionLike): Promise<components['schemas']['EventCreated']> {
-    requireEntityCreation('event', session);
+    requireEventCreation(session);
     let parsed: ReturnType<typeof preprocessCreate>;
     try {
         // JSON booleans and nullable controls select the same form values.
@@ -840,43 +839,29 @@ async function eventPermissions(event: Event, session: SessionLike, manager?: En
     }}, session, undefined, manager);
 }
 
-/** Project account-page admission without creating an anonymous session or exposing Event content. */
-export function readEventCreateEntry(session: SessionLike, returnTo?: unknown): components['schemas']['EventCreateEntry'] {
-    const entry = getEntityCreationAdmission('event', session, returnTo);
-    return {entry, context: entry.kind === 'render' ? getEntityCreationContext('event') : null};
+/** Evaluate Event administration in the caller's existing read snapshot.
+ * Common route composition asks only this named policy; it never reads roster
+ * data or substitutes detail-page admission for the independent admin grant. */
+export async function canAccessEventAdministration(event: Event, actor: SessionLike, manager: EntityManager): Promise<boolean> {
+    // Preserve the same current method policy and connection used by prior entry admission.
+    return mayPerformEventMethod(await eventPermissions(event, actor, manager), 'admin');
+}
+
+/** Creation remains account-only even when an independently authorized duplicate supplied its draft. */
+export function requireEventCreation(session: SessionLike): void {
+    if (!session.profile) throw new ApiProblem('AUTH_REQUIRED');
+    if (!hasAccountProfile(session)) throw new ApiProblem('FORBIDDEN');
+}
+
+/** Form definitions reuse the shared maintained permission/preset catalog. */
+export function eventFormContext(): components['schemas']['EventCreateContext'] {
+    return {defaults: completeDefaults(getInitialPerms('event')), ...permissionDefinitions()};
 }
 
 /** Account-only initial forms and public duplicate forms share the same static definitions. */
 export function readEventCreateContext(session: SessionLike): components['schemas']['EventCreateContext'] {
-    requireEntityCreation('event', session);
-    return getEntityCreationContext('event');
-}
-
-/** The guest form intentionally receives only the existing public Event title. */
-export async function readEventGuestEntry(id: string): Promise<components['schemas']['GuestEntry']> {
-    const event = requireEvent(await eventService.getEventById(id));
-    return projectGuestEntry(event);
-}
-
-/**
- * Share document page admission between SSR and client navigation. A token is
- * navigation state only: neither guest entry nor prefetch consumes its use.
- * Administration admission and the roster's later method grant stay separate.
- */
-export async function readEventResourceEntry(id: string, view: 'detail' | 'guest' | 'admin', session: SessionLike,
-    regToken?: string): Promise<components['schemas']['EventResourceEntry']> {
-    return eventService.withEventReadSnapshot(id, async function readEntry(manager, row) {
-        // Token navigation remains opaque and unconsumed through the common flow.
-        const entry = await getEntityResourceEntry('event', row, view === 'guest' ? 'guest' : 'detail', session,
-            {manager, resourceId: id, query: regToken ? new URLSearchParams({regToken}) : undefined});
-        if (!row || view === 'guest' || entry.entry.kind !== 'render') return entry;
-        // Event detail admits an active profile independently of ACCESS_VIEW.
-        // Its admin route additionally requires ACCESS_ADMIN; no roster data enters admission.
-        if (view === 'admin' && !mayPerformEventMethod(await eventPermissions(row, session, manager), 'admin')) {
-            return {entry: {kind: 'denied', status: 403, messageKey: 'api:errors.FORBIDDEN'}, guest: null};
-        }
-        return entry;
-    });
+    requireEventCreation(session);
+    return eventFormContext();
 }
 
 /** Project only the current profile's attendance and its normalized dietary values. */
@@ -961,7 +946,7 @@ export async function readEventDuplicate(id: string, session: SessionLike): Prom
             allowRegDateUpdatesAfterDeadline: Boolean(event.allowRegDateUpdatesAfterDeadline),
             allowRegCancelationAfterDeadline: Boolean(event.allowRegCancelationAfterDeadline),
             allowRegDietUpdateAfterDeadline: Boolean(event.allowRegDietUpdateAfterDeadline),
-            defaultPermissions: completeDefaults(await adminService.getDefaultPerms('event', id, manager))}, formContext: getEntityCreationContext('event')};
+            defaultPermissions: completeDefaults(await adminService.getDefaultPerms('event', id, manager))}, formContext: eventFormContext()};
     });
 }
 
@@ -1024,7 +1009,7 @@ async function withEventManagement<T>(id: string, session: SessionLike,
 async function eventSettingsToken(event: Event, session: SessionLike, manager: EntityManager, access: boolean): Promise<string> {
     const defaults = access ? completeDefaults(await adminService.getDefaultPerms('event', event.id, manager)) : null;
     return comparisonToken('event-settings', event.id, session, {header: event.headerImg ?? null,
-        ...(defaults ? permissionDefaultComparisonValues(defaults) : {}),
+        ...(defaults ? Object.fromEntries(Object.entries(defaults).map(([key, value]) => [`default:${key}`, value])) : {}),
         ...(access ? {newAdmin: null} : {})});
 }
 
@@ -1251,7 +1236,8 @@ export async function readEventDefaultsBaseline(id: string, session: SessionLike
     return eventService.withEventReadSnapshot(id, async function readDefaults(manager, row) {
         const event = requireEvent(row);
         if (!mayPerformEventMethod(await eventPermissions(event, session, manager), 'managePermissions')) throw new ApiProblem('FORBIDDEN');
-        return readEntityPermissionDefaults('event', id, session, {manager, headerImg: event.headerImg, comparisonId: event.id});
+        const defaultPermissions = completeDefaults(await adminService.getDefaultPerms('event', id, manager));
+        return {defaultPermissions, editToken: await eventSettingsToken(event, session, manager, true)};
     });
 }
 
@@ -1260,9 +1246,18 @@ export async function updateEventDefaults(id: string, body: components['schemas'
     /** Recheck method authority and selected audiences before shared mask persistence. */
     return withEventManagement(id, session, async function saveDefaults(manager, event, permissions) {
         if (!mayPerformEventMethod(permissions, 'managePermissions')) throw new ApiProblem('FORBIDDEN');
-        // Retain Event's broader header/audience/newAdmin comparison scope under these locks.
-        return updateEntityPermissionDefaults('event', id, body, session, token, {manager, headerImg: event.headerImg, comparisonId: event.id});
+        // Only submitted audiences participate in comparison and writes; omitted grants survive.
+        const current = completeDefaults(await adminService.getDefaultPerms('event', id, manager));
+        requireFieldComparison(token, await eventSettingsToken(event, session, manager, true), Object.keys(body).map(key => `default:${key}`));
+        await saveDefaultPermsFromBody('event', id, {defaultPerms: body}, {manager, inputFormat: 'masks'});
+        return {changed: Object.keys(body).some(key => body[key as keyof typeof body] !== current[key as keyof typeof current])};
     });
+}
+
+/** Existing grants and absent grants use independent comparison fields. */
+function eventAdministratorToken(id: string, profileId: string, mask: number | null, session: SessionLike): string {
+    return mask === null ? comparisonToken('event-settings', id, session, {newAdmin: null})
+        : comparisonToken('event-admin', `${id}:${profileId}`, session, {mask});
 }
 
 /** Disclose one administrator mask only after the method grant, independently of page admission. */
@@ -1270,7 +1265,10 @@ export async function readEventAdminBaseline(id: string, profileId: string, sess
     return eventService.withEventReadSnapshot(id, async function readAdministrator(manager, row) {
         const event = requireEvent(row);
         if (!mayPerformEventMethod(await eventPermissions(event, session, manager), 'managePermissions')) throw new ApiProblem('FORBIDDEN');
-        return readEntityAdministratorBaseline('event', id, profileId, session, {manager});
+        if (!await userService.getProfileById(profileId, manager)) throw new ApiProblem('NOT_FOUND');
+        const current = await adminService.getAdminGrant('event', id, profileId, manager);
+        const mask = current?.perms ?? null;
+        return {mask, editToken: eventAdministratorToken(id, profileId, mask, session)};
     });
 }
 
@@ -1278,8 +1276,19 @@ export async function readEventAdminBaseline(id: string, profileId: string, sess
 export async function setEventAdmin(id: string, profileId: string, mask: number | null, session: SessionLike, token?: string) {
     return withEventManagement(id, session, async function saveAdministrator(manager, event, permissions) {
         if (!mayPerformEventMethod(permissions, 'managePermissions')) throw new ApiProblem('FORBIDDEN');
-        // Profile-first review, explicit zero/null and changed receipts share one owner.
-        return setReviewedEntityAdministrator('event', id, profileId, mask, session, token, {manager});
+        let previousMask: number | null = null;
+        /** Shared profile admission precedes this callback's comparison and selected command. */
+        async function reviewAdministrator(): Promise<EntityAdministratorCommand> {
+            const current = await adminService.getAdminGrant('event', id, profileId, manager);
+            previousMask = current?.perms ?? null;
+            requireFieldComparison(token, eventAdministratorToken(id, profileId, previousMask, session), [current ? 'mask' : 'newAdmin']);
+            return mask === null ? {kind: 'remove'} : {kind: current ? 'update' : 'add', mask, createdBy: session.profile?.userId};
+        }
+        const outcome = await applyEntityAdministrator('event', id, profileId,
+            mask === null ? {kind: 'remove'} : {kind: 'add', mask, createdBy: session.profile?.userId}, manager, reviewAdministrator);
+        if (outcome === 'profile-missing') throw new ApiProblem('NOT_FOUND');
+        if (outcome === 'mask-required') throw new ApiProblem('VALIDATION_FAILED');
+        return {changed: previousMask !== mask};
     });
 }
 

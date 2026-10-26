@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
+import {hasAccountProfile} from './userController';
 import {Request} from "express";
 import {QueryFailedError} from 'typeorm';
 import {
     archiveEntity, assertEntityPropertyContext, classifyArchiveCommandError, comparisonToken, entityTag,
     getArchivePresentations, getEntityPropertyPresentation, normalizeBasicProperties,
-    getEntityCreationAdmission, getEntityResourceEntry, projectGuestEntry, requireEntityCreation, requireEntityPropertyUpdate, restoreEntity,
+    requireEntityPropertyUpdate, restoreEntity,
 } from './entityAdminController';
 import Joi from 'joi';
 import {Survey} from "../modules/database/entities/surveys/Survey";
@@ -228,26 +229,6 @@ async function requireSurvey(id: string): Promise<Survey> {
     return survey;
 }
 
-/** Project the account-only creation redirect without creating a draft,
- * identity or survey. Surveys expose no event or permission form context. */
-export function readSurveyCreateEntry(session: SessionLike, returnTo?: unknown): components['schemas']['SurveyCreateEntry'] {
-    const entry = getEntityCreationAdmission('survey', session, returnTo);
-    return {entry, context: entry.kind === 'render' ? {} : null};
-}
-
-/** Guest registration reuses its existing feature-owned public title read. */
-export async function readSurveyGuestEntry(id: string): Promise<components['schemas']['GuestEntry']> {
-    return projectGuestEntry(await requireSurvey(id));
-}
-
-/** Initial HTML and warm navigation share standalone profile admission. The
- * guest view reveals only its public title; detail redirects anonymous visitors. */
-export async function readSurveyResourceEntry(id: string, view: 'detail' | 'guest', session: SessionLike): Promise<components['schemas']['SurveyResourceEntry']> {
-    const survey = await surveyService.getSurveyById(id);
-    // The common flow retains Survey's independent standalone participation model.
-    return getEntityResourceEntry('survey', survey, view, session, {resourceId: id});
-}
-
 /** Stored image references stay on the server; consumers get an admitted URL
  * and an opaque presentation version through the existing shared image helper. */
 function surveyHeaderProjection(survey: Survey) {
@@ -282,11 +263,17 @@ export async function readSurvey(id: string, session: SessionLike) {
     return {data, etag: entityTag('survey-view', {data, profileId})};
 }
 
+/** Account-only creation matches the creation form and its duplicate POST. */
+export function requireSurveyCreation(session: SessionLike): void {
+    requireSurveyProfile(session);
+    if (!hasAccountProfile(session)) throw new ApiProblem('FORBIDDEN');
+}
+
 /** Decode the versioned recurring-choice names into the form parser,
  * then invoke its existing transactional creator. The shared operation alone owns
  * validation/normalization and persistence; this adapter adds no parent or ACLs. */
 export async function createSurvey(body: components['schemas']['SurveyCreateInput'], file: Express.Multer.File | undefined, session: SessionLike): Promise<components['schemas']['SurveyCreated']> {
-    requireEntityCreation('survey', session);
+    requireSurveyCreation(session);
     checkNewImage(file);
     const parsed = preprocessCreate({...body, combinations: body.combinations.map(combination => ({weekday: combination.weekday, week: combination.nthWeek}))});
 

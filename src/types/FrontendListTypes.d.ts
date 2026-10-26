@@ -1,4 +1,5 @@
-import type {ComputedRef} from 'vue';
+import type {ComputedRef, Ref} from 'vue';
+import type {useCommand} from '../frontend/composables/command';
 import type {FrontendRead, FrontendRequestScope} from './FrontendUiTypes';
 import type {FrontendEventPickerSource, FrontendPlainMessageKey} from './FrontendUiTypes';
 import type {components} from './api/v1';
@@ -33,6 +34,30 @@ export interface FrontendListQuickAddValues {
 /** Only identify a matching list control's current initiating operation. Actual
  * command authority, pending/unknown receipts and row data stay with their owners. */
 export type FrontendListPendingControl = {kind: 'add'} | {kind: 'assign' | 'delete' | 'assignment' | 'required'; id: string};
+
+/** Matching list actions need only the admitted row's identity and self membership. */
+export interface FrontendListActionItem {
+    id: string;
+    selfAssigned: boolean;
+}
+
+/** Share list-action orchestration without copying feature drafts or selecting endpoints.
+ * The existing command remains the only dispatch, confirmation and recovery owner. */
+export interface FrontendListActionSource {
+    command: Pick<ReturnType<typeof useCommand>, 'action' | 'run'>;
+    pendingControl: Ref<FrontendListPendingControl | null>;
+    assign(itemId: string, assigned: boolean, scope: FrontendRequestScope): Promise<unknown>;
+    removeItem(itemId: string, scope: FrontendRequestScope): Promise<unknown>;
+    removeAssignment(assignmentId: string, scope: FrontendRequestScope): Promise<unknown>;
+    addItem(scope: FrontendRequestScope): Promise<unknown>;
+    resetItem(): void;
+    messages: {
+        assigned: FrontendPlainMessageKey;
+        unassigned: FrontendPlainMessageKey;
+        confirmDelete: FrontendPlainMessageKey;
+        deleted: FrontendPlainMessageKey;
+    };
+}
 
 /** Matching detail workflows supply their actual read and lifetime. The shared
  * command composition owns recovery/status only, never rows, drafts or grants. */

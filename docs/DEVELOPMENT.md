@@ -276,6 +276,15 @@ inside the module that owns them instead of exporting them merely to connect new
 
 - Use `express.Router()` in a feature route module.
 - Add canonical document entries to their domain module under `src/backend/routes/`; `src/backend/app.ts` owns the ordered domain mounts.
+- Configure matching entity document/API/guest routes through `guestFlowFactory`, header mutations through
+  `entityHeaderUpdateHandler`, and self-assignment routes through `assignFlowFactory`. Keep common HTTP pipelines in
+  those middleware owners and domain checks/transactions in existing controllers/DBAL; preserve each operation's
+  admission, receipt-preparation and upload-ownership order. Domain routers add their distinct extensions.
+- Use `adminApiFactory` for the matching administrator, property, lifecycle and scoped profile-search routes;
+  retain feature controller business operations and deliberate exceptions. Settings/default permissions and Event
+  metadata remain distinct handlers. The identity API mounts guest-registration subrouters before feature routers,
+  using the same domain flow configuration as document and core API routes. Guest failures reach the common API
+  problem handler without passing through feature-specific error handlers.
 - Keep shared document admission, bootstrap and error helpers in `src/backend/routes/frontend.ts`, without domain route registrations.
 - Declare client paths, lazy views and static metadata in the matching domain under `src/frontend/routes/`; its index composes the records with the catch-all last.
 - Mount versioned feature adapters in `src/backend/routes/api/v1.ts` and document routes in their existing domain modules.
@@ -283,9 +292,12 @@ inside the module that owns them instead of exporting them merely to connect new
 
 - Keep middleware order visible in the route definition.
 - Wrap asynchronous request and parameter handlers with `asyncHandler` or `asyncParamHandler`.
-- Reuse the feature controller's entry and business operations from its explicit document and versioned adapters.
+- Reuse the configured guest-flow entry composition and the feature controller's business operations from both
+  document and versioned adapters.
   Browser create, guest, duplicate and deletion flows use the existing shared Vue components and generated operations,
   with the feature's actual admission, fields and outcomes supplied explicitly.
+- Preserve internal return navigation at login, registration and logout through `referrerUpdater`; explicit `next`
+  retains precedence and the existing safe-return implementation bounds inferred destinations.
 
 ### Controllers and services
 
@@ -1500,6 +1512,9 @@ reviewed commands. Standalone Surveys supply no Access operations, and their met
 comparison evidence without adding write preconditions.
 Features inject generated operations, query dependencies, normalization, field controls, authorization inputs and
 native wording. These owners compose the existing query/draft/command helpers rather than keep a second server store.
+Packing and Drivers use `useListActions` for membership, item/assignment removal and Quick Add. Pass their actual
+operations and live draft collector/reset; the shared owner delegates dispatch and unknown delivery to the existing
+command. A confirmed creation resets only the feature's submitted draft; rejection or uncertain delivery retains it.
 `useMetadataEditorHandle` exposes the current mounted editor's public workflow through its field adapters, including
 its absent-editor defaults and propagated recovery failures. It derives flags rather than copying them. Nullable text
 normalization is shared by explicit field opt-in; it does not apply Event capacity or deadline policy to other fields.

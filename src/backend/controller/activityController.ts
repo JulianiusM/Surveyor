@@ -15,6 +15,8 @@
  */
 
 // controllers/activityController.js
+import {hasAccountProfile} from './userController';
+import {getInitialPerms} from '../modules/lib/permissions';
 import {Request} from "express";
 import crypto from 'node:crypto';
 import type {EntityManager} from "typeorm";
@@ -22,11 +24,8 @@ import type {ActivityAssignment} from "../modules/database/entities/activity/Act
 import {
     applyEntityAdministrator, archiveEntity, assertEntityPropertyContext, comparisonToken, completeDefaults,
     entityMethodPermission, entityPropertyPermission, entityTag, getArchivePresentations, getAuthorizedEventUrl,
-    getEntityPropertyPresentation, getEntityViewAdmission, getEntityResourceEntry, getEntityCreationAdmission,
-    getEntityCreationContext, permissionDefaultComparisonValues, readEntityPermissionDefaults,
-    updateEntityPermissionDefaults, readEntityAdministratorBaseline, reviewEntityAdministrator,
-    requireVersionedAdministratorOutcome, permissionDefinitions, projectCurrentEntityEvent, projectGuestEntry,
-    requireEntityCreation, requireFieldComparison, restoreEntity, changeEntityEvent, setAutomaticArchival,
+    getEntityPropertyPresentation, getEntityViewAdmission, permissionDefinitions, projectCurrentEntityEvent,
+    requireFieldComparison, restoreEntity, changeEntityEvent, setAutomaticArchival,
 } from './entityAdminController';
 import {authorizeEventLink, getEventLinkOptions, readEventLinkSelection} from './eventController';
 import {ApiProblem} from '../modules/api/problem';
@@ -2867,32 +2866,16 @@ function activityMetadataToken(plan: ActivityPlan, data: components['schemas']['
     return comparisonToken('activity-meta', plan.id, session, data.values);
 }
 
+/** Public creation definitions preserve the audience matrix without disclosing an existing plan. */
+export function activityFormContext(): components['schemas']['ActivityCreateContext'] {
+    return {defaults: completeDefaults(getInitialPerms('activity')), ...permissionDefinitions()};
+}
+
 /** Initial creation retains account-only admission; duplicate GET has its own method grant. */
 export function readActivityCreateContext(session: SessionLike): components['schemas']['ActivityCreateContext'] {
-    requireEntityCreation('activity', session);
-    return getEntityCreationContext('activity');
-}
-
-/** Creation entry and event preselection use the same account and event-picker owners. */
-export async function readActivityCreateEntry(session: SessionLike, returnTo?: unknown, eventId?: unknown): Promise<components['schemas']['ActivityCreateEntry']> {
-    const entry = getEntityCreationAdmission('activity', session, returnTo);
-    // URL context does not create or persist a draft, identity, association or plan.
-    const selected = entry.kind === 'render' ? await readEventLinkSelection(eventId, session) : null;
-    return {entry, context: entry.kind === 'render' ? getEntityCreationContext('activity') : null,
-        ...(eventId !== undefined ? {selectedEvent: selected ? {...selected, description: selected.description ?? null} : null} : {})};
-}
-
-/** Guest registration reveals only its existing public title and resource identifier. */
-export async function readActivityGuestEntry(id: string): Promise<components['schemas']['GuestEntry']> {
-    const plan = await requireActivityPlan(id);
-    return projectGuestEntry(plan);
-}
-
-/** Translate current shared page admission without serializing protected plan content. */
-export async function readActivityResourceEntry(id: string, view: 'detail' | 'guest', session: SessionLike): Promise<components['schemas']['ActivityResourceEntry']> {
-    const plan = await activityService.getActivityPlanById(id);
-    // Preserve the existing read and linked-event admission without loading plan content.
-    return getEntityResourceEntry('activity', plan, view, session, {resourceId: id});
+    activityActorId(session);
+    if (!hasAccountProfile(session)) throw new ApiProblem('FORBIDDEN');
+    return activityFormContext();
 }
 
 /** Stored image references remain private; consumers receive only an admitted route and opaque version. */
@@ -3049,7 +3032,7 @@ export async function readActivityDuplicate(id: string, session: SessionLike, ev
     return {title: plan.title, description: plan.description ?? null, startDate: plan.startDate, endDate: plan.endDate,
         eventId: null, slots: slots.map(slot => ({id: generateUniqueId(), day: slot.day, position: slot.pos, title: slot.title,
             description: slot.description ?? '', startTime: slot.startTime ?? null, endTime: slot.endTime ?? null, maxAssignees: slot.maxAssignees || 1})),
-        defaultPermissions: completeDefaults(await adminService.getDefaultPerms('activity', id)), formContext: getEntityCreationContext('activity'),
+        defaultPermissions: completeDefaults(await adminService.getDefaultPerms('activity', id)), formContext: activityFormContext(),
         ...(eventId !== undefined ? {selectedEvent: selected ? {...selected, description: selected.description ?? null} : null} : {})};
 }
 
@@ -3093,7 +3076,7 @@ export async function readActivitySettings(id: string, session: SessionLike): Pr
     return {id, title: plan.title, ...activityHeaderProjection(plan),
         editableFields: metadata.editableFields,
         settingsToken: comparisonToken('activity-settings', id, session, {eventId: plan.eventId ?? null, header: plan.headerImg ?? null,
-            ...(access ? {...permissionDefaultComparisonValues(access.defaults), newAdmin: null} : {})}),
+            ...(access ? {...activityDefaultValues(access.defaults), newAdmin: null} : {})}),
         capabilities: {editHeader: permissions.has(entityMethodPermission('editHeader')), linkEvent: permissions.has(entityMethodPermission('changeEvent')),
             managePermissions: permissions.has('MANAGE_PERMISSIONS'), duplicate: Boolean(session.auth?.user && permissions.has('DATA_DUPLICATE')),
             remove: owns, manageArchive: archive.canManage, archive: archive.canArchive, restore: archive.canRestore,
@@ -3129,10 +3112,16 @@ export async function changeActivityEvent(id: string, body: components['schemas'
     return changeEntityEvent('activity', plan, body, session, invalidateEventContext, reviewContext, {prepare: prepareCompletion});
 }
 
+/** Audience comparisons use the same field names in full settings and narrow baselines. */
+function activityDefaultValues(defaults: components['schemas']['PermissionDefaults']): Record<string, number> {
+    return Object.fromEntries(Object.entries(defaults).map(([audience, mask]) => [`default:${audience}`, mask]));
+}
+
 /** Permission-only baseline reveals masks solely to current permission managers. */
 export async function readActivityDefaultsBaseline(id: string, session: SessionLike): Promise<components['schemas']['ActivityDefaultsBaseline']> {
     await requireActivityMethod(id, 'MANAGE_PERMISSIONS', session);
-    return readEntityPermissionDefaults('activity', id, session);
+    const defaultPermissions = completeDefaults(await adminService.getDefaultPerms('activity', id));
+    return {defaultPermissions, editToken: comparisonToken('activity-settings', id, session, activityDefaultValues(defaultPermissions))};
 }
 
 /** Existing audience owner receives numeric masks; no copied permission collector or ACL rule is introduced. */
@@ -3140,13 +3129,19 @@ export async function setActivityDefaults(id: string, defaults: components['sche
     await requireActivityMethod(id, 'MANAGE_PERMISSIONS', session);
     // Preserve the shared owner and its write order; the new transport rejects
     // an already-stale reviewed audience before invoking that unchanged write.
-    await updateEntityPermissionDefaults('activity', id, defaults, session, token);
+    const current = completeDefaults(await adminService.getDefaultPerms('activity', id));
+    requireFieldComparison(token, comparisonToken('activity-settings', id, session, activityDefaultValues(current)), Object.keys(defaults).map(key => `default:${key}`));
+    await saveDefaultPermsFromBody('activity', id, {defaultPerms: defaults}, {inputFormat: 'masks'});
 }
 
 /** Administrator-only baseline exposes exactly the requested profile's existing grant. */
 export async function readActivityAdminBaseline(id: string, profileId: string, session: SessionLike): Promise<components['schemas']['ActivityAdminBaseline']> {
     await requireActivityMethod(id, 'MANAGE_PERMISSIONS', session);
-    return readEntityAdministratorBaseline('activity', id, profileId, session);
+    if (!await userService.getProfileById(profileId)) throw new ApiProblem('NOT_FOUND');
+    const current = await adminService.getAdminGrant('activity', id, profileId);
+    const mask = current?.perms ?? null;
+    return {mask, editToken: mask === null ? comparisonToken('activity-settings', id, session, {newAdmin: null})
+        : comparisonToken('activity-admin', `${id}:${profileId}`, session, {mask})};
 }
 
 /** The existing administrator controller retains profile validation and persistence semantics. */
@@ -3154,9 +3149,14 @@ export async function setActivityAdmin(id: string, profileId: string, mask: numb
     await requireActivityMethod(id, 'MANAGE_PERMISSIONS', session);
     // Existing zero masks remain distinct from absent grants. Validate the same
     // reviewed field before delegating profile validation and actual persistence.
-    const reviewed = await reviewEntityAdministrator('activity', id, profileId, mask, session, token);
-    const outcome = await applyEntityAdministrator('activity', id, profileId, reviewed.command);
-    requireVersionedAdministratorOutcome(outcome);
+    const current = await adminService.getAdminGrant('activity', id, profileId);
+    const currentToken = current ? comparisonToken('activity-admin', `${id}:${profileId}`, session, {mask: current.perms})
+        : comparisonToken('activity-settings', id, session, {newAdmin: null});
+    requireFieldComparison(token, currentToken, [current ? 'mask' : 'newAdmin']);
+    const outcome = await applyEntityAdministrator('activity', id, profileId,
+        mask === null ? {kind: 'remove'} : {kind: current ? 'update' : 'add', mask, createdBy: session.profile?.userId});
+    if (outcome === 'profile-missing') throw new ApiProblem('NOT_FOUND');
+    if (outcome === 'mask-required') throw new ApiProblem('VALIDATION_FAILED');
 }
 
 /** Secure profile discovery retains account-only search and permission-management admission. */

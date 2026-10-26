@@ -1,5 +1,6 @@
 import {Router, type Request, type Response} from 'express';
 import {asyncHandler} from '../modules/lib/asyncHandler';
+import {addNextQuery} from '../middleware/referrerUpdater';
 import {captureApiActor} from '../modules/api/session';
 import {classifyApiError, requestLocale, validatedProblemBody} from '../modules/api/problem';
 import {renderFrontend} from '../modules/frontendRenderer';
@@ -119,7 +120,7 @@ router.get('/oidc/callback', asyncHandler(async function completeOidc(req, res) 
 }));
 
 /** Existing logout bookmarks keep their explicit identity transition. */
-router.get('/logout', asyncHandler(async function logoutDocument(req, res) {
+router.get('/logout', addNextQuery('/users/logout', '/users'), asyncHandler(async function logoutDocument(req, res) {
     const destination = await userController.logoutUserOidc(req.session);
     // Saved logout bookmarks keep the existing confirmation in the current
     // catalog-backed flash channel after the identity owner has completed.
@@ -193,7 +194,7 @@ router.get('/activate/:token', asyncHandler(async function activateIdentity(req,
 for (const [path, operation] of [['/login', 'login'], ['/register', 'register'], ['/forgot-password', 'forgot']] as const) {
     // Configuration follows the registered operation, including Express's
     // equivalent case/trailing-slash matches; return destinations stay exact.
-    router.get(path, asyncHandler(async function renderIdentityFrontend(req, res) {
+    router.get(path, ...(operation === 'forgot' ? [] : [addNextQuery(`/users${path}`, '/users')]), asyncHandler(async function renderIdentityFrontend(req, res) {
         const state = await bootstrap(req);
         const entry = frontendIdentityPageEntry(operation, settings.value, req.query.next);
         if (await applyPageEntry(req, res, state, entry)) return;

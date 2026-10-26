@@ -1,41 +1,19 @@
-import {Router, type NextFunction, type Request, type Response} from 'express';
+import {Router} from 'express';
 import type {components} from '../../../../types/api/v1';
 import * as eventApi from '../../../controller/eventController';
-import {requireEntityCreation} from '../../../controller/entityAdminController';
-import {ApiProblem} from '../../../modules/api/problem';
+import {createGuestFlowApiRouter} from '../../../middleware/guestFlowFactory';
+import {eventFlow} from '../../eventFlow';
 import {requireApiContext} from '../../../modules/api/session';
-import {decodeApiMultipartData, decodeApiMultipartImage, prepareValidatedJson, receiveApiUpload, sendPreparedJson, sendStoredApiBinary, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
+import {prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
-import {prepareFileUploader, removeImage} from '../../../modules/lib/fileCommons';
-import {searchLimiter} from '../../../middleware/adminApiFactory';
-import settings from '../../../modules/settings';
+import {createEntityAdminApiRouter, createEntityArchiveApiRouter, createUserSearchApiRouter} from '../../../middleware/adminApiFactory';
+import {createEntityHeaderUpdateRouter} from '../../../middleware/entityHeaderUpdateHandler';
 import financeRouter from './finance';
 
 const router = Router();
-const uploadHeader = prepareFileUploader(settings.value.headerImgDir).single('image');
 
 router.use('/:eventId/finance', financeRouter);
-
-/** Decode one generated multipart command without adding a second Event parser. */
-router.post('/', asyncHandler(async function createEvent(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    requireEntityCreation('event', actor);
-    let enteredCreation = false;
-    try {
-        // Account admission precedes byte storage. Structural validation then
-        // decodes only the data part, retaining unknown fields for rejection.
-        await receiveApiUpload(req, res, uploadHeader);
-        validateOperationRequest(req, 'createEvent', body => decodeApiMultipartData(body, req.file));
-        // The controller cleans existing validation failures before creation. Once
-        // its existing creation owner runs, an uploaded image may be committed.
-        enteredCreation = true;
-        const result = await eventApi.createEvent(req.body.data, req.file, actor);
-        res.location(`/api/v1/events/${encodeURIComponent(result.id)}`);
-        sendValidatedJson(req, res, 'createEvent', 201, result);
-    } finally {
-        if (!enteredCreation && req.file) removeImage(req.file.path);
-    }
-}));
+router.use(createGuestFlowApiRouter(eventFlow));
 
 /** Prepare the invariant completion before entering an irreversible shared delete. */
 router.delete('/:eventId/things-to-do/:entityType/:entityId', asyncHandler(async function deleteEventChild(req, res) {
@@ -45,41 +23,6 @@ router.delete('/:eventId/things-to-do/:entityType/:entityId', asyncHandler(async
     await eventApi.deleteEventChild(String(req.params.eventId), req.params.entityType as 'activity' | 'drivers' | 'packing',
         String(req.params.entityId), actor, req.query.view as 'detail' | 'admin' | undefined);
     sendPreparedJson(req, res, reply);
-}));
-
-router.get('/create-entry', asyncHandler(async function getEventCreateEntry(req, res) {
-    const actor = await requireApiContext(req, res);
-    validateOperationRequest(req, 'getEventCreateEntry');
-    const result = eventApi.readEventCreateEntry(actor, req.query.returnTo);
-    sendValidatedJson(req, res, 'getEventCreateEntry', 200, result);
-}));
-
-router.get('/create-context', asyncHandler(async function getEventCreateContext(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    validateOperationRequest(req, 'getEventCreateContext');
-    const result = eventApi.readEventCreateContext(actor);
-    sendValidatedJson(req, res, 'getEventCreateContext', 200, result);
-}));
-
-router.get('/:eventId/entry', asyncHandler(async function getEventResourceEntry(req, res) {
-    const actor = await requireApiContext(req, res);
-    validateOperationRequest(req, 'getEventResourceEntry');
-    const result = await eventApi.readEventResourceEntry(String(req.params.eventId), req.query.view as 'detail' | 'guest' | 'admin', actor, req.query.regToken as string | undefined);
-    sendValidatedJson(req, res, 'getEventResourceEntry', 200, result);
-}));
-
-router.get('/:eventId', asyncHandler(async function getEvent(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    validateOperationRequest(req, 'getEvent');
-    const result = await eventApi.readEvent(String(req.params.eventId), actor, req.query.view as 'detail' | 'admin' | undefined);
-    sendValidatedJson(req, res, 'getEvent', 200, result);
-}));
-
-router.get('/:eventId/duplicate', asyncHandler(async function getEventDuplicate(req, res) {
-    const actor = await requireApiContext(req, res);
-    validateOperationRequest(req, 'getEventDuplicate');
-    const result = await eventApi.readEventDuplicate(String(req.params.eventId), actor);
-    sendValidatedJson(req, res, 'getEventDuplicate', 200, result);
 }));
 
 router.get('/:eventId/metadata', asyncHandler(async function getEventMetadata(req, res) {
@@ -185,33 +128,26 @@ router.put('/:eventId/default-permissions', asyncHandler(async function updateEv
     sendValidatedJson(req, res, 'updateEventDefaults', 200, result);
 }));
 
-router.get('/:eventId/admins/:profileId/edit-baseline', asyncHandler(async function getEventAdminBaseline(req, res) {
-    const actor = await requireApiContext(req, res);
-    validateOperationRequest(req, 'getEventAdminBaseline');
-    const result = await eventApi.readEventAdminBaseline(String(req.params.eventId), String(req.params.profileId), actor);
-    sendValidatedJson(req, res, 'getEventAdminBaseline', 200, result, result.editToken);
-}));
-
-router.post('/:eventId/admins', asyncHandler(async function addEventAdmin(req, res) {
-    const actor = await requireApiContext(req, res);
-    validateOperationRequest(req, 'addEventAdmin');
-    const result = await eventApi.setEventAdmin(String(req.params.eventId), req.body.profileId, req.body.mask, actor, req.get('If-Match'));
-    sendValidatedJson(req, res, 'addEventAdmin', 200, result);
-}));
-
-router.patch('/:eventId/admins/:profileId', asyncHandler(async function updateEventAdmin(req, res) {
-    const actor = await requireApiContext(req, res);
-    validateOperationRequest(req, 'updateEventAdmin');
-    const result = await eventApi.setEventAdmin(String(req.params.eventId), String(req.params.profileId), req.body.mask, actor, req.get('If-Match'));
-    sendValidatedJson(req, res, 'updateEventAdmin', 200, result);
-}));
-
-router.delete('/:eventId/admins/:profileId', asyncHandler(async function deleteEventAdmin(req, res) {
-    const actor = await requireApiContext(req, res);
-    validateOperationRequest(req, 'deleteEventAdmin');
-    const result = await eventApi.setEventAdmin(String(req.params.eventId), String(req.params.profileId), null, actor, req.get('If-Match'));
-    sendValidatedJson(req, res, 'deleteEventAdmin', 200, result);
-}));
+createEntityAdminApiRouter<'event'>(router, {
+    entityType: 'event', parameter: 'eventId',
+    baseline: {operation: 'getEventAdminBaseline', requireProfile: false,
+        async read({id, profileId, actor}) {
+            const data = await eventApi.readEventAdminBaseline(id, profileId, actor);
+            return {data, etag: data.editToken};
+        }},
+    add: {operation: 'addEventAdmin', requireProfile: false, delivery: 'result',
+        async execute({id, body, actor, ifMatch}) {
+            return {data: await eventApi.setEventAdmin(id, body.profileId, body.mask, actor, ifMatch)};
+        }},
+    update: {operation: 'updateEventAdmin', requireProfile: false, delivery: 'result',
+        async execute({id, profileId, body, actor, ifMatch}) {
+            return {data: await eventApi.setEventAdmin(id, profileId, body.mask, actor, ifMatch)};
+        }},
+    remove: {operation: 'deleteEventAdmin', requireProfile: false, delivery: 'result',
+        async execute({id, profileId, actor, ifMatch}) {
+            return {data: await eventApi.setEventAdmin(id, profileId, null, actor, ifMatch)};
+        }},
+});
 
 router.get('/:eventId/header/edit-baseline', asyncHandler(async function getEventHeaderBaseline(req, res) {
     const actor = await requireApiContext(req, res);
@@ -220,70 +156,34 @@ router.get('/:eventId/header/edit-baseline', asyncHandler(async function getEven
     sendValidatedJson(req, res, 'getEventHeaderBaseline', 200, result, result.editToken);
 }));
 
-router.delete('/:eventId/header', asyncHandler(async function deleteEventHeader(req, res) {
-    const actor = await requireApiContext(req, res);
-    validateOperationRequest(req, 'deleteEventHeader');
-    const result = await eventApi.setEventHeader(String(req.params.eventId), undefined, actor, req.get('If-Match'));
-    sendValidatedJson(req, res, 'deleteEventHeader', 200, result);
-}));
+createEntityHeaderUpdateRouter(router, {
+    parameter: 'eventId', uploadOperation: 'uploadEventHeader', deleteOperation: 'deleteEventHeader',
+    requireProfile: false, admitUpload: eventApi.readEventHeaderBaseline,
+    command: {
+        receipt: 'after-write',
+        execute({id, file, actor, ifMatch}) {
+            return eventApi.setEventHeader(id, file, actor, ifMatch);
+        },
+    },
+});
 
-router.post('/:eventId/archive', asyncHandler(async function archiveEvent(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    validateOperationRequest(req, 'archiveEvent');
-    const result = await eventApi.setEventArchived(String(req.params.eventId), true, actor);
-    sendValidatedJson(req, res, 'archiveEvent', 200, result);
-}));
+createEntityArchiveApiRouter<'event'>(router, {
+    entityType: 'event', parameter: 'eventId',
+    archive: {operation: 'archiveEvent', requireProfile: true, delivery: 'result',
+        async execute({id, actor}) { return {data: await eventApi.setEventArchived(id, true, actor)}; }},
+    restore: {operation: 'restoreEvent', requireProfile: true, delivery: 'result',
+        async execute({id, actor}) { return {data: await eventApi.setEventArchived(id, false, actor)}; }},
+    automatic: {operation: 'setEventAutomaticArchival', requireProfile: true, delivery: 'result',
+        async execute({id, body, actor}) { return {data: await eventApi.setEventAutomaticArchival(id, body, actor)}; }},
+});
 
-router.post('/:eventId/restore', asyncHandler(async function restoreEvent(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    validateOperationRequest(req, 'restoreEvent');
-    const result = await eventApi.setEventArchived(String(req.params.eventId), false, actor);
-    sendValidatedJson(req, res, 'restoreEvent', 200, result);
-}));
-
-router.delete('/:eventId', asyncHandler(async function deleteEvent(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    validateOperationRequest(req, 'deleteEvent');
-    const result = await eventApi.removeEvent(String(req.params.eventId), actor);
-    sendValidatedJson(req, res, 'deleteEvent', 200, result);
-}));
-
-/** Capture authoritative request context before the shared existing search limiter can reject. */
-async function admitEventProfileSearch(req: Request, res: Response, next: NextFunction): Promise<void> {
-    await requireApiContext(req, res);
-    validateOperationRequest(req, 'searchEventProfiles');
-    next();
-}
-
-router.get('/:eventId/profiles', asyncHandler(admitEventProfileSearch), searchLimiter, asyncHandler(async function searchEventProfiles(req, res) {
-    const result = await eventApi.searchEventProfiles(String(req.params.eventId), String(req.query.q ?? ''), req.apiActor!);
-    sendValidatedJson(req, res, 'searchEventProfiles', 200, result);
-}));
-
-router.put('/:eventId/header', asyncHandler(async function uploadEventHeader(req, res) {
-    const actor = await requireApiContext(req, res);
-    // Reject forbidden writes before accepting bytes, then recheck under the controller's lock.
-    await eventApi.readEventHeaderBaseline(String(req.params.eventId), actor);
-    let committed = false;
-    try {
-        await receiveApiUpload(req, res, uploadHeader);
-        validateOperationRequest(req, 'uploadEventHeader', body => decodeApiMultipartImage(body, req.file));
-        if (!req.file) throw new ApiProblem('UPLOAD_INVALID');
-        const result = await eventApi.setEventHeader(String(req.params.eventId), req.file, actor, req.get('If-Match'));
-        committed = true;
-        sendValidatedJson(req, res, 'uploadEventHeader', 200, result);
-    } finally {
-        // Delivery failure after persistence must not remove the committed upload.
-        if (!committed && req.file) removeImage(req.file.path);
-    }
-}));
-
-router.get('/:eventId/header', asyncHandler(async function getEventHeader(req, res) {
-    const actor = await requireApiContext(req, res);
-    validateOperationRequest(req, 'getEventHeader');
-    const storedPath = await eventApi.readEventHeaderPath(String(req.params.eventId), actor);
-    await sendStoredApiBinary(req, res, 'getEventHeader', 200, settings.value.headerImgDir, storedPath);
-}));
+createUserSearchApiRouter<'event'>(router, {
+    entityType: 'event', parameter: 'eventId',
+    search: {operation: 'searchEventProfiles', requireProfile: false,
+        async read({id, query, actor}) {
+            return {data: await eventApi.searchEventProfiles(id, String(query.q ?? ''), actor)};
+        }},
+});
 
 router.post('/:eventId/things-to-do/:entityType/:entityId/archive', asyncHandler(async function archiveEventChild(req, res) {
     const actor = await requireApiContext(req, res, true);
@@ -299,13 +199,6 @@ router.post('/:eventId/things-to-do/:entityType/:entityId/restore', asyncHandler
     const result = await eventApi.setEventChildArchived(String(req.params.eventId), req.params.entityType as 'activity' | 'drivers' | 'packing',
         String(req.params.entityId), false, actor, req.query.view as 'detail' | 'admin' | undefined);
     sendValidatedJson(req, res, 'restoreEventChild', 200, result);
-}));
-
-router.put('/:eventId/automatic-archive', asyncHandler(async function setEventAutomaticArchival(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    validateOperationRequest(req, 'setEventAutomaticArchival');
-    const result = await eventApi.setEventAutomaticArchival(String(req.params.eventId), req.body, actor);
-    sendValidatedJson(req, res, 'setEventAutomaticArchival', 200, result);
 }));
 
 router.put('/:eventId/things-to-do/:entityType/:entityId/automatic-archive', asyncHandler(async function setEventChildAutomaticArchival(req, res) {

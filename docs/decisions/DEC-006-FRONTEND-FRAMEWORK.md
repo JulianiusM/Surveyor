@@ -295,7 +295,7 @@ The earlier manual-refresh watch substitution was corrected. Serialized authored
 restarts Express only after completion. Production runs coherent built artifacts, not Vite.
 Externalized SSR dependencies remain production dependencies; generated outputs stay ignored.
 
-### Authorized shared ownership and serving correction (2026-10-26)
+### Shared ownership and serving audit (2026-10-26)
 
 The maintainer explicitly requests a historical audit and repair of frontend duplication, shared implementations,
 separate frontend/backend/common folders, and strict protection of private source and dependencies. Private code
@@ -304,18 +304,43 @@ Vue remains in `src/frontend/`. Shared declarations retain the Development Polic
 contracts separated from server transaction types. Root package/lockfile and the release archive remain shared;
 the backend's compiled entry is now `dist/backend/server.js` behind the existing `npm run run` command.
 
-Native transport retirement remains authorized. Its former shared guest-flow responsibilities belong to one
-controller operation consumed by the five feature controllers, preserving their admission, private projections,
-token navigation and database boundaries. The current request separately authorizes consolidation of repeated
-permission/administrator orchestration previously deferred from the frontend migration; that earlier deferral
-remains recorded. Existing feature authority, comparison fields, locks and operation order remain constraints.
+**Rejected agent interpretation (2026-10-26):** the following paragraph was introduced by the agent in `cdccf6c`;
+it does not record maintainer approval:
+
+> Native transport retirement remains authorized. Its former shared guest-flow responsibilities belong to one
+> controller operation consumed by the five feature controllers, preserving their admission, private projections,
+> token navigation and database boundaries. The current request separately authorizes consolidation of repeated
+> permission/administrator orchestration previously deferred from the frontend migration; that earlier deferral
+> remains recorded. Existing feature authority, comparison fields, locks and operation order remain constraints.
+
+The maintainer subsequently explicitly rejects this interpretation: the named `guestFlowFactory` middleware,
+including common route creation, was not restored; unrelated entry responsibilities were moved into the distinct
+`entityAdminController`, and the administration consolidation lacked approval. Native browser retirement does not
+establish authorization for those changes. At that rejection, shared-flow remediation remained outstanding. This correction records
+the rejection, not approval of a replacement architecture or acceptance of the attempted implementation.
+
+The reiterated request restores the historical shared middleware responsibilities. All five domain configurations
+are consumed by `guestFlowFactory` for document and versioned core routes and by the identity API's guest-registration
+subrouters. `entityHeaderUpdateHandler`, `assignFlowFactory` and the four `adminApiFactory` composers create their
+matching current routes. Existing controller business/permission decisions,
+DBAL transactions, identity completion and feature-specific receipt/upload order remain their established owners.
+The rejected administration expansion is undone against its preceding source; its original deferred defect remains
+open. These facts describe the requested restoration, not a new general backend-refactor authorization.
+
+The maintainer's additional baseline instruction identifies the last `ts-migration` commit, verified as
+`3590f85ffca4a933679f8393bf3d6bbbc3258650`. Comparing original module responsibilities also identified the lost
+`referrerUpdater` return-navigation behavior and shared Packing/Drivers list actions; both now have shared adopted
+owners with current safe-return and command lifecycles. The comparison distinguishes accepted Vue/versioned
+transport replacements from removed shared responsibilities; it does not reinstate retired native presentation
+or infer approval for controller business consolidation.
 
 The audit reproduced repository/private source and arbitrary dependency delivery through the development asset
 prefix. A single backend-owned public-file inventory now guards both development requests and the actual client
 module graph, including filesystem aliases, raw-file queries and symlinks. General dependency serving is forbidden;
 exceptions cover only the optimized admitted browser dependency graph, Vite's required browser runtime files and
-specific icon fonts. Server and SSR artifacts remain outside the installed public root. This amendment records
-the current direct authorization; repository history alone does not establish every earlier conversational approval.
+specific icon fonts. Server and SSR artifacts remain outside the installed public root. The original direct request
+authorizes source separation and strict serving boundaries independently of the rejected controller interpretation;
+repository history alone does not establish every earlier conversational approval.
 
 The approved 2026-10-07 release amendment supersedes retained-old-asset deployment: current-folder replacement, ordinary session update detection,
 compatible loaded edits, one clean idle reload and preserved mounted drafts for missing chunks/incompatible commands.
@@ -361,8 +386,9 @@ small-screen behavior.
 
 Compare affected scenes against approved behavior with equal data/actors/viewport and disclose intended changes.
 Named shared operations and controller-owned method policy are implemented. Shared-action declarations originally
-served native factories alongside v1 consumers; the retained controller and v1 policy/capability owners continue to
-use those declarations after native factory retirement.
+served native factories alongside v1 consumers. The maintainer's 2026-10-26 correction requires restoration of shared
+backend middleware and route creation; native browser retirement does not retire that ownership. Current document
+and v1 adapters configure the restored factories while retaining controller policy and existing business operations.
 Current verification selection belongs to [Testing](../TESTING_GUIDE.md).
 No bundle-size or framework benchmark is claimed by this decision record.
 Documentation reports remain advisory.

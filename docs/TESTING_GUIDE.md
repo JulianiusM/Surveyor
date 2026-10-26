@@ -31,7 +31,11 @@ schema. The session fixture preserves the original middleware Session/save metho
 generation instead of adopting it, and leaves cookie-free initial reads uninitialized. Store writes/touches,
 response cookies and original object identity are observable assertions; synthetic contexts do not establish real
 account/guest ORM identity or domain permission behavior. Those require the existing persistence/system boundaries.
-Both fixtures close their owned infrastructure. A mocked response alone does not establish
+The shared-entity-routing fixture combines real Express/session middleware, authoritative context admission,
+generated validation and the restored route factories. Injected feature callbacks keep persistence outside this
+boundary; receipt ordering, scoped delivery and upload ownership checks do not establish ORM rollback or complete
+identity/provider journeys. It uses the same database-free selection and closes its owned server, store and temporary
+uploads. These fixtures close their owned infrastructure. A mocked response alone does not establish
 that integration boundary. The [Development Policy](policies/DEVELOPMENT_POLICY.md#test-selection-and-evidence)
 owns this bounded classification; database-backed integration retains real ORM metadata and guarded schema setup.
 
