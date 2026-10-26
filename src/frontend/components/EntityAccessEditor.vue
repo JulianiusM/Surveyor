@@ -488,7 +488,7 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                     <div class="frontend-action-row justify-content-end border-top border-secondary pt-3">
                         <ActionButton
                             type="submit"
-                            :pending="pendingAction?.kind === 'defaults' && command.pending.value" :show-spinner="false"
+                            :pending="pendingAction?.kind === 'defaults' && command.pending.value"
                             :disabled="blocked || (defaultsConflict)"
                             >{{ messages.t('packing.updatePermissions') }}</ActionButton
                         >
@@ -574,7 +574,6 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                                             class="btn-sm"
                                             variant="outline-danger"
                                             :pending="pendingAction?.kind === 'remove' && pendingAction.id === admin.profileId && command.pending.value"
-                                            :show-spinner="false"
                                             :disabled="blocked"
                                             @click="removeAdmin(admin.profileId)"
                                             ><i class="bi bi-trash me-1" aria-hidden="true"></i
@@ -582,7 +581,6 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                                         ><ActionButton
                                             class="btn-sm"
                                             :pending="pendingAction?.kind === 'save' && pendingAction.id === admin.profileId && command.pending.value"
-                                            :show-spinner="false"
                                             :disabled="
                                                 blocked ||
                                                 adminConflict(admin.profileId)
@@ -666,7 +664,7 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                                 @click="cancelAddAdmin"
                                 >{{ messages.t('common.cancel') }}</ActionButton
                             ><ActionButton type="submit" :disabled="blocked"
-                                :pending="pendingAction?.kind === 'add' && command.pending.value" :show-spinner="false">{{
+                                :pending="pendingAction?.kind === 'add' && command.pending.value">{{
                                 messages.t('packing.add')
                             }}</ActionButton>
                         </div>

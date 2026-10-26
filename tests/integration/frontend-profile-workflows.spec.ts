@@ -14,6 +14,7 @@ import type {FrontendBootstrap} from '../../src/types/FrontendTypes';
 import type {components, operations} from '../../src/types/api/v1';
 import {registerLocalAccount} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
+import {prepareFrontendSsrModules} from '../support/frontendRenderer';
 import {contractValidator} from '../../src/modules/api/contracts';
 import {createTranslator} from '../../src/modules/localization/translator';
 
@@ -85,19 +86,34 @@ function createHttpActor() {
     return {get, post, postJson, putJson, deleteJson, postEmpty, sessionId};
 }
 
-beforeAll(async function prepareRealApplication() {
+/** Admit the real persistence/application owners and wait for their pure renderer
+ * infrastructure before opening the fixture listener, matching installed startup. */
+async function prepareApplicationListener(rendererReady: Promise<void>): Promise<void> {
     await initializeIntegrationDatabase();
     // Replace only external delivery. Actual routing, account/profile decisions,
     // sessions and persistence remain intact, including native partial failures.
     vi.spyOn(mailer, 'sendMigrationEmail').mockResolvedValue();
     vi.spyOn(mailer, 'sendDeletionEmail').mockResolvedValue();
     const application = (await vi.importActual<typeof import('../../src/app')>('../../src/app')).default;
+    // Module preparation is independent of persistence. Its failure must prevent
+    // HTTP readiness while the shared hook still awaits both preparation branches.
+    await rendererReady;
     listener = http.createServer(application);
     await new Promise<void>(function listenLocally(resolve) { listener!.listen(0, '127.0.0.1', resolve); });
     const address = listener.address();
     if (!address || typeof address === 'string') throw new Error('The workflow integration listener has no local port.');
     origin = `http://127.0.0.1:${address.port}`;
     vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value, rootUrl: origin});
+}
+
+/** Keep compiler readiness in suite infrastructure and all actual actor/request
+ * assertions under their existing deadlines. Await both branches before teardown. */
+beforeAll(async function prepareRealApplication(): Promise<void> {
+    const rendererReady = prepareFrontendSsrModules(['ProfileWorkflowPage']);
+    const preparation = await Promise.allSettled([prepareApplicationListener(rendererReady), rendererReady]);
+    // A failed module lookup or database setup must not leave its independent
+    // branch running when the suite closes its listener/session store/database.
+    for (const result of preparation) if (result.status === 'rejected') throw result.reason;
 });
 
 afterEach(() => { vi.clearAllMocks(); });

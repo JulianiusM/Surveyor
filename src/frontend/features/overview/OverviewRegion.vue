@@ -47,10 +47,14 @@ const documentInteraction: FrontendOverviewCardInteraction = {clientNavigation: 
 // Typed identity is presentation only: different entity families may share a UUID.
 // The existing command remains the only request, authority and outcome owner.
 const pendingRemoval = shallowRef<{type: components['schemas']['OverviewCard']['type']; id: string} | null>(null);
+// Menu disclosure closes before its asynchronous command finishes. Keep only
+// the initiating card's identity; the existing command owns actual progress.
+const pendingMenu = shallowRef<{type: components['schemas']['OverviewCard']['type']; id: string} | null>(null);
 
 function cardInteraction(card: components['schemas']['OverviewCard']): FrontendOverviewCardInteraction {
     const removePending = pendingRemoval.value?.type === card.type && pendingRemoval.value.id === card.id;
-    const writeState = {removePending, removeDisabled: removal.action.disabled.value, writesDisabled: overviewInvalidated.value};
+    const menuPending = command.pending.value && pendingMenu.value?.type === card.type && pendingMenu.value.id === card.id;
+    const writeState = {removePending, menuPending, removeDisabled: removal.action.disabled.value, writesDisabled: overviewInvalidated.value};
     if (card.type === 'event') return {...writeState, clientNavigation: true, readHeader: eventApi.header.bind(eventApi), duplicateUrl: card.url + '/duplicate'};
     if (card.type === 'drivers') return {...writeState, clientNavigation: true, readHeader: driversApi.header.bind(driversApi), duplicateUrl: card.url + '/duplicate'};
     if (card.type === 'survey') return {...writeState, clientNavigation: true, readHeader: surveyApi.header.bind(surveyApi), duplicateUrl: card.url + '/duplicate'};
@@ -434,6 +438,7 @@ function navigationHref(values: Record<string, string | undefined>): string {
 function retirePresentation(): void {
     retireReads();
     pendingRemoval.value = null;
+    pendingMenu.value = null;
     lastConfirmed.value = null;
     deniedRead.value = null;
     returnPosition = undefined;
@@ -614,8 +619,8 @@ async function setVisibility(
     if (writesBlocked.value) return;
     const success = value === 'hidden' ? 'overview.visibilityHidden'
         : value === 'shown' ? 'overview.visibilityShown' : 'overview.visibilityDefault';
-    await command.run((scope) => api.visibility(card.type, card.id, value, scope), true, false,
-        {success});
+    await presentMenuCommand(card, () => command.run((scope) => api.visibility(card.type, card.id, value, scope), true, false,
+        {success}));
 }
 
 /** Confirm the shared lifecycle action using the card's inherited-state wording.
@@ -625,8 +630,8 @@ async function archive(card: components['schemas']['OverviewCard'], restore: boo
     if (writesBlocked.value) return;
     const lifecycle = card.type === 'event' ? eventLifecycle : card.type === 'drivers' ? driversLifecycle
         : card.type === 'survey' ? surveyLifecycle : card.type === 'activity' ? activityLifecycle : packingLifecycle;
-    await lifecycle.archive(card.id, restore, card.inheritedArchived,
-        card.type === 'event' ? restore ? 'event.confirmRestore' : 'event.confirmArchive' : undefined, !!card.automation);
+    await presentMenuCommand(card, () => lifecycle.archive(card.id, restore, card.inheritedArchived,
+        card.type === 'event' ? restore ? 'event.confirmRestore' : 'event.confirmArchive' : undefined, !!card.automation));
 }
 
 /** Personal Overview retains schedule controls for admitted Event and
@@ -639,7 +644,21 @@ async function automate(card: components['schemas']['OverviewCard'], paused: boo
     // cards stay inert even if an obsolete callback survives their replacement.
     const lifecycle = card.type === 'event' ? eventLifecycle : card.type === 'activity' ? activityLifecycle : null;
     if (!lifecycle) return;
-    await lifecycle.automate(card.id, paused);
+    await presentMenuCommand(card, () => lifecycle.automate(card.id, paused));
+}
+
+/** Retain only the initiating menu's presentation through its existing command
+ * and follow-up reads. Confirmation, dispatch and failure remain with that owner. */
+async function presentMenuCommand(card: components['schemas']['OverviewCard'], operation: () => Promise<unknown>): Promise<void> {
+    const intent = {type: card.type, id: card.id};
+    pendingMenu.value = intent;
+    try {
+        await operation();
+    } finally {
+        // Actor retirement may clear this selection while the admitted write
+        // settles. An old completion cannot clear a later gesture's presentation.
+        if (pendingMenu.value === intent) pendingMenu.value = null;
+    }
 }
 
 /** Deliver permanent deletion through the existing confirmed-navigation owner.

@@ -32,12 +32,12 @@ const {messages} = useFrontend();
                     </template></StatusNotice
                 >
                 <div class="frontend-action-row">
-                    <ActionButton :disabled="disabled || conflict" :pending="uploadPending" :show-spinner="false"
+                    <ActionButton :disabled="disabled || conflict" :pending="uploadPending"
                         @click="emit('upload', $event)">{{
                         labels.upload
                     }}</ActionButton
                     ><ActionButton v-if="hasImage" variant="outline-danger" :disabled="disabled"
-                        :pending="removePending" :show-spinner="false"
+                        :pending="removePending"
                         @click="emit('remove', $event)">{{ labels.remove }}</ActionButton>
                 </div>
             </div>

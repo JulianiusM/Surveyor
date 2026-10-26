@@ -378,7 +378,7 @@ const reorder = useListReorder({
             <CommandFeedback :feedback="command.feedback" :disabled="command.pending.value || command.recovering.value"
                 :creation-review="{required: command.reviewRequired.value, message: 'packing.reviewUnknownItem', state: readAction, paragraphClass: 'mb-2'}"
                 @review-creation="reviewUnknownCreation('packing.confirmUnknownReviewed')" />
-            <EntityDetailReadState :denied="denied" :error="list.error.value" :has-data="!!data" :pending="list.isPending.value"
+            <EntityDetailReadState :denied="denied" :error="list.error.value" :has-data="!!data" :pending="list.isPending.value" :refreshing="list.isFetching.value"
                 :last-updated-at="list.data.value ? list.dataUpdatedAt.value : undefined" :retry-at="retryAt" :skeleton="route.meta.loadingSkeleton" />
             <template v-if="data">
                 <!-- Storage failures are durable and cannot expire into silent loss.
@@ -531,7 +531,7 @@ const reorder = useListReorder({
                                         v-if="item.capabilities.removeItem"
                                         class="btn-sm ms-1"
                                         variant="outline-danger"
-                                        :pending="command.pending.value && pendingControl?.kind === 'delete' && pendingControl.id === item.id" :show-spinner="false"
+                                        :pending="command.pending.value && pendingControl?.kind === 'delete' && pendingControl.id === item.id"
                                         :disabled="blocked"
                                         :aria-label="messages.t('packing.deleteItem')"
                                         @click="removeItem(item)"

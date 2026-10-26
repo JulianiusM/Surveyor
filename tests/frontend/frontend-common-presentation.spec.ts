@@ -14,6 +14,10 @@ import EntityDescription from '../../src/frontend/components/EntityDescription.v
 import FormField from '../../src/frontend/components/FormField.vue';
 import FileField from '../../src/frontend/components/FileField.vue';
 import ActionButton from '../../src/frontend/components/ActionButton.vue';
+import EntityAssignmentActions from '../../src/frontend/components/EntityAssignmentActions.vue';
+import EntityQuickAdd from '../../src/frontend/components/EntityQuickAdd.vue';
+import EntityLifecycleActions from '../../src/frontend/components/EntityLifecycleActions.vue';
+import EntityDetailReadState from '../../src/frontend/components/EntityDetailReadState.vue';
 import AppHeader from '../../src/frontend/components/AppHeader.vue';
 import {createFrontendContext, observeInitialDocument, frontendContextKey, useActionState} from '../../src/frontend/app/context';
 import {frontendRoutes} from '../../src/frontend/routes';
@@ -362,6 +366,53 @@ describe('common frontend presentation', () => {
         await flushPromises();
         expect(document.activeElement).toBe(button);
         expect(button.disabled).toBe(false);
+    });
+
+    it.each([
+        {name: 'assignment', component: EntityAssignmentActions, props: {assigned: false, full: false, disabled: false,
+            assignLabel: 'Join', removeLabel: 'Leave', fullLabel: 'Full'}, pending: {pending: true}, settled: {pending: false}},
+        {name: 'quick add', component: EntityQuickAdd, props: {description: 'Keep this draft', capacity: null, disabled: false},
+            pending: {pending: true}, settled: {pending: false}},
+        {name: 'permanent deletion', component: EntityLifecycleActions, props: {labels: {activeHint: 'Active', archivedHint: 'Archived',
+            inheritedHint: 'Inherited', openEvent: 'Open Event', otherActions: 'Actions', deletePermanently: 'Delete permanently'},
+            direct: false, inherited: false, eventUrl: null, manageArchive: false, canArchive: false, canRestore: false,
+            canDuplicate: false, canRemove: true, duplicateTo: '/', disabled: false},
+            pending: {pendingAction: 'remove'}, settled: {pendingAction: null}},
+    ])('shows progress at the initiating $name control without another request', async example => {
+        const {wrapper, request} = await mounted(example.component, example.props);
+        const button = wrapper.get<HTMLButtonElement>('button').element;
+        expect(wrapper.find('.spinner-border').exists()).toBe(false);
+
+        // The feature supplies the same pending state that already prevents a
+        // repeated action. Its real shared button must also make progress visible.
+        await wrapper.setProps(example.pending);
+        expect(wrapper.get('button').element).toBe(button);
+        expect(button.disabled).toBe(true);
+        expect(button.getAttribute('aria-busy')).toBe('true');
+        expect(wrapper.get('button .spinner-border').attributes('aria-hidden')).toBe('true');
+
+        await wrapper.setProps(example.settled);
+        expect(wrapper.find('.spinner-border').exists()).toBe(false);
+        expect(button.disabled).toBe(false);
+        expect(request).not.toHaveBeenCalled();
+    });
+
+    it('shows localized retained-data read progress without a replacement skeleton', async () => {
+        const {wrapper, context, request} = await mounted(EntityDetailReadState,
+            {denied: false, error: null, hasData: true, pending: false, refreshing: true});
+        const statusRow = wrapper.get('[role="status"]').element.parentElement;
+        expect(wrapper.get('[role="status"]').text()).toBe('Loading…');
+        expect(wrapper.find('.frontend-skeleton').exists()).toBe(false);
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(wrapper.get('[role="status"]').text()).toBe('Wird geladen…');
+
+        // A routine read finishing releases its message while preserving the
+        // reserved row, so repeated background reads cannot shift the detail body.
+        await wrapper.setProps({refreshing: false});
+        expect(wrapper.find('[role="status"]').exists()).toBe(false);
+        expect(statusRow?.isConnected).toBe(true);
+        expect(request).not.toHaveBeenCalled();
     });
 
     it.each([

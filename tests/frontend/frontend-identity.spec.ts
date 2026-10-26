@@ -302,6 +302,9 @@ describe('identity forms and packing overview navigation', () => {
         await wrapper.get('header form').trigger('submit');
         await flushPromises();
         try {
+            expect(wrapper.get('header form button').attributes('aria-busy')).toBe('true');
+            expect(wrapper.find('header form button .spinner-border').exists()).toBe(true);
+            expect(wrapper.find('header summary .spinner-border').exists()).toBe(true);
             expect(context.mayChangeIdentity()).toBe(false);
             const departure = new Event('beforeunload', {cancelable: true});
             window.dispatchEvent(departure);
@@ -314,6 +317,7 @@ describe('identity forms and packing overview navigation', () => {
             await flushPromises();
         }
         expect(context.session.value?.context).toBe(anonymous.context);
+        expect(wrapper.find('header summary .spinner-border').exists()).toBe(false);
         expect(context.pageNotice.value).toEqual({kind: 'success', messageKey: 'auth.logoutDone'});
         expect(context.mayChangeIdentity()).toBe(true);
         expect(request.mock.calls.filter(([req]) => (req as Request).method === 'POST')).toHaveLength(1);

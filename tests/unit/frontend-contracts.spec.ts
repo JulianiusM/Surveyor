@@ -10,7 +10,7 @@ import {isRegistrationPasswordValid} from '../../src/modules/lib/frontendIdentit
 import type {Request, RequestHandler, Response} from 'express';
 import {normalizePackingMetadataPatch} from '../../src/controller/packingController';
 import {decodeApiMultipartData, decodeApiMultipartImage, receiveApiUpload, sendStoredApiBinary, validateOperationRequest} from '../../src/modules/api/transport';
-import {operationContract} from '../../src/modules/api/contracts';
+import {apiContract, operationContract} from '../../src/modules/api/contracts';
 
 const listId = 'd506d78a-e2d7-4be9-bc95-04d83bbd22ec';
 const itemId = 'f092070d-07e3-461e-94bb-84b1d828dc38';
@@ -322,6 +322,32 @@ describe('generated v1 contract boundaries', () => {
         expect(browser.validateProblem(newer)).toBe(false);
         expect(browser.validateSafeProblemDetails(newer)).toBe(true);
         expect(browser.validateSafeProblemDetails({...newer, status: 200})).toBe(false);
+    });
+
+    it('validates every authored problem branch without accepting another code, status or parameter shape', function validatesEveryProblemBranch() {
+        // Generated dispatch must preserve the full authored error inventory. The
+        // current required parameters are item UUIDs; derive their field names
+        // from the same manifest instead of copying an inventory of error codes.
+        for (const contract of apiContract.problems) {
+            const schema = contract.paramsSchema as {required?: string[]};
+            const params = Object.fromEntries((schema.required ?? []).map(name => [name, itemId]));
+            const problem = {type: 'about:blank', title: 'Rejected', detail: 'Synthetic rejection', requestId: 'all-problems',
+                code: contract.code, status: contract.status, messageKey: contract.messageKey, params};
+
+            // Both standalone runtimes keep the same accept/reject boundary even
+            // when the generator selects a unique code branch more efficiently.
+            for (const validators of [server, browser]) {
+                expect(validators.validateProblem(problem), contract.code).toBe(true);
+                for (const field of ['code', 'status', 'messageKey', 'params']) {
+                    expect(validators.validateProblem({...problem, [field]: null}), `${contract.code}: ${field}`).toBe(false);
+                }
+                expect(validators.validateProblem({...problem, code: 'UNKNOWN_ERROR'})).toBe(false);
+                expect(validators.validateProblem({...problem, status: 200})).toBe(false);
+                expect(validators.validateProblem({...problem, messageKey: 'api:errors.UNKNOWN_ERROR'})).toBe(false);
+                expect(validators.validateProblem({...problem, params: {unexpected: true}})).toBe(false);
+                expect(validators.validateProblem({...problem, fieldErrors: [{pointer: '/input', code: 'invalid'}]})).toBe(true);
+            }
+        }
     });
 
     it('enforces anonymous session privacy without requiring an active profile for an existing account', () => {

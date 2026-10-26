@@ -16,6 +16,17 @@ export async function render(url: string, bootstrap: FrontendBootstrap): Promise
         // App and the document renderer use the same route/evidence classification.
         // SSR remains the matching hydration tree, including readable Help/results.
         const javascriptRequired = context.requiresClientInitialization(router.currentRoute.value);
-        return {html, title: context.pageTitle.value, state: serializeBootstrap(initial), javascriptRequired};
+        // Router has already resolved its lazy views even while the shell renders
+        // a skeleton. Expose only their compiler names so the document can hint a
+        // unique matching public build entry without mounting another feature.
+        const routeComponentNames = new Set<string>();
+        for (const record of router.currentRoute.value.matched) {
+            const component = record.components?.default;
+            if (typeof component !== 'object' || component === null) continue;
+            const name = component.__name ?? component.name;
+            if (typeof name === 'string') routeComponentNames.add(name);
+        }
+        return {html, title: context.pageTitle.value, state: serializeBootstrap(initial), javascriptRequired,
+            routeComponentNames: [...routeComponentNames]};
     } finally { context.start()(); }
 }

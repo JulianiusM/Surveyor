@@ -190,6 +190,97 @@ describe('shared displayed entity header consumers', () => {
 });
 
 describe('shared automatic archival consumers', () => {
+    it.each([
+        {label: 'Archive for everyone', method: 'POST', suffix: 'archive'},
+        {label: 'Pause automatic archival', method: 'PUT', suffix: 'automatic-archive'},
+    ].flatMap(gesture => [false, true].map(failed => ({...gesture, failed}))))(
+        'retains the initiating child menu through $label and fresh delivery (failed=$failed)', async gesture => {
+            let finishWrite!: (value: Response) => void;
+            let finishRead!: (value: Response) => void;
+            const write = new Promise<Response>(resolve => { finishWrite = resolve; });
+            const read = new Promise<Response>(resolve => { finishRead = resolve; });
+            const selected: components['schemas']['OverviewCard'] = {
+                id: childId, type: 'activity', title: 'Menu Activity', description: null,
+                url: `/activity/${childId}`, headerUrl: null, headerVersion: null, eventContext: null,
+                visibility: 'default', overviewHidden: false, archived: false, inheritedArchived: false,
+                capabilities: {archive: true, restore: false, duplicate: false, remove: false},
+                children: null, automation: {paused: false, canManage: true},
+            };
+            const sibling = {...selected, type: 'packing' as const, title: 'Menu Packing', url: `/packing/${childId}`};
+            let writes = 0;
+            let freshRead = false;
+            let recovery = false;
+            const mounted = await mountFrontendEvent(EventThingsToDo,
+                async function deliverChildGesture(request): Promise<Response> {
+                    if (request.method !== 'GET') {
+                        writes++;
+                        expect(request.method).toBe(gesture.method);
+                        expect(new URL(request.url).pathname)
+                            .toBe(`/api/v1/events/${frontendEventId}/things-to-do/activity/${childId}/${gesture.suffix}`);
+                        return write;
+                    }
+                    if (writes && !recovery) { freshRead = true; return read; }
+                    return json({items: [selected, sibling]});
+                }, {eventId: frontendEventId});
+            cleanups.push(mounted.dispose);
+            const initiating = mounted.wrapper.get('article[data-type="activity"]');
+            const adjacent = mounted.wrapper.get('article[data-type="packing"]');
+            const input = mounted.wrapper.get<HTMLInputElement>('input[type="search"]');
+            await input.setValue('Menu');
+            const button = initiating.findAll('button.dropdown-item').find(value => value.text() === gesture.label)!;
+            const details = button.element.closest('details') as HTMLDetailsElement;
+
+            try {
+                // The ordinary dropdown dismisses; the same visible card trigger
+                // carries progress even when a sibling shares its identifier.
+                details.open = true;
+                await button.trigger('click');
+                await flushPromises();
+                expect(details.open).toBe(false);
+                expect(initiating.get('summary .frontend-card-action-progress').text())
+                    .toBe(mounted.context.messages.value.t('common.pending'));
+                expect(adjacent.find('.frontend-card-action-progress').exists()).toBe(false);
+                expect((button.element as HTMLButtonElement).disabled).toBe(true);
+                (button.element as HTMLButtonElement).click();
+                expect(writes).toBe(1);
+
+                // A confirmed command still owns its following real section read.
+                // Retain the local filter and card nodes throughout that wait.
+                finishWrite(json({changed: true}));
+                await flushPromises();
+                expect(freshRead).toBe(true);
+                expect(initiating.find('.frontend-card-action-progress').exists()).toBe(true);
+                expect(adjacent.find('.frontend-card-action-progress').exists()).toBe(false);
+                expect(mounted.wrapper.get('article[data-type="activity"]').element).toBe(initiating.element);
+                expect(input.element.value).toBe('Menu');
+                finishRead(gesture.failed ? new Response('<p>Temporarily unavailable</p>', {status: 429,
+                    headers: {'Content-Type': 'text/html', 'X-Surveyor-Context': session.context}})
+                    : json({items: [selected, sibling]}));
+                await flushPromises();
+                expect(mounted.wrapper.find('.frontend-card-action-progress').exists()).toBe(false);
+                expect(mounted.wrapper.get('article[data-type="activity"]').element).toBe(initiating.element);
+                expect(input.element.value).toBe('Menu');
+                if (gesture.failed) expect(mounted.wrapper.text())
+                    .toContain(mounted.context.messages.value.t('state.savedRefreshFailed'));
+
+                // Explicit read recovery never repeats the child mutation and
+                // never borrows its old initiating spinner for background work.
+                recovery = true;
+                await mounted.context.queryClient.refetchQueries({
+                    queryKey: eventKeys.things(session.context, frontendEventId, false), exact: true,
+                });
+                await flushPromises();
+                expect(mounted.wrapper.find('.frontend-card-action-progress').exists()).toBe(false);
+                expect(mounted.request.mock.calls.filter(([value]) => (value as Request).method !== 'GET')).toHaveLength(1);
+                expect(input.element.value).toBe('Menu');
+            } finally {
+                finishWrite(json({changed: false}));
+                finishRead(json({items: [selected, sibling]}));
+                await flushPromises();
+            }
+        },
+    );
+
     it.each(['Activity settings', 'Event settings'] as const)(
         'shares scheduled restore consent through %s while retaining Event wording', async function preservesScheduledRestore(consumer) {
             const eventSettings: components['schemas']['EventSettings'] = {

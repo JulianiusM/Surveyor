@@ -42,6 +42,9 @@ export default defineConfig({
     plugins: [vue()],
     test: {
         globals: false,
+        // Vitest 5 defaults to clearing history before each test. Preserve the
+        // existing suites' explicitly managed mocks, including beforeAll reads.
+        clearMocks: false,
         environment: 'node',
         // Date fixtures and the database contract use UTC, as CI already does.
         // Apply that contract in each worker so a developer's local zone cannot

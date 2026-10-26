@@ -528,6 +528,13 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
 
             // Confirmation belongs to the write. A following read failure cannot undo it.
             if (refreshAfter) {
+                // Returning from a native confirmation can trigger focus/session
+                // revalidation while the write settles. Join that existing read
+                // before refreshing instead of treating its temporary dispatch
+                // barrier as a failed saved-state read. No new session request or
+                // command replay is needed; real read failures still reach below.
+                if (!context.mayRead(scope) && context.sessionRead.value.pending) await context.refreshSession();
+                if (!context.isCurrent(scope)) throw new ObsoleteRequestError();
                 await refresh();
                 outcome.value = {confirmation: 'confirmed', refresh: 'succeeded'};
             }

@@ -204,7 +204,7 @@ function close(): void {
                         <p class="small mb-0">{{ adjustment.note }}</p>
                     </div>
                     <ActionButton variant="outline-danger" class="btn-sm align-self-start" :state="action"
-                                  :pending="removal.pending.value && removalReview?.adjustmentId === adjustment.id" :show-spinner="false"
+                                  :pending="removal.pending.value && removalReview?.adjustmentId === adjustment.id"
                                   :aria-label="messages.t('finance.removeFor', {kind: messages.t(Number(adjustment.amount) < 0 ? 'finance.rebate' : 'finance.surcharge'), name: personName(adjustment.registrationId)})"
                                   @click="remove(adjustment, $event)">
                         {{ messages.t('finance.remove') }}
@@ -251,7 +251,7 @@ function close(): void {
             <ActionButton variant="outline-secondary" :state="action" @click="discard">{{ messages.t('finance.discardEdits') }}</ActionButton>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value || removal.pending.value || removal.recovering.value" @click="close">{{ messages.t('common.close') }}</ActionButton>
             <ActionButton :form="`${id}-form`" type="submit" :state="action"
-                :pending="command.pending.value" :show-spinner="false"><i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('finance.addSurchargeOrRebate') }}</ActionButton>
+                :pending="command.pending.value"><i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('finance.addSurchargeOrRebate') }}</ActionButton>
         </template>
         <template v-if="removalReview" #footer>
             <ActionButton :id="`${id}-cancel-removal`" variant="secondary"

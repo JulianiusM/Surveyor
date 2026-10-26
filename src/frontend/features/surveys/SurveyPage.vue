@@ -175,7 +175,7 @@ async function addCombination(): Promise<void> {
             <template #actions><RefreshButton :state="readAction" @refresh="refresh" /></template>
         </EntityHeader>
         <div class="card-body">
-            <EntityDetailReadState :denied="denied" :error="list.error.value" :has-data="!!data" :pending="list.isPending.value"
+            <EntityDetailReadState :denied="denied" :error="list.error.value" :has-data="!!data" :pending="list.isPending.value" :refreshing="list.isFetching.value"
                 :last-updated-at="data ? list.dataUpdatedAt.value : undefined" :retry-at="retryAt" :skeleton="route.meta.loadingSkeleton">
             </EntityDetailReadState>
             <template v-if="data">

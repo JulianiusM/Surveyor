@@ -406,7 +406,9 @@ describe('lazy route delivery', () => {
         const navigation = router.push('/slow');
         await flushPromises();
         expect(wrapper.get('.frontend-navigation-loading').attributes('role')).toBe('status');
-        expect(wrapper.get('.frontend-navigation-loading').classes()).toContain('visually-hidden');
+        expect(wrapper.get('.frontend-navigation-loading').classes()).not.toContain('visually-hidden');
+        expect(wrapper.get('.frontend-navigation-loading').text()).toBe('Loading…');
+        expect(wrapper.get('.frontend-navigation-loading .spinner-border').attributes('aria-hidden')).toBe('true');
         expect(wrapper.find('main [data-loading-skeleton]').exists()).toBe(false);
         expect(wrapper.find('header .frontend-navigation-indicator .spinner-border').exists()).toBe(true);
         expect(router.currentRoute.value.path).toBe('/');

@@ -112,7 +112,7 @@ async function reviewUnknown(): Promise<void> {
                         v-if="field.capabilities.delete"
                         type="button"
                         class="btn-sm text-field-delete" variant="outline-danger"
-                        :pending="command.pending.value && removingId === field.id" :show-spinner="false"
+                        :pending="command.pending.value && removingId === field.id"
                         :data-text-field-id="field.id"
                         :disabled="blocked"
                         :aria-label="messages.t('packing.deleteItem')"
@@ -203,7 +203,7 @@ async function reviewUnknown(): Promise<void> {
                     type="submit"
                     form="textFieldForm"
                     class="btn-sm" variant="primary"
-                    :pending="command.pending.value && !removingId" :show-spinner="false"
+                    :pending="command.pending.value && !removingId"
                     :disabled="blocked || !maySave || conflict">
                     <i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('common.save') }}</ActionButton>
             </template>

@@ -459,6 +459,50 @@ describe('reconcile-only commands', () => {
         expect(write).toHaveBeenCalledOnce();
     });
 
+    it.each(['success', 'failure', 'actor-change'] as const)(
+        'waits for an overlapping session read before confirmed-command refresh (%s)', async mode => {
+            let finishSession!: (response: Response) => void;
+            let failSession!: (error: Error) => void;
+            const request = vi.fn(() => new Promise<Response>((resolve, reject) => {
+                finishSession = resolve;
+                failSession = reject;
+            }));
+            const {command, context, refresh} = await mountedCommand(false, request);
+            const write = vi.fn(async () => ({changed: true}));
+
+            // Focus after native confirmation starts this existing session read.
+            // The completed command must wait without another bootstrap or write.
+            const checking = context.refreshSession().catch(() => undefined);
+            const running = command.run(write);
+            await flushPromises();
+            expect(command.outcome.value).toEqual({confirmation: 'confirmed', refresh: 'pending'});
+            expect(command.pending.value).toBe(true);
+            expect(refresh).not.toHaveBeenCalled();
+            expect(request).toHaveBeenCalledOnce();
+
+            if (mode === 'failure') failSession(new TypeError('Session read unavailable'));
+            else {
+                const current = mode === 'actor-change' ? {...session, context: 'replacement-context-1234567890'} : session;
+                finishSession(new Response(JSON.stringify(current), {headers: {'Content-Type': 'application/json',
+                    'X-Surveyor-Context': current.context!}}));
+            }
+            await checking;
+            const result = await running;
+
+            // Only healthy current-actor admission starts the resource refresh.
+            // Real failure retains saved feedback; actor replacement retires it.
+            expect(write).toHaveBeenCalledOnce();
+            expect(request).toHaveBeenCalledOnce();
+            expect(refresh).toHaveBeenCalledTimes(mode === 'success' ? 1 : 0);
+            expect(command.pending.value).toBe(false);
+            expect(command.uncertain.value).toBe(false);
+            expect(command.outcome.value?.confirmation).toBe(mode === 'actor-change' ? 'obsolete' : 'confirmed');
+            expect(command.notice.value).toBe(mode === 'success' ? 'state.saved'
+                : mode === 'failure' ? 'state.savedRefreshFailed' : null);
+            expect(result).toEqual(mode === 'actor-change' ? undefined : {changed: true});
+        },
+    );
+
     it('keeps intentional disposal before write confirmation obsolete', async function preservesPreconfirmationDisposal() {
         const {command, context, refresh} = await mountedCommand();
         const scope = context.capture();

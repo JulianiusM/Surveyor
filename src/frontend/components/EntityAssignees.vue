@@ -18,7 +18,7 @@ const emit = defineEmits<{remove: [id: string]}>();
             <template v-if="removable && assignee.assignmentId !== null">
                 <slot name="remove" :assignment-id="assignee.assignmentId">
                     <ActionButton class="btn-sm" variant="outline-danger"
-                        :disabled="disabled" :pending="pendingAssignmentId === assignee.assignmentId" :show-spinner="false"
+                        :disabled="disabled" :pending="pendingAssignmentId === assignee.assignmentId"
                         :aria-label="removeLabel" @click="emit('remove', assignee.assignmentId)">&times;</ActionButton>
                 </slot>
             </template>

@@ -60,6 +60,7 @@ test('accepts declaration contracts and documented DBAL/short named selectors', 
     assert.equal(result.status, 0);
     assert.equal(result.report.errors.length, 0);
     assert.ok(result.report.manualReview.length > 0);
+    assert.match(result.report.manualReview.join(' '), /every maintainer question.*final answer.*outstanding requests.*in full/u);
 });
 
 test('rejects executable files in src/types', t => {
@@ -317,8 +318,9 @@ test('approval preflight reads policy labels and accepts clear single and distin
     assert.equal(single.status, 0);
     assert.equal(single.report.mode, 'approval-request');
     assert.equal(single.report.checkedRequests, 1);
-    assert.equal(single.report.limitations.length, 2);
+    assert.equal(single.report.limitations.length, 3);
     assert.match(single.report.limitations.join(' '), /cannot establish.*approval/u);
+    assert.match(single.report.limitations.join(' '), /every outstanding question.*final answer.*cannot verify conversation channels/u);
     write(root, file, approvalRequest() + '\n' + approvalRequest('R2'));
     assert.equal(run(root, args).status, 0);
 

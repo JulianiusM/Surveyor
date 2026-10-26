@@ -287,10 +287,10 @@ async function refresh(): Promise<void> {
                                                         :state="management" @click="editDates(row)"><i class="bi bi-calendar2-week" aria-hidden="true"></i> {{ messages.t('event.organizer.editDates') }}</ActionButton>
                                                     <ActionButton v-if="row.email" variant="outline-light"
                                                         :state="available" :disabled="clipboard.pending.has(row.id)"
-                                                        :pending="clipboard.pending.has(row.id)" :show-spinner="false"
+                                                        :pending="clipboard.pending.has(row.id)"
                                                         @click="copyEmail(row)"><i class="bi bi-clipboard" aria-hidden="true"></i> {{ messages.t('event.organizer.copyEmail') }}</ActionButton>
                                                     <ActionButton v-if="manageRegistrations" variant="outline-danger"
-                                                        :pending="command.pending.value && removingId === row.id" :show-spinner="false"
+                                                        :pending="command.pending.value && removingId === row.id"
                                                         :state="management" @click="removeRegistration(row)"><i class="bi bi-trash" aria-hidden="true"></i> {{ messages.t('event.organizer.deleteRegistration') }}</ActionButton>
                                                 </div>
                                             </td>
@@ -368,7 +368,7 @@ async function refresh(): Promise<void> {
                     <ActionButton variant="outline-secondary"
                         :disabled="command.pending.value || command.recovering.value" @click="closeDates">{{ messages.t('common.cancel') }}</ActionButton>
                     <ActionButton type="submit" :form="`${id}-date-form`" :state="management"
-                        :pending="command.pending.value && !removingId" :show-spinner="false"><i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('event.organizer.saveDates') }}</ActionButton>
+                        :pending="command.pending.value && !removingId"><i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('event.organizer.saveDates') }}</ActionButton>
                 </div>
             </template>
         </AppDialog>

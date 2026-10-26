@@ -40,7 +40,8 @@ export class ActivityPlanRequirementOverride extends NumericProfileBase implemen
     roleId?: number | null;
 
     @ManyToOne(() => ActivityRole, {
-        onDelete: "RESTRICT",
+        // Remove only role-specific overrides when that role is removed.
+        onDelete: "CASCADE",
         onUpdate: "CASCADE",
         nullable: true,
     })

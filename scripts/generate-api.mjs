@@ -314,7 +314,7 @@ for (const browser of [false, true]) {
     const id = `urn:surveyor:api:v1:${browser ? 'browser' : 'server'}`;
     const requestId = browser ? `${id}:request` : id;
     const ajv = new Ajv2020({strict: true, allErrors: true, coerceTypes: false, useDefaults: false,
-        removeAdditional: false, validateFormats: true, code: {source: true, esm: browser}});
+        removeAdditional: false, validateFormats: true, discriminator: true, code: {source: true, esm: browser}});
     addFormats(ajv);
     ajv.addKeyword({keyword: 'x-surveyor-min-length-utf16', type: 'string', schemaType: 'number',
         metaSchema: {type: 'integer', minimum: 0}, code: compileUtf16Minimum,
@@ -325,7 +325,13 @@ for (const browser of [false, true]) {
         const additive = browser && graphId === id;
         const definitions = [];
         for (const [name, schema] of Object.entries(allSchemas)) {
-            definitions.push([name, validatorSchema(schema, graphId, additive)]);
+            const compiled = validatorSchema(schema, graphId, additive);
+            // Problem already requires a unique constant code in every variant.
+            // Tell Ajv to select that branch directly instead of trying every
+            // unrelated error code. This generated annotation changes neither the
+            // authored contract nor accepted payloads; malformed tags still fail.
+            if (name === 'Problem') compiled.discriminator = {propertyName: 'code'};
+            definitions.push([name, compiled]);
         }
         ajv.addSchema({$id: graphId, $defs: Object.fromEntries(definitions)});
     }

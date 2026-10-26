@@ -113,7 +113,7 @@ async function save(): Promise<void> {
                 type="submit"
                 form="slotRoleAdminForm"
                 class="btn-sm" variant="primary"
-                :pending="command.pending.value" :show-spinner="false"
+                :pending="command.pending.value"
                 :disabled="blocked || !slot.roles.length">
                 <i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('activity.saveChanges') }}</ActionButton>
         </template>

@@ -117,12 +117,12 @@ function beginNew(action: 'approve' | 'decline'): void {
             <div class="frontend-action-row flex-wrap gap-1">
                 <template v-if="invoice.status === 'NEW'">
                     <ActionButton variant="success" class="btn-sm" :disabled="disabled" :state="review?.actionState"
-                        :pending="review?.command.pending.value && review.operation.value === 'approve'" :show-spinner="false"
+                        :pending="review?.command.pending.value && review.operation.value === 'approve'"
                         @click="review ? beginNew('approve') : emit('review', invoice, 'approve')">
                         <i class="bi bi-check2 me-1" aria-hidden="true"></i>{{ messages.t('finance.accept') }}
                     </ActionButton>
                     <ActionButton variant="outline-danger" class="btn-sm" :disabled="disabled" :state="review?.actionState"
-                        :pending="review?.command.pending.value && review.operation.value === 'decline'" :show-spinner="false"
+                        :pending="review?.command.pending.value && review.operation.value === 'decline'"
                         @click="review ? beginNew('decline') : emit('review', invoice, 'decline')">
                         <i class="bi bi-x-lg me-1" aria-hidden="true"></i>{{ messages.t('finance.reject') }}
                     </ActionButton>
@@ -146,7 +146,7 @@ function beginNew(action: 'approve' | 'decline'): void {
                 <i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>
                 {{ messages.t('finance.retract') }}
             </ActionButton>
-            <ActionButton v-else-if="invoice.canClose" :show-spinner="false"
+            <ActionButton v-else-if="invoice.canClose"
                 variant="outline-success" class="btn-sm" :disabled="disabled" @click="emit('closeInvoice', invoice)">
                 <i class="bi bi-check2-circle me-1" aria-hidden="true"></i>
                 {{ messages.t('common.close') }}

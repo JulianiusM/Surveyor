@@ -179,7 +179,7 @@ function acknowledgeHistory(): void {
                 </div>
             </div>
             <div class="frontend-action-row justify-content-end mt-2">
-                <ActionButton type="submit" :state="submitAction" :pending="command.pending.value" :show-spinner="false">
+                <ActionButton type="submit" :state="submitAction" :pending="command.pending.value">
                     <i class="bi bi-cloud-upload me-1" aria-hidden="true"></i>
                     {{ messages.t(command.pending.value ? 'finance.submitting' : command.uncertain.value ? 'finance.submissionUnconfirmed' : 'finance.submitInvoice') }}
                 </ActionButton>

@@ -6,8 +6,6 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import type {Address} from 'nodemailer/lib/mailer';
-
 /** Shared email contracts keep caller-owned content separate from SMTP and renderer implementation details. */
 export interface EmailAction {
     label: string;
@@ -60,7 +58,12 @@ export interface StructuredEmailContent {
 }
 
 export type EmailContent = string | StructuredEmailContent;
-export type EmailRecipient = Address;
+
+/** Surveyor requires a named destination even when a transport accepts partial address objects. */
+export interface EmailRecipient {
+    name: string;
+    address: string;
+}
 
 export interface RenderedEmail {
     text: string;

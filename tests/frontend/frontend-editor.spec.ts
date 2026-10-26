@@ -287,24 +287,36 @@ describe('mounted Packing Quick Add confirmation', () => {
                 await mounted.wrapper.get('form').trigger('submit');
                 await flushPromises();
 
+                if (bootstrapState === 'pending') {
+                    // A still-running session check is progress, not failure.
+                    // Keep submission blocked until it admits the causal detail
+                    // read; completed fields release when that lifetime settles.
+                    expect(writes).toBe(1);
+                    expect(title.element.disabled).toBe(true);
+                    expect(title.element.value).toBe('Confirmed tent');
+                    expect(document.body.textContent).not.toContain(mounted.context.messages.value.t('state.savedRefreshFailed'));
+                    finishBootstrap(json(session));
+                    await checking;
+                    await flushPromises();
+                }
+
                 // The completed creation releases its actual controls even though
-                // its follow-up read cannot dispatch. No unknown-review prompt or
+                // a failed session check can prevent its follow-up read. No unknown-review prompt or
                 // retained creation input can offer the same item for resubmission.
                 expect(writes).toBe(1);
                 expect(title.element.value).toBe('');
                 expect(description.element.value).toBe('');
                 expect(capacity.element.value).toBe('1');
                 expect(form.checkValidity()).toBe(false);
-                expect(document.body.textContent).toContain(mounted.context.messages.value.t('state.savedRefreshFailed'));
+                if (bootstrapState === 'failed')
+                    expect(document.body.textContent).toContain(mounted.context.messages.value.t('state.savedRefreshFailed'));
+                else expect(document.body.textContent).not.toContain(mounted.context.messages.value.t('state.savedRefreshFailed'));
                 expect(document.body.textContent).not.toContain(mounted.context.messages.value.t('packing.reviewUnknownItem'));
 
                 // Later session/detail recovery is read-only. It must not clear a
                 // new local draft or replay the already acknowledged creation.
                 await title.setValue('New unsaved item');
-                if (bootstrapState === 'pending') {
-                    finishBootstrap(json(session));
-                    await checking;
-                } else await mounted.context.refreshSession();
+                if (bootstrapState === 'failed') await mounted.context.refreshSession();
                 await flushPromises();
                 await mounted.wrapper.get('button[aria-label="Refresh"]').trigger('click');
                 await flushPromises();
@@ -508,11 +520,11 @@ describe('mounted Packing header upload selection', () => {
                 upload.element.focus();
                 await upload.trigger('click');
                 await vi.waitFor(() => expect(writes).toBe(1));
-                // Actual command ownership reaches the shared button, while
-                // the established upload presentation remains free of spinners.
+                // The same upload command owns disabled state and visible
+                // progress until its confirmed write and following read settle.
                 expect(upload.element.disabled).toBe(true);
                 expect(upload.attributes('aria-busy')).toBe('true');
-                expect(upload.find('.spinner-border').exists()).toBe(false);
+                expect(upload.find('.spinner-border').exists()).toBe(true);
                 releaseUpload();
                 await flushPromises();
                 expect(writes).toBe(1);

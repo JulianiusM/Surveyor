@@ -867,9 +867,12 @@ describe('inline packing drafts', () => {
 
         try {
             await input.trigger('keydown', {key: 'Enter', ctrlKey: true});
+            expect(wrapper.get('[role="status"]').text()).toBe('Saving…');
+            expect(wrapper.find('[role="status"] .spinner-border').exists()).toBe(true);
             releasePendingEditorFocus(input.element);
             held.resolve(false);
             await flushPromises();
+            expect(wrapper.find('[role="status"]').exists()).toBe(false);
             expect(wrapper.get<HTMLTextAreaElement>('textarea').element).toBe(input.element);
             expect(input.element.value).toBe('Retained description\nSecond line');
             expect(document.activeElement).toBe(input.element);

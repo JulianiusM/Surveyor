@@ -50,7 +50,7 @@ function description(warning: components['schemas']['ActivityWarning']): string 
                 id="assignmentWarningConfirm"
                 type="button"
                 variant="warning"
-                :pending="pending" :show-spinner="false"
+                :pending="pending"
                 :disabled="pending || blocked || confirmDisabled"
                 @click="emit('confirm')">{{ confirmLabel ?? messages.t('activity.continueAnyway') }}</ActionButton>
         </template>

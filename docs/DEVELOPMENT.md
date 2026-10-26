@@ -4,10 +4,10 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: developer-experience maintainers
 status: current
-last-verified: 2026-10-25
+last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
-source-anchors: package.json; src/app.ts; src/frontend/; src/routes/; src/controller/; src/modules/database/; src/modules/api/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
+verification-scope: approved local browser assets, responsiveness and dependency compatibility scope reconciled; public asset encodings, module preload delivery and renderer startup readiness retained alongside prior P11 routing, Vue rendering, native browser retirement and inherited domain and database safety; no deployment or exhaustive verification claim
+source-anchors: package.json; src/app.ts; src/server.ts; src/modules/frontendAssets.ts; src/modules/frontendRenderer.ts; src/frontend/; src/routes/; src/controller/; src/modules/database/; src/modules/api/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/check-development-policy.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: development-workflow-or-help-tooling-change
 -->
 
@@ -35,6 +35,11 @@ npm ci
 ```
 
 Use `npm ci` for a clean checkout because `package-lock.json` is the dependency source used by CI and release builds. Use `npm install` only when intentionally changing dependency declarations and the lockfile.
+
+TypeScript remains on 6.x because locale generation and the development checker consume its JavaScript compiler
+and AST APIs. The native TypeScript 7 package does not provide a drop-in replacement for those exports. A compiler
+upgrade must also validate these shared tooling owners, OpenAPI generation and Vue type checking; changing the
+compiler version alone would break the current build/check workflow. The manifest and lockfile own exact versions.
 
 ### 2. Create a development database
 
@@ -292,6 +297,11 @@ inside the module that owns them instead of exporting them merely to connect new
   operation from the corresponding controller or its feature module with the locked rows and manager. Checks and
   writes remain inside that transaction; never weaken atomicity by moving the check before lock acquisition.
 - Preserve the distinction between account IDs, guest IDs, profile IDs, entity IDs, item IDs, and event-registration IDs.
+
+Use the installed TypeORM 1.x APIs: query runners and query builders expose `dataSource`, and repository existence
+checks use `exists` or `existsBy`. When replacing older names, preserve the query's conditions, relation loading,
+selected columns and transaction manager. An API naming correction does not change DBAL ownership or authorize
+different transaction and locking behavior.
 
 ### Authentication and permissions
 
@@ -1417,11 +1427,37 @@ post-command authority.
 
 Express serves shared static/Help resources; Vite transforms entry/style URLs before inserting the Vue tree.
 Keep cascade composition in authored `styles/application.sass`, consumed by both the client entry and development
-renderer. It orders base `style.sass`, `help.sass` and `frontend.css` once; do not maintain another list in a caller.
+renderer. It orders Bootstrap Icons CSS, base `style.sass`, `help.sass` and `frontend.css` once; do not maintain
+another list in a caller.
 Its source link and built-manifest delivery remain usable before JavaScript, including static Help. `style.sass`
-retains its accordion/timezone graph and installed Bootstrap layer alongside the CDN layer.
+retains its accordion/timezone graph and installed Bootstrap layer. Import Bootstrap Icons CSS and its font files
+through this authored build graph too. Application-owned browser assets use the instance's origin through existing
+Vite development delivery and Express built-asset delivery; do not add CDN stylesheet, script or font dependencies.
+This follows the [approved 2026-10-26 amendment](decisions/DEC-006-FRONTEND-FRAMEWORK.md#approved-local-browser-assets-and-responsiveness-scope-2026-10-26),
+which supersedes the earlier requirement to preserve both CDN and compiled Bootstrap layers.
+Built documents preload the entry's manifest-declared shared modules. The client build also prepares Brotli/gzip
+sidecars for emitted JavaScript, CSS and SVG; the public asset owner negotiates available encodings with
+`Vary: Accept-Encoding`, retaining original files and their byte-range delivery. Development warms the shared
+source entry, stylesheet and SSR entry through Vite. Installed startup loads the same built SSR module before HTTP
+readiness without creating a request or private state; production never imports Vite or compresses files per request.
 Test emitted URLs and mounted usable controls, not a hydration marker. HMR/authored-input restart checks are relevant
 when their owners change; they are not required again for every unrelated feature view.
+
+#### Responsiveness targets and evidence
+
+Optimize toward first visible draw and population of the initially visible skeleton regions within one second
+from navigation start. The maintainer's 2026-10-26 clarification makes this an internal optimization target,
+not a production delivery requirement or an automated one-second test gate.
+
+Production uses the established Core Web Vitals good targets: Largest Contentful Paint (LCP) at most 2.5 seconds,
+Interaction to Next Paint (INP) at most 200 milliseconds and Cumulative Layout Shift (CLS) at most 0.1, each at the
+75th percentile of page views, assessed separately for mobile and desktop. These follow the
+[official Web Vitals guidance](https://web.dev/articles/vitals).
+
+Measure first draw/FCP, hydration and actual visible content population separately; a hydration marker or a
+decorative skeleton does not establish usable feature readiness. Record the route, data, cache state, CPU/network
+conditions and any synthetic responses with lab results. Lab measurements guide optimization; production compliance
+requires representative field measurements and cannot be certified by a local fixture or a small sample of runs.
 
 #### Progressive loading and shared placeholders
 

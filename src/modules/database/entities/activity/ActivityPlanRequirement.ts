@@ -30,7 +30,8 @@ export class ActivityPlanRequirement extends NumericBase implements ParentEntity
     roleId!: string;
 
     @ManyToOne(() => ActivityRole, {
-        onDelete: "RESTRICT",
+        // A role-specific requirement has no meaning after its role is removed.
+        onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "role_id", referencedColumnName: "id"}])

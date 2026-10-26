@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers
 owner: frontend maintainers
 status: current
-last-verified: 2026-10-25
+last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Original framework/interface decisions and deferred targets retained; authorized P11 cutover scope and lasting amendments preserved; source ownership reconciled without final acceptance or deployment claim
+verification-scope: approved local browser asset and responsiveness scope recorded; original framework/interface decisions, deferred targets, authorized P11 cutover scope and lasting amendments retained without final acceptance or deployment claim
 source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendRenderer.ts; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; src/routes/api/v1/
 next-review: frontend-technology-or-rendering-boundary-change
 -->
@@ -298,6 +298,21 @@ Externalized SSR dependencies remain production dependencies; generated outputs 
 The approved 2026-10-07 release amendment supersedes retained-old-asset deployment: current-folder replacement, ordinary session update detection,
 compatible loaded edits, one clean idle reload and preserved mounted drafts for missing chunks/incompatible commands.
 No additional operator protocol is introduced.
+
+### Approved local browser assets and responsiveness scope (2026-10-26)
+
+The earlier Architecture and Development guides required preserving both CDN and compiled Bootstrap layers.
+The original rationale for that duplication is unrecorded. Following the HAR/startup investigation, the maintainer
+explicitly approves removal of the duplicate Bootstrap CDN stylesheet and amendment of both preservation rules,
+then directs that application-owned browser assets be served locally to simplify privacy handling. Bootstrap CSS
+and Bootstrap Icons CSS/fonts use the existing authored Vite graph and Express delivery alongside the other local
+assets. Preserve styled static/pre-JavaScript content and review the resulting presentation against the installed
+Bootstrap baseline; the former CDN version no longer participates in the cascade.
+
+The same reply clarifies that one second for first draw and initial skeleton population is an internal optimization
+target. Established production targets remain sufficient; this creates no universal one-second delivery or test gate.
+The [Development Guide](../DEVELOPMENT.md#responsiveness-targets-and-evidence) owns the metric thresholds and evidence
+requirements. This amendment records authorization rather than production performance certification.
 
 ### Authorized automatic document reload scope (2026-10-15)
 

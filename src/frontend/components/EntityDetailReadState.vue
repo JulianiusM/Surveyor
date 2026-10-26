@@ -12,6 +12,7 @@ defineProps<{
     error: Error | null;
     hasData: boolean;
     pending: boolean;
+    refreshing?: boolean;
     lastUpdatedAt?: number;
     retryAt?: number;
     skeleton?: FrontendLoadingSkeleton;
@@ -30,4 +31,12 @@ const {messages} = useFrontend();
          during background reads. -->
     <slot />
     <LoadingSkeleton v-if="!hasData && !denied && pending" v-bind="skeleton" />
+    <!-- Background reads retain usable content and drafts. Reserve one small
+         status row so periodic progress never shifts the controls below it. -->
+    <div v-else-if="hasData && !denied" style="min-height: 1.5rem">
+        <span v-if="refreshing" class="d-inline-flex align-items-center gap-2 small text-body-secondary" role="status">
+            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            {{ messages.t('common.loading') }}
+        </span>
+    </div>
 </template>

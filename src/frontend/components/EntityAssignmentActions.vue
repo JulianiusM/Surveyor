@@ -10,12 +10,12 @@ const emit = defineEmits<{toggle: []}>();
 
 <template>
     <template v-if="assigned">
-        <ActionButton class="btn-sm" variant="outline-danger" :disabled="disabled" :pending="pending" :show-spinner="false"
+        <ActionButton class="btn-sm" variant="outline-danger" :disabled="disabled" :pending="pending"
             @click="emit('toggle')">{{ removeLabel }}</ActionButton>
         <span v-if="full" class="badge bg-secondary ms-1">{{ fullLabel }}</span>
     </template>
     <span v-else-if="everyone" class="badge bg-info ms-1">{{ everyone }}</span>
-    <ActionButton v-else-if="!full" class="btn-sm" variant="outline-success" :disabled="disabled" :pending="pending" :show-spinner="false"
+    <ActionButton v-else-if="!full" class="btn-sm" variant="outline-success" :disabled="disabled" :pending="pending"
         @click="emit('toggle')">{{ assignLabel }}</ActionButton>
     <span v-else class="badge bg-secondary">{{ fullLabel }}</span>
 </template>

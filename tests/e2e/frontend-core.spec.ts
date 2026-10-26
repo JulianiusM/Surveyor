@@ -1714,12 +1714,23 @@ test('frontend edits items with conflict review, quick-adds, reorders and remove
     expect((await readPacking(page.request, resource.id)).items.sort((a, b) => a.position - b.position).map(item => item.id))
         .toEqual([added.id, original.id]);
     const everyone = addedRow.getByRole('switch', {name: 'All', exact: true});
+    /** Acknowledge earlier receipts before measuring this native control. No
+     * inline editor is open here; their blur-submitted drafts must stay untouched. */
+    async function dismissPreviousNotices(): Promise<void> {
+        // Otherwise clearing the preceding receipt on command admission changes
+        // document height and invokes browser scroll anchoring during this check.
+        const dismiss = page.locator('[data-frontend-notices] .alert-dismissible > button.btn-close:visible');
+        while (await dismiss.count()) await dismiss.first().click();
+        await expect(dismiss).toHaveCount(0);
+    }
+    await dismissPreviousNotices();
     await expectRetainedControlFocus(page, everyone, {
         endpoint: `/api/v1/packing-lists/${resource.id}/items/${added.id}`, method: 'PATCH', status: 200,
         activate() { return everyone.press('Space'); },
     });
     await expect(everyone).toBeChecked();
     await expect(addedRow.locator('td').nth(1)).toHaveText('Everyone');
+    await dismissPreviousNotices();
     await expectRetainedControlFocus(page, everyone, {
         endpoint: `/api/v1/packing-lists/${resource.id}/items/${added.id}`, method: 'PATCH', status: 200,
         activate() { return everyone.press('Space'); },

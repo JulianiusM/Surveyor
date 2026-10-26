@@ -176,11 +176,11 @@ function statusClass(status: Link['status']): string {
                                         <td class="text-end">
                                             <div class="btn-group btn-group-sm">
                                                 <ActionButton variant="outline-light" :state="available"
-                                                    :pending="clipboard.pending.has(link.id)" :show-spinner="false"
+                                                    :pending="clipboard.pending.has(link.id)"
                                                     :disabled="link.status !== 'active' || clipboard.pending.has(link.id)"
                                                     @click="copyLink(link)"><i class="bi bi-clipboard me-1" aria-hidden="true"></i>{{ messages.t('event.organizer.copy') }}</ActionButton>
                                                 <ActionButton variant="outline-danger" :state="available"
-                                                    :pending="command.pending.value && revokingId === link.id" :show-spinner="false"
+                                                    :pending="command.pending.value && revokingId === link.id"
                                                     :disabled="link.status === 'revoked'"
                                                     @click="revoke(link)"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>{{ messages.t('event.organizer.revoke') }}</ActionButton>
                                             </div>

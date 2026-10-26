@@ -24,13 +24,13 @@ const {messages} = useFrontend();
         <p v-if="automation?.paused">{{ automation.pausedHint }}</p>
         <div class="frontend-action-row">
             <ActionButton v-if="canArchive" class="btn-sm" variant="outline-light" :disabled="disabled"
-                :pending="pendingAction === 'archive'" :show-spinner="false"
+                :pending="pendingAction === 'archive'"
                 @click="emit('archive', false, $event)">{{ messages.t('common.archive') }}</ActionButton
             ><ActionButton v-if="canRestore" class="btn-sm" variant="outline-light" :disabled="disabled"
-                :pending="pendingAction === 'archive'" :show-spinner="false"
+                :pending="pendingAction === 'archive'"
                 @click="emit('archive', true, $event)">{{ messages.t('common.restore') }}</ActionButton>
             <ActionButton v-if="automation" class="btn-sm" variant="outline-light" :disabled="disabled"
-                :pending="pendingAction === 'automation'" :show-spinner="false"
+                :pending="pendingAction === 'automation'"
                 @click="emit('automate', !automation.paused, $event)">{{ automation.paused ? automation.resumeLabel : automation.pauseLabel }}</ActionButton>
         </div>
     </section>
@@ -43,7 +43,7 @@ const {messages} = useFrontend();
             }}</RouterLink
             ><a v-if="exportLink" class="btn btn-outline-light" :href="exportLink.url" target="_blank" rel="noopener">{{ exportLink.label }}</a
             ><ActionButton v-if="canRemove" variant="outline-danger" :disabled="disabled || removeDisabled"
-                :pending="pendingAction === 'remove'" :show-spinner="false"
+                :pending="pendingAction === 'remove'"
                 @click="emit('remove', $event)">{{ labels.deletePermanently }}</ActionButton>
         </div>
     </section>

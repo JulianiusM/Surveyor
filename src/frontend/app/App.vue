@@ -188,9 +188,13 @@ function dismissPersonalLink(): void {
                     {{ messages.t('state.updateAvailable') }}
                 </StatusNotice>
             </div>
-            <!-- Pending navigation belongs to the header indicator, not a page
-                 skeleton. Keep the mounted route and announce progress once. -->
-            <span v-if="ready && pendingNavigation" class="frontend-navigation-loading visually-hidden" role="status">{{ messages.t('common.loading') }}</span>
+            <!-- Route delivery retains the mounted page and its drafts. Keep
+                 progress visible in the viewport without inserting a page row,
+                 stealing focus or creating another navigation lifetime. -->
+            <span v-if="ready && pendingNavigation" class="frontend-navigation-loading" role="status">
+                <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                {{ messages.t('common.loading') }}
+            </span>
             <!-- Route presentation selects the same public layout for SSR and hydration.
                  The renderer owns shared geometry; no private read or command is implied. -->
             <LoadingSkeleton v-if="ready && initialLoading" data-frontend-initial-loading v-bind="route.meta.loadingSkeleton" page />

@@ -11,6 +11,7 @@
     "Resolve every conflict with existing policies or approved designs directly with the maintainer before dependent edits.",
     "Verify approval for potentially unintended consequences and every policy or design decision change.",
     "Apply all six Development Policy approval fields, a direct decision question and policy link to every approval or conflict-resolving clarification; independently review the exact request and obtain root review before sending; a rejected or withdrawn question grants no approval.",
+    "Verify every maintainer question appears in the final answer with all outstanding requests and required explanations in full; commentary, question tools, files and earlier-question references are not substitutes.",
     "Trace the original accepted baseline and explicit amendments; compare concrete owners, callers, reads, writes, authority and lifecycle effects before editing, not just the current implementation.",
     "Shared files, libraries, stores or schemas do not prove unchanged responsibility; tests and agent-authored authorization records cannot supply missing maintainer approval.",
     "Review new writable request-state mirrors, save interception, locks and common-admission writes before implementation; the configured identity-stage exception grants no permission for new callers, indirect aliases or expanded lifecycle effects.",

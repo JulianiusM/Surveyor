@@ -188,6 +188,12 @@ defineExpose({begin});
                 @keydown.enter="commitOnEnter"
                 @keydown.esc.prevent="cancel"
             />
+            <!-- Blur/Enter saves have no initiating button. Keep progress beside
+                 the retained editor for its entire existing save/read lifetime. -->
+            <span v-if="pending" class="d-inline-flex align-items-center gap-1 small text-body-secondary mt-1" role="status">
+                <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                {{ messages.t('common.pending') }}
+            </span>
             <ActionButton v-if="!editable && !remoteChanged"
                 class="btn-sm mt-1" variant="outline-secondary" :disabled="pending || disabled" @click="cancel">
                 {{ messages.t('common.cancel') }}

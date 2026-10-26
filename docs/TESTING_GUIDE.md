@@ -4,9 +4,9 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: test maintainers
 status: current
-last-verified: 2026-10-25
+last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
+verification-scope: Vitest 5 mock-history compatibility and existing fork worker contract reconciled; prior P11 routing, Vue rendering, native browser retirement and inherited domain and database safety retained; no deployment or exhaustive verification claim
 source-anchors: package.json; src/app.ts; src/frontend/; src/routes/; src/controller/; src/modules/database/; src/modules/api/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: test-layout-command-or-help-validation-change
 -->
@@ -130,6 +130,12 @@ isolated unit/client files and scoped server-component integration with bounded 
 processes after observed native threaded-worker exits without a test result; Linux CI retains threads. The same
 concurrency bound, fresh file isolation and UTC environment apply to both pools; the native exit's precise cause
 has not been established.
+
+The shared configuration explicitly sets `clearMocks: false` to retain the existing mock-history behavior when
+using Vitest 5, whose default clears calls before each test. Individual fixtures still own their intended mock
+reset/restore boundaries; an upgrade must not erase setup evidence merely to obtain a passing assertion. Review
+the [official migration guidance](https://vitest.dev/guide/migration/) when changing the runner and keep its V8
+coverage package on the matching release.
 
 The shared Windows fork worker delivers transformed source through Vitest's existing IPC rather than its optional
 per-module temporary-file handoff. This prevents those files and their expensive replacement-style renames; it does
@@ -395,10 +401,12 @@ actual lazy route modules in a named `beforeAll` under the existing hook budget.
 rendering inside each unchanged assertion deadline. This follows the existing route-fixture pattern without
 pre-rendering output, priming private state or replacing real components. Cold-compilation attribution still needs
 evidence; a timeout alone does not establish an application rendering defect.
-For an HTTP integration suite with an existing owned listener, prepare its actual built lazy module alongside that
-server infrastructure. The profile-document suite resolves exactly one built Overview module and imports it without
-a setup request or render. Its real HTTP/bootstrap assertions retain their deadline; this does not measure cold
-module initialization as application latency. Keep earlier failed runs visible when recording the focused rerun.
+For an HTTP integration suite with an existing owned listener, prepare its actual built lazy modules alongside that
+server infrastructure. The profile suites use [`tests/support/frontendRenderer.ts`](../tests/support/frontendRenderer.ts)
+to prepare the installed renderer and only their own declared built graphs, rejecting missing or ambiguous modules.
+This evaluates code without a setup request, render, actor or query-cache priming. Real backend HTTP/bootstrap
+assertions and hook/assertion deadlines remain unchanged; this does not measure cold module initialization as
+application latency. Keep earlier failed runs visible when recording the focused rerun.
 
 Source HMR, serialized contract/catalog regeneration, coherent production SSR dependencies and release/chunk recovery
 cross different boundaries. Exercise the relevant owner when changed; a build or hydration marker alone does not

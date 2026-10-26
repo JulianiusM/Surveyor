@@ -41,7 +41,8 @@ export class ActivitySlotRole extends NumericBase implements ParentItemRelation 
     roleId!: number;
 
     @ManyToOne(() => ActivityRole, {
-        onDelete: "RESTRICT",
+        // A removed role cannot retain a slot quota, including root cascades.
+        onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "role_id", referencedColumnName: "id"}])

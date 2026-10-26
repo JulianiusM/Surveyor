@@ -273,7 +273,7 @@ function acknowledge(): void {
             <ActionButton v-if="pool" variant="outline-secondary" :disabled="command.action.disabled.value" @click="restoreDraft">{{ messages.t('finance.discardEdits') }}</ActionButton>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t(pool ? 'common.close' : 'common.cancel') }}</ActionButton>
             <ActionButton type="submit" :form="`${id}-form`" :state="action"
-                :pending="command.pending.value" :show-spinner="false">
+                :pending="command.pending.value">
                 <i class="bi me-1" :class="pool ? 'bi-save' : 'bi-plus-circle'" aria-hidden="true"></i>
                 {{ messages.t(pool ? 'finance.savePoolSettings' : 'finance.addPool') }}
             </ActionButton>

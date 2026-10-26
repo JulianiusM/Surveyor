@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; developers; AI coding agents
 owner: project maintainers
 status: current
-last-verified: 2026-10-15
+last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: maintainer-authorized baseline and responsibility review, clarification approval enforcement and bounded session-ownership checks added; existing engineering and delivery boundaries retained
+verification-scope: maintainer-authorized final-answer-only questions and complete outstanding requests added to agent review; prior approval, responsibility, session and delivery boundaries retained
 source-anchors: AGENTS.md; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/development-check.json; scripts/check-development-policy.mjs; scripts/tests/development-policy-check.test.mjs; docs/DEVELOPMENT.md; docs/ARCHITECTURE.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; src/; tests/; package.json
 next-review: explicit-maintainer-policy-amendment
 -->
@@ -30,7 +30,8 @@ within its declared scope. Temporary boundaries do not belong in permanent guida
 Treat explicit maintainer decisions and approved designs as constraints. Code is evidence of current behavior, not
 permission to rewrite the policy to match an implementation defect. Resolve conflicting instructions directly with
 the maintainer before dependent implementation. Potentially unintended consequences require advance approval;
-prepare concrete reviewable work within the authorized scope and ask in the conversation, never inside a document.
+prepare concrete reviewable work within the authorized scope and ask in the final answer under the
+[question presentation rule](#questions-belong-in-the-final-answer-2026-10-26), never inside a document.
 Do not infer approval from elapsed time, delegation, an existing defect or an editorial cleanup request.
 
 Before dependent edits, compare the request with the actual canonical paths, policy and design anchors. If they
@@ -69,6 +70,25 @@ unapproved legacy repair. New adapter code still enforces its own authentication
 and delivery boundaries; it must not add avoidable postcommit rejection, automatic replay or stronger guarantees
 than the shared operation provides. This clarification does not weaken security or authorize new behavior.
 
+### Questions belong in the final answer (2026-10-26)
+
+The maintainer explicitly requires every question to appear in the agent's final answer. This covers factual
+clarifications, preferences, options, confirmations and approval requests. Asking through commentary, progress
+updates, question tools, logs or documentation is a policy violation. Internal drafts for required preflight and
+review are allowed, but they do not present a question to the maintainer or establish an answer.
+
+The final answer must contain every outstanding question in full. Approval requests retain the complete required
+change explanation below; a reference to an earlier question or a statement that approval is pending is insufficient.
+If a question was presented elsewhere, re-present it completely in the final answer. Neither its earlier placement
+nor silence supplies approval. Complete independent authorized work, and stop dependent work when an answer is
+required; end the turn with the actual question in the final answer.
+
+The root agent reviews actual question placement and completeness before sending the final answer. Delegates relay
+unresolved questions to the root rather than presenting them to the maintainer elsewhere. The development checker's
+review criteria and approval preflight remind agents of this requirement; they cannot inspect conversation channels
+or certify that the final answer was delivered correctly. This dated clarification narrows the earlier requirement
+to ask in the conversation; it preserves individual approval, independent review and the prohibition on inferred consent.
+
 ### Required change explanation (2026-10-13)
 
 The maintainer's 2026-10-13 correction withdraws the quotation and mandatory read-back amendment in favor of concise,
@@ -102,7 +122,8 @@ such decision remains an ordinary clarification. Inspect the exact proposed requ
 before sending it; a previous review of the broader plan does not review a later question automatically.
 Preflight the exact proposed text with `node scripts/check-development-policy.mjs --approval-request <temporary-file>`
 before presentation. This read-only mode checks field/order/question/link/identifier syntax only; its temporary input
-is not a documentation destination or approval record. Present the full request in the conversation. Passing it
+is not a documentation destination or approval record. Present the full request in the final answer under the
+[question presentation rule](#questions-belong-in-the-final-answer-2026-10-26). Passing it
 does not replace either semantic reviewer, grant approval or create an application/documentation delivery gate.
 
 Explain the change clearly in concise prose. Exact quotations, replacement text, code, diffs and implementation
@@ -258,8 +279,9 @@ Use the following task procedure; a repeated statement that policies were follow
 5. Inspect the advisory documentation/classification report and resolve task-created location violations. Preserve
    its nonblocking delivery policy. Run the appropriate production checks, then obtain an independent review of
    approval provenance, semantic boundaries, readability and behavior preservation where the task changes those risks.
-6. Report actual findings, evidence, scope and limitations. Resolve violations in owned changes or seek a direct
-   decision; do not declare an incomplete review or a skipped check successful.
+6. Report actual findings, evidence, scope and limitations. Review the actual final answer for all outstanding
+   questions and complete approval explanations under the question presentation rule. Resolve violations in owned
+   changes or seek a direct decision there; do not declare an incomplete review or a skipped check successful.
 
 [`development-check.json`](development-check.json) owns the machine-readable boundary inventory and human-review
 criteria; [`check-development-policy.mjs`](../../scripts/check-development-policy.mjs) evaluates it. The checker fails

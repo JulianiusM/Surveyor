@@ -54,7 +54,7 @@ function updateCapacity(value: FrontendListQuickAddValues['maxAssignees']): void
                 </template>
             </FormField>
             <div class="col-md-2 d-grid">
-                <ActionButton type="submit" variant="success" :disabled="disabled" :pending="pending" :show-spinner="false"
+                <ActionButton type="submit" variant="success" :disabled="disabled" :pending="pending"
                     ><i class="bi bi-check-lg me-1" aria-hidden="true"></i
                     >{{ messages.t('packing.add') }}</ActionButton
                 >

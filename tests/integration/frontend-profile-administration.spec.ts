@@ -1,8 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {readdir} from 'node:fs/promises';
 import http from 'node:http';
-import path from 'node:path';
-import {pathToFileURL} from 'node:url';
 import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 import * as userService from '../../src/modules/database/services/UserService';
 import {AppDataSource} from '../../src/modules/database/dataSource';
@@ -10,35 +7,24 @@ import {Profile} from '../../src/modules/database/entities/user/Profile';
 import {Session} from '../../src/modules/database/entities/session/Session';
 import {createTranslator} from '../../src/modules/localization/translator';
 import settings from '../../src/modules/settings';
+import {initializeFrontendRenderer} from '../../src/modules/frontendRenderer';
 import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
 import type {components} from '../../src/types/api/v1';
 import {createActivityPlanWithSlot, createDriversListWithItem, createIntegrationEvent, createPackingListWithItem,
     createSurveyWithCombinations, registerLocalAccount} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
+import {prepareFrontendSsrModules} from '../support/frontendRenderer';
 
 let listener: http.Server | undefined;
 let application: typeof import('../../src/app')['default'] | undefined;
 let origin: string | undefined;
 
 /** The real server needs admitted persistence before installing its listener. */
-async function prepareApplicationListener(): Promise<void> {
+async function prepareApplicationListener(rendererReady: Promise<void>): Promise<void> {
     await initializeIntegrationDatabase();
     // Prepare the real application's cold imports/listener as suite infrastructure,
     // leaving each workflow's ordinary assertion timeout unchanged.
-    await applicationOrigin();
-}
-
-/** Import only the actual built module graph; never render or prime private state. */
-async function prepareOverviewSsrModule(): Promise<void> {
-    // This case measures route/bootstrap behavior, not lazy module compilation.
-    // Prepare the actual built graph used by the renderer, without pre-rendering
-    // a document, creating a request or priming any actor/query state.
-    const directory = path.resolve(__dirname, '../../dist/frontend-server');
-    const modules = (await readdir(directory)).filter(file => /^OverviewPage-[\w-]+\.mjs$/u.test(file));
-    if (modules.length !== 1) throw new Error('Build exactly one Overview SSR module before this integration suite.');
-    // Follow production's entry-before-route import order through shared chunks.
-    await import(pathToFileURL(path.join(directory, 'entry-server.mjs')).href);
-    await import(pathToFileURL(path.join(directory, modules[0]!)).href);
+    await applicationOrigin(rendererReady);
 }
 
 /** Prepare independent server and pure module infrastructure within one hook.
@@ -46,7 +32,8 @@ async function prepareOverviewSsrModule(): Promise<void> {
 beforeAll(async function prepareApplicationInfrastructure(): Promise<void> {
     // Module evaluation creates no app/context and needs no backend listener or
     // database. Keep the persistence-before-listen dependency in its own branch.
-    const preparation = await Promise.allSettled([prepareApplicationListener(), prepareOverviewSsrModule()]);
+    const rendererReady = prepareFrontendSsrModules(['OverviewPage', 'PackingEntry', 'DriversEntry']);
+    const preparation = await Promise.allSettled([prepareApplicationListener(rendererReady), rendererReady]);
     // A failed module lookup must not let teardown race the admitted listener
     // branch. Finish both preparations before preserving their actual rejection.
     for (const result of preparation) if (result.status === 'rejected') throw result.reason;
@@ -67,13 +54,16 @@ afterAll(async () => {
 /** Start the actual Express application only after this suite's guarded schema
  * exists. Its real router, session middleware and built SSR renderer supply every
  * HTTP response; no application page or validator is replaced by a fixture. */
-async function applicationOrigin(): Promise<string> {
+async function applicationOrigin(rendererReady?: Promise<void>): Promise<string> {
     if (origin) return origin;
     // Importing the real app installs its ordinary store and routes. The owned
     // listener supplies only a local transport after database admission succeeded.
     // The runner's actual-module loader preserves the source module's default
     // export across its CJS/ESM interop without substituting any application owner.
     application = (await vi.importActual<typeof import('../../src/app')>('../../src/app')).default;
+    // Normal startup prepares renderer code before listen. The suite additionally
+    // prepares only its actual named lazy graphs; no request/private state is made.
+    await (rendererReady ?? initializeFrontendRenderer());
     listener = http.createServer(application);
     await new Promise<void>(function listenLocally(resolve) { listener!.listen(0, '127.0.0.1', resolve); });
     const address = listener.address();

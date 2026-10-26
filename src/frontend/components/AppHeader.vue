@@ -255,6 +255,13 @@ async function retryCompletion(): Promise<void> {
                             icon="bi-person-circle"
                             align-end
                         >
+                            <!-- The menu dismisses after Logout is clicked.
+                                 Keep that same command's progress visible on
+                                 its retained profile trigger while it settles. -->
+                            <template #trigger>
+                                <span v-if="logoutCommand.pending.value" class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+                                <i v-else class="bi bi-person-circle me-1" aria-hidden="true"></i>{{ profileLabel }}
+                            </template>
                             <li>
                                 <RouterLink class="dropdown-item" :to="frontendOverviewPath"
                                     ><i class="bi bi-speedometer2 me-1" aria-hidden="true"></i
@@ -276,15 +283,16 @@ async function retryCompletion(): Promise<void> {
                             <li><hr class="dropdown-divider" /></li>
                             <li>
                                 <form @submit.prevent="logout">
-                                    <button
+                                    <ActionButton unstyled
                                         class="dropdown-item text-danger"
                                         type="submit"
                                         :disabled="identityBlocked"
+                                        :pending="logoutCommand.pending.value"
                                         @click.prevent="logout"
                                     >
                                         <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i
                                         >{{ messages.t('app.logout') }}
-                                    </button>
+                                    </ActionButton>
                                 </form>
                             </li>
                             <li>

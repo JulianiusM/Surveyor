@@ -3102,6 +3102,84 @@ implementation_defects:
     closes_when:
       - The original failing mounted flow passes and successful actual built recovery clears the notice without business writes.
       - Independent review and focused denial/obsolete-result checks verify the shared boundary and actual workflow adoption.
+  - id: IMP-131
+    status: open
+    discovered_on: 2026-10-26
+    severity: low
+    owner: application maintainers
+    package: general-packing-presentation-remediation
+    out_of_scope_for_documentation_migration: true
+    title: Packing heading names an icon absent from the bundled icon font
+    evidence:
+      - src/frontend/features/packing/PackingPage.vue passes bi-bag-check-check through EntityHeader to PageHeading's
+        decorative icon. The textual heading is rendered independently.
+      - That selector is absent from both the previously installed bootstrap-icons 1.11.3 stylesheet and the
+        upstream 1.13.2 stylesheet selected during the dependency upgrade. This is an inherited defect, not an
+        icon-package upgrade regression.
+    impact: The Packing heading's decorative icon has no matching glyph rule, while its title and actions remain available.
+    authorization: The dependency upgrade preserves behavior and does not authorize this separate presentation repair.
+    documentation_contract: Product guidance describes the Packing heading and controls; this implementation defect
+      and any repair proposal remain maintenance-only.
+    closes_when:
+      - A separately authorized presentation change selects the intended available icon and verifies the rendered heading.
+  - id: IMP-132
+    status: open
+    discovered_on: 2026-10-26
+    severity: medium
+    owner: application maintainers
+    package: general-session-store-remediation
+    out_of_scope_for_documentation_migration: true
+    title: Third-party session destruction callback does not await its database deletion
+    evidence:
+      - connect-typeorm remains version 2.0.0 before and after the dependency upgrade. Its installed
+        out/app/TypeormStore/TypeormStore.js destroy implementation starts repository.softDelete inside a map callback
+        without returning the promise. Promise.all therefore receives undefined entries rather than deletion promises.
+      - The outer completion callback can run before those database operations settle, and their later rejected
+        promises do not enter the attached catch handler.
+      - src/modules/lib/session.ts constructs this unmodified TypeormStore, and src/app.ts installs it in
+        express-session. Express's Session.destroy and Store.regenerate delegate completion to the store callback.
+    impact: A caller relying on store destruction completion can proceed before deletion settles, and a later SQL
+      rejection can escape that callback's error handling.
+    evidence_limit: This is a static promise-chain finding. No production, HTTP or database failure was reproduced,
+      and the review does not establish that Surveyor's ordinary logout uses Session.destroy or regeneration.
+    authorization: The dependency and TypeORM API updates do not authorize a third-party patch, replacement store,
+      session lifecycle redesign or workaround for this inherited behavior.
+    documentation_contract: Product guidance describes completed session lifecycle operations without exposing this
+      implementation defect or promising behavior established only by static review.
+    closes_when:
+      - A separately authorized change preserves the shared session owner and confirms destruction callback completion
+        and errors against delayed and rejected database deletion.
+  - id: IMP-133
+    status: open
+    discovered_on: 2026-10-26
+    severity: high
+    owner: test maintainers
+    package: general-ci-test-prerequisites
+    out_of_scope_for_documentation_migration: true
+    title: CI integration stage omits an existing built SSR fixture prerequisite
+    evidence:
+      - The tracked pre-upgrade baseline 2ae721098d9686b2f2f7853e7dcaf2f08570430f already has
+        tests/integration/frontend-profile-administration.spec.ts read dist/frontend-server and import its
+        entry-server.mjs and exactly one OverviewPage module during suite preparation.
+      - .github/workflows/ci.yml runs its integration matrix stage on a separate runner with npm ci and npm run
+        generate, followed by the integration Vitest project. Application build runs only on the browser matrix
+        runner, with no built-asset transfer to the integration runner.
+      - dist is ignored and has no tracked files. The project has no install hook that builds frontend artifacts;
+        generate prepares database metadata, API contracts and locales rather than the Vite SSR build.
+      - Current profile fixtures retain the same built-artifact prerequisite through tests/support/frontendRenderer.ts.
+        The dependency upgrade and shared module-readiness helper did not create that requirement.
+    impact: On a clean runner without those ignored artifacts, profile suite preparation cannot read or import its
+      required SSR modules, preventing its assertions from executing.
+    evidence_limit: Workflow, package scripts and tracked fixture source were inspected only; no actual CI run or
+      clean-runner failure was performed. This is distinct from the closed Windows preparation-timeout finding
+      TEST-FRONTEND-PROFILE-PREPARATION.
+    authorization: Dependency compatibility validation does not authorize workflow changes, a new build policy,
+      test exclusions or weakened fixture assertions. Correcting inherited CI preparation requires separate scope.
+    documentation_contract: Product guidance retains the existing test boundaries; this unresolved prerequisite
+      and any remediation proposal remain maintenance-only.
+    closes_when:
+      - A separately authorized change supplies the required coherent artifacts before integration execution and
+        verifies the existing profile assertions from a clean checkout on the supported CI baseline.
 findings:
   - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
     status: closed

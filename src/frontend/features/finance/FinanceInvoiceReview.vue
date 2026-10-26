@@ -102,7 +102,7 @@ const {id, form, invoice, closedPool, operation, reviewing, inspected, completed
             </ActionButton>
             <ActionButton v-else variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t(completed ? 'common.close' : 'common.cancel') }}</ActionButton>
             <ActionButton v-if="!completed" type="submit" :form="`${id}-form`" :state="actionState"
-                :pending="command.pending.value" :show-spinner="false"
+                :pending="command.pending.value"
                 :variant="inline || operation === 'close' || reviewing ? 'warning' : rejection ? 'danger' : 'primary'">
                 {{ messages.t(operation === 'close' ? 'finance.close' : inline ? operation === 'approve' ? 'finance.accept' : 'finance.reject' : retroactive && !reviewing ? 'finance.continue' : operation === 'revise' ? 'finance.confirmCorrection'
                     : operation === 'reject' ? 'finance.confirmRejection' : 'finance.confirm') }}

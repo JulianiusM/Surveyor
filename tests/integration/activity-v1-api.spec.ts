@@ -1,5 +1,8 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {randomUUID} from 'node:crypto';
+import http from 'node:http';
+import express from 'express';
+import session from 'express-session';
 import type {Request} from 'express';
 import nativeActivity, * as activity from '../../src/controller/activityController';
 import {AppDataSource} from '../../src/modules/database/dataSource';
@@ -10,6 +13,10 @@ import * as adminService from '../../src/modules/database/services/EntityAdminSe
 import * as eventService from '../../src/modules/database/services/EventService';
 import * as recommendationService from '../../src/modules/database/services/ActivityRecommendationService';
 import {contractValidator} from '../../src/modules/api/contracts';
+import {handleApiProblem} from '../../src/modules/api/problem';
+import activityRouter from '../../src/routes/api/v1/activity';
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
+import {CascadeActivityRoleDependents1792886400000} from '../../src/migrations/1792886400000-CascadeActivityRoleDependents';
 import {PERM} from '../../src/modules/lib/permissions';
 import type {components} from '../../src/types/api/v1';
 import type {ApiActor} from '../../src/types/ApiTypes';
@@ -41,10 +48,108 @@ beforeAll(async function prepareDatabase() {
     owner = await persistIntegrationProfile({name: 'Activity organizer'});
     participant = await persistIntegrationProfile({name: 'Duty participant'});
     other = await persistIntegrationProfile({name: 'Other participant'});
-}, 120_000);
+}, 300_000);
 afterAll(closeIntegrationDatabase);
 
 describe('versioned Activity production operations', () => {
+    it('deletes an owned plan with assignments and shared text through the HTTP adapter', async () => {
+        const {id, slot} = await fixture();
+        await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
+        await activity.createActivityTextField(id, {title: 'Instructions', text: 'Bring water'}, actor(owner));
+
+        await expect(activity.deleteActivityPlan(id, actor(other))).rejects.toMatchObject({status: 403});
+        expect(await activityService.getActivityPlanById(id)).not.toBeNull();
+
+        const context = 'activity-delete-context-123456789012345';
+        const csrf = 'activity-delete-csrf-123456789012345678';
+        const app = express();
+        app.use(express.json());
+        app.use(session({secret: 'activity-delete-http-fixture', resave: false, saveUninitialized: false}));
+        app.post('/seed', function seedOwner(req, res) {
+            req.session.profile = owner;
+            req.session.auth = {user: owner.user!};
+            req.session.frontendContext = context;
+            req.session.frontendCsrfToken = csrf;
+            res.sendStatus(204);
+        });
+        app.use('/api/v1/activity-plans', activityRouter);
+        app.use(handleApiProblem);
+        const server = http.createServer(app);
+        await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+        try {
+            const address = server.address();
+            if (!address || typeof address === 'string') throw new Error('Missing Activity HTTP listener');
+            const origin = `http://127.0.0.1:${address.port}`;
+            const seed = await fetch(`${origin}/seed`, {method: 'POST'});
+            const cookie = seed.headers.get('set-cookie')?.split(';', 1)[0];
+            expect(cookie).toBeTruthy();
+            const response = await fetch(`${origin}/api/v1/activity-plans/${id}`, {method: 'DELETE', headers: {
+                Cookie: cookie!, 'X-Surveyor-Context': context, 'X-CSRF-Token': csrf,
+                'X-Surveyor-Api-Compatibility': apiCompatibility,
+            }});
+            expect(response.status).toBe(200);
+            expect(await response.json()).toEqual({changed: true});
+        } finally {
+            await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+        }
+        expect(await activityService.getActivityPlanById(id)).toBeNull();
+        expect(await activityService.getActivitySlotsFlat(id)).toEqual([]);
+        expect(await activityService.getActivityPlanTextFields(id)).toEqual([]);
+        expect(await activityService.getActivitySlotAssignments(id, participant.id)).toEqual([]);
+    });
+
+    it('migrates role-dependent cascades reversibly while retaining saved rows', async () => {
+        const eventId = await createIntegrationEvent(owner.id, 'Deletion migration event');
+        await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id);
+        const {id, slot} = await fixture(eventId);
+        await activity.createActivityRole(id, {name: 'Coordinator'}, actor(owner));
+        const role = (await activityService.getAllRoles(id)).find(candidate => candidate.title === 'Coordinator')!;
+        await nativeActivity.addSlotRole(slot.id, {roles: [role.id]});
+        await activity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(participant));
+        await activity.saveActivityRequirements(id, {
+            assignmentMode: 'REQUIRED', generalRequiredShifts: 2, roundingMode: 'FLOOR', bindingDeadline: null,
+            allowOverfillAfterFull: false, allowExternalAssignees: false, allowArrivalDayEvening: true,
+            allowDepartureDayMorning: true, roleRequirements: [{roleId: String(role.id), requiredShifts: 1}],
+            stayRequirements: [{stayDays: 1, requiredShifts: 0}, {stayDays: 2, requiredShifts: 1}, {stayDays: 3, requiredShifts: 2}],
+            overrides: [{profileId: participant.id, roleId: String(role.id), requiredShifts: 0}],
+        }, actor(owner));
+        const tables = ['activity_assignment_roles', 'activity_slot_role', 'activity_plan_requirements', 'activity_plan_requirement_overrides'];
+        const migration = new CascadeActivityRoleDependents1792886400000();
+        const runner = AppDataSource.createQueryRunner();
+        await runner.connect();
+        try {
+            // The old constraint reproduces the HAR failure even though every
+            // row also has a cascading assignment, slot or plan parent.
+            const savedRows = [];
+            for (const table of tables) {
+                const rows = await runner.query(`SELECT * FROM \`${table}\` WHERE role_id = ?`, [role.id]);
+                expect(rows).toHaveLength(1);
+                savedRows.push(rows);
+            }
+            await migration.down(runner);
+            await migration.down(runner);
+            for (const table of tables) {
+                expect((await runner.getTable(table))?.foreignKeys.find(key => key.columnNames[0] === 'role_id')?.onDelete).toBe('RESTRICT');
+            }
+            await expect(activity.deleteActivityPlan(id, actor(owner))).rejects.toMatchObject({driverError: {code: 'ER_ROW_IS_REFERENCED_2'}});
+
+            await migration.up(runner);
+            await migration.up(runner);
+            for (const [index, table] of tables.entries()) {
+                expect((await runner.getTable(table))?.foreignKeys.find(key => key.columnNames[0] === 'role_id')?.onDelete).toBe('CASCADE');
+                expect(await runner.query(`SELECT * FROM \`${table}\` WHERE role_id = ?`, [role.id])).toEqual(savedRows[index]);
+            }
+            await activity.deleteActivityPlan(id, actor(owner));
+            expect(await activityService.getActivityPlanById(id)).toBeNull();
+            for (const table of tables) {
+                expect(await runner.query(`SELECT * FROM \`${table}\` WHERE role_id = ?`, [role.id])).toEqual([]);
+            }
+        } finally {
+            await migration.up(runner);
+            await runner.release();
+        }
+    }, 120_000);
+
     it('projects civil weeks without changing the saved dates, assignments or native view', async () => {
         const input = creation();
         input.startDate = '2027-03-27';

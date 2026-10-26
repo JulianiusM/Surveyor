@@ -112,7 +112,7 @@ export async function getEntityPermissionInputs(entities: EntityDescriptor[], pr
  */
 export function addEntityPermissionCandidates<T extends ObjectLiteral>(query: SelectQueryBuilder<T>, type: EntityType, scope: EntityPermissionQueryScope, eventIdExpression: string): void {
     const alias = query.alias;
-    const manager = query.connection.manager;
+    const manager = query.dataSource.manager;
     // One requested permission bit means a matching grant row is sufficient. Numeric masks
     // and active-profile identity come from the engine, while these clauses only read storage.
     const assignments = manager.getRepository(ACL).createQueryBuilder('permissionAssignment')

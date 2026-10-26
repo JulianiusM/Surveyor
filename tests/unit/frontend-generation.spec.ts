@@ -692,10 +692,12 @@ describe('contract and catalog generation', () => {
             const browserUrl = pathToFileURL(path.join(first, '.generated/api/v1/browser.mjs')).href;
             const serverUrl = pathToFileURL(path.join(first, '.generated/api/v1/server.cjs')).href;
             const registrationUrl = pathToFileURL(path.join(first, '.generated/api/v1/browser/validateRegistrationInput.mjs')).href;
+            const problemUrl = pathToFileURL(path.join(first, '.generated/api/v1/browser/validateProblem.mjs')).href;
             const verifyStandalone = `globalThis.Function = function () { throw new Error('Runtime compilation is forbidden'); };
                 const browser = await import(${JSON.stringify(browserUrl)});
                 const server = (await import(${JSON.stringify(serverUrl)})).default;
                 const registration = await import(${JSON.stringify(registrationUrl)});
+                const problem = await import(${JSON.stringify(problemUrl)});
                 for (const validators of [browser, server]) {
                     if (!validators.validatePackingMetadataPatch({title: '💡'.repeat(255)})) throw new Error('Unicode boundary rejected');
                     if (validators.validatePackingMetadataPatch({title: '💡'.repeat(256)})) throw new Error('Unicode bound ignored');
@@ -707,6 +709,13 @@ describe('contract and catalog generation', () => {
                     const input = {username: 'Account', displayname: 'Account', email: 'account@example.invalid', password: 'A1💡💡💡', password_repeat: 'A1💡💡💡'};
                     if (!validators.validateRegistrationInput(input)) throw new Error('Standalone native UTF-16 registration rejected');
                     if (validators.validateRegistrationInput({...input, password_repeat: 'A1💡💡x'})) throw new Error('Standalone native UTF-16 repetition accepted');
+                }
+                for (const validators of [browser, server, problem]) {
+                    const input = {type: 'about:blank', title: 'Rejected', detail: 'Synthetic rejection', requestId: 'standalone-problem',
+                        code: 'PACKING_ITEM_FULL', status: 409, messageKey: 'api:errors.PACKING_ITEM_FULL',
+                        params: {itemId: '11111111-1111-4111-8111-111111111111'}};
+                    if (!validators.validateProblem(input)) throw new Error('Standalone discriminated Problem rejected');
+                    if (validators.validateProblem({...input, status: 400})) throw new Error('Standalone Problem correlation ignored');
                 }`;
             execFileSync(process.execPath, ['--input-type=module', '--eval', verifyStandalone], {cwd: temporary, stdio: 'pipe'});
             generate('generate-api.mjs', ['--output-root', first, '--check']);

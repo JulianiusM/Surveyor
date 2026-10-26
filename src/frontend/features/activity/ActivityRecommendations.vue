@@ -605,14 +605,14 @@ function statusLabel(status: typeof statuses[number]): string {
                     type="button"
                     class="btn-sm" variant="outline-secondary"
                     data-recommendations-refresh
-                    :pending="pendingControl === 'reload'" :show-spinner="false"
+                    :pending="pendingControl === 'reload'"
                     :disabled="blocked"
                     @click="reload"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>{{ messages.t('activity.recommendations.reload') }}</ActionButton>
                 <ActionButton
                     type="button"
                     class="btn-sm" variant="outline-primary"
                     data-recommendations-auto
-                    :pending="pendingControl === 'generate'" :show-spinner="false"
+                    :pending="pendingControl === 'generate'"
                     :disabled="blocked || running || assignmentMode === 'FREE'"
                     :title="assignmentMode === 'FREE' ? messages.t('activity.recommendations.freeHint') : ''"
                     @click="generate"><i class="bi bi-stars me-1" aria-hidden="true"></i>{{ messages.t('activity.recommendations.auto') }}</ActionButton>
@@ -620,7 +620,7 @@ function statusLabel(status: typeof statuses[number]): string {
                     type="button"
                     class="btn-sm" variant="primary"
                     data-recommendations-apply
-                    :pending="pendingControl === 'save'" :show-spinner="false"
+                    :pending="pendingControl === 'save'"
                     :disabled="blocked || !workspace"
                     @click="save"><i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('activity.saveChanges') }}</ActionButton>
             </div>

@@ -262,6 +262,7 @@ async function confirmAssignment(): Promise<void> {
                 :error="list.error.value"
                 :has-data="!!data"
                 :pending="list.isPending.value"
+                :refreshing="list.isFetching.value"
                 :last-updated-at="list.data.value ? list.dataUpdatedAt.value : undefined"
                 :retry-at="retryAt"
                 :skeleton="route.meta.loadingSkeleton"

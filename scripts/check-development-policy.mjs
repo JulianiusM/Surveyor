@@ -398,6 +398,7 @@ function checkApprovalRequest(options) {
     return {mode: 'approval-request', checkedRequests: requests.length, errors, limitations: [
         'Structural preflight only: it cannot establish clarity, scope, authorization provenance or approval.',
         'Independent nonauthor and root semantic review of the exact request remain mandatory before presentation.',
+        'Present every outstanding question and its complete required explanation in the final answer. This tool cannot verify conversation channels or actual delivery.',
     ]};
 }
 

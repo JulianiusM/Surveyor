@@ -73,6 +73,8 @@ for (const locale of ['en', 'de'] as const) {
             await page.getByRole('tab', {name: messages.t('activity.rules'), exact: true}).click();
             await expect(page.locator('[data-requirements-dirty]')).toHaveText(messages.t('activity.requirements.savedBadge'));
             const reload = page.locator('[data-requirements-refresh]');
+            const readProgress = page.locator('#requirementPanel').getByRole('status')
+                .filter({hasText: messages.t('common.loading')});
             const otherControl = page.locator('#requiredShifts');
             const endpoint = `**/api/v1/activity-plans/${plan.id}/requirements`;
 
@@ -107,6 +109,9 @@ for (const locale of ['en', 'de'] as const) {
                     await expect(reload).toBeDisabled();
                     await expect(reload).toHaveAttribute('aria-busy', 'true');
                     await expect(reload.locator('.spinner-border')).toHaveCount(0);
+                    // Reload retains its compact appearance while the owned read
+                    // shows progress next to the saved configuration and draft.
+                    await expect(readProgress).toBeVisible();
 
                     // Chromium drops native disabled-button focus to BODY. A
                     // deliberate later focus owner must cancel restoration.
@@ -125,6 +130,7 @@ for (const locale of ['en', 'de'] as const) {
                     expect((await completion).status()).toBe(200);
                     await expect(reload).toBeEnabled();
                     await expect(reload).toHaveAttribute('aria-busy', 'false');
+                    await expect(readProgress).toHaveCount(0);
                     if (moveFocus) await expect(otherControl).toBeFocused();
                     else {
                         await expect(reload).toBeFocused();

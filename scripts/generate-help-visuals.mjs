@@ -66,26 +66,29 @@ const lines = values => values.map(text).join('<br>');
 await fs.mkdir(output, {recursive: true});
 await fs.mkdir(evidence, {recursive: true});
 
-/** Cache only release-pinned styling dependencies; no production/application requests. */
-async function pinnedAsset(url, name) {
-    const destination = path.join(evidence, name);
-    try { return await fs.readFile(destination); }
-    catch (error) { if (error.code !== 'ENOENT') throw error; }
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Cannot load pinned header asset: ${response.status} ${url}`);
-    const bytes = Buffer.from(await response.arrayBuffer());
-    await fs.writeFile(destination, bytes);
-    return bytes;
-}
-
-const bootstrap = await pinnedAsset('https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css', 'bootstrap-5.3.3.css');
-const iconStyles = await pinnedAsset('https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css', 'bootstrap-icons-1.11.3.css');
-const iconFont = await pinnedAsset('https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/fonts/bootstrap-icons.woff2', 'bootstrap-icons-1.11.3.woff2');
-const embeddedIcons = iconStyles.toString().replace(/url\("\.\/fonts\/bootstrap-icons\.woff2[^"]*"\)/u,
-    `url("data:font/woff2;base64,${iconFont.toString('base64')}")`);
 const manifest = JSON.parse(await fs.readFile(path.join(root, 'dist/public/app/.vite/manifest.json'), 'utf8'));
 const entry = manifest['src/frontend/app/entry-client.ts'];
-const applicationCss = (await Promise.all(entry.css.map(name => fs.readFile(path.join(root, 'dist/public/app', name), 'utf8')))).join('\n');
+const builtCss = (await Promise.all(entry.css.map(name => fs.readFile(path.join(root, 'dist/public/app', name), 'utf8')))).join('\n');
+const embeddedFonts = new Map();
+const assetHashes = {};
+// The manifest supplies the same font files as the real browser. Embed those
+// release bytes only for this server-free capture, without another CSS inventory
+// or a network fallback that could silently differ from the built application.
+for (const name of entry.assets ?? []) {
+    if (!/\.woff2?$/u.test(name)) continue;
+    const bytes = await fs.readFile(path.join(root, 'dist/public/app', name));
+    const format = name.endsWith('.woff2') ? 'woff2' : 'woff';
+    embeddedFonts.set(`/app/${name}`, `data:font/${format};base64,${bytes.toString('base64')}`);
+    assetHashes[name] = hash(bytes);
+}
+const applicationCss = builtCss.replace(/url\((["']?)(\/app\/assets\/[^"'()\s]+)\1\)/gu,
+    function embedBuiltFont(_match, _quote, url) {
+        // Upstream cache suffixes do not belong on a data URL. Only fonts
+        // declared by this build may replace a stylesheet resource reference.
+        const source = embeddedFonts.get(url.split(/[?#]/u, 1)[0]);
+        if (!source) throw new Error(`Cannot embed built stylesheet asset: ${url}`);
+        return `url("${source}")`;
+    });
 const logo = await fs.readFile(path.join(root, 'src/public/img/logo.png'));
 const renderer = await import(pathToFileURL(path.join(root, 'dist/frontend-server/entry-server.mjs')).href);
 const profile = {id: '00000000-0000-4000-8000-000000000001', name: labels.fictionalProfile};
@@ -104,7 +107,7 @@ const exports = [];
 try {
     // Keep the application markup and translated labels intact. Only resolve its
     // shipped image URL to inline bytes so this source capture stays server-free.
-    await page.setContent(`<!doctype html><html lang="${locale}" data-bs-theme="dark"><head><style>${bootstrap}</style><style>${embeddedIcons}</style><style>${applicationCss}</style></head><body>${rendered.html.replaceAll('/img/logo.png', `data:image/png;base64,${logo.toString('base64')}`)}</body></html>`);
+    await page.setContent(`<!doctype html><html lang="${locale}" data-bs-theme="dark"><head><style>${applicationCss}</style></head><body>${rendered.html.replaceAll('/img/logo.png', `data:image/png;base64,${logo.toString('base64')}`)}</body></html>`);
     await page.evaluate(() => document.fonts.ready);
     const header = page.locator('header');
     const headerLabels = await header.innerText();
@@ -201,6 +204,6 @@ try {
     for (const name of ['scripts/generate-help-visuals.mjs', labelsPath, 'src/frontend/components/AppHeader.vue', 'src/frontend/components/AppNavigationDropdown.vue', catalogPath, 'src/public/img/logo.png', 'dist/frontend-server/entry-server.mjs', 'dist/public/app/.vite/manifest.json']) {
         sources[name] = hash(await fs.readFile(path.join(root, name)));
     }
-    await fs.writeFile(path.join(evidence, 'evidence.json'), JSON.stringify({generatedAt: new Date().toISOString(), locale, selectedFigure, header: {width: 1344, sha256: hash(headerBytes), provenance: 'Built Vue SSR AppHeader; fictional account; no relabelling'}, sources, pinnedAssets: {bootstrap: hash(bootstrap), icons: hash(iconStyles), font: hash(iconFont)}, exports, inspectionWidths: [1440, 768, 298]}, null, 2));
+    await fs.writeFile(path.join(evidence, 'evidence.json'), JSON.stringify({generatedAt: new Date().toISOString(), locale, selectedFigure, header: {width: 1344, sha256: hash(headerBytes), provenance: 'Built Vue SSR AppHeader; fictional account; no relabelling'}, sources, builtAssets: {styles: hash(Buffer.from(builtCss)), fonts: assetHashes}, exports, inspectionWidths: [1440, 768, 298]}, null, 2));
     console.log(JSON.stringify(exports, null, 2));
 } finally { await browser.close(); }

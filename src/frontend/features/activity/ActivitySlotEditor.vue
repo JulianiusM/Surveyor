@@ -255,7 +255,7 @@ async function reviewUnknown(): Promise<void> {
                         v-if="!suggestions.length"
                         type="button"
                         class="list-group-item list-group-item-action d-flex align-items-center justify-content-between text-bg-dark"
-                        unstyled :pending="creatingRole" :show-spinner="false"
+                        unstyled :pending="creatingRole"
                         :disabled="blocked"
                         @click="createRole">{{ messages.t('activity.createRole', {name: search.trim()}) }}<i class="bi bi-magic" aria-hidden="true"></i>
                     </ActionButton>
@@ -289,7 +289,7 @@ async function reviewUnknown(): Promise<void> {
                 type="submit"
                 form="slotEditorForm"
                 class="btn-sm" variant="primary"
-                :pending="command.pending.value && !creatingRole" :show-spinner="false"
+                :pending="command.pending.value && !creatingRole"
                 :disabled="blocked || conflict">{{ messages.t('common.save') }}</ActionButton>
         </template>
     </AppDialog>

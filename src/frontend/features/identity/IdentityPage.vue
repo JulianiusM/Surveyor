@@ -68,7 +68,7 @@ const command = useCommand(context.refreshSession, true, {dirty: isDirty,
     recoveryEligible: () => sessionRetryAvailable.value});
 const reconciling = command.recovering;
 // The recovery form shares command protection with sign-in, but has its own
-// initiating button and existing no-spinner presentation.
+// initiating button and pending presentation.
 const recoveringAccess = ref(false);
 // The two mounted forms share one command lease. Only the submitted form owns
 // pending focus; the other form retains its existing disabled-only fence.
@@ -595,7 +595,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                         <div class="col-md-6 mt-auto">
                             <div class="d-grid">
                                 <ActionButton type="submit" variant="outline-primary" :disabled="blocked"
-                                    :pending="submittingRecovery" :show-spinner="false"><i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>{{
+                                    :pending="submittingRecovery"><i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>{{
                                     messages.t('auth.requestAccess')
                                 }}</ActionButton>
                             </div>

@@ -25,6 +25,7 @@ import {AppDataSource} from "./modules/database/dataSource";
 import {createSessionStore} from './modules/lib/session';
 import settings from './modules/settings';
 import {frontendDevelopmentMiddleware} from './modules/frontendDevelopment';
+import {createFrontendAssets} from './modules/frontendAssets';
 import apiV1Router from './routes/api/v1';
 import indexRouter from './routes';
 import usersRouter from './routes/users';
@@ -51,14 +52,15 @@ app.use(express.json({limit: '1mb'}));
 app.use(express.urlencoded({extended: true, limit: '1mb'}));
 app.use(cookieParser());
 app.use(frontendDevelopmentMiddleware);
-app.use(express.static(path.join(__dirname, 'public')));
 // The development server runs source TS, while both frontend builds share their normal dist outputs.
-app.use('/app', express.static(path.resolve(__dirname, '../dist/public/app')));
+// Select frontend encodings before the general public root can serve /app files.
+app.use('/app', createFrontendAssets(path.resolve(__dirname, '../dist/public/app')));
 // An old document may request a chunk removed by a release. Keep missing assets
 // outside document rendering so its recovery can observe the real failed load.
 app.use('/app', function missingFrontendAsset(_req, res) {
     res.status(404).set('Cache-Control', 'no-store').type('text/plain').send('Not found');
 });
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ensure dataSource is initialized before this
 const sessionStore = createSessionStore(AppDataSource.manager);

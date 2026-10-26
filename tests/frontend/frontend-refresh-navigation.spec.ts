@@ -217,6 +217,90 @@ describe('Overview Packing lifecycle actions', () => {
     });
 });
 
+describe('Overview contextual menu progress', () => {
+    it.each([
+        {label: 'Archive for everyone', method: 'POST', suffix: 'archive'},
+        {label: 'Pause automatic archival', method: 'PUT', suffix: 'automatic-archive'},
+        {label: 'Hide for me', method: 'PUT', suffix: 'visibility'},
+    ].flatMap(gesture => [false, true].map(failed => ({...gesture, failed}))))(
+        'keeps only the initiating card visible through $label and its fresh read (failed=$failed)', async gesture => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
+        vi.stubGlobal('confirm', vi.fn(() => true));
+        const write = deferred<Response>();
+        const read = deferred<Response>();
+        const selected = {...card, type: 'event' as const, title: 'Menu Event', url: `/event/${otherId}`,
+            capabilities: {...card.capabilities, archive: true}, automation: {paused: false, canManage: true}};
+        // A sibling family deliberately shares the UUID. Presentation belongs to
+        // the typed card that initiated the operation, rather than every match.
+        const sibling = {...card, type: 'packing' as const, title: 'Menu Packing', url: `/packing/${otherId}`,
+            capabilities: {...card.capabilities, archive: true}};
+        let writes = 0;
+        let freshRead = false;
+        let recovery = false;
+        const {wrapper, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+            async function deliverCardGesture(captured): Promise<Response> {
+                if (captured.method !== 'GET') {
+                    writes++;
+                    expect(captured.method).toBe(gesture.method);
+                    expect(new URL(captured.url).pathname.endsWith('/' + gesture.suffix)).toBe(true);
+                    return write.promise;
+                }
+                if (writes && !recovery) { freshRead = true; return read.promise; }
+                return json({...region(captured), availableTypes: ['event', 'packing'], pageSize: 12,
+                    hasNext: false, items: [selected, sibling]});
+            });
+        const initiating = wrapper.get('article[data-type="event"]');
+        const adjacent = wrapper.get('article[data-type="packing"]');
+        const input = wrapper.get<HTMLInputElement>('input[type="search"]');
+        await input.setValue('Menu');
+        const button = initiating.findAll('button.dropdown-item').find(value => value.text() === gesture.label)!;
+        const details = button.element.closest('details') as HTMLDetailsElement;
+
+        try {
+            details.open = true;
+            await button.trigger('click');
+            await flushPromises();
+            expect(details.open).toBe(false);
+            expect(initiating.get('summary .frontend-card-action-progress').text()).toBe(context.messages.value.t('common.pending'));
+            expect(adjacent.find('.frontend-card-action-progress').exists()).toBe(false);
+            expect((button.element as HTMLButtonElement).disabled).toBe(true);
+            (button.element as HTMLButtonElement).click();
+            expect(writes).toBe(1);
+
+            // Confirmed writes retain their visible initiating progress until the
+            // existing command's authoritative follow-up read finishes.
+            write.resolve(json(gesture.suffix === 'visibility'
+                ? {visibility: 'hidden', overviewHidden: true, archived: false} : {changed: true}));
+            await flushPromises();
+            expect(freshRead).toBe(true);
+            expect(initiating.find('.frontend-card-action-progress').exists()).toBe(true);
+            expect(adjacent.find('.frontend-card-action-progress').exists()).toBe(false);
+            expect(input.element.value).toBe('Menu');
+            expect(wrapper.get('article[data-type="event"]').element).toBe(initiating.element);
+
+            // Either fresh-read outcome clears progress without replaying the
+            // confirmed operation. A failure preserves its warning and old card.
+            read.resolve(gesture.failed ? readFailure(429, 'html') : json({...region(new Request('http://localhost/')),
+                availableTypes: ['event', 'packing'], pageSize: 12, hasNext: false, items: [selected, sibling]}));
+            await flushPromises();
+            expect(wrapper.find('.frontend-card-action-progress').exists()).toBe(false);
+            if (gesture.failed) expect(wrapper.text()).toContain(context.messages.value.t('state.savedRefreshFailed'));
+            expect(input.element.value).toBe('Menu');
+            expect(wrapper.get('article[data-type="event"]').element).toBe(initiating.element);
+            recovery = true;
+            await context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
+            await flushPromises();
+            expect(wrapper.find('.frontend-card-action-progress').exists()).toBe(false);
+            expect(request.mock.calls.filter(([value]) => (value as Request).method !== 'GET')).toHaveLength(1);
+            expect(input.element.value).toBe('Menu');
+        } finally {
+            write.resolve(json({changed: false}));
+            read.resolve(json({...region(new Request('http://localhost/')), items: [selected, sibling]}));
+            await flushPromises();
+        }
+    });
+});
+
 describe('Overview independent schedule controls', () => {
     it.each([
         {type: 'event', parent: false}, {type: 'activity', parent: false}, {type: 'event', parent: true},
@@ -2604,7 +2688,8 @@ describe('mixed-family Overview integration', () => {
             await flushPromises();
             expect(control.attributes('aria-busy')).toBe('true');
             expect(sibling.attributes('aria-busy')).toBe('false');
-            expect(control.find('.spinner-border').exists()).toBe(false);
+            expect(control.find('.spinner-border').exists()).toBe(true);
+            expect(sibling.find('.spinner-border').exists()).toBe(false);
             expect((control.element as HTMLButtonElement).disabled).toBe(true);
             expect((sibling.element as HTMLButtonElement).disabled).toBe(true);
             // Happy DOM retains disabled focus; model only Chromium's native

@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; developers; AI agents
 owner: architecture maintainers
 status: current
-last-verified: 2026-10-25
+last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
-source-anchors: package.json; src/app.ts; src/frontend/; src/routes/; src/controller/; src/modules/database/; src/modules/api/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
+verification-scope: approved local browser assets, responsiveness and dependency compatibility scope reconciled; startup renderer module readiness and prior P11 routing, Vue rendering and native browser retirement guidance retained alongside inherited domain and database safety; no deployment or exhaustive verification claim
+source-anchors: package.json; src/app.ts; src/server.ts; src/modules/frontendAssets.ts; src/modules/frontendRenderer.ts; src/frontend/; src/routes/; src/controller/; src/modules/database/; src/modules/api/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: architecture-or-help-delivery-change
 -->
 
@@ -50,8 +50,8 @@ The lockfile is authoritative for exact installed dependency versions. The impor
 | Area | Current implementation |
 |---|---|
 | Runtime | Node.js; CI and release workflows use 24.15.0 |
-| Language | TypeScript targeting ES2024 |
-| Web framework | Express 5.2.x |
+| Language | TypeScript 6.x targeting ES2024; see [compiler API compatibility](DEVELOPMENT.md#1-install-dependencies) |
+| Web framework | Express 5.3.x |
 | Component UI | Vue 3/TypeScript, Bootstrap-compatible presentation, native controls and suitable Reka UI primitives |
 | Routing and server snapshots | Vue Router and TanStack Vue Query; feature-owned drafts remain separate |
 | Browser/SSR build | Vite with separate client and SSR outputs; Sass compiles the standalone print stylesheet |
@@ -72,7 +72,8 @@ The lockfile is authoritative for exact installed dependency versions. The impor
 3. `startInvoiceRetentionJob()` performs an immediate invoice cleanup and installs the hourly timer.
 4. `startEntityArchivalJob()` validates archival settings, performs an initial sweep when enabled, and installs its separate hourly timer.
 5. `src/app.ts` is loaded only after the database exists, because application construction obtains the TypeORM session repository.
-6. An HTTP server listens on the configured application port.
+6. Frontend development initialization retains Vite's source warmup when enabled; installed releases load the built SSR renderer's code without rendering a request.
+7. An HTTP server listens on the configured application port.
 
 A failure in any step logs the error and terminates the process. There is no degraded database-free mode.
 
@@ -753,12 +754,18 @@ Vue application code lives under `src/frontend/`. Feature `api.ts` owners consum
 through `app/transport.ts`; app-owned controls receive explicit values, capabilities, events and injected operations.
 Application presentation helpers and styles belong under `src/frontend/`, shared by their actual consumers.
 The client entry and development renderer reference the same authored `styles/application.sass` root. It owns the
-cascade once: base `style.sass`, `help.sass`, then `frontend.css`. `style.sass` owns its accordion/timezone imports,
-including the installed Bootstrap layer. Vite emits separate client/SSR artifacts; the existing renderer uses that
-source stylesheet link in development and the client manifest in installed releases, including styled
-server-rendered/static content before JavaScript initialization. Preserve the
-effective stylesheet order, CDN/compiled Bootstrap layers and styled pre-JavaScript content. Responsive overrides
-belong in the shared authored presentation owner; generated output is never an authored source.
+cascade once: Bootstrap Icons CSS, base `style.sass`, `help.sass`, then `frontend.css`. `style.sass` owns its
+accordion/timezone imports, including the installed Bootstrap layer. Icon fonts enter the same authored build graph.
+Vite emits separate client/SSR artifacts; the existing renderer uses the source stylesheet link in development
+and the client manifest in installed releases, including styled server-rendered/static content before JavaScript
+initialization. Serve application-owned browser assets from the instance's origin, including Bootstrap CSS,
+icons and fonts, without CDN fetches. Preserve effective stylesheet order and styled pre-JavaScript content.
+Responsive overrides belong in the shared authored presentation owner; generated output is never an authored source.
+
+The [approved 2026-10-26 amendment](decisions/DEC-006-FRONTEND-FRAMEWORK.md#approved-local-browser-assets-and-responsiveness-scope-2026-10-26)
+supersedes the earlier preservation of both CDN and compiled Bootstrap layers. The
+[Development Guide](DEVELOPMENT.md#responsiveness-targets-and-evidence) owns the internal one-second optimization
+target and established production responsiveness criteria.
 
 The frontend feedback owner supplies notice lifetime; existing backend/domain/catalog owners remain shared.
 Logo/favicon image assets and third-party Bootstrap/icons retain their real consumers independently of application

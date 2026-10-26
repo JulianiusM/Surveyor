@@ -4,11 +4,144 @@ import express from 'express';
 import http from 'node:http';
 import path from 'node:path';
 import os from 'node:os';
+import fs from 'node:fs/promises';
+import {brotliCompressSync, brotliDecompressSync, gzipSync} from 'node:zlib';
 import {frontendDevelopmentMiddleware, frontendDevelopmentServer, initializeFrontendDevelopment} from '../../src/modules/frontendDevelopment';
+import {createFrontendAssets} from '../../src/modules/frontendAssets';
 import {renderFrontend} from '../../src/modules/frontendRenderer';
 import type {FrontendBootstrap} from '../../src/types/FrontendTypes';
 
 afterEach(() => { vi.unstubAllEnvs(); });
+
+describe('frontend public asset delivery', () => {
+    it('negotiates prepared encodings and retains original, HEAD, Range and missing-asset delivery', async function servesPreparedEncodings() {
+        const fontBytes = await fs.readFile('node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2');
+        const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-frontend-assets-'));
+        const source = 'export const message = "A compressible application module";\n'.repeat(100);
+        const style = '.fixture { color: white; }\n'.repeat(100);
+        const scriptBytes = Buffer.from(source);
+        const app = express();
+        const server = http.createServer(app);
+        try {
+            // This isolated build-shaped directory owns public files and its
+            // manifest. The actual Express middleware selects their encodings.
+            await fs.mkdir(path.join(directory, 'assets'));
+            await fs.mkdir(path.join(directory, '.vite'));
+            await fs.writeFile(path.join(directory, '.vite/manifest.json'), JSON.stringify({entry: {
+                file: 'assets/entry-hash.js', css: ['assets/entry-hash.css'], assets: ['assets/icons-hash.woff2'],
+            }}));
+            await fs.writeFile(path.join(directory, 'assets/entry-hash.js'), scriptBytes);
+            await fs.writeFile(path.join(directory, 'assets/entry-hash.js.br'), brotliCompressSync(scriptBytes));
+            await fs.writeFile(path.join(directory, 'assets/entry-hash.js.gz'), gzipSync(scriptBytes));
+            await fs.writeFile(path.join(directory, 'assets/entry-hash.css'), style);
+            await fs.writeFile(path.join(directory, 'assets/entry-hash.css.gz'), gzipSync(style));
+            await fs.writeFile(path.join(directory, 'assets/icons-hash.woff2'), fontBytes);
+            await fs.writeFile(path.join(directory, 'assets/unlisted.js'), source);
+            await fs.writeFile(path.join(directory, 'assets/unlisted.js.br'), brotliCompressSync(scriptBytes));
+            app.use('/app', createFrontendAssets(directory));
+            app.use((_req, res) => res.status(404).end());
+            await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+            const address = server.address();
+            if (!address || typeof address === 'string') throw new Error('The asset fixture listener has no port');
+            const origin = `http://127.0.0.1:${address.port}/app`;
+
+            // Fetch decodes the real HTTP body. Its encoding/type/length headers
+            // establish which stored representation supplied these same bytes.
+            for (const encoding of ['br', 'gzip', 'identity']) {
+                const response = await fetch(`${origin}/assets/entry-hash.js`, {headers: {'Accept-Encoding': encoding}});
+                expect(response.status).toBe(200);
+                expect(response.headers.get('content-encoding')).toBe(encoding === 'identity' ? null : encoding);
+                expect(response.headers.get('content-type')).toContain('javascript');
+                expect(response.headers.get('vary')).toContain('Accept-Encoding');
+                expect(await response.text()).toBe(source);
+            }
+            // Actual browsers commonly list gzip first at the same quality as
+            // Brotli. That order must not hide the smaller prepared encoding;
+            // explicit weights/exclusions still keep their existing semantics.
+            for (const [encoding, expected] of [
+                ['gzip, deflate, br, zstd', 'br'],
+                ['GZip, DEFLATE, BR', 'br'],
+                ['gzip;q=1, br;q=0.5', 'gzip'],
+                ['gzip;q=0.5, br;q=1', 'br'],
+                ['gzip, br;q=0', 'gzip'],
+                ['gzip, br, br;q=0.2', 'gzip'],
+            ]) {
+                const response = await fetch(`${origin}/assets/entry-hash.js`, {headers: {'Accept-Encoding': encoding!}});
+                expect(response.headers.get('content-encoding'), encoding).toBe(expected);
+                expect(await response.text()).toBe(source);
+            }
+            const head = await fetch(`${origin}/assets/entry-hash.js`, {method: 'HEAD', headers: {'Accept-Encoding': 'br'}});
+            expect(head.status).toBe(200);
+            expect(head.headers.get('content-encoding')).toBe('br');
+            expect(head.headers.get('content-length')).toBe(String(brotliCompressSync(scriptBytes).length));
+            expect(await head.text()).toBe('');
+            const revalidated = await fetch(`${origin}/assets/entry-hash.js`, {
+                // Explicit revalidation avoids Fetch adding Cache-Control:no-cache,
+                // which intentionally requests a complete response from Express.
+                headers: {'Accept-Encoding': 'br', 'If-None-Match': head.headers.get('etag')!, 'Cache-Control': 'max-age=0'},
+            });
+            expect(revalidated.status).toBe(304);
+            expect(revalidated.headers.get('vary')).toContain('Accept-Encoding');
+            expect(await revalidated.text()).toBe('');
+
+            const fallback = await fetch(`${origin}/assets/entry-hash.css`, {headers: {'Accept-Encoding': 'br, gzip'}});
+            expect(fallback.headers.get('content-encoding')).toBe('gzip');
+            expect(fallback.headers.get('content-type')).toContain('text/css');
+            expect(await fallback.text()).toBe(style);
+            // WOFF2 is already a compressed binary format. The actual public
+            // owner must preserve its font MIME, bytes and ordinary HEAD delivery.
+            const font = await fetch(`${origin}/assets/icons-hash.woff2`, {headers: {'Accept-Encoding': 'br, gzip'}});
+            expect(font.status).toBe(200);
+            expect(font.headers.get('content-type')).toContain('font/woff2');
+            expect(font.headers.get('content-encoding')).toBeNull();
+            expect(Buffer.from(await font.arrayBuffer())).toEqual(fontBytes);
+            const fontHead = await fetch(`${origin}/assets/icons-hash.woff2`, {method: 'HEAD'});
+            expect(fontHead.status).toBe(200);
+            expect(fontHead.headers.get('content-length')).toBe(String(fontBytes.length));
+            expect(await fontHead.text()).toBe('');
+            const range = await fetch(`${origin}/assets/entry-hash.js`, {headers: {'Accept-Encoding': 'br', Range: 'bytes=0-5'}});
+            expect(range.status).toBe(206);
+            expect(range.headers.get('content-encoding')).toBeNull();
+            expect(await range.text()).toBe(source.slice(0, 6));
+            // Fetch adds identity to Range requests itself. Use the actual HTTP
+            // headers here to exercise a client explicitly forbidding identity.
+            const encodedRange = await new Promise<http.IncomingMessage>((resolve, reject) => {
+                http.get(`${origin}/assets/entry-hash.js`, {
+                    headers: {'Accept-Encoding': 'br, identity;q=0', Range: 'bytes=0-5'},
+                }, resolve).once('error', reject);
+            });
+            const chunks: Buffer[] = [];
+            for await (const chunk of encodedRange) chunks.push(Buffer.from(chunk));
+            expect(encodedRange.statusCode).toBe(200);
+            expect(encodedRange.headers['content-encoding']).toBe('br');
+            expect(brotliDecompressSync(Buffer.concat(chunks)).toString()).toBe(source);
+            const weighted = await fetch(`${origin}/assets/entry-hash.js`, {
+                headers: {'Accept-Encoding': 'br;q=0, gzip;q=0.8, identity;q=0.1'},
+            });
+            expect(weighted.headers.get('content-encoding')).toBe('gzip');
+            expect(await weighted.text()).toBe(source);
+
+            const unlisted = await fetch(`${origin}/assets/unlisted.js`, {headers: {'Accept-Encoding': 'br'}});
+            expect(unlisted.headers.get('content-encoding')).toBeNull();
+            expect(await unlisted.text()).toBe(source);
+            expect((await fetch(`${origin}/assets/missing.js`)).status).toBe(404);
+            expect((await fetch(`${origin}/assets/entry-hash.js`, {
+                headers: {'Accept-Encoding': 'identity;q=0, br;q=0, gzip;q=0'},
+            })).status).toBe(406);
+            for (const file of ['../outside.js', 'C:/outside.js']) {
+                await fs.writeFile(path.join(directory, '.vite/manifest.json'), JSON.stringify({entry: {file}}));
+                expect(() => createFrontendAssets(directory)).toThrow('Invalid frontend asset manifest path');
+            }
+        } finally {
+            // Close the owned listener before removing its named temporary root;
+            // a failed assertion must not leave streams referencing that fixture.
+            if (server.listening) await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+            if (path.dirname(path.resolve(directory)) !== path.resolve(os.tmpdir())
+                || !path.basename(directory).startsWith('surveyor-frontend-assets-')) throw new Error('Unexpected asset fixture cleanup path');
+            await fs.rm(directory, {recursive: true, force: true});
+        }
+    });
+});
 
 // This fixture integrates actual Express/Vite middleware and shared SSR through
 // HTTP. It owns only synthetic bootstrap data and a temporary local listener;
@@ -23,8 +156,8 @@ describe('Express-integrated frontend development', () => {
     });
 
     // This real HTTP case compiles the cold Vite SSR/client graph and Sass.
-    // Measured passing runs take 25–29 seconds; allow compilation and owned
-    // cleanup without widening ordinary test or hook deadlines.
+    // Include cold compilation and owned cleanup in this infrastructure case's
+    // budget without widening ordinary test or hook deadlines.
     it('renders source SSR and serves Vue HMR through the existing HTTP origin', async () => {
         vi.stubEnv('NODE_ENV', 'development');
         vi.stubEnv('SURVEYOR_FRONTEND_DEV', '1');
@@ -105,9 +238,20 @@ describe('Express-integrated frontend development', () => {
             expect(compiledStyle.indexOf('.accordion-dark')).toBeLessThan(compiledStyle.indexOf('.tz-picker'));
             expect(compiledStyle.indexOf('.tz-picker')).toBeLessThan(compiledStyle.indexOf('.help-content'));
             expect(compiledStyle.indexOf('.help-content')).toBeLessThan(compiledStyle.indexOf('.frontend-app'));
-            const bootstrapLayer = styles.find(source => source.includes('bootstrap@5.3.3/dist/css/bootstrap.min.css'));
-            expect(bootstrapLayer).toBeDefined();
-            expect(html.indexOf(bootstrapLayer!)).toBeLessThan(html.indexOf(sourceStyles[0]!));
+            // Use the font URL the real Sass/Vite response supplies. This catches
+            // missing local font publication and incorrect development URL bases,
+            // rather than proving an unrelated hardcoded package path is readable.
+            const fontReferences = [...compiledStyle.matchAll(/url\(["']?([^\s)"']+\.woff2(?:\?[^\s)"']*)?)["']?\)/gu)]
+                .map(match => new URL(match[1]!, stylesheet.url));
+            expect(fontReferences).toHaveLength(1);
+            const iconUrl = fontReferences[0]!;
+            expect(iconUrl.origin).toBe(origin);
+            expect(iconUrl.pathname.startsWith('/app/')).toBe(true);
+            const iconFont = await fetch(iconUrl);
+            expect(iconFont.status).toBe(200);
+            expect(iconFont.headers.get('content-type')).toContain('font/woff2');
+            expect(Buffer.from(await iconFont.arrayBuffer())).toEqual(await fs.readFile('node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2'));
+            for (const source of [...styles, ...scripts]) expect(new URL(source, origin).origin).toBe(origin);
             expect(html).not.toContain('href="/style/');
             expect(html).toContain('href="/img/favicon-32x32.png"');
             expect(html).toContain('src="/img/logo.png"');

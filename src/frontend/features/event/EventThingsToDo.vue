@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, reactive, ref, useId, watch} from 'vue';
+import {computed, reactive, ref, shallowRef, useId, watch} from 'vue';
 import {RouterLink} from 'vue-router';
 import type {components} from '../../../types/api/v1';
 import type {FrontendOverviewCardInteraction} from '../../../types/FrontendUiTypes';
@@ -43,6 +43,9 @@ const removal = useEntityRemoval(command, destination);
 // The single child command blocks the section. A delete spinner belongs only
 // to the selected child, independently of shared lifecycle/dropdown commands.
 const deletingChild = ref<{type: ChildType; id: string} | null>(null);
+// Card menus dismiss after a gesture, while this same section command keeps
+// running. This selection carries no draft, authority or copied pending state.
+const pendingMenu = shallowRef<{type: Card['type']; id: string} | null>(null);
 const available = useActionState({eligible: mayUseThings,
     blocked: () => command.action.disabled.value || !!destination.target.value});
 const refreshAction = useActionState({eligible: () => section.readAction.isAvailable(),
@@ -102,12 +105,14 @@ function toggleGroup(type: ChildType): void {
 /** Shared cards retain their presentation owner. Children with client routes receive SPA
  * navigation and their own authorized image operation through explicit inputs. */
 function interaction(card: Card): FrontendOverviewCardInteraction {
-    if (card.type === 'drivers') return {clientNavigation: true, lifecycle: true, readHeader: driversApi.header.bind(driversApi)};
-    if (card.type === 'activity') return {clientNavigation: true, lifecycle: true, readHeader: activityApi.header.bind(activityApi)};
-    return {clientNavigation: card.type === 'packing', lifecycle: true,
+    const menuPending = command.pending.value && pendingMenu.value?.type === card.type && pendingMenu.value.id === card.id;
+    if (card.type === 'drivers') return {clientNavigation: true, lifecycle: true, menuPending, readHeader: driversApi.header.bind(driversApi)};
+    if (card.type === 'activity') return {clientNavigation: true, lifecycle: true, menuPending, readHeader: activityApi.header.bind(activityApi)};
+    return {clientNavigation: card.type === 'packing', lifecycle: true, menuPending,
         ...(card.type === 'packing' ? {readHeader: packingApi.header.bind(packingApi)} : {})};
 }
 function retireLocalState(): void {
+    pendingMenu.value = null;
     search.value = '';
     selectedType.value = 'all';
     Object.assign(adminSearch, {packing: '', activity: '', drivers: ''});
@@ -124,7 +129,7 @@ async function archive(card: Card, restore: boolean): Promise<void> {
     if (!lifecycle) return;
     // The shared owner selects the scheduled-restore warning from the
     // current admitted projection; this host keeps only child/API ownership.
-    await lifecycle.archive(card.id, restore, card.inheritedArchived, undefined, !!card.automation);
+    await presentMenuCommand(card, () => lifecycle.archive(card.id, restore, card.inheritedArchived, undefined, !!card.automation));
 }
 
 /** Pause/resume uses the controller-projected schedule capability. Only resuming
@@ -134,7 +139,21 @@ async function automate(card: Card, paused: boolean): Promise<void> {
     const lifecycle = createChildLifecycle(card);
     if (!lifecycle) return;
     // The server rechecks schedule eligibility; presentation never infers dates.
-    await lifecycle.automate(card.id, paused);
+    await presentMenuCommand(card, () => lifecycle.automate(card.id, paused));
+}
+
+/** Keep one selected child's trigger visible through the existing lifecycle
+ * command. The section still owns admission, confirmation, refresh and outcome. */
+async function presentMenuCommand(card: Card, operation: () => Promise<unknown>): Promise<void> {
+    const intent = {type: card.type, id: card.id};
+    pendingMenu.value = intent;
+    try {
+        await operation();
+    } finally {
+        // A changed Event or actor retires the old selection independently of
+        // its pending promise. Do not clear a newer child's presentation.
+        if (pendingMenu.value === intent) pendingMenu.value = null;
+    }
 }
 
 /** Bind this admitted Event/child intent to the existing generated operations.

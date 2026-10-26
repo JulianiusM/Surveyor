@@ -41,6 +41,6 @@ function chooseEvent(value: string | null): void {
                 }}</ActionButton>
             </template></StatusNotice
         >
-        <ActionButton type="submit" :disabled="disabled || conflict" :pending="pending" :show-spinner="false">{{ submitLabel }}</ActionButton>
+        <ActionButton type="submit" :disabled="disabled || conflict" :pending="pending">{{ submitLabel }}</ActionButton>
     </form>
 </template>

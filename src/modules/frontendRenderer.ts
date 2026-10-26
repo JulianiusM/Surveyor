@@ -7,11 +7,27 @@ import {createTranslator, localeManifest} from './localization/translator';
 import {frontendDevelopmentServer} from './frontendDevelopment';
 import settings from './settings';
 
-interface AssetChunk {file: string; css?: string[]; imports?: string[]}
+interface AssetChunk {file: string; name?: string; isDynamicEntry?: boolean; css?: string[]; imports?: string[]}
 interface FrontendRenderer {render(url: string, bootstrap: FrontendBootstrap): Promise<FrontendRenderResult>}
 
 const distribution = fs.existsSync(path.join(__dirname, '../frontend-server/entry-server.mjs'))
     ? path.resolve(__dirname, '..') : path.resolve(__dirname, '../../dist');
+
+/** Load the installed renderer's code through Node's ordinary module cache.
+ * Every render still creates its own application and private request state. */
+async function loadInstalledFrontendRenderer(): Promise<FrontendRenderer> {
+    // Startup and requests share this exact release path, without an additional
+    // renderer instance, private cache or synthetic request to warm the module.
+    return await import(pathToFileURL(path.join(distribution, 'frontend-server/entry-server.mjs')).href) as FrontendRenderer;
+}
+
+/** Move installed renderer import/parse work before HTTP readiness. Source
+ * development keeps Vite's own warmup and module invalidation lifecycle. */
+export async function initializeFrontendRenderer(): Promise<void> {
+    // Import definitions only: no router resolution, session, query or render.
+    // A missing/broken release artifact fails the existing startup error path.
+    if (!frontendDevelopmentServer()) await loadInstalledFrontendRenderer();
+}
 
 /** Escape plain text for HTML; bootstrap JSON has its own script-element serializer. */
 function escapeHtml(value: string): string {
@@ -81,29 +97,54 @@ function javascriptInitializationMonitor(): string {
 }
 
 /** Resolve only build-authored manifest paths, without importing Vite into production startup. */
-function clientAssets(): {script: string; styles: string[]} {
+function clientAssets(routeComponentNames: readonly string[] = []): {script: string; styles: string[]; modules: string[]} {
     const manifest = JSON.parse(fs.readFileSync(path.join(distribution, 'public/app/.vite/manifest.json'), 'utf8')) as Record<string, AssetChunk>;
     const entry = manifest['src/frontend/app/entry-client.ts'];
     if (!entry) throw new Error('Frontend client entry is missing from its build manifest');
     const styles = new Set<string>();
-    const seen = new Set<string>();
+    const modules = new Set<string>();
+    const seen = new Set<string>(['src/frontend/app/entry-client.ts']);
 
     /** Traverse each build-authored dependency once and retain stylesheet order.
      * Shared imports and cycles must neither duplicate links nor recurse forever. */
-    function collectStyles(chunk: AssetChunk): void {
+    function collectAssets(chunk: AssetChunk, includeStyles = true): void {
+        // Head preloads let the browser fetch the shared runtime alongside the
+        // entry rather than discovering it only after downloading/parsing entry JS.
+        modules.add(`/app/${chunk.file}`);
         // Set insertion order preserves the manifest's first encountered styles.
-        for (const css of chunk.css ?? []) styles.add(`/app/${css}`);
+        if (includeStyles) for (const css of chunk.css ?? []) styles.add(`/app/${css}`);
 
         // Mark dependencies before descending so a shared/cyclic edge is visited
         // once. A missing build-authored chunk remains an ordinary build error.
         for (const imported of chunk.imports ?? []) {
             if (seen.has(imported)) continue;
             seen.add(imported);
-            collectStyles(manifest[imported]);
+            collectAssets(manifest[imported], includeStyles);
         }
     }
-    collectStyles(entry);
-    return {script: `/app/${entry.file}`, styles: [...styles]};
+    collectAssets(entry);
+    // Match only a unique compiler/build name. Missing or ambiguous hints retain
+    // ordinary lazy loading; they never select a different route or load siblings.
+    // Route CSS keeps Vite's established dynamic-import cascade and load ownership.
+    for (const name of routeComponentNames) {
+        const matches = Object.values(manifest).filter(chunk => chunk.isDynamicEntry && chunk.name === name);
+        if (matches.length === 1) collectAssets(matches[0]!, false);
+    }
+    return {script: `/app/${entry.file}`, styles: [...styles], modules: [...modules]};
+}
+
+/** Only Home owns discovery metadata. Other documents reuse the app's existing
+ * locale instance without initializing another complete translation store. */
+function landingMetadata(bootstrap: FrontendBootstrap, escapedTitle: string): string {
+    if (!bootstrap.landing) return '';
+    const messages = createTranslator(bootstrap.session.locale);
+    // Attribute values stay escaped independently of the title already prepared
+    // for this document's ordinary head. No private profile data enters metadata.
+    return `<meta name="description" content="${escapeHtml(messages.t('landing.metaDescription'))}">
+<meta name="keywords" content="${escapeHtml(messages.t('landing.metaKeywords'))}"><meta name="author" content="Surveyor">
+<meta property="og:title" content="${escapedTitle}"><meta property="og:description" content="${escapeHtml(messages.t('landing.metaSocialDescription'))}">
+<meta property="og:image" content="/img/logo.png"><meta property="og:url" content="${escapeHtml(settings.value.rootUrl)}">
+<meta name="twitter:card" content="summary_large_image">`;
 }
 
 /**
@@ -118,30 +159,22 @@ export async function prepareFrontend(res: Response, url: string, bootstrap: Fro
     // The same composition imported by the client styles readable Help/startup
     // recovery before JavaScript. Ordering belongs to that authored stylesheet;
     // installed releases resolve its emitted CSS through Vite's manifest.
-    const assets = development ? {script: '/src/frontend/app/entry-client.ts',
-        styles: ['/src/frontend/styles/application.sass']} : clientAssets();
     // Production resolves only the current release. Development uses the same renderer
     // source through Vite so SSR and hydrated components share module invalidation/HMR.
     const renderer = development
         ? await development.ssrLoadModule('/src/frontend/app/entry-server.ts') as FrontendRenderer
-        : await import(pathToFileURL(path.join(distribution, 'frontend-server/entry-server.mjs')).href) as FrontendRenderer;
+        : await loadInstalledFrontendRenderer();
     const rendered = await renderer.render(url, bootstrap);
+    const assets = development ? {script: '/src/frontend/app/entry-client.ts',
+        styles: ['/src/frontend/styles/application.sass'], modules: []} : clientAssets(rendered.routeComponentNames);
     const locale = bootstrap.session.locale;
     const direction = localeManifest.find(entry => entry.locale === locale)?.direction ?? 'ltr';
     res.set('Cache-Control', 'private, no-store').set('Content-Language', locale);
     const title = escapeHtml(rendered.title);
     // Landing keeps the discovery/social metadata. Other documents retain
     // their existing head, and private profile values never enter these fields.
-    const messages = createTranslator(locale);
-    const landingMetadata = bootstrap.landing ? `<meta name="description" content="${escapeHtml(messages.t('landing.metaDescription'))}">
-<meta name="keywords" content="${escapeHtml(messages.t('landing.metaKeywords'))}"><meta name="author" content="Surveyor">
-<meta property="og:title" content="${title}"><meta property="og:description" content="${escapeHtml(messages.t('landing.metaSocialDescription'))}">
-<meta property="og:image" content="/img/logo.png"><meta property="og:url" content="${escapeHtml(settings.value.rootUrl)}">
-<meta name="twitter:card" content="summary_large_image">` : '';
     const head = `<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title}</title>${landingMetadata}<link rel="icon" href="/img/favicon-32x32.png">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">`;
+<title>${title}</title>${landingMetadata(bootstrap, title)}<link rel="icon" href="/img/favicon-32x32.png">`;
     // The shell owns notice markup directly beneath its header. Independent
     // fallback styles/monitor observe the outer root without inserting Vue children.
     const body = `${javascriptInitializationStyles()}<div id="surveyor-frontend">${rendered.html}</div>
@@ -154,6 +187,7 @@ export async function prepareFrontend(res: Response, url: string, bootstrap: Fro
     const shell = `<!doctype html>
 <html lang="${locale}" dir="${direction}" data-bs-theme="dark">
 <head>${headMarker}${assets.styles.map(style => `<link rel="stylesheet" href="${style}">`).join('')}
+${assets.modules.map(module => `<link rel="modulepreload" crossorigin href="${module}">`).join('')}
 </head><body class="d-flex flex-column min-vh-100 bg-secondary">${bodyMarker}
 <script type="module" data-frontend-entry src="${assets.script}"></script></body></html>`;
     const transformed = development ? await development.transformIndexHtml(url, shell) : shell;

@@ -80,7 +80,7 @@ async function refresh(): Promise<void> {
             <ActionButton variant="outline-light" class="btn-sm" :state="action" @click="emit('edit', 'adjustments')">{{ messages.t('finance.surchargesRebates') }}</ActionButton>
             <ActionButton variant="outline-light" class="btn-sm" :state="action" @click="emit('edit', 'takeovers')">{{ messages.t('finance.manageTakeovers2') }}</ActionButton>
             <ActionButton v-if="pool.status !== 'CLOSED'" variant="outline-light" class="btn-sm" :state="action"
-                :pending="command.pending.value" :show-spinner="false" @click="changeSubmissionState">
+                :pending="command.pending.value" @click="changeSubmissionState">
                 {{ messages.t(pool.status === 'OPEN' ? 'finance.closeParticipantInvoices' : 'finance.openParticipantInvoices') }}
             </ActionButton>
         </div>

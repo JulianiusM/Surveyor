@@ -39,7 +39,6 @@ async function start(): Promise<void> {
         console.error('The frontend application container is missing.');
         return;
     }
-    const messages = createTranslator(document.documentElement.lang);
     let context: FrontendContext | undefined;
     let discardApproved = false;
 
@@ -64,7 +63,12 @@ async function start(): Promise<void> {
     function recoverStartup(): void {
         // Read live controls, including files and autofill, at the decision boundary.
         // No form value is serialized or automatically submitted by recovery.
-        if (!mayReloadInitialDocument() && !window.confirm(messages.t('draft.discard'))) return;
+        if (!mayReloadInitialDocument()) {
+            // Healthy startup needs only the application's locale instance. Build
+            // a fallback translator only when recovery precedes context creation.
+            const messages = context?.messages.value ?? createTranslator(document.documentElement.lang);
+            if (!window.confirm(messages.t('draft.discard'))) return;
+        }
         discardApproved = true;
         let dispatched = false;
         try {

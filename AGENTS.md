@@ -4,9 +4,9 @@ documentation-metadata
 audience: AI coding agents; maintainers
 owner: project maintainers
 status: current
-last-verified: 2026-10-14
+last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: informed individual approval and answer-scoped identifiers routed to the authoritative policy; shared context bootstrap, semantic review and established engineering boundaries retained
+verification-scope: final-answer-only questions and complete outstanding requests routed to the authoritative policy; shared context bootstrap, semantic review and established engineering boundaries retained
 source-anchors: docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; scripts/check-documentation.mjs; scripts/tests/documentation-check.test.mjs; docs/README.md; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; package.json; repository-tree
 next-review: explicit-maintainer-policy-amendment
 -->
@@ -44,7 +44,9 @@ Do not substitute a policy acknowledgement or a clean syntax result for that pro
 
 Policies and approved designs govern what may change. Code establishes current behavior and cannot silently override
 those decisions. Conflicting instructions or potentially unintended consequences require direct maintainer approval
-before dependent implementation. Ask in the conversation; never hide plans or approval requests in a document.
+before dependent implementation. Apply the policy's
+[question presentation rule](docs/policies/DEVELOPMENT_POLICY.md#questions-belong-in-the-final-answer-2026-10-26)
+to every question, including complete outstanding requests in the final answer; never hide plans or requests in a document.
 After approval, record a concise dated amendment without erasing the original choice. Continue independent authorized
 work while a required answer is pending; elapsed time is not approval.
 

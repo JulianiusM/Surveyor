@@ -1,7 +1,7 @@
 import {apiCompatibility} from '../../../.generated/api/v1/policy.mjs';
 import {validatePackingListView} from '../../../.generated/api/v1/browser/validatePackingListView.mjs';
 import {expect, test, type Dialog, type Locator, type Page, type Route} from '@playwright/test';
-import {readFileSync} from 'node:fs';
+import fs, {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import type {Response} from 'express';
@@ -11,11 +11,71 @@ import type {FrontendBootstrap, FrontendPreparedDocument} from '../../../src/typ
 import {createFrontendEventView} from '../../factories/frontendEventFactory';
 
 type Session = components['schemas']['SessionView'];
-const deliveries = new WeakMap<Page, {documents: number; commands: number; nativeStyles: number}>();
+const deliveries = new WeakMap<Page, {documents: number; commands: number; nativeStyles: number;
+    externalAssets: string[]; fontAssets: string[]}>();
+
+for (const ambiguous of [false, true]) {
+    test(`initial route preloads ${ambiguous ? 'skip ambiguous build names' : 'include its resolved view and shared runtime'}`, async ({page}, testInfo) => {
+        const manifestPath = resolve('dist/public/app/.vite/manifest.json');
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string,
+            {file: string; name?: string; isDynamicEntry?: boolean}>;
+        const identity = manifest['src/frontend/features/identity/IdentityPage.vue']!;
+        const originalRead = fs.readFileSync;
+        let intercepted = 0;
+        let delivery: Awaited<ReturnType<typeof startupDocument>>;
+        try {
+            if (ambiguous) {
+                // Only the build-manifest boundary is substituted. Rendering still
+                // resolves the real route; an ambiguous hint must load neither candidate.
+                const conflicting = {...manifest, syntheticDuplicate: {...identity, file: 'assets/ambiguous-view.js'}};
+                Object.defineProperty(fs, 'readFileSync', {configurable: true, writable: true,
+                    value: function readAmbiguousManifest(...arguments_: unknown[]) {
+                        if (String(arguments_[0]).replaceAll('\\', '/').endsWith('/public/app/.vite/manifest.json')) {
+                            intercepted++;
+                            return JSON.stringify(conflicting);
+                        }
+                        return Reflect.apply(originalRead, fs, arguments_);
+                    }});
+            }
+            delivery = await startupDocument(page, '/users/login', {session: startupSession()});
+        } finally { fs.readFileSync = originalRead; }
+        if (ambiguous) expect(intercepted).toBeGreaterThan(0);
+
+        // Inspect the actual delivered head before Vite's ordinary lazy-import
+        // helper can add runtime links for an intentionally skipped route hint.
+        const preloads = [...delivery.html.matchAll(/<link\b[^>]*rel="modulepreload"[^>]*href="([^"]+)"/gu)]
+            .map(match => new URL(match[1]!, delivery.url).pathname);
+        await page.goto(delivery.url, {waitUntil: 'domcontentloaded'});
+        expect(preloads).toContain('/app/' + manifest['src/frontend/app/entry-client.ts']!.file);
+        expect(preloads.includes('/app/' + identity.file)).toBe(!ambiguous);
+        expect(new Set(preloads).size).toBe(preloads.length);
+        expect(preloads).not.toContain('/app/assets/ambiguous-view.js');
+        for (const [source, chunk] of Object.entries(manifest)) {
+            // Other lazy pages retain ordinary navigation ownership. Shared runtime
+            // chunks may be hinted, while unrelated complete views stay deferred.
+            if (chunk.isDynamicEntry && source !== 'src/frontend/features/identity/IdentityPage.vue') {
+                expect(preloads).not.toContain('/app/' + chunk.file);
+            }
+        }
+
+        // Keep a deterministic transfer budget beside measured browser timing.
+        // Wall-clock acceptance belongs to a controlled CPU/network run, since CI
+        // scheduling and intercepted responses cannot certify a one-second load.
+        const compressedBytes = preloads.reduce((total, url) => total
+            + readFileSync(resolve('dist/public', url.slice(1)) + '.br').length, 0);
+        expect(compressedBytes).toBeLessThan(270_000);
+        await testInfo.attach('initial-module-budget.json', {contentType: 'application/json',
+            body: JSON.stringify({compressedBytes, preloads})});
+        await waitForFrontendHydration(page);
+        await expect(page.locator('#username')).toBeEditable();
+        await expect(page.getByRole('button', {name: 'Login', exact: true})).toBeEnabled();
+    });
+}
 
 test.afterEach(async ({page}) => {
     expect(deliveries.get(page)?.commands ?? 0, 'Isolated startup must not dispatch commands').toBe(0);
     expect(deliveries.get(page)?.nativeStyles ?? 0, 'Frontend documents must not depend on native stylesheets').toBe(0);
+    expect(deliveries.get(page)?.externalAssets ?? [], 'Application assets must load from the document origin').toEqual([]);
     deliveries.delete(page);
 });
 
@@ -36,22 +96,25 @@ function startupSession(locale: Session['locale'] = 'en'): Session {
 async function startupDocument(page: Page, path: string, bootstrap: FrontendBootstrap,
                                documentHeaders?: Record<string, string>) {
     const renderer = await import(pathToFileURL(resolve('dist/modules/frontendRenderer.js')).href) as {
+        initializeFrontendRenderer(): Promise<void>;
         prepareFrontend(response: Response, url: string, bootstrap: FrontendBootstrap): Promise<FrontendPreparedDocument>;
     };
+    // Match installed readiness: warm only code, then render each fixture's own
+    // public bootstrap through the same owner used by subsequent requests.
+    await renderer.initializeFrontendRenderer();
     // Only the response/header boundary is substituted. The real renderer owns
     // the complete shell, independent notice/monitor, SSR tree and bootstrap.
     const response: Response = Object.create(null);
     response.set = setFixtureHeader;
     const prepared = await renderer.prepareFrontend(response, path, bootstrap);
-    // Local installed Bootstrap makes layout independent of CDN availability.
-    // Its version differs from the release CDN, so omit only fixture SRI metadata;
-    // production HTML, module loading and application behavior remain intact.
-    const html = prepared.html.replace(/\s+integrity="[^"]*"/gu, '');
+    // Preserve the real document unchanged. Every stylesheet/font must be emitted
+    // by the application build; no CDN substitute can conceal a remote dependency.
+    const html = prepared.html;
     const url = new URL(path, 'http://surveyor-startup.test').href;
-    const observed = {documents: 0, commands: 0, nativeStyles: 0};
+    const observed = {documents: 0, commands: 0, nativeStyles: 0, externalAssets: [] as string[], fontAssets: [] as string[]};
     deliveries.set(page, observed);
     await page.route('**/*', deliverStartupRequest);
-    return {url, observed};
+    return {url, observed, html};
 
     function setFixtureHeader(_field: unknown, _value?: string | string[]): Response { return response; }
 
@@ -68,12 +131,10 @@ async function startupDocument(page: Page, path: string, bootstrap: FrontendBoot
             await route.abort('failed');
             return;
         }
-        if (requestedUrl.hostname === 'cdn.jsdelivr.net' && pathname.endsWith('/bootstrap.min.css')) {
-            await route.fulfill({status: 200, contentType: 'text/css',
-                body: readFileSync('node_modules/bootstrap/dist/css/bootstrap.min.css')});
-            return;
-        }
         if (requestedUrl.origin !== 'http://surveyor-startup.test') {
+            // Block every external origin and retain attempted asset requests as
+            // explicit failures; successful layout cannot silently rely on a CDN.
+            if (['stylesheet', 'script', 'font', 'image'].includes(request.resourceType())) observed.externalAssets.push(request.url());
             await route.abort('failed');
             return;
         }
@@ -83,8 +144,7 @@ async function startupDocument(page: Page, path: string, bootstrap: FrontendBoot
             // real shell too; this remains synthetic public data, not a server route
             // admission or search-result/persistence assertion.
             const document = request.url() === url ? html
-                : (await renderer.prepareFrontend(response, pathname + requestedUrl.search, bootstrap)).html
-                    .replace(/\s+integrity="[^"]*"/gu, '');
+                : (await renderer.prepareFrontend(response, pathname + requestedUrl.search, bootstrap)).html;
             await route.fulfill({status: 200, contentType: 'text/html', headers: documentHeaders, body: document});
             return;
         }
@@ -93,7 +153,10 @@ async function startupDocument(page: Page, path: string, bootstrap: FrontendBoot
             // cannot select another workspace path or substitute executable code.
             const filename = pathname.slice('/app/assets/'.length);
             if (!/^[A-Za-z0-9_.-]+$/u.test(filename)) throw new Error('Unexpected startup asset path.');
-            await route.fulfill({status: 200, contentType: filename.endsWith('.css') ? 'text/css' : 'text/javascript',
+            const contentType = filename.endsWith('.css') ? 'text/css' : filename.endsWith('.woff2') ? 'font/woff2'
+                : filename.endsWith('.woff') ? 'font/woff' : 'text/javascript';
+            if (request.resourceType() === 'font') observed.fontAssets.push(request.url());
+            await route.fulfill({status: 200, contentType,
                 body: readFileSync(resolve('dist/public/app/assets', filename))});
             return;
         }
@@ -128,6 +191,68 @@ async function startupDocument(page: Page, path: string, bootstrap: FrontendBoot
         await route.fulfill({status: 404, contentType: 'text/plain', body: 'No startup fixture for this request.'});
     }
 }
+
+/** Verify a real shell icon's font face and painted glyph. A font-family rule or
+ * nonempty pseudo-element alone could still render a missing-font square. */
+async function expectLocalIconReady(page: Page): Promise<void> {
+    const icon = page.locator('header .bi-house-fill');
+    await expect(icon).toBeVisible();
+    // Let the browser's ordinary CSS/font loading finish without explicitly
+    // requesting a font that the delivered page never uses by itself.
+    await expect.poll(() => icon.evaluate(() => Array.from(document.fonts)
+        .find(face => face.family.replaceAll('"', '') === 'bootstrap-icons')?.status)).toBe('loaded');
+    const glyph = await icon.evaluate(function inspectPaintedIcon(element) {
+        const style = getComputedStyle(element, '::before');
+        const content = style.content.slice(1, -1);
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 64;
+        const context = canvas.getContext('2d')!;
+        // Compare the actual icon glyph with the system fallback at the same
+        // position. A successfully downloaded but unusable face must still fail.
+        context.font = '32px ' + style.fontFamily;
+        context.fillText(content, 8, 40);
+        const painted = context.getImageData(0, 0, 64, 64).data;
+        context.clearRect(0, 0, 64, 64);
+        context.font = '32px sans-serif';
+        context.fillText(content, 8, 40);
+        const fallback = context.getImageData(0, 0, 64, 64).data;
+        return {family: style.fontFamily.replaceAll('"', ''), codePoint: content.codePointAt(0) ?? 0,
+            hasInk: painted.some(value => value !== 0), distinctFromFallback: painted.some((value, index) => value !== fallback[index]),
+            width: element.getBoundingClientRect().width};
+    });
+    expect(glyph.family).toBe('bootstrap-icons');
+    expect(glyph.codePoint).toBeGreaterThanOrEqual(0xe000);
+    expect(glyph.codePoint).toBeLessThanOrEqual(0xf8ff);
+    expect(glyph.hasInk).toBe(true);
+    expect(glyph.distinctFromFallback).toBe(true);
+    expect(glyph.width).toBeGreaterThan(0);
+    expect(deliveries.get(page)?.fontAssets.length).toBeGreaterThan(0);
+    expect(deliveries.get(page)?.externalAssets).toEqual([]);
+}
+
+test('local styles and icon fonts render before entry execution and survive hydration with external assets blocked', async ({page}) => {
+    const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Local asset fixture',
+        content: '<h2>Styled before entry execution</h2>', currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};
+    const delivery = await startupDocument(page, '/help', {session: startupSession(), help});
+    const entry = await failStartupModule(page, /\/app\/assets\/entry-client-[^/]+\.js(?:\?|$)/u);
+    try {
+        await page.goto(delivery.url, {waitUntil: 'commit'});
+        await entry.started;
+        await expect(page.locator('.help-content h2')).toHaveCSS('font-weight', '600');
+        await expect(page.locator('header nav')).toHaveCSS('display', 'flex');
+        await expect(page.locator('#surveyor-frontend')).not.toHaveAttribute('data-frontend-hydrated', 'true');
+        await expectLocalIconReady(page);
+
+        // Release the real build entry, then assert the hydrated shell still
+        // uses the downloaded same-origin icon rather than a replacement asset.
+        entry.restore();
+        await waitForFrontendHydration(page);
+        await expectLocalIconReady(page);
+        await expect(page.getByRole('searchbox')).toBeEditable();
+        expect(delivery.observed.externalAssets).toEqual([]);
+    } finally { entry.restore(); }
+});
 
 /** Both real Event intents share one bounded actor/read fixture. Capabilities
  * retain their independent page adoption, and no Finance projection is admitted. */
@@ -911,6 +1036,7 @@ test('lazy navigation shows header progress without inserting a line above the c
         await entry.started;
         await expect(page.locator('header .frontend-navigation-indicator .spinner-border')).toBeVisible();
         await expect(page.locator('main .frontend-navigation-loading')).toHaveAttribute('role', 'status');
+        await expect(page.locator('main .frontend-navigation-loading')).toBeVisible();
         await expect(page.locator('main [data-loading-skeleton]')).toHaveCount(0);
         await expect(source.locator('h1')).toHaveText('Retained source page');
         expect((await source.boundingBox())!.y).toBe(before.y);
@@ -1596,6 +1722,7 @@ test.describe('JavaScript unavailable', () => {
             await expect(page.locator('#surveyor-frontend')).not.toHaveAttribute('data-frontend-hydrated', 'true');
             const applicationStyles = page.locator('link[rel="stylesheet"][href^="/app/"]');
             expect(await applicationStyles.count()).toBeGreaterThan(0);
+            await expectLocalIconReady(page);
             await page.screenshot({path: testInfo.outputPath('copied-styles.png'),
                 fullPage: true, animations: 'disabled', caret: 'hide'});
 

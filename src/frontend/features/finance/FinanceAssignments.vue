@@ -224,7 +224,7 @@ function close(): void {
             <ActionButton variant="outline-secondary" :state="action" @click="discard">{{ messages.t('finance.discardEdits') }}</ActionButton>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t('common.close') }}</ActionButton>
             <ActionButton :form="`${id}-form`" type="submit" :state="action"
-                :pending="command.pending.value" :show-spinner="false"><i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('finance.saveParticipantsFactors') }}</ActionButton>
+                :pending="command.pending.value"><i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('finance.saveParticipantsFactors') }}</ActionButton>
         </template>
     </AppDialog>
 </template>

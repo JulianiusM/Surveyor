@@ -214,7 +214,7 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                                                 type="button"
                                                 class="btn-sm" variant="outline-danger"
                                                 data-delete-slot
-                                                :pending="pendingControl === 'delete:' + slot.id" :show-spinner="false"
+                                                :pending="pendingControl === 'delete:' + slot.id"
                                                 :data-slotid="slot.id"
                                                 :disabled="disabled"
                                                 :aria-label="messages.t('packing.deleteItem')"
@@ -253,7 +253,7 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                                                 type="button"
                                                 class="btn-sm" variant="outline-warning"
                                                 data-action="leave-role"
-                                                :pending="pendingControl === 'assign:' + slot.id + ':' + role.name" :show-spinner="false"
+                                                :pending="pendingControl === 'assign:' + slot.id + ':' + role.name"
                                                 :data-role="role.name"
                                                 :disabled="disabled"
                                                 @click="emit('assign', slot, false, role.name)">{{ messages.t('activity.leave') }}</ActionButton>
@@ -262,7 +262,7 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                                                 type="button"
                                                 class="btn-sm" variant="outline-primary"
                                                 data-action="take-role"
-                                                :pending="pendingControl === 'assign:' + slot.id + ':' + role.name" :show-spinner="false"
+                                                :pending="pendingControl === 'assign:' + slot.id + ':' + role.name"
                                                 :data-role="role.name"
                                                 :disabled="disabled"
                                                 @click="emit('assign', slot, true, role.name)">{{ messages.t('activity.take') }}</ActionButton>
@@ -304,7 +304,7 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                                                     type="button"
                                                     class="btn-sm ms-1" variant="outline-danger"
                                                     data-owner-remove
-                                                    :pending="pendingControl === 'assignment:' + assignmentId" :show-spinner="false"
+                                                    :pending="pendingControl === 'assignment:' + assignmentId"
                                                     :data-assignid="assignmentId"
                                                     :disabled="disabled"
                                                     :aria-label="messages.t('packing.removeAssignment')"
@@ -318,7 +318,7 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                                             type="button"
                                             class="btn-sm flex-grow-1" variant="outline-danger"
                                             data-action="unassign"
-                                            :pending="pendingControl === 'assign:' + slot.id + ':'" :show-spinner="false"
+                                            :pending="pendingControl === 'assign:' + slot.id + ':'"
                                             :disabled="disabled"
                                             @click="emit('assign', slot, false)">{{ messages.t('activity.leave') }}</ActionButton>
                                         <ActionButton
@@ -327,7 +327,7 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                                             class="btn-sm flex-grow-1"
                                             :variant="full(slot) ? 'outline-warning' : 'outline-success'"
                                             data-action="assign"
-                                            :pending="pendingControl === 'assign:' + slot.id + ':'" :show-spinner="false"
+                                            :pending="pendingControl === 'assign:' + slot.id + ':'"
                                             :disabled="disabled"
                                             :title="full(slot) ? messages.t('activity.fullHint') : undefined"
                                             @click="emit('assign', slot, true)">

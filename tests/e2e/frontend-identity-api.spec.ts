@@ -20,8 +20,8 @@ async function session(request: APIRequestContext): Promise<SessionView> {
 
 /** Read actual alert text through nested native/Vue markup without parsing tags as prose. */
 function renderedIdentityError(html: string): string | undefined {
-    const window = new Window({settings: {disableJavaScriptEvaluation: true,
-        disableJavaScriptFileLoading: true, disableCSSFileLoading: true}});
+    const window = new Window({settings: {enableJavaScriptEvaluation: false,
+        disableJavaScriptFileLoading: true, enableCSSFileLoading: false}});
     try {
         const document = new window.DOMParser().parseFromString(html, 'text/html');
         const notice = document.querySelector('.alert-danger');

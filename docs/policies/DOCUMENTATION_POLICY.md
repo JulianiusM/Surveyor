@@ -5,9 +5,9 @@ documentation-metadata
 audience: maintainers; documentation contributors; AI agents
 owner: documentation maintainers
 status: current
-last-verified: 2026-10-15
+last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-06-ci-repair
-verification-scope: maintainer-authorized clarification approval enforcement and decision-provenance correction routed to the development policy; active governance, runtime Help and profile-owned staging boundaries retained
+verification-scope: maintainer-authorized final-answer-only question placement routed to the development policy; prior approval, provenance, runtime Help and profile boundaries retained
 source-anchors: docs/policies/DEVELOPMENT_POLICY.md; scripts/check-documentation.mjs; scripts/tests/documentation-check.test.mjs; repository-tree; src/controller/helpController.ts; src/frontend/features/help/; src/locales/; .github/workflows/release.yml; docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md; docs/policies/documentation-check.json; docs/backlog/documentation-remediation.yml; scripts/check-help-documentation.mjs; docs/features/help/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; tests/unit/help-localization.spec.ts
 next-review: documentation-pipeline-or-help-trust-boundary-change
 -->
@@ -55,6 +55,10 @@ That section owns the per-decision format, meaningful-content requirements and s
 Its 2026-10-14 amendment requires sufficient decision context, explicit scope and approach, and distinct identifiers
 for requests presented together. Correct labels or brevity alone do not make a request understandable; this policy
 does not maintain another template.
+
+The maintainer's 2026-10-26 clarification requires all questions and complete outstanding requests in the final
+answer. Follow the Development Policy's [question presentation rule](DEVELOPMENT_POLICY.md#questions-belong-in-the-final-answer-2026-10-26)
+for their placement and review; an earlier question elsewhere or a pending-decision reference is not sufficient.
 
 The maintainer's 2026-10-15 enforcement correction includes clarification or option questions that decide a conflict
 or changed boundary. Apply that section's full explanation, direct question and independent/root review before

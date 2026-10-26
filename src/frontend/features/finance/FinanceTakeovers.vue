@@ -226,7 +226,7 @@ function close(): void {
         <template #footer>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t('common.close') }}</ActionButton>
             <ActionButton :form="`${id}-form`" type="submit" :state="action"
-                :pending="command.pending.value" :show-spinner="false"><i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('finance.saveChanges') }}</ActionButton>
+                :pending="command.pending.value"><i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('finance.saveChanges') }}</ActionButton>
         </template>
     </AppDialog>
 </template>

@@ -248,6 +248,8 @@ export interface FrontendOverviewCardInteraction {
     duplicateUrl?: string;
     /** The owning collection identifies this Delete independently of sibling locks. */
     removePending?: boolean;
+    /** Only the selected card's menu gesture presents the shared command's progress. */
+    menuPending?: boolean;
     /** A retained confirmed destination pauses only another permanent deletion. */
     removeDisabled?: boolean;
     /** Optional collection freshness policy pauses mutations while preserving navigation. */

@@ -144,7 +144,7 @@ function acknowledge(): void {
         <template #bodyActions>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t('common.cancel') }}</ActionButton>
             <ActionButton type="submit" :form="`${id}-form`" :state="action"
-                :pending="command.pending.value" :show-spinner="false">{{ messages.t('finance.addExpense') }}</ActionButton>
+                :pending="command.pending.value">{{ messages.t('finance.addExpense') }}</ActionButton>
         </template>
     </AppDialog>
 </template>

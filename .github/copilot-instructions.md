@@ -4,9 +4,9 @@ documentation-metadata
 audience: GitHub Copilot; maintainers
 owner: project maintainers
 status: current
-last-verified: 2026-10-14
+last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: shared agent-context command and continuation routing; centralized concise approval and semantic review retained without competing engineering rules
+verification-scope: final-answer question placement routed to the policy alongside shared agent context and approval review; no competing engineering rules
 source-anchors: AGENTS.md; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; package.json; repository-tree
 next-review: explicit-maintainer-policy-amendment
 -->
@@ -22,6 +22,8 @@ Read and enforce BOTH [Documentation Policy](../docs/policies/DOCUMENTATION_POLI
 Policies and approved designs cannot be silently changed to match code. Resolve conflicts and potentially unintended
 consequences directly with the maintainer before dependent implementation; never hide approvals or plans in a file.
 The policies own all engineering, documentation classification, evidence, test and database-safety rules.
+Follow the [question presentation rule](../docs/policies/DEVELOPMENT_POLICY.md#questions-belong-in-the-final-answer-2026-10-26)
+for every question and complete outstanding request in the final answer.
 
 Use the Documentation Policy's [optional task-profile discovery](../docs/policies/DOCUMENTATION_POLICY.md#document-roles-and-optional-task-profiles)
 at task start and pass applied profiles to delegates. The policy owns activation; absent profiles are normal.
@@ -35,7 +37,7 @@ and review semantic boundaries and readability. A newer conflicting name and a c
 approval or human review. Apply the procedure to every delegated agent and review its actual output.
 
 Follow the short, simple [required change explanation](../docs/policies/DEVELOPMENT_POLICY.md#required-change-explanation-2026-10-13)
-separately before each individual approval question, including its meaningful four-field explanation, prohibition on
+separately before each individual approval question, including its complete explanation, prohibition on
 bundling and semantic delegation/root review. Correct labels alone are insufficient. This routing summary does not
 define an alternative format or grant approval.
 

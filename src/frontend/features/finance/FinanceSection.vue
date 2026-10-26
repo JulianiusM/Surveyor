@@ -608,7 +608,7 @@ function revealHistory(): void { submissionOpen.value = true; }
                 >
                     {{ messages.t('common.cancel') }}
                 </ActionButton>
-                <ActionButton variant="danger" :state="available" :pending="command.pending.value" :show-spinner="false" @click="retract">{{ messages.t('finance.confirmRetraction') }}</ActionButton>
+                <ActionButton variant="danger" :state="available" :pending="command.pending.value" @click="retract">{{ messages.t('finance.confirmRetraction') }}</ActionButton>
             </template>
         </AppDialog>
     </section>

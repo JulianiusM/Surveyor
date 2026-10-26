@@ -21,7 +21,7 @@ const {messages} = useFrontend();
             v-if="refreshable"
             :variant="refreshNeeded ? 'warning' : 'outline-light'"
             class="btn-sm"
-            :pending="pending" :show-spinner="false"
+            :pending="pending"
             :disabled="disabled"
             data-finance-ledger-refresh
             @click="emit('refresh')"

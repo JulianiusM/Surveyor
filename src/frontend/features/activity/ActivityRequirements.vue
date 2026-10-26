@@ -198,13 +198,13 @@ async function save(): Promise<void> {
                     :disabled="readAction.disabled.value || command.pending.value || command.recovering.value" @click="reload">
                     <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>{{ messages.t('activity.requirements.reload') }}</ActionButton>
                 <ActionButton type="button" class="btn-sm" variant="success" data-requirements-save
-                    :pending="command.pending.value" :show-spinner="false" :disabled="blocked || !dirty" @click="save">
+                    :pending="command.pending.value" :disabled="blocked || !dirty" @click="save">
                     <i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('activity.requirements.saveSettings') }}</ActionButton>
             </div>
         </div>
         <div class="card-body">
             <CommandFeedback :feedback="command.feedback" />
-            <EntityDetailReadState :denied="denied" :error="list.error.value" :has-data="!!configuration" :pending="list.isPending.value"
+            <EntityDetailReadState :denied="denied" :error="list.error.value" :has-data="!!configuration" :pending="list.isPending.value" :refreshing="list.isFetching.value"
                 :last-updated-at="list.data.value ? list.dataUpdatedAt.value : undefined" :retry-at="retryAt" />
             <template v-if="draft && configuration && analysis && coverage">
                 <p class="text-secondary small mb-3">{{ messages.t('activity.requirements.description') }}</p>
@@ -366,7 +366,7 @@ async function save(): Promise<void> {
                     <div class="frontend-action-row justify-content-end border-top border-secondary-subtle mt-3 pt-3">
                         <small class="text-secondary me-auto">{{ messages.t('activity.requirements.saveHint') }}</small>
                         <ActionButton type="button" variant="success" data-requirements-save
-                            :pending="command.pending.value" :show-spinner="false" :disabled="blocked || !dirty" @click="save">
+                            :pending="command.pending.value" :disabled="blocked || !dirty" @click="save">
                             <i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('activity.requirements.saveRequirements') }}</ActionButton>
                     </div>
                 </form>

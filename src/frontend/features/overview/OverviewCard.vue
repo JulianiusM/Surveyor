@@ -116,6 +116,15 @@ function expand(event: MouseEvent): void {
                 <AppNavigationDropdown v-if="personalVisibility || (interaction.lifecycle ?? interaction.clientNavigation) && (card.capabilities.archive || card.capabilities.restore || card.automation?.canManage)" :navigation="false" :label="messages.t('common.archival')"
                     trigger-class="btn btn-sm btn-outline-light dropdown-toggle"
                     :trigger-label="messages.t('overview.archiveMenu', {title: card.title})">
+                        <!-- Native menus close after a choice. Retain this same
+                             card's command progress on the visible trigger. -->
+                        <template #trigger>
+                            {{ messages.t('common.archival') }}
+                            <span v-if="interaction.menuPending" class="frontend-card-action-progress d-inline-flex align-items-center gap-1 ms-1" role="status">
+                                <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                                {{ messages.t('common.pending') }}
+                            </span>
+                        </template>
                         <template
                             v-if="
                                 (interaction.lifecycle ?? interaction.clientNavigation) &&
@@ -189,7 +198,7 @@ function expand(event: MouseEvent): void {
                         class="btn-sm"
                         variant="danger"
                         :disabled="writeDisabled || interaction.removeDisabled"
-                        :pending="interaction.removePending" :show-spinner="false"
+                        :pending="interaction.removePending"
                         @click="emit('remove')"
                         ><i class="bi bi-trash me-1" aria-hidden="true"></i
                         >{{ messages.t('overview.delete') }}</ActionButton

@@ -126,6 +126,15 @@
    pending navigation without inserting a skeleton row above the current page. */
 .frontend-navigation-indicator { display: inline-flex; width: 1rem; height: 1rem; margin-inline-start: .5rem; }
 .frontend-navigation-indicator .spinner-border { width: 1rem; height: 1rem; }
+/* Lazy navigation can start far below the header. Keep its one shared status
+   in view without moving retained content, intercepting clicks or covering a
+   modal. The existing Bootstrap spinner also owns reduced-motion behavior. */
+.frontend-navigation-loading { position: fixed; z-index: 1045;
+    inset-inline-end: max(1rem, env(safe-area-inset-right)); bottom: max(1rem, env(safe-area-inset-bottom));
+    display: inline-flex; align-items: center; gap: .5rem; max-width: calc(100vw - 2rem);
+    padding: .625rem 1rem; border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius);
+    background: var(--bs-body-bg); color: var(--bs-body-color); box-shadow: var(--bs-box-shadow-sm);
+    pointer-events: none; }
 .frontend-dialog-backdrop { position: fixed; inset: 0; z-index: 1050; background: rgb(0 0 0 / 50%); }
 .frontend-dialog { position: fixed; z-index: 1055; inset: 1.75rem auto auto 50%; transform: translateX(-50%);
     --bs-modal-header-padding-x: 1rem; --bs-modal-header-padding-y: 1rem; --bs-modal-title-line-height: 1.5;

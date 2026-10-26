@@ -37,7 +37,8 @@ export class ActivityAssignmentRole extends NumericBase {
     roleId!: number;
 
     @ManyToOne(() => ActivityRole, {
-        onDelete: "RESTRICT",
+        // Role links belong to the role's lifecycle, including root cascades.
+        onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "role_id", referencedColumnName: "id"}])

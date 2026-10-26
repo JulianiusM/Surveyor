@@ -20,6 +20,7 @@ import {startInvoiceRetentionJob} from './modules/invoice/retention';
 import {startEntityArchivalJob} from './modules/entityArchival';
 import settings from './modules/settings';
 import {initializeFrontendDevelopment} from './modules/frontendDevelopment';
+import {initializeFrontendRenderer} from './modules/frontendRenderer';
 
 async function bootstrap() {
     try {
@@ -36,6 +37,9 @@ async function bootstrap() {
         const {default: app} = await require('./app');
         const server = http.createServer(app);
         await initializeFrontendDevelopment(server);
+        // Prepare installed renderer code before the first visitor waits for its
+        // import. Each document still owns a fresh request-local application.
+        await initializeFrontendRenderer();
         server.listen(settings.value.appPort, () => {
             console.log(`🚀 Server listening on ${settings.value.rootUrl}`);
         });

@@ -1,6 +1,8 @@
 // Own the frontend cascade once for client imports and pre-JavaScript SSR delivery.
-// Keep installed Bootstrap/base styling, Help and frontend overrides in this order;
-// base Sass and component styles keep their declared cascade and source ownership.
+// Keep icons before installed Bootstrap/base styling, Help and frontend overrides,
+// matching their former cascade. Vite owns local font URLs and emitted files;
+// static SSR uses this same complete stylesheet before JavaScript initializes.
+@use "bootstrap-icons/font/bootstrap-icons.css"
 @use "style"
 @use "help"
 @use "frontend.css"

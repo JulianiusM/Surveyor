@@ -87,6 +87,45 @@ async function mounted(component: Component, handler: (request: Request) => Prom
 }
 
 describe('Activity production frontend consumers', () => {
+    it('refreshes a deleted slot after confirmation focus starts a session check', async () => {
+        let current = {...view, slots: [slot]};
+        let finishSession!: (response: Response) => void;
+        const {wrapper, context, request} = await mounted(ActivityPage, async input => {
+            if (new URL(input.url).pathname === '/api/v1/session')
+                return new Promise<Response>(resolve => { finishSession = resolve; });
+            if (input.method === 'DELETE') {
+                current = {...current, slots: []};
+                return json({changed: true});
+            }
+            return json(current);
+        });
+        const stop = context.start();
+        cleanups.push(async () => { stop(); });
+        vi.stubGlobal('confirm', () => {
+            // Native dialog dismissal can deliver focus before DELETE settles.
+            // Hold that session read through the confirmed response, as in the HAR.
+            window.dispatchEvent(new Event('focus'));
+            return true;
+        });
+        const remove = wrapper.get<HTMLButtonElement>('[data-delete-slot]');
+        await remove.trigger('click');
+        await flushPromises();
+        expect(remove.element.disabled).toBe(true);
+        expect(remove.attributes('aria-busy')).toBe('true');
+        expect(wrapper.text()).not.toContain(context.messages.value.t('state.savedRefreshFailed'));
+        expect(wrapper.find('[data-slotid="' + slotId + '"]').exists()).toBe(true);
+
+        // Admission then allows the causal GET to deliver the new empty schedule.
+        // The delete is never repeated and the successful read has no stale warning.
+        finishSession(json(session));
+        await flushPromises();
+        expect(wrapper.find('[data-slotid="' + slotId + '"]').exists()).toBe(false);
+        expect(wrapper.text()).toContain(context.messages.value.t('common.removed'));
+        expect(wrapper.text()).not.toContain(context.messages.value.t('state.savedRefreshFailed'));
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'DELETE')).toHaveLength(1);
+        expect(request.mock.calls.filter(([input]) => new URL((input as Request).url).pathname === '/api/v1/session')).toHaveLength(1);
+    });
+
     it('previews same-day insertion edges while refusing another day and external drops', async () => {
         const writes: unknown[] = [];
         const current = {...view, slots: [slot, {...slot, id: planId, title: 'Second breakfast slot', position: 1}, view.slots[1]!]};
@@ -650,9 +689,10 @@ describe('Activity production frontend consumers', () => {
         expect(create.getAttribute('aria-busy')).toBe('true');
         expect(create.classList.contains('list-group-item-action')).toBe(true);
         expect(create.classList.contains('btn')).toBe(false);
-        expect(create.querySelector('.spinner-border')).toBeNull();
+        expect(create.querySelector('.spinner-border')).not.toBeNull();
         expect(save.disabled).toBe(true);
         expect(save.getAttribute('aria-busy')).toBe('false');
+        expect(save.querySelector('.spinner-border')).toBeNull();
 
         // happy-dom does not perform Chromium's native disabled-button blur.
         // Simulate that boundary here; integrated Reload E2E verifies the real

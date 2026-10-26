@@ -114,6 +114,9 @@ export interface FrontendRenderResult {
     state: string;
     /** Shared route/admission classification identifies content awaiting client initialization. */
     javascriptRequired: boolean;
+    /** Compiler-derived names of the already resolved route components. These are
+     * optional public asset hints only; they admit no route, data or interaction. */
+    routeComponentNames?: readonly string[];
 }
 
 /** The complete SSR document already exists; its owning response only sends these immutable bytes. */
