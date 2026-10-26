@@ -23,13 +23,18 @@ interface IdColumnMetadata {
     collation: string | null;
 }
 
+/** Validate character metadata before it is interpolated as a SQL identifier. */
 function assertSafeSqlName(value: string, label: string): void {
+    // Reject punctuation because character set/collation names are not bind values.
     if (!/^[a-zA-Z0-9_]+$/.test(value)) {
         throw new Error(`Unexpected ${label} in activity slot ID metadata`);
     }
 }
 
+/** Match the optional source-slot column to the referenced slot's exact UUID storage. */
 async function alignSourceItemIdWithActivitySlot(queryRunner: QueryRunner): Promise<void> {
+    // MariaDB may represent UUIDs as native, binary or text columns. Read the actual
+    // referenced definition instead of assuming the initial varchar placeholder.
     const columns: IdColumnMetadata[] = await queryRunner.query(`
         SELECT COLUMN_TYPE AS columnType,
                CHARACTER_SET_NAME AS characterSet,
@@ -59,6 +64,7 @@ async function alignSourceItemIdWithActivitySlot(queryRunner: QueryRunner): Prom
         characterDefinition = ` CHARACTER SET ${slotId.characterSet} COLLATE ${slotId.collation}`;
     }
 
+    // Avoid DDL when type, character set and collation already match the slot key.
     const sourceColumns: IdColumnMetadata[] = await queryRunner.query(`
         SELECT COLUMN_TYPE AS columnType,
                CHARACTER_SET_NAME AS characterSet,
@@ -82,9 +88,12 @@ async function alignSourceItemIdWithActivitySlot(queryRunner: QueryRunner): Prom
 export class AddActivityRecommendationOperations1788134500000 implements MigrationInterface {
     name = "AddActivityRecommendationOperations1788134500000";
 
+    /** Add operation/source fields and their slot reference to existing recommendations. */
     public async up(queryRunner: QueryRunner): Promise<void> {
         if (!await tableExists(queryRunner, TABLE)) return;
 
+        // Align source storage before adding a foreign key; an existing source
+        // constraint, even under another name, already supplies that relationship.
         await addColumnIfNotExists(
             queryRunner,
             TABLE,
@@ -108,9 +117,12 @@ export class AddActivityRecommendationOperations1788134500000 implements Migrati
         }
     }
 
+    /** Remove source-slot constraints before removing the operation/source columns. */
     public async down(queryRunner: QueryRunner): Promise<void> {
         if (!await tableExists(queryRunner, TABLE)) return;
 
+        // Discover actual source-column constraints as well as the recorded name,
+        // so column removal follows the original dependency order on each schema.
         const table = await queryRunner.getTable(TABLE);
         for (const foreignKey of table?.foreignKeys.filter(
             (candidate) => candidate.columnNames.includes("source_item_id"),

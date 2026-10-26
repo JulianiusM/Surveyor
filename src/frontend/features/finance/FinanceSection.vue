@@ -416,6 +416,7 @@ function revealHistory(): void { submissionOpen.value = true; }
                                                 <FinanceHistory
                                                     :invoices="invoicesForPool(pool.id)"
                                                     :event-id="eventId" :pool="pool" :refresh-saved="section.refresh"
+                                                    :review-component="FinanceInvoiceReview"
                                                     admin
                                                     :disabled="refreshAction.disabled.value"
                                                     :refreshing="refreshingControl === 'history:' + pool.id"

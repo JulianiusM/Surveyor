@@ -14,9 +14,12 @@
  * limitations under the License.
  */
 
+import type {AssignmentCandidate} from '../../../../types/ActivityTypes';
+
+
 import {EntityManager, In, Not} from "typeorm";
 import type {ActivityCreationCompletion, ActivityPropertyPatch, SlotAssignmentMap} from "../../../../types/ActivityTypes";
-import {AssignmentCandidate} from "../../activity/availability";
+
 import {toParticipantKey} from "../../../../common/activity/requirements";
 import {generateUniqueId} from "../../lib/util";
 import {AppDataSource} from "../dataSource";
@@ -168,14 +171,20 @@ export async function writeAssignmentChanges(
 // Role & Assignment helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Reuse matching stored roles and persist any missing supplied names.
+ * Existing role properties remain intact; new rows retain the supplied default
+ * and description values in the caller's manager or the existing transaction. */
 export async function ensureRoleId(planId: string, roleNames: string[] | string, isDefault?: boolean, description?: string, manager?: EntityManager): Promise<ActivityRole[]> {
+    /** Resolve and save the same plan-scoped role set within one manager. */
     async function persistRoles(manager: EntityManager): Promise<ActivityRole[]> {
+        // Normalize only the existing scalar/list calling form, then read roles.
         const repo = manager.getRepository(ActivityRole);
         if (!Array.isArray(roleNames)) {
             roleNames = [roleNames];
         }
         const roles = await repo.findBy({title: In(roleNames), entity: {id: planId}});
 
+        // Append missing names without rewriting properties of an existing role.
         for (const name of roleNames) {
             if (roles.some(val => val.title === name)) continue;
 
@@ -192,10 +201,14 @@ export async function ensureRoleId(planId: string, roleNames: string[] | string,
     return manager ? persistRoles(manager) : AppDataSource.transaction(persistRoles);
 }
 
+/** Return an existing membership or persist one for the selected slot/profile.
+ * Missing slots remain null; the slot supplies its owning plan, while admission,
+ * capacity and transaction/concurrency guarantees retain their current callers. */
 export async function ensureAssignment(
     itemId: string,
     profileId: string
 ): Promise<number | null> {
+    // Discover the stored slot-to-plan relationship before locating membership.
     const repo = AppDataSource.getRepository(ActivityAssignment);
     const slot = await AppDataSource.getRepository(ActivitySlot).findOne({
             where: {id: itemId},
@@ -205,6 +218,7 @@ export async function ensureAssignment(
     if (!slot) return null;
     const planId = slot.entity.id;
 
+    // Preserve the existing read-before-create sequence without introducing locks.
     let ass = await repo.findOneBy({
         item: {id: itemId},
         profile: {id: profileId}
@@ -436,8 +450,13 @@ export async function addActivitySlot(planId: string, slot: Partial<ActivitySlot
     await addActivitySlots(planId, [slot], profileId);
 }
 
+/** Save supplied slot records for one plan and creator through one manager.
+ * Preserve supplied identifiers, dates and positions; the controller owns their
+ * validation and the caller may already own the surrounding transaction. */
 export async function addActivitySlots(planId: string, slots: Partial<ActivitySlot>[], profileId: string, manager?: EntityManager) {
+    /** Materialize the existing slot projection and save the batch together. */
     async function saveSlots(manager: EntityManager): Promise<void> {
+        // Map only the established stored fields and creator relationship.
         const repo = manager.getRepository(ActivitySlot);
         const slotEntities: ActivitySlot[] = [];
         for (const slot of slots) {
@@ -454,6 +473,7 @@ export async function addActivitySlots(planId: string, slots: Partial<ActivitySl
                 profile: {id: profileId},
             }));
         }
+        // Use this same manager for the batch; no additional transaction is added.
         await repo.save(slotEntities);
     }
     if (manager) await saveSlots(manager);
@@ -532,7 +552,11 @@ export async function deleteActivitySlot(slotId: string) {
     await AppDataSource.getRepository(ActivitySlot).delete(slotId);
 }
 
+/** Write the supplied positions for slots still belonging to this plan.
+ * Preserve concurrent update dispatch and existing partial-failure behavior;
+ * validation and any surrounding operation guarantees remain with the caller. */
 export async function reorderActivitySlots(planId: string, order: { slotId: string, pos: number }[]) {
+    // Each existing update retains both item and plan predicates before dispatch.
     const repo = AppDataSource.getRepository(ActivitySlot);
     await Promise.all(
         order.map((o) =>
@@ -566,13 +590,18 @@ export async function getActivitySlotAssignments(planId: string, profileId: stri
     return assignments.map(a => a.item.id);
 }
 
+/** Project stored slot commitments by participant for the allocation engines.
+ * Reuse the caller's manager and existing role interpretation; this read makes
+ * no eligibility, conflict, fairness or assignment decision. */
 export async function getParticipantAssignmentsWithSlots(planId: string, manager: EntityManager = AppDataSource.manager): Promise<Record<string, AssignmentCandidate[]>> {
+    // Hydrate the same slot/profile/role graph for this plan's assignments.
     const repo = manager.getRepository(ActivityAssignment);
     const assignments = await repo.find({
         where: {entity: {id: planId}},
         relations: {item: true, profile: true, activityAssignmentRoles: {role: true}},
     });
 
+    // Group the established structural slot facts under each profile identity.
     const map: Record<string, AssignmentCandidate[]> = {};
     for (const assignment of assignments) {
         const participantKey = toParticipantKey({profileId: assignment.profile.id});
@@ -671,10 +700,14 @@ export async function countActivityPlanParticipants(planId: string, eventId: str
     return Number(result!.count);
 }
 
+/** Collect each stored participant's distinct nondefault role identifiers.
+ * The caller's manager retains its snapshot; rows without a profile contribute
+ * no identity, and eligibility rules remain outside this projection. */
 export async function getParticipantRolesForPlan(planId: string, manager: EntityManager = AppDataSource.manager): Promise<{
     participantKey: string;
     roleIds: number[]
 }[]> {
+    // Read the selected plan's assignments and their existing role relationships.
     const assignments = await manager
         .getRepository(ActivityAssignment)
         .find({
@@ -690,6 +723,7 @@ export async function getParticipantRolesForPlan(planId: string, manager: Entity
 
     const roleMap = new Map<string, Set<number>>();
 
+    // Preserve profile-key construction and deduplicate named role IDs per person.
     for (const assignment of assignments) {
         let participantKey: string | null = null;
         if (assignment.profile?.id) {
@@ -764,7 +798,11 @@ export async function getActivitySlotRoles(planId: string) {
 }
 
 
+/** Save the supplied role links with the existing initial quantity of one.
+ * This persistence helper does not replace old links or decide role admission;
+ * the caller owns the operation's surrounding authorization and validation. */
 export async function addActivitySlotRoles(slotId: string, roles: number[]) {
+    // Materialize only this slot's supplied role relationships before saving.
     const repo = AppDataSource.getRepository(ActivitySlotRole);
     const entries = roles.map((roleId) =>
         repo.create({item: {id: slotId}, role: {id: roleId}, maxQty: 1})

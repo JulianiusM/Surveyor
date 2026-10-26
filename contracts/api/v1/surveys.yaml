@@ -15,7 +15,7 @@ schemas:
           - $ref: '#/schemas/SurveyCreateContext'
           - type: 'null'
   SurveyResourceEntry:
-    $ref: ./packing.yaml#/schemas/PackingResourceEntry
+    $ref: ./common.yaml#/schemas/PackingResourceEntry
   SurveyCombinationInput:
     description: A recurring monthly weekday and occurrence, not a concrete date.
     type: object
@@ -117,7 +117,7 @@ schemas:
         $ref: '#/schemas/SurveyCreateInput'
       image: {type: string, format: binary}
   SurveyCreated:
-    $ref: ./packing.yaml#/schemas/PackingCreated
+    $ref: ./common.yaml#/schemas/PackingCreated
   SurveyDuplicate:
     type: object
     additionalProperties: false
@@ -153,7 +153,7 @@ schemas:
       archived: {type: boolean}
       inheritedArchived: {type: boolean, const: false}
   SurveyMetadataPatch:
-    $ref: ./packing.yaml#/schemas/PackingMetadataPatch
+    $ref: ./common.yaml#/schemas/PackingMetadataPatch
   SurveySettings:
     description: Applicable owner settings only. The presentation token is not a write precondition; surveys expose no event association, general permissions, administrators or automatic archival.
     type: object
@@ -186,7 +186,7 @@ schemas:
           manageArchive: {type: boolean}
       currentEvent: {type: 'null'}
       archive:
-        $ref: ./packing.yaml#/schemas/PackingArchive
+        $ref: ./common.yaml#/schemas/PackingArchive
       access: {type: 'null'}
 paths:
   /surveys/create-entry:
@@ -578,7 +578,7 @@ paths:
           content:
             application/octet-stream:
               schema:
-                $ref: ./packing.yaml#/schemas/PackingHeaderBinary
+                $ref: ./common.yaml#/schemas/PackingHeaderBinary
         default: *a1
     put:
       operationId: uploadSurveyHeader

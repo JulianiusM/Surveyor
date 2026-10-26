@@ -1,3 +1,4 @@
+import {findOrCreateUserFromOidc} from '../../src/backend/modules/identity/oidcAccounts';
 import type {Request, Response} from 'express';
 import type {SessionData} from 'express-session';
 import {randomUUID} from 'node:crypto';
@@ -1368,8 +1369,51 @@ describe('authentication user stories', () => {
         expect(await userService.getUserById(userId)).not.toBeNull();
     });
 
+    it('keeps an exact OIDC account match authoritative over changed provider email and name claims', async () => {
+        const {id, email, username} = await registerLocalAccount('oidc-exact-policy');
+        await userService.linkUserToOidc(id, 'https://identity.example', 'exact-policy-subject');
+        const profiles = await userService.getProfilesForUser(id);
+        const usersBefore = await AppDataSource.getRepository(User).count();
+
+        const account = await findOrCreateUserFromOidc('https://identity.example', {
+            sub: 'exact-policy-subject', email: 'changed-exact-claim@example.com',
+            preferred_username: 'changed-provider-username', name: 'Changed provider name',
+        });
+
+        // An exact issuer/subject match historically does not relink by email,
+        // rename the account, activate it or replace its existing profiles.
+        expect(account).toMatchObject({id, email, username});
+        expect(Boolean(account.isActive)).toBe(false);
+        expect(account.profiles.map(profile => profile.id).sort()).toEqual(profiles.map(profile => profile.id).sort());
+        expect(await AppDataSource.getRepository(User).count()).toBe(usersBefore);
+        await expect(userService.verifyPassword(id, 'initial-secret')).resolves.toBe(true);
+        expect(await AppDataSource.getRepository(User).findOneBy({id})).toMatchObject({email, username, oidcSub: 'exact-policy-subject'});
+    });
+
+    it('links an existing email account and activates it without replacing its password or profiles', async () => {
+        const {id, email, username} = await registerLocalAccount('oidc-email-policy');
+        await userService.createProfile(id, 'Additional OIDC policy profile');
+        const profiles = await userService.getProfilesForUser(id);
+        const usersBefore = await AppDataSource.getRepository(User).count();
+
+        const account = await findOrCreateUserFromOidc('https://identity.example', {
+            sub: 'email-policy-subject', email, preferred_username: 'unused-provider-name', name: 'Unused provider label',
+        }, {linkByEmail: true});
+
+        // Email linking preserves the local identity and its profiles; only the
+        // existing activation/link fields are selected by this policy branch.
+        expect(account).toMatchObject({id, email, username, oidcIssuer: 'https://identity.example', oidcSub: 'email-policy-subject'});
+        expect(Boolean(account.isActive)).toBe(true);
+        expect(account.profiles.map(profile => profile.id).sort()).toEqual(profiles.map(profile => profile.id).sort());
+        expect(await AppDataSource.getRepository(User).count()).toBe(usersBefore);
+        await expect(userService.verifyPassword(id, 'initial-secret')).resolves.toBe(true);
+        const saved = await AppDataSource.getRepository(User).findOneByOrFail({id});
+        expect(saved.oidcSub).toBe('email-policy-subject');
+        expect(Boolean(saved.isActive)).toBe(true);
+    });
+
     it('provisions an active OIDC account and profile just in time', async () => {
-        const oidc = await userService.findOrCreateUserFromOidc('https://identity.example', {
+        const oidc = await findOrCreateUserFromOidc('https://identity.example', {
             sub: 'jit-provisioned-subject',
             email: 'jit-user@example.com',
             preferred_username: 'jit-user',

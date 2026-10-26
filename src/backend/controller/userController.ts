@@ -35,6 +35,7 @@ import type {MessageKey} from '../../types/LocalizationTypes';
 import {ApiProblem} from '../modules/api/problem';
 import {buildGuestLink, ENTITIES} from "../modules/lib/util";
 import * as oidc from "../modules/oidc";
+import {findOrCreateUserFromOidc} from "../modules/identity/oidcAccounts";
 import settings from "../modules/settings";
 import type {Entity, GuestLinkData, OverviewCollection, OverviewPageView, OverviewQuery, OverviewReadResult, OverviewRegion, OverviewRegionView, PersonalVisibilityCompletion, PersonalVisibilityResult} from "../../types/UserTypes";
 import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, LockedArchiveContext, PersonalVisibility} from "../../types/ArchiveTypes";
@@ -213,13 +214,18 @@ async function resolveLoginUser(body: any, options?: IdentityLinkOptions) {
     return user;
 }
 
+/** Select local account authority synchronously; each caller retains its original save timing. */
+function applyAccountIdentity(session: Request['session'], user: User): void {
+    session.auth = {user};
+    session.profile = getDefaultProfile(user.profiles);
+    rotateFrontendSessionContext(session);
+}
+
 /** Direct saves immediately; isolated frontend saves defer to their enclosing completion transaction. */
 async function saveAccountIdentity(session: Request['session'], user: User): Promise<void> {
     // Save the validated account/default profile with one new frontend scope.
     // A staged session cannot leak into request autosave if preparation rejects.
-    session.auth = {user};
-    session.profile = getDefaultProfile(user.profiles);
-    rotateFrontendSessionContext(session);
+    applyAccountIdentity(session, user);
     await persistSession(session);
 }
 
@@ -468,7 +474,10 @@ async function readOverviewNavigation(session: SessionLike, input: unknown, frag
     return {state, target, byRegion};
 }
 
+/** Build both Overview collections from the same admitted, bounded navigation read. */
 export async function getOverviewPage(session: SessionLike, query: unknown = {}): Promise<OverviewPageView> {
+    // The reader owns identity/query admission and the resulting clamped state;
+    // both main and hidden regions use that same collection total and link context.
     const {state, byRegion} = await readOverviewNavigation(session, query, false);
     function collectionView(collection: OverviewCollection) {
         const mainKey = overviewKey(collection, 'main');
@@ -731,10 +740,30 @@ export async function loginUserWithOidc(session: Request['session']) {
     return oidc.startLogin(session);
 }
 
-// GET /auth/callback → handles code exchange, JIT-provision, session setup, redirect
+/** Complete validated provider login through the local account owner, then save identity and tokens together. */
 export async function loginUserWithOidcCallback(req: Request) {
-    // oidcCallback sets req.session.userId and req.session.user, then redirects
-    return oidc.callback(req);
+    // Protocol validation finishes before any local account or session authority changes.
+    const {issuer, identityClaims, tokens} = await oidc.exchangeCallback(req);
+    // Resolve the established linking/provisioning policy before changing session authority.
+    const user = await findOrCreateUserFromOidc(issuer, identityClaims, {
+        linkByEmail: true,
+    });
+    applyAccountIdentity(req.session, user);
+
+    // Provider tokens follow identity selection; no early save occurs through the shared synchronous helper.
+    req.session.tokens = {
+        id_token: tokens.id_token,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        expires_at: tokens.expires_at, // epoch seconds if present
+        token_type: tokens.token_type,
+    };
+
+    // Clear transient OIDC artifacts
+    req.session.oidc = undefined;
+
+    // Persist once after clearing transient protocol state, retaining the original provider completion boundary.
+    await persistSession(req.session);
 }
 
 // POST /auth/logout → clears local session and (if available) does RP-initiated logout
@@ -1063,10 +1092,13 @@ export async function deleteAccount(body: any, session: Request['session']) {
     throw new ExpectedError("Invalid session. Log out and try again", "error", 500);
 }
 
+/** Delete the authenticated account, send its existing notification and complete logout. */
 export async function deleteUser(session: Request['session']) {
     if (!session.auth?.user) {
         throw new ExpectedError("Not logged in as user!", "error", 401);
     }
+    // Retain the established delete-before-mail-before-logout sequence. Delivery
+    // and provider/session failures do not undo the already completed deletion.
     const deleted = await userService.deleteUser(session.auth.user.id);
     if (deleted?.email) {
         await mailer.sendDeletionEmail({name: resolveEmailRecipientName(deleted.name, deleted.username), address: deleted.email}, deleted);
@@ -1074,11 +1106,14 @@ export async function deleteUser(session: Request['session']) {
     return await logoutUserOidc(session);
 }
 
+/** Delete the authenticated guest and retain its existing mail/logout completion. */
 export async function deleteGuest(session: Request['session']) {
     if (!session.auth?.guest) {
         throw new ExpectedError("Not logged in as guest!", "error", 401);
     }
 
+    // Use the removed record for optional notification, then clear session/provider
+    // identity through the same logout owner used by account deletion.
     const deleted = await userService.deleteGuest(session.auth.guest.id);
     if (deleted?.email) {
         await mailer.sendDeletionEmail({name: resolveEmailRecipientName(deleted.username, deleted.profile?.name), address: deleted.email}, deleted);
@@ -1154,40 +1189,6 @@ export async function changeActiveProfileWithSession<Result>(profileId: string, 
         return options.prepareResult(session, manager);
     }
     return commitIdentityCompletion(req, options.context, prepareProfileChange, true);
-}
-
-export async function validateSession(session: Request['session']) {
-    let ok = true;
-    // Check profile validity
-    if (ok && session.profile) {
-        const profile = await userService.getProfileById(session.profile.id);
-        if (!profile || (profile.userId !== session.auth?.user?.id && profile.guestId !== session.auth?.guest?.id)) {
-            ok = false;
-        }
-    }
-
-    // Check user authentication
-    if (ok && session.auth?.user) {
-        const user = await userService.getUserById(session.auth.user.id);
-        if (!user) {
-            ok = false;
-        }
-    }
-
-    // Check guest authentication
-    if (ok && session.auth?.guest) {
-        const guest = await userService.getGuestInternal(session.auth.guest.id);
-        if (!guest) {
-            ok = false;
-        }
-    }
-
-    // Check for dangling profile without auth
-    if (ok && session.profile && !session.auth) {
-        ok = false;
-    }
-
-    return ok;
 }
 
 /** Retain blank-name validation, optional rename and default selection,

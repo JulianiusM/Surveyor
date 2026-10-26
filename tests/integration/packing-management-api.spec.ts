@@ -1,3 +1,5 @@
+
+import {readEventLinkSelection} from '../../src/backend/modules/event/linkage';
 import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 import fs from 'node:fs';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
@@ -13,7 +15,7 @@ import {packingFlow} from '../../src/backend/routes/packingFlow';
 import {readOverview, setOverviewVisibility} from '../../src/backend/modules/overview/api';
 import packingController from '../../src/backend/controller/packingController';
 import {archiveEntity, changeEntityEvent, getEntityViewAdmission, restoreEntity} from '../../src/backend/controller/entityAdminController';
-import {readEventLinkSelection} from '../../src/backend/controller/eventController';
+
 import {randomUUID} from 'node:crypto';
 import {QueryFailedError, type EntityManager} from 'typeorm';
 import {contractValidator} from '../../src/backend/modules/api/contracts';

@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
+import {readEntityDefaultsBaseline, updateEntityDefaults, readEntityAdministratorBaseline, updateEntityAdministrator} from './entityAdminController';
+
+import {eventMethodPermission, mayPerformEventMethod, validateCalendarDate} from '../modules/event/linkage';
+
+
 // controllers/eventController.ts
-import {hasAccountProfile} from './userController';
-import {Request} from "express";
-import {
-    applyEntityAdministrator, archiveEntity, assertEditableEntityFields, classifyArchiveCommandError, comparisonToken, completeDefaults,
-    entityMethodPermission, getArchivePresentations, getArchiveView, getEntityPropertyPresentation, permissionDefinitions,
-    requireFieldComparison, restoreEntity, setAutomaticArchival,
-} from "./entityAdminController";
-import crypto from 'node:crypto';
+import {hasAccountProfile} from './userController';import {Request} from "express";
+import {searchEntityProfiles, archiveEntity, assertEditableEntityFields, classifyArchiveCommandError, comparisonToken, completeDefaults, getArchivePresentations, getArchiveView, getEntityPropertyPresentation, permissionDefinitions, requireFieldComparison, restoreEntity, setAutomaticArchival} from './entityAdminController';
+
 import path from 'node:path';
 // Business logic for the Event routes
 import Joi from 'joi';
@@ -37,7 +37,7 @@ import {isParticipantSubmissionPool} from '../modules/invoice/state';
 
 import * as eventService from '../modules/database/services/EventService';
 import * as adminService from '../modules/database/services/EntityAdminService';
-import * as userService from '../modules/database/services/UserService';
+
 import * as lifecycleService from '../modules/database/services/EntityLifecycleService';
 import activityController from './activityController';
 import driversController from './driversController';
@@ -49,7 +49,7 @@ import {archiveKey} from '../modules/archive/policy';
 import {ApiProblem} from '../modules/api/problem';
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {checkNewImage, performImageSwap, removeImage} from "../modules/lib/fileCommons";
-import {getInitialPerms, PERM} from '../modules/lib/permissions';
+import {getInitialPerms} from '../modules/lib/permissions';
 import {
     buildDateTotals,
     convertToSingleList,
@@ -60,11 +60,11 @@ import {
     normalizeToArray,
     rewriteISOToZone
 } from "../modules/lib/util";
-import {can, evaluateEntities, evaluateSubject, getEntityPermissionQueryScope, isOwner, saveDefaultPermsFromBody} from "../modules/permissionEngine";
+import {can, evaluateSubject, isOwner, saveDefaultPermsFromBody} from '../modules/permissionEngine';
 import {requireSessionProfileId} from '../modules/lib/session';
 import {projectOverviewCard} from '../modules/overview/api';
-import type {DIETARY, EventLinkOption, EventLinkOptionsQuery, EventLinkOptionsResult, EventMethod} from "../../types/EventTypes";
-import type {EntityAdministratorCommand, PermBundle, PermType, PermView, SessionLike} from "../../types/PermissionTypes";
+import type {DIETARY, EventMethod} from '../../types/EventTypes';
+import type {PermBundle, PermView, SessionLike} from '../../types/PermissionTypes';
 import type {components} from '../../types/api/v1';
 import type {ApiResponsePreparer} from '../../types/ApiTransportTypes';
 import type {EntityMutationOutcome} from '../../types/EntityPropertyTypes';
@@ -74,44 +74,11 @@ import {WithRequired} from "../../types/UtilTypes";
 // Template constant for create errors
 const CREATE_TEMPLATE = 'event/event-create';
 
-/** One declaration selects method grants for permission middleware, v1 commands and
- * capabilities. This preserves the existing independent bits and the participant
- * export's combined requirement; profile/account/participant admission remains
- * with the document route or shared operation rather than being inferred here. */
-const eventMethodPermissions: Record<EventMethod, readonly PermType[]> = {
-    register: ['ACCESS_REGISTRATION'], admin: ['ACCESS_ADMIN'], participants: ['ACCESS_PARTICIPANTS'],
-    manageRegistrations: ['MANAGE_REGISTRATIONS'], items: ['ACCESS_ITEMS'], manageAssignments: ['MANAGE_ASSIGNMENTS'],
-    exportParticipants: ['DATA_EXPORT', 'ACCESS_PARTICIPANTS'],
-    managePermissions: [entityMethodPermission('managePermissions')],
-    editHeader: [entityMethodPermission('editHeader')], duplicate: [entityMethodPermission('duplicate')],
-};
-
-/** Translate this owner's complete grant choice to the existing permission middleware bitmask. */
-export function eventMethodPermission(method: EventMethod): number {
-    return eventMethodPermissions[method].reduce((mask, key) => mask | PERM[key], 0);
-}
-
-/** The permission engine interprets grants; this owner selects every required method bit. */
-function mayPerformEventMethod(permissions: PermView, method: EventMethod): boolean {
-    return permissions.all(...eventMethodPermissions[method]);
-}
 
 /** Related content requires own attendance or assignment-management authority.
  * Page/method admission and each child's lifecycle grants remain separate checks. */
 function mayReadEventChildren(registration: EventRegistration | null, managesAssignments: boolean): boolean {
     return Boolean(registration || managesAssignments);
-}
-
-// A grant can be revoked between candidate discovery and evaluation. Cursor positions may
-// therefore refer to a now-private event: encrypt them rather than exposing an encoded ID.
-// They are process-local navigation state; a restart simply requires restarting the search.
-const eventCursorKey = crypto.randomBytes(32);
-
-/** Reject impossible calendar dates as well as malformed strings before SQL sees them. */
-function validateCalendarDate(value: string, helpers: Joi.CustomHelpers): string | Joi.ErrorReport {
-    const date = new Date(`${value}T00:00:00Z`);
-    if (!Number.isFinite(date.getTime()) || date.getUTCFullYear() < 1000 || date.toISOString().slice(0, 10) !== value) return helpers.error('any.invalid');
-    return value;
 }
 
 /** Identify only authored Event property rejections from the existing validator.
@@ -130,135 +97,6 @@ function eventPropertyRejectionCause(error: Joi.ValidationError): string | undef
         case 'location': return detail.type === 'string.max' ? 'EVENT_LOCATION_TOO_LONG' : undefined;
         case 'deadlineTz': return 'EVENT_TIMEZONE_INVALID';
         default: return undefined;
-    }
-}
-
-/** Authenticate both the seek position and the profile/filter scope as one opaque token. */
-function encodeEventCursor(position: {startDate: string; id: string}, scope: string): string {
-    const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv('aes-256-gcm', eventCursorKey, iv);
-    const encrypted = Buffer.concat([cipher.update(JSON.stringify({position, scope}), 'utf8'), cipher.final()]);
-    return Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString('base64url');
-}
-
-/** Reject changed filters, another profile's token, and modified bytes before querying. */
-function decodeEventCursor(token: string, scope: string): {startDate: string; id: string} {
-    try {
-        const bytes = Buffer.from(token, 'base64url');
-        const decipher = crypto.createDecipheriv('aes-256-gcm', eventCursorKey, bytes.subarray(0, 12));
-        decipher.setAuthTag(bytes.subarray(12, 28));
-        const decoded = JSON.parse(Buffer.concat([decipher.update(bytes.subarray(28)), decipher.final()]).toString('utf8'));
-        if (decoded.scope !== scope) throw new Error('Cursor scope changed');
-        return decoded.position;
-    } catch {
-        throw new APIError('Search expired or changed. Reset filters and try again.', {}, 400, {cause: 'EVENT_SEARCH_EXPIRED'});
-    }
-}
-
-export function projectEventLinkOption(event: Event): EventLinkOption {
-    return {
-        id: event.id, title: event.title, description: event.description ?? undefined,
-        startDate: event.startDate, endDate: event.endDate, archived: event.archivedAt !== null,
-        deadlinePassed: !!event.bindingDeadline && new Date(event.bindingDeadline).getTime() < Date.now(),
-    };
-}
-
-/**
- * Authorize the actual attachment target through the common event method policy.
- * A selected URL is discovery only; creation/relink adapters call this owner again.
- *
- * @param manager Transaction used for current permission evidence by a locked caller.
- * @param knownEvent That caller's selected, locked event row; null means the row
- * disappeared, while undefined retains the ordinary lookup. The row belongs to eventId.
- */
-export async function authorizeEventLink(eventId: string | null | undefined, session: SessionLike,
-                                         manager?: EntityManager, knownEvent?: Event | null): Promise<Event | null> {
-    requireSessionProfileId(session);
-    if (eventId === null || eventId === undefined || eventId === '') return null;
-    const {error} = Joi.string().uuid().validate(eventId);
-    if (error) throw new APIError('Invalid event.', {}, 400);
-
-    // Direct callers keep their existing lookup. A controller operating under a
-    // DBAL-managed parent lock supplies that exact row and transaction instead;
-    // both paths apply this same attachment policy without another permission owner.
-    const event = knownEvent === undefined ? await eventService.getEventById(eventId) : knownEvent;
-    if (!event) throw new APIError('Event not found.', {}, 404);
-
-    // Ownership, individual grants and audience membership all use the same engine.
-    const allowed = await can({kind: 'entity', entity: {
-        entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
-    }}, session, eventMethodPermission('manageAssignments'), undefined, manager);
-    if (!allowed) throw new APIError('Not allowed to attach entities to this event.', {}, 403);
-    return event;
-}
-
-/**
- * Resolve an optional initial selection without disclosing a rejected event. Direct calls
- * forms and features share this read projection; submitting an event still
- * performs its own mandatory authorization. Operational failures must remain errors.
- */
-export async function readEventLinkSelection(input: unknown, session: SessionLike): Promise<EventLinkOption | null> {
-    if (typeof input !== 'string' || input === '') return null;
-    try {
-        const event = await authorizeEventLink(input, session);
-        return event ? projectEventLinkOption(event) : null;
-    } catch (error) {
-        if (!(error instanceof APIError)) throw error;
-        return null;
-    }
-}
-
-/** Search all historical states without turning candidate discovery into an ACL implementation. */
-export async function getEventLinkOptions(query: unknown, session: SessionLike): Promise<EventLinkOptionsResult> {
-    const profileId = requireSessionProfileId(session);
-    const schema = Joi.object({
-        q: Joi.string().trim().max(200).allow('').default(''),
-        from: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).custom(validateCalendarDate),
-        to: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).custom(validateCalendarDate),
-        period: Joi.string().valid('all', 'upcoming', 'ongoing', 'ended').default('all'),
-        archive: Joi.string().valid('all', 'active', 'archived').default('all'),
-        deadline: Joi.string().valid('all', 'open', 'passed').default('all'),
-        cursor: Joi.string().max(2048), selectedId: Joi.string().uuid().lowercase(),
-    }).unknown(false).required();
-    const {value, error} = schema.validate(query);
-    if (error || (value.from && value.to && value.from > value.to)) throw new APIError('Invalid event filters.', {}, 400,
-        {cause: !error ? 'EVENT_SEARCH_RANGE_INVALID' : undefined});
-    const {cursor, selectedId, ...filters} = value as EventLinkOptionsQuery;
-    const scope = JSON.stringify({profileId, ...filters});
-    let position = cursor ? decodeEventCursor(cursor, scope) : undefined;
-    const result: EventLinkOptionsResult = {items: [], nextCursor: null};
-    if (selectedId) {
-        // An unauthorized formerly selected event is omitted, never echoed with a title.
-        result.selected = await readEventLinkSelection(selectedId, session);
-    }
-    // SQL prefilters the engine's exact one-bit eligibility inputs before LIMIT. Thousands
-    // of denied rows therefore do not become empty user-facing pages. A final evaluation is
-    // still required because grants may change between SQL discovery and this batch read.
-    // The SQL candidate filter uses a necessary bit; the controller still checks
-    // the complete method rule after loading candidates, before disclosure.
-    const permissionScope = getEntityPermissionQueryScope(session, eventMethodPermissions.manageAssignments[0]!);
-    const referenceTime = new Date();
-    while (true) {
-        const candidates = await eventService.getEventLinkCandidates(filters, permissionScope, referenceTime, position);
-        if (!candidates.length) return result;
-        const descriptors = candidates.map(event => ({entityType: 'event' as const, entityId: event.id, ownerId: event.ownerId, eventId: event.id}));
-        const permissions = await evaluateEntities(descriptors, session);
-        for (const event of candidates) {
-            const permission = permissions.get(`event:${event.id}`);
-            if (!permission || !mayPerformEventMethod(permission, 'manageAssignments')) {
-                position = {startDate: event.startDate, id: event.id};
-                continue;
-            }
-            // Read one authorized lookahead result. Only then emit a continuation after the
-            // last displayed item, avoiding a misleading Next page button on a terminal page.
-            if (result.items.length === 25) {
-                result.nextCursor = encodeEventCursor(position!, scope);
-                return result;
-            }
-            result.items.push(projectEventLinkOption(event));
-            position = {startDate: event.startDate, id: event.id};
-        }
-        if (candidates.length < 100) return result;
     }
 }
 
@@ -521,7 +359,9 @@ async function registerAttendance(event: Event, body: any, req: {session: Sessio
     return 'Registration saved';
 }
 
+/** Compare saved dietary choices and authored notes without rewriting unchanged registration inputs. */
 function isDietaryEqual(reg: EventRegistration, dietary: DIETARY[], allergyNotes: string, dietComment: string) {
+    // Separate stored choices from special allergy/comment text before comparing the submitted set.
     const localDiets: Set<DIETARY> = new Set();
     let localAllergy;
     let localComment;
@@ -702,7 +542,9 @@ export async function canBypassDeadlineWithToken(eventId: string, token?: string
     return link && bypassStatus(link) === 'active' ? {ok: true, linkId: link.id} : {ok: false};
 }
 
+/** Present existing registration links with the shared lifecycle status, without changing token state. */
 async function listDeadlineBypassLinks(event: Event) {
+    // Load only this event links, then project existing usage/revocation/expiry evidence.
     const links = await eventService.listDeadlineBypassLinks(event.id);
     return links.map(function presentLink(link) {
         return {id: link.id, token: link.token, createdAt: link.track.createdAt, expiresAt: link.expiresAt,
@@ -762,7 +604,9 @@ async function updateRegistrationDates(event: Event, registrationId: string, bod
     return 'Registration updated';
 }
 
+/** Aggregate registered participants, dietary details and date totals for the existing export projection. */
 async function getParticipantsExtended(event: Event) {
+    // Read the current roster before counting choices and collecting unique authored notes.
     const participants = await eventService.getEventParticipants(event.id);
     const totals: Record<string, number> = {};
     const allergies: Set<string> = new Set();
@@ -793,7 +637,9 @@ async function getParticipantsExtended(event: Event) {
     }
 }
 
+/** Split semicolon-delimited authored notes into trimmed unique export entries. */
 function aggregateInfos(infoSet: Set<string>, infoString: string) {
+    // Ignore empty fragments while retaining each distinct note in the supplied aggregation set.
     const coms = infoString.split(';')
         .map(v => v.trim())
         .filter(Boolean);
@@ -1237,31 +1083,23 @@ export async function setEventChildAutomaticArchival(id: string, entityType: 'ac
 
 /** Publicly granted access management receives only its own current audience baselines. */
 export async function readEventDefaultsBaseline(id: string, session: SessionLike): Promise<components['schemas']['PackingDefaultsBaseline']> {
-    return eventService.withEventReadSnapshot(id, async function readDefaults(manager, row) {
+    return eventService.withEventReadSnapshot(id, /** Read an admitted Event audience baseline with its original full settings comparison scope. */
+async function readDefaults(manager, row) {
+        // Check current method authority on this snapshot before reading masks or constructing comparison evidence.
         const event = requireEvent(row);
         if (!mayPerformEventMethod(await eventPermissions(event, session, manager), 'managePermissions')) throw new ApiProblem('FORBIDDEN');
-        const defaultPermissions = completeDefaults(await adminService.getDefaultPerms('event', id, manager));
-        return {defaultPermissions, editToken: await eventSettingsToken(event, session, manager, true)};
+        return readEntityDefaultsBaseline('event', id, session, manager, {prepareToken: () => eventSettingsToken(event, session, manager, true)});
     });
 }
 
 /** Shared permission persistence keeps sparse audience updates and current locked authorization. */
 export async function updateEventDefaults(id: string, body: components['schemas']['PermissionDefaultsPatch'], session: SessionLike, token?: string) {
-    /** Recheck method authority and selected audiences before shared mask persistence. */
-    return withEventManagement(id, session, async function saveDefaults(manager, event, permissions) {
+    return withEventManagement(id, session, /** Apply admitted sparse Event audience changes on the existing management transaction. */
+async function saveDefaults(manager, event, permissions) {
+        // Recheck the Event method grant before the shared reviewed-default operation reads or writes masks.
         if (!mayPerformEventMethod(permissions, 'managePermissions')) throw new ApiProblem('FORBIDDEN');
-        // Only submitted audiences participate in comparison and writes; omitted grants survive.
-        const current = completeDefaults(await adminService.getDefaultPerms('event', id, manager));
-        requireFieldComparison(token, await eventSettingsToken(event, session, manager, true), Object.keys(body).map(key => `default:${key}`));
-        await saveDefaultPermsFromBody('event', id, {defaultPerms: body}, {manager, inputFormat: 'masks'});
-        return {changed: Object.keys(body).some(key => body[key as keyof typeof body] !== current[key as keyof typeof current])};
+        return updateEntityDefaults('event', id, body, session, token, manager, {prepareToken: () => eventSettingsToken(event, session, manager, true)});
     });
-}
-
-/** Existing grants and absent grants use independent comparison fields. */
-function eventAdministratorToken(id: string, profileId: string, mask: number | null, session: SessionLike): string {
-    return mask === null ? comparisonToken('event-settings', id, session, {newAdmin: null})
-        : comparisonToken('event-admin', `${id}:${profileId}`, session, {mask});
 }
 
 /** Disclose one administrator mask only after the method grant, independently of page admission. */
@@ -1269,10 +1107,7 @@ export async function readEventAdminBaseline(id: string, profileId: string, sess
     return eventService.withEventReadSnapshot(id, async function readAdministrator(manager, row) {
         const event = requireEvent(row);
         if (!mayPerformEventMethod(await eventPermissions(event, session, manager), 'managePermissions')) throw new ApiProblem('FORBIDDEN');
-        if (!await userService.getProfileById(profileId, manager)) throw new ApiProblem('NOT_FOUND');
-        const current = await adminService.getAdminGrant('event', id, profileId, manager);
-        const mask = current?.perms ?? null;
-        return {mask, editToken: eventAdministratorToken(id, profileId, mask, session)};
+        return readEntityAdministratorBaseline('event', id, profileId, session, manager);
     });
 }
 
@@ -1280,27 +1115,14 @@ export async function readEventAdminBaseline(id: string, profileId: string, sess
 export async function setEventAdmin(id: string, profileId: string, mask: number | null, session: SessionLike, token?: string) {
     return withEventManagement(id, session, async function saveAdministrator(manager, event, permissions) {
         if (!mayPerformEventMethod(permissions, 'managePermissions')) throw new ApiProblem('FORBIDDEN');
-        let previousMask: number | null = null;
-        /** Shared profile admission precedes this callback's comparison and selected command. */
-        async function reviewAdministrator(): Promise<EntityAdministratorCommand> {
-            const current = await adminService.getAdminGrant('event', id, profileId, manager);
-            previousMask = current?.perms ?? null;
-            requireFieldComparison(token, eventAdministratorToken(id, profileId, previousMask, session), [current ? 'mask' : 'newAdmin']);
-            return mask === null ? {kind: 'remove'} : {kind: current ? 'update' : 'add', mask, createdBy: session.profile?.userId};
-        }
-        const outcome = await applyEntityAdministrator('event', id, profileId,
-            mask === null ? {kind: 'remove'} : {kind: 'add', mask, createdBy: session.profile?.userId}, manager, reviewAdministrator);
-        if (outcome === 'profile-missing') throw new ApiProblem('NOT_FOUND');
-        if (outcome === 'mask-required') throw new ApiProblem('VALIDATION_FAILED');
-        return {changed: previousMask !== mask};
+        return updateEntityAdministrator('event', id, profileId, mask, session, token, manager);
     });
 }
 
 /** Reuse secure account-profile search; no guest credentials or raw addresses enter options. */
 export async function searchEventProfiles(id: string, query: string, session: SessionLike): Promise<components['schemas']['PackingProfileOptions']> {
     await requireEventMethod(id, session, 'managePermissions');
-    return (await userService.searchUsersSecure(query)).map(profile => ({profileId: profile.id, name: profile.name,
-        username: profile.username, isGuest: false}));
+    return searchEntityProfiles(query);
 }
 
 /** Method-only image writers receive a reference hash without protected image bytes. */

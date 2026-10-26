@@ -1,6 +1,15 @@
 import type {Request} from 'express';
 import type {EntityManager} from 'typeorm';
 import type {components} from './api/v1';
+import type {TokenEndpointResponse} from 'openid-client';
+import type {OidcClaims} from './UserTypes';
+
+/** Verified provider evidence; local account selection and session completion remain controller-owned. */
+export interface OidcLoginEvidence {
+    issuer: string;
+    identityClaims: OidcClaims;
+    tokens: TokenEndpointResponse;
+}
 
 /** The existing transfer/deactivation flow reports only completed former-owner
  * cleanup. Controller prose and localized API notices project the same facts; this

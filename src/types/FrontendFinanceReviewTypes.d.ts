@@ -1,5 +1,6 @@
 import type {components} from './api/v1';
 import type {FrontendPlainMessageKey, FrontendRequestScope} from './FrontendUiTypes';
+import type {Component} from 'vue';
 
 /** One reviewed submission-access intent; later reads cannot retarget its command. */
 export interface FinanceSubmissionAccessReview {
@@ -53,6 +54,14 @@ export interface FinanceHistoryProps {
     eventId?: string;
     pool?: components['schemas']['FinancePool'];
     refreshSaved?: () => Promise<void>;
+    /** The parent composes editable review; read-only evidence imports no dialog. */
+    reviewComponent?: Component;
+}
+
+/** Row-owned review state passes through presentation without a second owner. */
+export interface FinanceInvoiceReviewSlot {
+    owner: FinanceInvoiceReviewOwner;
+    open: boolean;
 }
 
 export interface FinanceInvoiceRowProps extends Omit<FinanceHistoryProps, 'invoices' | 'refreshing'> {

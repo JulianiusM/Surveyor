@@ -24,7 +24,10 @@ export class AddInvoiceSettlementSnapshots1789430400000 implements MigrationInte
         }
     }
 
+    /** Remove snapshot/email/credit fields without replacing existing settlements. */
     public async down(queryRunner: QueryRunner): Promise<void> {
+        // Retain the historical pool-before-share removal order and conditional
+        // table checks; this rollback does not invent a substitute snapshot.
         if (await tableExists(queryRunner, "event_invoice_pools")) {
             await dropColumnIfExists(queryRunner, "event_invoice_pools", "calculation_snapshot");
             await dropColumnIfExists(queryRunner, "event_invoice_pools", "send_calculation_emails");

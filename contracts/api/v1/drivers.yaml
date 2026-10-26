@@ -1,10 +1,10 @@
 schemas:
   DriversCreateEntry:
-    $ref: ./packing.yaml#/schemas/PackingCreateEntry
+    $ref: ./common.yaml#/schemas/PackingCreateEntry
   DriversResourceEntry:
-    $ref: ./packing.yaml#/schemas/PackingResourceEntry
+    $ref: ./common.yaml#/schemas/PackingResourceEntry
   DriversAssignee:
-    $ref: ./packing.yaml#/schemas/PackingAssignee
+    $ref: ./common.yaml#/schemas/PackingAssignee
   DriversItemView:
     type: object
     additionalProperties: false
@@ -207,31 +207,31 @@ schemas:
       inheritedArchived:
         type: boolean
   DriversDescriptionValue:
-    $ref: ./packing.yaml#/schemas/PackingDescriptionValue
+    $ref: ./common.yaml#/schemas/PackingDescriptionValue
   DriversMetadataPatch:
-    $ref: ./packing.yaml#/schemas/PackingMetadataPatch
+    $ref: ./common.yaml#/schemas/PackingMetadataPatch
   DriversDescriptionPatch:
-    $ref: ./packing.yaml#/schemas/PackingDescriptionPatch
+    $ref: ./common.yaml#/schemas/PackingDescriptionPatch
   DriversDescriptionBaseline:
-    $ref: ./packing.yaml#/schemas/PackingDescriptionBaseline
+    $ref: ./common.yaml#/schemas/PackingDescriptionBaseline
   DriversDefaultsBaseline:
-    $ref: ./packing.yaml#/schemas/PackingDefaultsBaseline
+    $ref: ./common.yaml#/schemas/PackingDefaultsBaseline
   DriversAdminBaseline:
-    $ref: ./packing.yaml#/schemas/PackingAdminBaseline
+    $ref: ./common.yaml#/schemas/PackingAdminBaseline
   DriversHeaderBaseline:
-    $ref: ./packing.yaml#/schemas/PackingHeaderBaseline
+    $ref: ./common.yaml#/schemas/PackingHeaderBaseline
   DriversAssignmentResult:
-    $ref: ./packing.yaml#/schemas/PackingAssignmentResult
+    $ref: ./common.yaml#/schemas/PackingAssignmentResult
   PermissionDefaults:
-    $ref: ./packing.yaml#/schemas/PermissionDefaults
+    $ref: ./common.yaml#/schemas/PermissionDefaults
   PermissionDefaultsPatch:
-    $ref: ./packing.yaml#/schemas/PermissionDefaultsPatch
+    $ref: ./common.yaml#/schemas/PermissionDefaultsPatch
   PermissionDefinition:
-    $ref: ./packing.yaml#/schemas/PermissionDefinition
+    $ref: ./common.yaml#/schemas/PermissionDefinition
   PermissionPreset:
-    $ref: ./packing.yaml#/schemas/PermissionPreset
+    $ref: ./common.yaml#/schemas/PermissionPreset
   DriversCreateContext:
-    $ref: ./packing.yaml#/schemas/PackingCreateContext
+    $ref: ./common.yaml#/schemas/PackingCreateContext
   DriversNewItem:
     type: object
     additionalProperties: false
@@ -276,9 +276,9 @@ schemas:
       defaultPermissions:
         $ref: "#/schemas/PermissionDefaults"
   DriversCreated:
-    $ref: ./packing.yaml#/schemas/PackingCreated
+    $ref: ./common.yaml#/schemas/PackingCreated
   MutationResult:
-    $ref: ./packing.yaml#/schemas/MutationResult
+    $ref: ./common.yaml#/schemas/MutationResult
   DriversItemPatch:
     type: object
     additionalProperties: false
@@ -338,35 +338,35 @@ schemas:
       editToken:
         $ref: "#/schemas/DriversItemView/properties/editToken"
   DriversOrderEditBaseline:
-    $ref: ./packing.yaml#/schemas/PackingOrderEditBaseline
+    $ref: ./common.yaml#/schemas/PackingOrderEditBaseline
   DriversItemOrder:
-    $ref: ./packing.yaml#/schemas/PackingItemOrder
+    $ref: ./common.yaml#/schemas/PackingItemOrder
   DriversEventChange:
-    $ref: ./packing.yaml#/schemas/PackingEventChange
+    $ref: ./common.yaml#/schemas/PackingEventChange
   DriversEventChanged:
-    $ref: ./packing.yaml#/schemas/PackingEventChanged
+    $ref: ./common.yaml#/schemas/PackingEventChanged
   DriversProfileOption:
-    $ref: ./packing.yaml#/schemas/PackingProfileOption
+    $ref: ./common.yaml#/schemas/PackingProfileOption
   DriversProfileOptions:
-    $ref: ./packing.yaml#/schemas/PackingProfileOptions
+    $ref: ./common.yaml#/schemas/PackingProfileOptions
   DriversAdmin:
-    $ref: ./packing.yaml#/schemas/PackingAdmin
+    $ref: ./common.yaml#/schemas/PackingAdmin
   DriversAdminInput:
-    $ref: ./packing.yaml#/schemas/PackingAdminInput
+    $ref: ./common.yaml#/schemas/PackingAdminInput
   DriversAdminPatch:
-    $ref: ./packing.yaml#/schemas/PackingAdminPatch
+    $ref: ./common.yaml#/schemas/PackingAdminPatch
   DriversCurrentEvent:
-    $ref: ./packing.yaml#/schemas/PackingCurrentEvent
+    $ref: ./common.yaml#/schemas/PackingCurrentEvent
   DriversArchive:
-    $ref: ./packing.yaml#/schemas/PackingArchive
+    $ref: ./common.yaml#/schemas/PackingArchive
   DriversAccess:
-    $ref: ./packing.yaml#/schemas/PackingAccess
+    $ref: ./common.yaml#/schemas/PackingAccess
   DriversSettings:
-    $ref: ./packing.yaml#/schemas/PackingSettings
+    $ref: ./common.yaml#/schemas/PackingSettings
   DriversHeaderUpload:
-    $ref: ./packing.yaml#/schemas/PackingHeaderUpload
+    $ref: ./common.yaml#/schemas/PackingHeaderUpload
   DriversHeaderBinary:
-    $ref: ./packing.yaml#/schemas/PackingHeaderBinary
+    $ref: ./common.yaml#/schemas/PackingHeaderBinary
   DriversCreateForm:
     type: object
     additionalProperties: false

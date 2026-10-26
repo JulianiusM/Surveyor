@@ -16,13 +16,12 @@ export class HelpApi {
      * the shared transport owns cancellation and this query's recovery deadline. */
     async help(query: HelpQuery, scope: FrontendRequestScope, signal?: AbortSignal): Promise<Help> {
         const transport = this.transport;
-        async function readHelp(): Promise<Help> {
-            const response = await transport.client.GET('/help', {
+        function readHelp() {
+            return transport.client.GET('/help', {
                 params: {query, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getHelpPage', {...response, signal}, validateHelpPageData, scope, undefined, true).data;
         }
-        return transport.allowedRead(`help/${JSON.stringify(query)}`, scope, readHelp, signal);
+        return (await transport.readJson(`help/${JSON.stringify(query)}`, scope, readHelp, 'getHelpPage', validateHelpPageData, signal, undefined, true)).data;
     }
 }
 

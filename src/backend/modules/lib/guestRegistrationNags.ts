@@ -14,15 +14,12 @@
  * limitations under the License.
  */
 
-export type GuestRegistrationNags = {
-    accountRecommendationTitle?: string;
-    accountRecommendation?: string;
-    linkWarning: string;
-    emailRecommendation: string;
-    submitConfirmation?: string;
-};
+import type {GuestRegistrationNags} from '../../../types/GuestFlowTypes';
 
+
+/** Select the established Event-specific or general guest registration guidance without changing participation rules. */
 export function getGuestRegistrationNags(entityType: string): GuestRegistrationNags {
+    // Event warnings explain linked registration retention; other resources keep the existing personal-link guidance.
     if (entityType === 'event') {
         return {
             accountRecommendationTitle: 'Best for events',

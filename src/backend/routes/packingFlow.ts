@@ -1,6 +1,9 @@
+import {searchEntityEvents} from '../modules/event/linkage';
+
+import {readEventLinkSelection} from '../modules/event/linkage';
 import * as controller from '../controller/packingController';
 import {getEntityViewAdmission} from '../controller/entityAdminController';
-import {readEventLinkSelection} from '../controller/eventController';
+
 import * as service from '../modules/database/services/PackingService';
 import type {PackingList} from '../modules/database/entities/packing/PackingList';
 import {ApiProblem} from '../modules/api/problem';
@@ -23,7 +26,7 @@ export const packingFlow = createGuestFlow<'packing', PackingList>({
     readCreateContext: controller.readPackingCreateContext,
     requireCreation: controller.requirePackingCreation,
     selectEvent: readEventLinkSelection,
-    searchEvents: controller.searchPackingEvents,
+    searchEvents: searchEntityEvents,
     create: controller.createPackingList,
     creation: {imageOwnership: 'success', receipt: 'after-success', location: true},
     duplicate: controller.readPackingDuplicate,

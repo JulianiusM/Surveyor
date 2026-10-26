@@ -44,13 +44,12 @@ export class ActivityApi {
     /** Requirements are independently private; reads preserve cancellation and shared cooldowns. */
     async requirements(planId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['ActivityRequirements']> {
         const transport = this.transport;
-        async function readRequirements(): Promise<components['schemas']['ActivityRequirements']> {
-            const response = await transport.client.GET('/activity-plans/{planId}/requirements', {
+        function readRequirements() {
+            return transport.client.GET('/activity-plans/{planId}/requirements', {
                 params: {path: {planId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getActivityRequirements', {...response, signal}, validateActivityRequirements, scope).data;
         }
-        return transport.allowedRead(`activity/${planId}/requirements`, scope, readRequirements, signal);
+        return (await transport.readJson(`activity/${planId}/requirements`, scope, readRequirements, 'getActivityRequirements', validateActivityRequirements, signal)).data;
     }
 
     /** Submit the generated flat settings draft once through the existing business owner. */
@@ -76,13 +75,12 @@ export class ActivityApi {
     /** Observe a safe snapshot for authority/unknown-result recovery without maintaining or enqueuing. */
     async recommendations(planId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['ActivityRecommendations']> {
         const transport = this.transport;
-        async function readRecommendations(): Promise<components['schemas']['ActivityRecommendations']> {
-            const response = await transport.client.GET('/activity-plans/{planId}/recommendations', {
+        function readRecommendations() {
+            return transport.client.GET('/activity-plans/{planId}/recommendations', {
                 params: {path: {planId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getActivityRecommendations', {...response, signal}, validateActivityRecommendations, scope).data;
         }
-        return transport.allowedRead(`activity/${planId}/recommendations`, scope, readRecommendations, signal);
+        return (await transport.readJson(`activity/${planId}/recommendations`, scope, readRecommendations, 'getActivityRecommendations', validateActivityRecommendations, signal)).data;
     }
 
     /** Preview the submitted batch and retain the digest for its explicit warning acknowledgement. */
@@ -113,13 +111,13 @@ export class ActivityApi {
     /** Poll only a known domain job; transport cooldown/cancellation remain shared. */
     async recommendationJob(planId: string, jobId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['ActivityRecommendationJob']> {
         const transport = this.transport;
-        async function readJob(): Promise<components['schemas']['ActivityRecommendationJob']> {
-            const response = await transport.client.GET('/activity-plans/{planId}/recommendations/auto/{jobId}', {
+        function readJob() {
+            return transport.client.GET('/activity-plans/{planId}/recommendations/auto/{jobId}', {
                 params: {path: {planId, jobId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getActivityRecommendationJob', {...response, signal}, validateActivityRecommendationJobResult, scope).data.job;
         }
-        return transport.allowedRead(`activity/${planId}/recommendations/jobs/${jobId}`, scope, readJob, signal);
+        return (await transport.readJson(`activity/${planId}/recommendations/jobs/${jobId}`, scope, readJob,
+            'getActivityRecommendationJob', validateActivityRecommendationJobResult, signal)).data.job;
     }
 
     /** Slot commands adapt existing controller operations. The component supplies only
@@ -228,13 +226,12 @@ export class ActivityApi {
     async activity(planId: string, scope: FrontendRequestScope, signal?: AbortSignal,
                   previous?: FrontendRead<List>): Promise<FrontendRead<List>> {
         const transport = this.transport;
-        async function readActivity(): Promise<FrontendRead<List>> {
-            const response = await transport.client.GET('/activity-plans/{planId}', {
+        function readActivity() {
+            return transport.client.GET('/activity-plans/{planId}', {
                 params: {path: {planId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
             });
-            return transport.read('getActivityPlan', {...response, signal}, validateActivityView, scope, previous);
         }
-        return transport.allowedRead(`activity/${planId}`, scope, readActivity, signal);
+        return transport.readJson(`activity/${planId}`, scope, readActivity, 'getActivityPlan', validateActivityView, signal, previous);
     }
 
     /** Obtain permitted root fields and usable comparison evidence together.
@@ -243,13 +240,12 @@ export class ActivityApi {
     async metadata(planId: string, scope: FrontendRequestScope, signal?: AbortSignal,
                    previous?: FrontendRead<Metadata>): Promise<FrontendRead<Metadata>> {
         const transport = this.transport;
-        async function readMetadata(): Promise<FrontendRead<Metadata>> {
-            const response = await transport.client.GET('/activity-plans/{planId}/metadata', {
+        function readMetadata() {
+            return transport.client.GET('/activity-plans/{planId}/metadata', {
                 params: {path: {planId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
             });
-            return transport.read('getActivityMetadata', {...response, signal}, validateActivityMetadata, scope, previous);
         }
-        const result = await transport.allowedRead(`activity/${planId}/metadata`, scope, readMetadata, signal);
+        const result = await transport.readJson(`activity/${planId}/metadata`, scope, readMetadata, 'getActivityMetadata', validateActivityMetadata, signal, previous);
         this.transport.requireComparison(result.etag);
         return result;
     }
@@ -275,13 +271,12 @@ export class ActivityApi {
      * cooldown while its generated validator checks the permitted panels/tokens. */
     async settings(planId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['ActivitySettings']> {
         const transport = this.transport;
-        async function readSettings(): Promise<components['schemas']['ActivitySettings']> {
-            const response = await transport.client.GET('/activity-plans/{planId}/settings', {
+        function readSettings() {
+            return transport.client.GET('/activity-plans/{planId}/settings', {
                 params: {path: {planId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getActivitySettings', {...response, signal}, validateActivitySettings, scope).data;
         }
-        return transport.allowedRead(`activity/${planId}/settings`, scope, readSettings, signal);
+        return (await transport.readJson(`activity/${planId}/settings`, scope, readSettings, 'getActivitySettings', validateActivitySettings, signal)).data;
     }
 
     /** Creation admission is distinct from the public duplication projection. The caller supplies
@@ -289,13 +284,12 @@ export class ActivityApi {
     async createEntry(scope: FrontendRequestScope, signal?: AbortSignal,
                       returnTo?: string, eventId?: string): Promise<components['schemas']['ActivityCreateEntry']> {
         const transport = this.transport;
-        async function readCreationEntry(): Promise<components['schemas']['ActivityCreateEntry']> {
-            const response = await transport.client.GET('/activity-plans/create-entry', {
+        function readCreationEntry() {
+            return transport.client.GET('/activity-plans/create-entry', {
                 params: {query: {returnTo, eventId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getActivityCreateEntry', {...response, signal}, validateActivityCreateEntry, scope).data;
         }
-        return transport.allowedRead('activity/create-entry/' + (returnTo ?? '') + '/' + (eventId ?? ''), scope, readCreationEntry, signal);
+        return (await transport.readJson('activity/create-entry/' + (returnTo ?? '') + '/' + (eventId ?? ''), scope, readCreationEntry, 'getActivityCreateEntry', validateActivityCreateEntry, signal)).data;
     }
 
     /** Detail and explicit guest routes deliberately have different admission. Never
@@ -303,13 +297,12 @@ export class ActivityApi {
     async resourceEntry(planId: string, view: 'detail' | 'guest', scope: FrontendRequestScope,
                         signal?: AbortSignal): Promise<components['schemas']['ActivityResourceEntry']> {
         const transport = this.transport;
-        async function readResourceEntry(): Promise<components['schemas']['ActivityResourceEntry']> {
-            const response = await transport.client.GET('/activity-plans/{planId}/entry', {
+        function readResourceEntry() {
+            return transport.client.GET('/activity-plans/{planId}/entry', {
                 params: {path: {planId}, query: {view}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getActivityResourceEntry', {...response, signal}, validateActivityResourceEntry, scope).data;
         }
-        return transport.allowedRead(`activity/${planId}/entry/${view}`, scope, readResourceEntry, signal);
+        return (await transport.readJson(`activity/${planId}/entry/${view}`, scope, readResourceEntry, 'getActivityResourceEntry', validateActivityResourceEntry, signal)).data;
     }
 
     /** Read only the server's permitted duplication surface. Destination selection
@@ -318,13 +311,12 @@ export class ActivityApi {
     async duplicate(planId: string, scope: FrontendRequestScope, signal?: AbortSignal,
                     eventId?: string): Promise<components['schemas']['ActivityDuplicate']> {
         const transport = this.transport;
-        async function readDuplicate(): Promise<components['schemas']['ActivityDuplicate']> {
-            const response = await transport.client.GET('/activity-plans/{planId}/duplicate', {
+        function readDuplicate() {
+            return transport.client.GET('/activity-plans/{planId}/duplicate', {
                 params: {path: {planId}, query: {eventId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getActivityDuplicate', {...response, signal}, validateActivityDuplicate, scope).data;
         }
-        return transport.allowedRead(`activity/${planId}/duplicate/${eventId ?? ''}`, scope, readDuplicate, signal);
+        return (await transport.readJson(`activity/${planId}/duplicate/${eventId ?? ''}`, scope, readDuplicate, 'getActivityDuplicate', validateActivityDuplicate, signal)).data;
     }
 
     /** Submit the generated creation contract and optional image as one multipart command.
@@ -355,13 +347,12 @@ export class ActivityApi {
     async events(query: FrontendEventPickerQuery,
                   scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
-        async function readEventOptions(): Promise<components['schemas']['EventPickerOptions']> {
-            const response = await transport.client.GET('/activity-plans/events', {
+        function readEventOptions() {
+            return transport.client.GET('/activity-plans/events', {
                 params: {query, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('searchActivityEvents', {...response, signal}, validateEventPickerOptions, scope).data;
         }
-        return transport.allowedRead(`activity/events/${JSON.stringify(query)}`, scope, readEventOptions, signal);
+        return (await transport.readJson(`activity/events/${JSON.stringify(query)}`, scope, readEventOptions, 'searchActivityEvents', validateEventPickerOptions, signal)).data;
     }
 
     async linkEvent(planId: string, input: components['schemas']['PackingEventChange'], token: string, scope: FrontendRequestScope) {
@@ -381,13 +372,12 @@ export class ActivityApi {
      * transport; a displayed username never becomes the acting identity. */
     async profiles(planId: string, q: string, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
-        async function readProfileOptions(): Promise<components['schemas']['PackingProfileOptions']> {
-            const response = await transport.client.GET('/activity-plans/{planId}/profiles', {
+        function readProfileOptions() {
+            return transport.client.GET('/activity-plans/{planId}/profiles', {
                 params: {path: {planId}, query: {q}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('searchActivityProfiles', {...response, signal}, validatePackingProfileOptions, scope).data;
         }
-        return transport.allowedRead(`activity/${planId}/profiles/${q}`, scope, readProfileOptions, signal);
+        return (await transport.readJson(`activity/${planId}/profiles/${q}`, scope, readProfileOptions, 'searchActivityProfiles', validatePackingProfileOptions, signal)).data;
     }
 
     async addAdmin(planId: string, input: components['schemas']['PackingAdminInput'], token: string, scope: FrontendRequestScope) {
@@ -415,14 +405,13 @@ export class ActivityApi {
          * ordinary JSON/text decoder and the shared validated rejection policy.
          * Binary recovery therefore observes the same actor and Retry-After owner
          * as JSON reads instead of introducing a second error parser or deadline. */
-        async function readHeader(): Promise<Blob> {
-            const result = await transport.client.GET('/activity-plans/{planId}/header', {
+        function readHeader() {
+            return transport.client.GET('/activity-plans/{planId}/header', {
                 params: {path: {planId}, header: transport.headers(scope)}, signal, cache: 'no-store', parseAs: 'blob',
             });
-            return transport.headerImage(result, scope, signal);
         }
 
-        return transport.allowedRead(`activity/${planId}/header`, scope, readHeader, signal);
+        return transport.readHeaderImage(`activity/${planId}/header`, scope, readHeader, signal);
     }
 
     /** Replace the header using the file draft's reviewed comparison token.
@@ -473,13 +462,12 @@ export class ActivityApi {
      * separate identity command with its own confirmed context and destination. */
     async guestEntry(planId: string, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
-        async function readGuestEntry(): Promise<components['schemas']['GuestEntry']> {
-            const response = await transport.client.GET('/activity-plans/{planId}/guest', {
+        function readGuestEntry() {
+            return transport.client.GET('/activity-plans/{planId}/guest', {
                 params: {path: {planId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getActivityGuestEntry', {...response, signal}, validateGuestEntry, scope).data;
         }
-        return transport.allowedRead('activity/' + planId + '/guest', scope, readGuestEntry, signal);
+        return (await transport.readJson('activity/' + planId + '/guest', scope, readGuestEntry, 'getActivityGuestEntry', validateGuestEntry, signal)).data;
     }
 
     async registerGuest(planId: string, input: components['schemas']['GuestRegistrationInput'], scope: FrontendRequestScope) {

@@ -14,6 +14,14 @@
  * limitations under the License.
  */
 
+import type {ActivityPlan} from '../backend/modules/database/entities/activity/ActivityPlan';
+import type {ActivityPlanRequirement} from '../backend/modules/database/entities/activity/ActivityPlanRequirement';
+import type {ActivityPlanRequirementOverride} from '../backend/modules/database/entities/activity/ActivityPlanRequirementOverride';
+import type {ActivityPlanStayRequirement} from '../backend/modules/database/entities/activity/ActivityPlanStayRequirement';
+import type {ActivitySlot} from '../backend/modules/database/entities/activity/ActivitySlot';
+import type {ParticipantAttendance} from './ActivityRequirementTypes';
+
+
 export type SlotAssignmentRow = {
     assignmentId: number;
     itemId: string;
@@ -30,6 +38,26 @@ export type SlotAssignee = {
 };
 
 export type SlotAssignmentMap = Record<string, SlotAssignee[]>;
+
+/** The existing print-only slot projection; assigned count and attached roles remain required. */
+export type ActivityPrintSlot = ActivitySlot & {
+    assignedCount: number;
+    assignees: SlotAssignee[];
+    roles: {id: number; name: string}[];
+};
+
+/** One printed UTC day and its admitted schedule rows. */
+export interface ActivityPrintDay {
+    date: string;
+    dayIndex: number;
+    slots: ActivityPrintSlot[];
+}
+
+/** Monday-based print grouping without changing the original included-day range. */
+export interface ActivityPrintWeek {
+    start: string;
+    days: ActivityPrintDay[];
+}
 
 /** Optional completion is prepared while the existing creation transaction can still roll back. */
 export type ActivityCreationCompletion = (id: string) => void;
@@ -59,7 +87,7 @@ export interface ActivityRecommendationPersistenceContext extends ActivityRecomm
 export interface ActivityRecommendationOperationInput {
     itemId: string;
     profileId: string;
-    operation: import("../backend/modules/database/entities/activity/ActivityAssignmentRecommendation").RecommendationOperation;
+    operation: RecommendationOperation;
     sourceItemId?: string | null;
 }
 
@@ -68,8 +96,8 @@ export interface RecommendationInput {
     id?: string;
     itemId: string;
     profileId?: string | null;
-    status?: import("../backend/modules/database/entities/activity/ActivityAssignmentRecommendation").RecommendationStatus;
-    operation?: import("../backend/modules/database/entities/activity/ActivityAssignmentRecommendation").RecommendationOperation;
+    status?: RecommendationStatus;
+    operation?: RecommendationOperation;
     sourceItemId?: string | null;
     manual?: boolean;
     hidden?: boolean;
@@ -146,3 +174,169 @@ export interface RecommendationModalRequest {
     sourceItemId?: string;
     swapProfileId?: string;
 }
+
+
+interface AutoAssignmentPlan
+    extends Pick<
+        ActivityPlan,
+        |
+        "assignmentMode"
+        | "generalRequiredShifts"
+        | "roundingMode"
+        | "startDate"
+        | "endDate"
+        | "allowOverfillAfterFull"
+        | "allowArrivalDayEvening"
+        | "allowDepartureDayMorning"
+    > {
+    /** Include relationship identity even when two events happen to have identical participants. */
+    eventId?: string | null;
+    allowExternalAssignees?: boolean;
+}
+
+export interface AutoAssignmentSlot extends ActivitySlot {
+    assignedCount?: number;
+}
+
+export interface AutoAssignmentContext {
+    plan: AutoAssignmentPlan;
+    slots: AutoAssignmentSlot[];
+    participants: ParticipantAttendance[];
+    roleRequirements: ActivityPlanRequirement[];
+    overrides: ActivityPlanRequirementOverride[];
+    stayRequirements: ActivityPlanStayRequirement[];
+    existingAssignments: Record<string, AssignmentCandidate[]>;
+    existingRecommendations?: RecommendationInput[];
+    /** Availability only: these shifts belong to other plans and cannot satisfy local requirements. */
+    linkedPlans?: ActivityLinkedPlanContext;
+}
+
+/** Attendance eligibility and boundary evidence shared by assignment warnings and allocation. */
+
+export interface AttendanceCheck {
+    allowed: boolean;
+    boundary?: "arrival" | "departure" | "before" | "after";
+}
+
+export interface AttendancePolicy {
+    allowArrivalDayEvening?: boolean;
+    allowDepartureDayMorning?: boolean;
+}
+
+export interface FairAssignmentSlot {
+    id: string;
+    day: string;
+    startTime?: string | null;
+    endTime?: string | null;
+    pos?: number | null;
+    isArrivalEvening?: boolean | null;
+    isDepartureMorning?: boolean | null;
+    maxAssignees?: number | null;
+    assignedCount?: number;
+}
+
+export interface FairAssignmentContext {
+    plan: {
+        assignmentMode: "FREE" | "REQUIRED";
+        generalRequiredShifts?: number | null;
+        roundingMode?: "CEIL" | "ROUND" | "FLOOR" | null;
+        startDate: string;
+        endDate: string;
+        allowOverfillAfterFull?: boolean;
+        allowArrivalDayEvening?: boolean;
+        allowDepartureDayMorning?: boolean;
+    };
+    slots: FairAssignmentSlot[];
+    participants: ParticipantAttendance[];
+    roleRequirements: ActivityPlanRequirement[];
+    overrides: ActivityPlanRequirementOverride[];
+    stayRequirements: ActivityPlanStayRequirement[];
+    existingAssignments: Record<string, AssignmentCandidate[]>;
+    existingRecommendations?: RecommendationInput[];
+    linkedPlans?: ActivityLinkedPlanContext;
+}
+
+export type RecommendationJobStatus = "QUEUED" | "RUNNING" | "COMPLETE" | "FAILED" | "STALE";
+
+export interface RecommendationJobView {
+    id: string;
+    planId: string;
+    status: RecommendationJobStatus;
+    createdAt: string;
+    updatedAt: string;
+    recommendationCount?: number;
+    error?: string;
+}
+
+export interface RecommendationJobCoordinatorOptions {
+    loadContext: (planId: string) => Promise<AutoAssignmentContext>;
+    execute?: (context: AutoAssignmentContext) => Promise<RecommendationInput[]>;
+    persist: (planId: string, recommendations: RecommendationInput[], expected: ActivityRecommendationPersistenceContext) => Promise<void>;
+    maxQueueSize?: number;
+    maxCachedJobs?: number;
+    cacheTtlMs?: number;
+}
+
+/** Plain inputs for recommendation warnings, shared by controllers and allocation. */
+
+export interface RecommendationWarningOptions {
+    slots: ActivitySlot[];
+    recommendations: RecommendationInput[];
+    existingAssignments?: Record<string, AssignmentCandidate[]>;
+    linkedAssignments?: Record<string, AssignmentCandidate[]>;
+    participantAttendance?: Record<string, ParticipantAttendance>;
+    slotCapacities?: Record<string, number>;
+    allowOverfill?: boolean;
+    attendancePolicy?: AttendancePolicy;
+}
+
+export interface SlotTimeboxCandidate {
+    day: string;
+    startTime?: string | null;
+    endTime?: string | null;
+    pos?: number | null;
+}
+
+export interface SlotTimebox {
+    startMinutes: number | null;
+    endMinutes: number | null;
+}
+
+/** Supported stored requirement settings; business admission stays with its operation owner. */
+
+export type PlanRequirementSettings = Partial<Pick<
+    ActivityPlan,
+    |
+    "assignmentMode"
+    | "generalRequiredShifts"
+    | "roundingMode"
+    | "bindingDeadline"
+    | "allowOverfillAfterFull"
+    | "allowExternalAssignees"
+    | "allowArrivalDayEvening"
+    | "allowDepartureDayMorning"
+>>;
+
+export interface RequirementConfiguration {
+    plan: Pick<
+        ActivityPlan,
+        | "id"
+        | "assignmentMode"
+        | "generalRequiredShifts"
+        | "roundingMode"
+        | "startDate"
+        | "endDate"
+        | "bindingDeadline"
+        | "allowOverfillAfterFull"
+        | "allowExternalAssignees"
+        | "allowArrivalDayEvening"
+        | "allowDepartureDayMorning"
+    >;
+    roleRequirements: ActivityPlanRequirement[];
+    overrides: ActivityPlanRequirementOverride[];
+    stayRequirements: ActivityPlanStayRequirement[];
+}
+
+export type RecommendationStatus = "PENDING" | "APPROVED" | "APPLIED" | "REJECTED";
+
+export type RecommendationOperation = "ASSIGN" | "REASSIGN" | "UNASSIGN";

@@ -222,7 +222,7 @@ schemas:
     required: [changed]
     properties:
       changed:
-        "$ref": ./packing.yaml#/schemas/MutationResult/properties/changed
+        "$ref": ./common.yaml#/schemas/MutationResult/properties/changed
       emailDelivery:
         "$ref": '#/schemas/EmailDelivery'
   IdentityResult:

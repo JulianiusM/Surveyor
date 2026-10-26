@@ -128,12 +128,14 @@ describe('P8A organizer finance forms', () => {
     it('captures only native inline approval values before a summary-only gate without imposing HTML amount precision', async () => {
         const refresh = vi.fn(async () => {});
         const mounted = await mountFrontendEvent(FinanceHistory, async () => json({changed: true}), {
-            eventId, pool, invoices: [{...invoice, status: 'NEW'}], admin: true, refreshSaved: refresh,
+            eventId, pool, reviewComponent: FinanceInvoiceReview, invoices: [{...invoice, status: 'NEW'}], admin: true, refreshSaved: refresh,
         });
         cleanups.push(mounted.dispose);
         const row = mounted.wrapper.get('[data-finance-invoice="12"]');
         expect(row.get('td[data-label="Submitted details"]').text()).toContain('<Original evidence>');
         const fields = row.get('td[data-label="Organizer review"]');
+        expect(fields.get('textarea[id$="-inline-description"]').attributes('maxlength')).toBe('4000');
+        expect(fields.get('textarea[id$="-inline-reason"]').attributes('maxlength')).toBe('4000');
         const amount = fields.get<HTMLInputElement>('input[type="number"]');
         await amount.setValue('000.00123');
         await fields.get('textarea[id$="-inline-description"]').setValue('  Reviewed correction  ');
@@ -190,7 +192,7 @@ describe('P8A organizer finance forms', () => {
 
     it('uses the displayed German submitted amount for untouched approval and rejection summaries', async () => {
         const mounted = await mountFrontendEvent(FinanceHistory, async () => json({changed: true}), {
-            eventId, pool, invoices: [{...invoice, status: 'NEW'}], admin: true, refreshSaved: vi.fn(async () => {}),
+            eventId, pool, reviewComponent: FinanceInvoiceReview, invoices: [{...invoice, status: 'NEW'}], admin: true, refreshSaved: vi.fn(async () => {}),
         });
         cleanups.push(mounted.dispose);
         mounted.context.locale.value = 'de';
@@ -212,7 +214,7 @@ describe('P8A organizer finance forms', () => {
         const rows = Array.from({length: 27}, (_, index) => ({...invoice, id: String(index + 20), status: 'NEW' as const,
             createdAt: `2026-10-${String(index + 1).padStart(2, '0')}T10:00:00Z`}));
         const mounted = await mountFrontendEvent(FinanceHistory, async () => json({changed: true}), {
-            eventId, pool, invoices: rows, admin: true, refreshSaved: vi.fn(async () => {}),
+            eventId, pool, reviewComponent: FinanceInvoiceReview, invoices: rows, admin: true, refreshSaved: vi.fn(async () => {}),
         });
         cleanups.push(mounted.dispose);
         const original = mounted.wrapper.get('[data-finance-invoice="20"]');
@@ -246,7 +248,7 @@ describe('P8A organizer finance forms', () => {
     it('retains a pending row owner across a saved status transition and keeps its completed failed-read receipt without enabling replay', async () => {
         let finish!: (response: Response) => void;
         const mounted = await mountFrontendEvent(FinanceHistory, () => new Promise<Response>(resolve => {finish = resolve;}), {
-            eventId, pool, invoices: [{...invoice, status: 'NEW'}], admin: true,
+            eventId, pool, reviewComponent: FinanceInvoiceReview, invoices: [{...invoice, status: 'NEW'}], admin: true,
             refreshSaved: vi.fn(async () => {throw new Error('Saved read unavailable');}),
         });
         cleanups.push(mounted.dispose);
@@ -270,7 +272,7 @@ describe('P8A organizer finance forms', () => {
 
     it('releases externally retired unsent NEW fields without leaving an invisible dirty navigation blocker', async () => {
         const mounted = await mountFrontendEvent(FinanceHistory, async () => json({changed: true}), {
-            eventId, pool, invoices: [{...invoice, status: 'NEW'}], admin: true, refreshSaved: vi.fn(async () => {}),
+            eventId, pool, reviewComponent: FinanceInvoiceReview, invoices: [{...invoice, status: 'NEW'}], admin: true, refreshSaved: vi.fn(async () => {}),
         });
         cleanups.push(mounted.dispose);
         const row = mounted.wrapper.get('[data-finance-invoice="12"]');
@@ -290,7 +292,7 @@ describe('P8A organizer finance forms', () => {
     it('keeps a status-updated row locked after unknown delivery until explicit fresh inspection and acknowledgement', async () => {
         const refresh = vi.fn(async () => {});
         const mounted = await mountFrontendEvent(FinanceHistory, async () => {throw new TypeError('Response lost');}, {
-            eventId, pool, invoices: [{...invoice, status: 'NEW'}], admin: true, refreshSaved: refresh,
+            eventId, pool, reviewComponent: FinanceInvoiceReview, invoices: [{...invoice, status: 'NEW'}], admin: true, refreshSaved: refresh,
         });
         cleanups.push(mounted.dispose);
         const row = mounted.wrapper.get('[data-finance-invoice="12"]');
@@ -528,6 +530,7 @@ describe('P8A organizer finance forms', () => {
     it('rejects only after its explicit confirmation, preserves reason on a canceled close and keeps original evidence as escaped text', async () => {
         const confirm = vi.fn(() => false); vi.stubGlobal('confirm', confirm);
         const mounted = await mountForm(FinanceInvoiceReview, {invoice: {...invoice, status: 'NEW'}, action: 'decline'});
+        expect(mounted.dialog.get('textarea[name="rejectionReason"]').attributes('maxlength')).toBe('4000');
         await mounted.dialog.get('textarea[name="rejectionReason"]').setValue('Missing receipt');
         await button(mounted.dialog, 'Cancel').trigger('click');
         expect(mounted.wrapper.emitted('close')).toBeUndefined();

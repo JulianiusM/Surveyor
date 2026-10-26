@@ -1,3 +1,4 @@
+import {normalizeListMetadataPatch as normalizePackingMetadataPatch} from '../../src/backend/controller/entityAdminController';
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {describe, expect, it} from 'vitest';
 import {mkdtemp, rm, writeFile} from 'node:fs/promises';
@@ -8,7 +9,7 @@ import * as browser from '../../.generated/api/v1/browser.mjs';
 import type {components} from '../../src/types/api/v1';
 import {isRegistrationPasswordValid} from '../../src/common/lib/frontendIdentity';
 import type {Request, RequestHandler, Response} from 'express';
-import {normalizePackingMetadataPatch} from '../../src/backend/controller/packingController';
+
 import {decodeApiMultipartData, decodeApiMultipartImage, receiveApiUpload, sendStoredApiBinary, validateOperationRequest} from '../../src/backend/modules/api/transport';
 import {apiContract, operationContract} from '../../src/backend/modules/api/contracts';
 

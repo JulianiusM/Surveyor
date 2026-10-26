@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+import type {PlanRequirementSettings, RequirementConfiguration} from '../../../../types/ActivityTypes';
+
+
 import type {RequirementOverrideInput, RoleRequirementInput, StayRequirementInput} from "../../../../types/ActivityRequirementTypes";
 import type {EntityManager} from "typeorm";
 import {AppDataSource} from "../dataSource";
@@ -22,49 +25,14 @@ import {ActivityPlanRequirement} from "../entities/activity/ActivityPlanRequirem
 import {ActivityPlanRequirementOverride} from "../entities/activity/ActivityPlanRequirementOverride";
 import {ActivityPlanStayRequirement} from "../entities/activity/ActivityPlanStayRequirement";
 
-/**
- * Persistence layer for requirement settings. This service centralizes transactional updates
- * for plan-level defaults, role-based requirements, and participant overrides so controllers
- * and UI flows can keep the configuration consistent.
- */
-
-export type PlanRequirementSettings = Partial<Pick<
-    ActivityPlan,
-    |
-    "assignmentMode"
-    | "generalRequiredShifts"
-    | "roundingMode"
-    | "bindingDeadline"
-    | "allowOverfillAfterFull"
-    | "allowExternalAssignees"
-    | "allowArrivalDayEvening"
-    | "allowDepartureDayMorning"
->>;
-
-export interface RequirementConfiguration {
-    plan: Pick<
-        ActivityPlan,
-        | "id"
-        | "assignmentMode"
-        | "generalRequiredShifts"
-        | "roundingMode"
-        | "startDate"
-        | "endDate"
-        | "bindingDeadline"
-        | "allowOverfillAfterFull"
-        | "allowExternalAssignees"
-        | "allowArrivalDayEvening"
-        | "allowDepartureDayMorning"
-    >;
-    roleRequirements: ActivityPlanRequirement[];
-    overrides: ActivityPlanRequirementOverride[];
-    stayRequirements: ActivityPlanStayRequirement[];
-}
-
+/** Load the selected plan settings and their stored requirement collections.
+ * Reuse the caller's manager, preserve nullable absence and sort the copied stay
+ * rows by duration without interpreting their required-shift policy. */
 export async function getRequirementConfiguration(
     planId: string,
     manager: EntityManager = AppDataSource.manager,
 ): Promise<RequirementConfiguration | null> {
+    // Hydrate only the established settings projection and related requirement data.
     const planRepo = manager.getRepository(ActivityPlan);
     const plan = await planRepo.findOne({
         where: {id: planId},
@@ -88,6 +56,7 @@ export async function getRequirementConfiguration(
         },
     });
 
+    // Absence remains a nullable DBAL result; the controller chooses its outcome.
     if (!plan) return null;
 
     return {
@@ -98,13 +67,19 @@ export async function getRequirementConfiguration(
     };
 }
 
+/** Replace all stored role requirements in the existing transaction.
+ * An empty supplied collection clears the plan's rows; validation belongs to the
+ * controller and no additional locks or business defaults are introduced here. */
 export async function replaceRoleRequirements(planId: string, requirements: RoleRequirementInput[]): Promise<void> {
+    /** Delete and recreate only this plan's role requirement rows atomically. */
     await AppDataSource.transaction(async (manager) => {
+        // Clear the old set first, including the deliberate empty-set operation.
         const repo = manager.getRepository(ActivityPlanRequirement);
         await repo.delete({entity: {id: planId}});
 
         if (!requirements.length) return;
 
+        // Preserve the controller-supplied role IDs and required-shift values.
         const rows = requirements.map((req) =>
             repo.create({
                 entity: {id: planId},
@@ -116,13 +91,19 @@ export async function replaceRoleRequirements(planId: string, requirements: Role
     });
 }
 
+/** Replace the plan's stored participant/role override rows atomically.
+ * Preserve submitted row IDs and existing nullable role/profile mapping; caller
+ * validation and the separately scoped requirement workflow remain unchanged. */
 export async function replaceRequirementOverrides(planId: string, overrides: RequirementOverrideInput[]): Promise<void> {
+    /** Clear and recreate only the selected plan's override collection. */
     await AppDataSource.transaction(async (manager) => {
+        // Empty input intentionally commits the deletion without creating rows.
         const repo = manager.getRepository(ActivityPlanRequirementOverride);
         await repo.delete({entity: {id: planId}});
 
         if (!overrides.length) return;
 
+        // Materialize the same validated row identities and relationship values.
         const rows = overrides.map((override) =>
             repo.create({
                 id: override.id,

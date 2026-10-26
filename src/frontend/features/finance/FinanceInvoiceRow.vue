@@ -1,12 +1,13 @@
 <script setup lang="ts">
+import {fieldAttributes as acceptanceFields} from '../../../../.generated/api/v1/browser/validateFinanceAcceptanceInput.mjs';
+import {fieldAttributes as declineFields} from '../../../../.generated/api/v1/browser/validateFinanceDeclineInput.mjs';
 import {computed, ref} from 'vue';
 import type {components} from '../../../types/api/v1';
-import type {FinanceInvoiceRowProps} from '../../../types/FrontendFinanceReviewTypes';
+import type {FinanceInvoiceRowProps, FinanceInvoiceReviewSlot} from '../../../types/FrontendFinanceReviewTypes';
 import {useFrontend} from '../../app/context';
 import {financeDate, financeMoney, invoiceStatus, invoiceStatusClass} from './presentation';
 import {useFinanceInvoiceReview} from './invoiceReview';
 import {protectFinanceNumberFromScroll} from './numbers';
-import FinanceInvoiceReview from './FinanceInvoiceReview.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import FormField from '../../components/FormField.vue';
 
@@ -15,6 +16,7 @@ type Invoice = components['schemas']['FinanceInvoice'];
 // management caller creates the existing review owner; personal and inspection
 // rows receive their same read-only evidence without gaining command authority.
 const props = defineProps<FinanceInvoiceRowProps>();
+defineSlots<{review(props: FinanceInvoiceReviewSlot): unknown}>();
 const emit = defineEmits<{retract: [invoice: Invoice]; closeInvoice: [invoice: Invoice];
     review: [invoice: Invoice, action: 'approve' | 'decline' | 'revise' | 'reject' | 'close']}>();
 const {messages, locale} = useFrontend();
@@ -79,11 +81,11 @@ function beginNew(action: 'approve' | 'decline'): void {
                     :label="messages.t('finance.correctedAmount2')" :placeholder="messages.t('finance.keep', {fmtMoney: financeMoney(invoice.amount, locale)})"
                     :disabled="review.actionState.disabled.value || confirmationOpen" />
                 <FormField :id="`${review.id}-inline-description`" v-model="review.draft.description" :name="null" multiline :rows="2"
-                    class="mt-2" control-class="form-control-sm invoice-corrected-description" label-class="small mb-1" :max-length="4000"
+                    class="mt-2" control-class="form-control-sm invoice-corrected-description" label-class="small mb-1" :max-length="acceptanceFields.correctedDescription.maxLength"
                     :label="messages.t('finance.correctedDescription2')" :placeholder="messages.t('finance.leaveBlankToKeepSubmittedDescription')"
                     :disabled="review.actionState.disabled.value || confirmationOpen" />
                 <FormField :id="`${review.id}-inline-reason`" v-model="review.draft.reason" :name="null" multiline :rows="2"
-                    class="mt-2" control-class="form-control-sm invoice-rejection-reason" label-class="small mb-1" :max-length="4000"
+                    class="mt-2" control-class="form-control-sm invoice-rejection-reason" label-class="small mb-1" :max-length="declineFields.rejectionReason.maxLength"
                     :label="messages.t('finance.rejectionReason')" :placeholder="messages.t('finance.requiredWhenRejecting')"
                     :disabled="review.actionState.disabled.value || confirmationOpen" />
             </div>
@@ -156,7 +158,5 @@ function beginNew(action: 'approve' | 'decline'): void {
     </tr>
     <!-- This same owner survives saved status changes and hidden filter/page
          rows. Source retirement unmounts it and releases the private fields. -->
-    <FinanceInvoiceReview v-if="review && pool && eventId && refreshSaved" :owner="review"
-        :event-id="eventId" :invoice="invoice" :current-invoice="invoice" :pool="pool"
-        action="approve" inline :open="confirmationOpen" :active="!disabled" :refresh="refreshSaved" />
+    <slot v-if="review && pool && eventId && refreshSaved" name="review" :owner="review" :open="confirmationOpen" />
 </template>

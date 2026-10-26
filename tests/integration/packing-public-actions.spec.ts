@@ -1,3 +1,5 @@
+import {insertListAssignment} from '../../src/backend/modules/database/services/ListService';
+import {normalizeListMetadataPatch} from '../../src/backend/controller/entityAdminController';
 import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 import fs from 'node:fs';
 import {randomUUID} from 'node:crypto';
@@ -57,7 +59,7 @@ describe('native-granted public Packing actions through versioned operations', (
     it.each(['stored', 'stateless'] as const)('denies editing and administration with normal defaults for %s public requests', async kind => {
         const {id, items} = await fixture();
         const actor = publicActor(kind);
-        await packingService.assignPackingItem(items[0].id, target.id);
+        await insertListAssignment('packing', items[0].id, target.id);
         const assignment = await AppDataSource.getRepository(PackingAssignment).findOneByOrFail({item: {id: items[0].id}});
 
         await expect(packing.readPackingItemEditBaseline(id, items[0].id, actor)).rejects.toMatchObject({status: 403});
@@ -168,8 +170,8 @@ describe('native-granted public Packing actions through versioned operations', (
         const {id, items} = await fixture(true);
         const actor = publicActor();
         await adminService.updatePerms('packing', id, {public: PERM.ITEM_EDIT});
-        await packingService.assignPackingItem(items[0].id, owner.id);
-        await packingService.assignPackingItem(items[0].id, target.id);
+        await insertListAssignment('packing', items[0].id, owner.id);
+        await insertListAssignment('packing', items[0].id, target.id);
         const baseline = await packing.readPackingItemEditBaseline(id, items[0].id, actor);
         const order = await packing.readPackingItemOrderBaseline(id, actor);
         expect(order).toEqual({items: items.map(item => ({id: item.id, position: item.pos})), orderToken: expect.any(String)});
@@ -189,7 +191,7 @@ describe('native-granted public Packing actions through versioned operations', (
         const {id, items} = await fixture();
         const foreign = await fixture();
         const actor = publicActor();
-        await packingService.assignPackingItem(items[0].id, target.id);
+        await insertListAssignment('packing', items[0].id, target.id);
         const assignment = await AppDataSource.getRepository(PackingAssignment).findOneByOrFail({item: {id: items[0].id}});
         await adminService.updatePerms('packing', id, {public: PERM.MANAGE_ASSIGNMENTS});
         await expect(packing.deletePackingAssignment(foreign.id, String(assignment.id), actor)).rejects.toMatchObject({status: 404});
@@ -197,7 +199,7 @@ describe('native-granted public Packing actions through versioned operations', (
         await packing.deletePackingAssignment(id, String(assignment.id), actor);
         expect(await packingService.getPackingAssignmentById(assignment.id)).toBeNull();
         await adminService.updatePerms('packing', id, {public: PERM.ITEM_DELETE});
-        await packingService.assignPackingItem(items[0].id, target.id);
+        await insertListAssignment('packing', items[0].id, target.id);
         await packing.deletePackingItem(id, items[0].id, actor);
         expect(await packingService.getPackingItemById(items[0].id)).toBeNull();
         expect(await AppDataSource.getRepository(PackingAssignment).countBy({item: {id: items[0].id}})).toBe(0);
@@ -297,7 +299,7 @@ describe('native-granted public Packing actions through versioned operations', (
         const updated = await packing.patchPackingDescription(id, {description: 'Reviewed public description'}, baseline.editToken, actor);
         expect(updated.description).toBe('Reviewed public description');
         await expect(packing.patchPackingDescription(id, {description: 'Stale'}, baseline.editToken, actor)).rejects.toMatchObject({status: 412});
-        const normalized = packing.normalizePackingMetadataPatch({description: ''}) as {description: null};
+        const normalized = normalizeListMetadataPatch({description: ''}) as {description: null};
         await packing.patchPackingDescription(id, normalized, updated.editToken, actor);
         expect(await packingService.getPackingListById(id)).toMatchObject({title: 'Private Packing title', description: null, eventId, archivedAt: null});
         await adminService.updatePerms('packing', id, {public: PERM.EDIT_META});

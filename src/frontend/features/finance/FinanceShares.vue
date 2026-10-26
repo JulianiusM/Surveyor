@@ -7,6 +7,7 @@ import ActionButton from '../../components/ActionButton.vue';
 import FormField from '../../components/FormField.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import FinanceLedgerFooter from './FinanceLedgerFooter.vue';
+import {useFinancePagination} from './pagination';
 
 type Share = components['schemas']['FinanceShare'];
 // Organizer payer rows and personal pool rows share saved signed balances,
@@ -21,7 +22,6 @@ const search = ref('');
 const status = ref('');
 const sort = ref('name');
 const size = ref(25);
-const page = ref(0);
 const refreshNeeded = ref(false);
 const refreshNotice = ref(0);
 const poolDescriptions = computed(() => new Map((props.pools ?? []).map(pool => [pool.id, pool.description ?? ''])));
@@ -33,13 +33,11 @@ const filtered = computed(() => selectedIds.value.flatMap(id => {
     const share = currentShares.value.get(id);
     return share ? [share] : [];
 }));
-const pages = computed(() => Math.max(1, Math.ceil(filtered.value.length / size.value)));
-const visible = computed(() => filtered.value.slice(page.value * size.value, (page.value + 1) * size.value));
+const {page, pages, visible} = useFinancePagination(() => filtered.value, size);
 watch([search, status, sort, size, locale], resetDisplay);
 watch(() => props.refreshVersion, applyDisplay);
 watch(() => props.shares.map(share => share.id).join(','), resetDisplay);
 watch(() => props.shares.map(share => `${share.id}:${share.status}`).join(','), markChangedFilter);
-watch(pages, value => {page.value = Math.min(page.value, value - 1);});
 
 /** Apply current filters only for explicit controls or a replacement saved share
  * set. A confirmed settlement updates live text without removing its action row. */

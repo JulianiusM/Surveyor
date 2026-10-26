@@ -18,7 +18,7 @@ import {EntityManager, In} from "typeorm";
 import type {RecommendationInput} from "../../../../types/ActivityTypes";
 import {AppDataSource} from "../dataSource";
 import {ActivityAssignmentRecommendation} from "../entities/activity/ActivityAssignmentRecommendation";
-export type {RecommendationInput} from "../../../../types/ActivityTypes";
+
 
 /** DBAL-only recommendation reads/writes. Reconciliation and validity decisions belong to the controller. */
 export async function getRecommendations(planId: string, manager: EntityManager = AppDataSource.manager) {

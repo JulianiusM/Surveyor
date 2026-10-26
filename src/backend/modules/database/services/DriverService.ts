@@ -16,6 +16,7 @@
 
 // src/backend/modules/database/driversService.ts
 import {DeepPartial, EntityNotFoundError, type EntityManager} from "typeorm";
+import {getLockedListAssignment} from './ListService';
 import type {BasicEntityPropertyPatch} from '../../../../types/EntityPropertyTypes';
 import type {DriversItemAssignee, EnrichedDriversItem} from "../../../../types/DriversTypes";
 import {generateUniqueId} from '../../lib/util';
@@ -23,7 +24,7 @@ import {AppDataSource} from '../dataSource';
 import {DriversAssignment} from '../entities/drivers/DriversAssignment';
 import {DriversItem} from '../entities/drivers/DriversItem';
 import {DriversList} from '../entities/drivers/DriversList';
-import {Event} from '../entities/event/Event';
+
 import * as entityAdminService from "./EntityAdminService";
 
 /** Persist a controller-approved root through the supplied manager. Direct
@@ -212,9 +213,13 @@ export async function getDriversItemById(itemId: string): Promise<EnrichedDriver
     };
 }
 
+/** Read passenger-assignment counts per ride without loading profile rows.
+ * The projection preserves raw COUNT conversion and omits rides with no rows;
+ * feature controllers retain capacity and driver/passenger interpretation. */
 export async function getDriversAssignmentCounts(
     listId: string
 ): Promise<Record<string, number>> {
+    // Group only this list's stored assignment rows by their owning item.
     const rows = await AppDataSource.getRepository(DriversAssignment)
         .createQueryBuilder("da")
         .select("da.item_id", "itemId")
@@ -223,6 +228,7 @@ export async function getDriversAssignmentCounts(
         .groupBy("da.item_id")
         .getRawMany<{ itemId: string; cnt: string }>();
 
+    // MariaDB returns COUNT as text; preserve the established numeric projection.
     return Object.fromEntries(rows.map(r => [r.itemId, Number(r.cnt)]));
 }
 
@@ -244,18 +250,12 @@ export async function withDriversAssignmentLock<T>(
     async function readLocked(manager: EntityManager): Promise<T> {
         // Both adapters read capacity and personal membership under the same
         // existing item lock before their shared controller decision runs.
-        const {item, existing, count} = await getLockedDriversAssignment(manager, itemId, profileId);
+        const {item, existing, count} = await getLockedListAssignment('drivers', manager, itemId, profileId);
         return action(manager, item, existing, count);
     }
     return AppDataSource.transaction('READ COMMITTED', readLocked);
 }
 
-/** Insert a controller-approved assignment. TypeORM reports missing foreign records as DB errors. */
-export async function assignDriversItem(itemId: string, profileId: string, manager: EntityManager = AppDataSource.manager): Promise<void> {
-    const item = await manager.getRepository(DriversItem).findOneByOrFail({id: itemId});
-    const repo = manager.getRepository(DriversAssignment);
-    await repo.save(repo.create({item: {id: itemId}, profile: {id: profileId}, entity: {id: item.entityId}}));
-}
 
 /** Delete all historical memberships for this profile/ride. Direct callers ignore
  * affected-row evidence; the versioned receipt uses it inside its locked snapshot. */
@@ -316,18 +316,6 @@ export async function deleteDriversAssignment(assignId: number, manager: EntityM
     await manager.getRepository(DriversAssignment).delete({id: assignId});
 }
 
-/**
- * Serialize root property writes with relinking by locking the same root row. Transaction and
- * repository details stay in the DBAL; the controller validates existence and the parent snapshot
- * before calling updateDriversListProperties with this transaction's manager.
- */
-export async function withDriversListLock<T>(id: string, action: (manager: EntityManager, current: DriversList | null) => Promise<T>): Promise<T> {
-    async function readLocked(manager: EntityManager): Promise<T> {
-        const current = await manager.getRepository(DriversList).findOne({where: {id}, lock: {mode: 'pessimistic_write'}});
-        return action(manager, current);
-    }
-    return AppDataSource.transaction('READ COMMITTED', readLocked);
-}
 
 /** Persist only the normalized fields supplied by the controller in its existing transaction. */
 export async function updateDriversListProperties(id: string, patch: BasicEntityPropertyPatch, manager: EntityManager): Promise<void> {
@@ -376,28 +364,4 @@ export async function getDriversSnapshotRows(manager: EntityManager, listId: str
         where: {entity: {id: listId}}, relations: {profile: true}, order: {id: 'ASC'},
     });
     return {items, assignments};
-}
-
-/** Return assignment evidence under the existing exclusive ride-row lock. The
- * controller applies capacity/identity policy; a public remover has no self row. */
-export async function getLockedDriversAssignment(manager: EntityManager, itemId: string, profileId?: string) {
-    // Lock before reading aggregate/personal evidence so concurrent takes cannot
-    // independently consume the same final passenger place.
-    const item = await manager.getRepository(DriversItem).findOne({where: {id: itemId}, lock: {mode: 'pessimistic_write'}});
-    const repository = manager.getRepository(DriversAssignment);
-    const existing = profileId ? await repository.findOneBy({item: {id: itemId}, profile: {id: profileId}}) : null;
-    const count = await repository.countBy({item: {id: itemId}});
-    return {item, existing, count};
-}
-
-/** Hold a selected parent while the new adapter's root/default writes and receipt
- * are prepared. Standalone creation retains its call order. */
-export async function withDriversCreationTransaction<T>(eventId: string | null, action: (manager: EntityManager, event: Event | null) => Promise<T>): Promise<T> {
-    async function createLocked(manager: EntityManager): Promise<T> {
-        // Parent-before-root ordering matches the shared relationship operation;
-        // nullable evidence leaves absence/admission decisions in the controller.
-        const event = eventId ? await manager.getRepository(Event).findOne({where: {id: eventId}, lock: {mode: 'pessimistic_write'}}) : null;
-        return action(manager, event);
-    }
-    return AppDataSource.transaction('READ COMMITTED', createLocked);
 }

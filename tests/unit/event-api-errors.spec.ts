@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
-import {classifyApiError, validatedProblemBody} from '../../src/backend/modules/api/problem';
-import {APIError} from '../../src/backend/modules/lib/errors';
+import {classifyApiError, declaredApiProblem, validatedProblemBody} from '../../src/backend/modules/api/problem';
+import {APIError, ExpectedError} from '../../src/backend/modules/lib/errors';
 
 describe('Event business rejection transport', () => {
     it.each([
@@ -20,10 +20,20 @@ describe('Event business rejection transport', () => {
         expect(JSON.stringify(body)).not.toContain('private@example.test');
         expect(native.message).toBe('Native private diagnostic');
         expect(native.status).toBe(status);
+
+        // Historical classifier compatibility keeps the declared Event status,
+        // even when an internal caller annotates a different trusted status.
+        // Strict direct projections must retain their narrower old contract.
+        const mismatched = new APIError('Private mismatch', {}, 418, {cause});
+        expect(declaredApiProblem(mismatched)).toBeNull();
+        expect(classifyApiError(mismatched)).toMatchObject({code: cause, status});
+        expect(classifyApiError(new ExpectedError('Private other class', 'error', 418, {}, {cause})).code)
+            .toBe('INTERNAL_ERROR');
     });
 
     it('never interprets matching prose or external cause-shaped objects as Event policy', () => {
         expect(classifyApiError(new APIError('Event is full', {}, 403)).code).toBe('FORBIDDEN');
         expect(classifyApiError({cause: 'EVENT_FULL', status: 403}).code).toBe('INTERNAL_ERROR');
+        expect(classifyApiError(new APIError('Other domain', {}, 418, {cause: 'ACCOUNT_INACTIVE'})).code).toBe('INTERNAL_ERROR');
     });
 });

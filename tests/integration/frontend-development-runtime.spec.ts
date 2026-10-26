@@ -136,6 +136,14 @@ describe('frontend public asset delivery', () => {
             await fs.mkdir(path.join(directory, 'src/backend'), {recursive: true});
             await fs.writeFile(path.join(directory, 'src/backend/private.ts'), 'export const secret = "private fixture";');
             const input = path.join(directory, 'src/frontend/entry.ts');
+            // The new shared media owner is explicitly public; importing it
+            // must not require broad publication of the common source tree.
+            await fs.mkdir(path.join(directory, 'src/common/lib'), {recursive: true});
+            await fs.copyFile('src/common/lib/fileMedia.ts', path.join(directory, 'src/common/lib/fileMedia.ts'));
+            await fs.writeFile(input, 'export {imageFileAccept} from "../common/lib/fileMedia.ts";');
+            await expect(build({configFile: false, root: directory, logLevel: 'silent',
+                plugins: [frontendBoundary(directory)], build: {write: false, rollupOptions: {input}},
+            })).resolves.toBeDefined();
             await fs.writeFile(input, 'export {secret} from "../backend/private.ts";');
             await expect(build({configFile: false, root: directory, logLevel: 'silent',
                 plugins: [frontendBoundary(directory)], build: {write: false, rollupOptions: {input}},

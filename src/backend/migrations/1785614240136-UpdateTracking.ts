@@ -20,7 +20,10 @@ import {addColumnIfNotExists, dropColumnIfExists} from "../modules/database/util
 export class UpdateTracking1785614240136 implements MigrationInterface {
     name = 'UpdateTracking1785614240136'
 
+    /** Add missing tracking columns and align existing timestamps to microseconds. */
     public async up(queryRunner: QueryRunner): Promise<void> {
+        // Install previously absent columns first, then apply the explicit historic
+        // precision/default changes in their recorded DDL order.
         const columnsToAdd: Array<{ table: string; column: string; params: string }> = [
             {
                 table: 'event_registration_dietary',
@@ -192,7 +195,10 @@ export class UpdateTracking1785614240136 implements MigrationInterface {
             CHANGE \`updated_at\` \`updated_at\` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)`);
     }
 
+    /** Restore the previous timestamp definitions and remove newly added columns. */
     public async down(queryRunner: QueryRunner): Promise<void> {
+        // Restore each table's original nullability and defaults before removing
+        // the tracking columns that did not exist before this migration.
         await queryRunner.query(`ALTER TABLE \`surveys\`
             CHANGE \`updated_at\` \`updated_at\` timestamp(0) NOT NULL DEFAULT CURRENT_TIMESTAMP()`);
         await queryRunner.query(`ALTER TABLE \`surveys\`

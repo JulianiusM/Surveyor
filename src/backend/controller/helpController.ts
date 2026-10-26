@@ -150,7 +150,9 @@ function stripDocumentationMetadata(markdown: string): string {
     return markdown.replace(DOCUMENTATION_METADATA_RE, '');
 }
 
+/** Decode the supported URI character references before checking controls/schemes. */
 function decodeUriCharacterReferences(value: string): string {
+    // Numeric and named encodings must not hide a forbidden scheme or separator.
     return value
         .replace(/&#x([0-9a-f]+);?/giu, (_match, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
         .replace(/&#([0-9]+);?/gu, (_match, code: string) => String.fromCodePoint(Number.parseInt(code, 10)))
@@ -160,7 +162,9 @@ function decodeUriCharacterReferences(value: string): string {
         .replace(/&amp;/giu, '&');
 }
 
+/** Reject unsafe authored Help destinations under DEC-004's trusted-content contract. */
 function assertSafeHelpUri(href: string, sourceName: string): void {
+    // Empty links retain Markdown behavior; inspect decoded nonempty destinations.
     const trimmed = href.trim();
     if (!trimmed) {
         return;
@@ -182,7 +186,9 @@ function assertSafeHelpUri(href: string, sourceName: string): void {
     }
 }
 
+/** Separate the earliest query/fragment suffix while retaining its original spelling. */
 function splitUriSuffix(href: string): { base: string; suffix: string } {
+    // Filesystem lookup receives only the base; route rewriting keeps the whole suffix.
     const queryIndex = href.indexOf('?');
     const fragmentIndex = href.indexOf('#');
     const indexes = [queryIndex, fragmentIndex].filter(index => index >= 0);
@@ -247,7 +253,9 @@ function managedHelpDocName(href: string, locale = 'en'): string | null {
     return resolveDocSource(normalized, locale) ? normalized : null;
 }
 
+/** Visit each object/token once across Marked's nested token representation. */
 function visitTokenTree(value: unknown, visitor: (token: Record<string, any>) => void, seen = new WeakSet<object>()): void {
+    // Ignore primitive leaves and already-seen objects before descending into children.
     if (!value || typeof value !== 'object') {
         return;
     }
@@ -381,7 +389,9 @@ function rewriteHelpAssetHref(href: string, locale = 'en'): string {
     return localizedHelpUrl(`${destination}`, source?.locale ?? locale);
 }
 
+/** Derive heading/search text from nested inline tokens without interpreting HTML. */
 function tokenPlainText(token: any): string {
+    // Nested tokens take precedence; a simple text leaf retains its authored content.
     if (Array.isArray(token?.tokens)) {
         return token.tokens.map((child: any) => tokenPlainText(child)).join('');
     }
@@ -402,7 +412,9 @@ function slugifyHeading(title: string): string {
     return slug || 'section';
 }
 
+/** Build heading order and stable duplicate-aware IDs from this selected article. */
 function extractHeadings(markdown: string): HeadingInfo[] {
+    // Count slugs per article so repeated headings acquire deterministic suffixes.
     const tokens = marked.lexer(markdown, {gfm: true});
     const counts = new Map<string, number>();
     const headings: HeadingInfo[] = [];
@@ -460,9 +472,12 @@ function applyAuthoredHeadingAnchors(markdown: string, headings: HeadingInfo[], 
     }
 }
 
+/** Attach the previously selected IDs only to the corresponding rendered headings. */
 function addHeadingIds(html: string, headings: HeadingInfo[]): string {
+    // Keep the authored heading sequence; unexpected renderer levels retain their HTML.
     let headingIndex = 0;
     return html.replace(/<h([1-6])>([\s\S]*?)<\/h\1>/gu, (match, level: string, body: string) => {
+        // Advance once per rendered heading, even if its expected level is absent.
         const heading = headings[headingIndex];
         headingIndex += 1;
         if (!heading || heading.level !== Number(level)) {

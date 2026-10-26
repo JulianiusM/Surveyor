@@ -75,7 +75,9 @@ export const DEFAULT_PERM = (() => {
     } as const satisfies Record<string, number>;
 })();
 
+/** Supply creation defaults; Event additionally grants its participant roster bit. */
 export function getInitialPerms(entityType: CombEntityType): PermData {
+    // Preserve the Event exception without inferring that its children inherit it.
     if (entityType == "event") {
         return {public: DEFAULT_PERM.DEFAULT_ENTITY, participant: PERM.ACCESS_PARTICIPANTS}
     }
@@ -112,7 +114,9 @@ export function getPresets(): PermPreset[] {
     }));
 }
 
+/** Combine recognized named grants; absent/invalid key collections contribute no bits. */
 export function toMask(keys: string[] | undefined, perms: Record<string, number> = PERM) {
+    // Unknown keys are zero, so this collector never manufactures an authority bit.
     if (!keys || !Array.isArray(keys)) return 0;
     return keys.reduce((m, k) => m | (perms[k] ?? 0), 0);
 }

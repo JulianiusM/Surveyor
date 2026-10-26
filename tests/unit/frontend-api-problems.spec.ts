@@ -1,3 +1,4 @@
+import {normalizeListMetadataPatch as normalizePackingMetadataPatch} from '../../src/backend/controller/entityAdminController';
 import {describe, expect, it} from 'vitest';
 import type {NextFunction, Request, Response} from 'express';
 import {ApiProblem, handleApiProblem} from '../../src/backend/modules/api/problem';
@@ -7,7 +8,7 @@ import {createTranslator} from '../../src/common/localization/translator';
 import {ExpectedError, ValidationError} from '../../src/backend/modules/lib/errors';
 import {frontendIdentityProblemKey} from '../../src/common/lib/frontendIdentity';
 import {loginUser, registerUser, resetPassword} from '../../src/backend/controller/userController';
-import {normalizePackingMetadataPatch} from '../../src/backend/controller/packingController';
+
 import {validateApiInput} from '../../src/backend/modules/api/transport';
 
 /** Only request data used by the pure negotiation/error boundary is present; no application or database starts. */

@@ -16,13 +16,14 @@
 
 // TypeORM-based implementation of the packing list module
 import {type EntityManager} from "typeorm";
+import {getLockedListAssignment} from './ListService';
 import type {BasicEntityPropertyPatch} from '../../../../types/EntityPropertyTypes';
 import {generateUniqueId} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {PackingAssignment} from '../entities/packing/PackingAssignment';
 import {PackingItem} from '../entities/packing/PackingItem';
 import {PackingList} from '../entities/packing/PackingList';
-import {Event} from '../entities/event/Event';
+
 import * as entityAdminService from "./EntityAdminService";
 
 // Packing Lists
@@ -243,9 +244,14 @@ export async function getPackingItems(listId: string): Promise<(PackingItem & { 
     });
 }
 
+/** Count stored memberships per item within the selected packing list.
+ * Items without assignment rows remain absent; feature policy decides how those
+ * counts interact with capacity and Everyone rows. */
 export async function getPackingAssignmentCounts(listId: string) {
+    // Read the same list-scoped rows before reducing their item identifiers.
     const repo = AppDataSource.getRepository(PackingAssignment);
     const assignments = await repo.findBy({entity: {id: listId}});
+    // Accumulate memberships without loading profiles or changing assignment data.
     return assignments.reduce((map: Record<string, number>, a) => {
         map[a.itemId] = (map[a.itemId] || 0) + 1;
         return map;
@@ -285,18 +291,12 @@ export async function withPackingAssignmentLock<T>(
         });
         if (!root) return action(manager, null, null, 0);
 
-        const {item, existing, count} = await getLockedPackingAssignment(manager, itemId, profileId);
+        const {item, existing, count} = await getLockedListAssignment('packing', manager, itemId, profileId);
         return action(manager, item, existing, count);
     }
     return AppDataSource.transaction('READ COMMITTED', readLocked);
 }
 
-/** Insert a controller-approved assignment. TypeORM reports missing foreign records as DB errors. */
-export async function assignPackingItem(itemId: string, profileId: string, manager: EntityManager = AppDataSource.manager): Promise<void> {
-    const item = await manager.getRepository(PackingItem).findOneByOrFail({id: itemId});
-    const repo = manager.getRepository(PackingAssignment);
-    await repo.save(repo.create({item: {id: itemId}, profile: {id: profileId}, entity: {id: item.entityId}}));
-}
 
 /** Remove all stored memberships for this item/profile and return the affected
  * count. Direct removal stays direct; locked v1 callers reuse their own manager. */
@@ -305,7 +305,11 @@ export async function unassignPackingItem(itemId: string, profileId: string, man
     return result.affected ?? 0;
 }
 
+/** Project the selected profile's stored membership item identifiers.
+ * Both list and profile predicates remain query constraints; no participation
+ * or assignment permission is inferred by this persistence read. */
 export async function getPackingAssignments(listId: string, profileId: string) {
+    // Restrict both ownership dimensions before projecting the matching IDs.
     const rows = await AppDataSource.getRepository(PackingAssignment).findBy({
         entity: {id: listId},
         profile: {id: profileId},
@@ -313,7 +317,11 @@ export async function getPackingAssignments(listId: string, profileId: string) {
     return rows.map(r => r.itemId);
 }
 
+/** Group stored assignment/profile display data by packing item.
+ * Preserve assignment IDs, profile IDs and the existing absent-name fallback;
+ * the caller owns admission and decides which groups may be disclosed. */
 export async function getPackingItemAssignees(listId: string) {
+    // Hydrate profiles only for assignments belonging to this selected list.
     const rows = await AppDataSource.getRepository(PackingAssignment).find({
         where: {entity: {id: listId}},
         relations: {
@@ -321,6 +329,7 @@ export async function getPackingItemAssignees(listId: string) {
         }
     });
     const map: Record<string, { id: number, profileId: string, name: string }[]> = {};
+    // Group the unchanged row projection without modifying entity membership.
     for (const r of rows) {
         const name = r.profile.name || '—';
         if (!map[r.itemId]) map[r.itemId] = [];
@@ -355,18 +364,6 @@ export async function togglePackingItemRequiredByAll(itemId: string, flag: boole
 }
 
 
-/**
- * Serialize root property writes with relinking by locking the same root row. Transaction and
- * repository details stay in the DBAL; the controller validates existence and the parent snapshot
- * before calling updatePackingListProperties with this transaction's manager.
- */
-export async function withPackingListLock<T>(id: string, action: (manager: EntityManager, current: PackingList | null) => Promise<T>): Promise<T> {
-    async function readLocked(manager: EntityManager): Promise<T> {
-        const current = await manager.getRepository(PackingList).findOne({where: {id}, lock: {mode: 'pessimistic_write'}});
-        return action(manager, current);
-    }
-    return AppDataSource.transaction('READ COMMITTED', readLocked);
-}
 
 /** Persist only the normalized fields supplied by the controller in its existing transaction. */
 export async function updatePackingListProperties(id: string, patch: BasicEntityPropertyPatch, manager: EntityManager): Promise<void> {
@@ -407,30 +404,4 @@ export async function getPackingSnapshotRows(manager: EntityManager, listId: str
         where: {entity: {id: listId}}, relations: {profile: true}, order: {id: 'ASC'},
     });
     return {items, assignments};
-}
-
-/** Acquire the item after the owning root/parent locks, then return assignment evidence to the controller.
- * A public method actor has no personal membership; skip only that lookup, retaining
- * the same exclusive item lock and aggregate count for controller-owned decisions. */
-export async function getLockedPackingAssignment(manager: EntityManager, itemId: string, profileId?: string) {
-    const item = await manager.getRepository(PackingItem).findOne({where: {id: itemId}, lock: {mode: 'pessimistic_write'}});
-
-    // A missing profile omits only personal evidence; every consumer still gets
-    // the locked item and aggregate stored count for its controller-owned decision.
-    const repository = manager.getRepository(PackingAssignment);
-    const existing = profileId ? await repository.findOneBy({item: {id: itemId}, profile: {id: profileId}}) : null;
-    const count = await repository.countBy({item: {id: itemId}});
-
-    return {item, existing, count};
-}
-
-/** Lock a selected parent before creation and retain it through all supplied row
- * writes. Nullable evidence lets the controller distinguish no parent from a
- * vanished selection and evaluate the common attachment policy under this lock. */
-export async function withPackingCreationTransaction<T>(eventId: string | null, action: (manager: EntityManager, event: Event | null) => Promise<T>): Promise<T> {
-    async function createLocked(manager: EntityManager): Promise<T> {
-        const event = eventId ? await manager.getRepository(Event).findOne({where: {id: eventId}, lock: {mode: 'pessimistic_write'}}) : null;
-        return action(manager, event);
-    }
-    return AppDataSource.transaction('READ COMMITTED', createLocked);
 }

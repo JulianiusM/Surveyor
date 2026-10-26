@@ -18,13 +18,12 @@ export class IdentityAdministrationApi {
     async workflowEntry(kind: operations['getProfileWorkflowEntry']['parameters']['query']['kind'], returnTo: string,
                         scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['ProfileWorkflowEntry']> {
         const transport = this.transport;
-        async function readWorkflowEntry(): Promise<components['schemas']['ProfileWorkflowEntry']> {
-            const response = await transport.client.GET('/profiles/workflow-entry', {
+        function readWorkflowEntry() {
+            return transport.client.GET('/profiles/workflow-entry', {
                 params: {query: {kind, returnTo}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getProfileWorkflowEntry', {...response, signal}, validateProfileWorkflowEntry, scope).data;
         }
-        return transport.allowedRead(`identity/workflow-entry/${kind}`, scope, readWorkflowEntry, signal);
+        return (await transport.readJson(`identity/workflow-entry/${kind}`, scope, readWorkflowEntry, 'getProfileWorkflowEntry', validateProfileWorkflowEntry, signal)).data;
     }
 
     /** Issue only from an explicit action; secrets stay in this mounted feature,
@@ -59,55 +58,51 @@ export class IdentityAdministrationApi {
     /** Read a token-holder preview explicitly, without consuming the token or caching its secret. */
     async preview(token: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['ProfileMigrationPreviewOutcome']> {
         const transport = this.transport;
-        async function readMigrationPreview(): Promise<components['schemas']['ProfileMigrationPreviewOutcome']> {
+        function readMigrationPreview() {
             // POST keeps the bearer value out of URLs; this operation remains a
             // read with captured actor/cancellation and the existing cooldown owner.
-            const response = await transport.client.POST('/profiles/migration/preview', {
+            return transport.client.POST('/profiles/migration/preview', {
                 params: {header: transport.headers(scope)}, body: {token}, signal, cache: 'no-store',
             });
-            return transport.read('previewIdentityProfileMigration', {...response, signal}, validateProfileMigrationPreviewOutcome, scope).data;
         }
-        return transport.allowedRead('identity/profile-migration-preview', scope, readMigrationPreview, signal);
+        return (await transport.readJson('identity/profile-migration-preview', scope, readMigrationPreview, 'previewIdentityProfileMigration', validateProfileMigrationPreviewOutcome, signal)).data;
     }
 
     /** Resolve page admission before requesting private account/profile projections. */
     async entry(view: operations['getProfileAdministrationEntry']['parameters']['query']['view'], returnTo: string, scope: FrontendRequestScope,
                 signal?: AbortSignal): Promise<components['schemas']['PageEntryOutcome']> {
         const transport = this.transport;
-        async function readProfileEntry(): Promise<components['schemas']['PageEntryOutcome']> {
+        function readProfileEntry() {
             // An account-only redirect is navigation, not authentication loss for a valid guest.
-            const response = await transport.client.GET('/profiles/entry', {
+            return transport.client.GET('/profiles/entry', {
                 params: {query: {view, returnTo}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getProfileAdministrationEntry', {...response, signal}, validatePageEntryOutcome, scope).data;
         }
-        return transport.allowedRead(`identity/profile-entry/${view}`, scope, readProfileEntry, signal);
+        return (await transport.readJson(`identity/profile-entry/${view}`, scope, readProfileEntry, 'getProfileAdministrationEntry', validatePageEntryOutcome, signal)).data;
     }
 
     /** Read only the captured actor's active profile, preserving cancellation and read cooldown. */
     async current(scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['ProfileSettings']> {
         const transport = this.transport;
-        async function readCurrentProfile(): Promise<components['schemas']['ProfileSettings']> {
+        function readCurrentProfile() {
             // This private projection supplies no account, token or unrelated profile data.
-            const response = await transport.client.GET('/profiles/current', {
+            return transport.client.GET('/profiles/current', {
                 params: {header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getIdentityProfile', {...response, signal}, validateProfileSettings, scope).data;
         }
-        return transport.allowedRead('identity/current-profile', scope, readCurrentProfile, signal);
+        return (await transport.readJson('identity/current-profile', scope, readCurrentProfile, 'getIdentityProfile', validateProfileSettings, signal)).data;
     }
 
     /** Obtain the account-owned roster; the server retains account versus guest admission. */
     async profiles(scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['ProfileManagement']> {
         const transport = this.transport;
-        async function readOwnedProfiles(): Promise<components['schemas']['ProfileManagement']> {
+        function readOwnedProfiles() {
             // Another tab's actor change cannot publish this older roster into the new identity.
-            const response = await transport.client.GET('/profiles', {
+            return transport.client.GET('/profiles', {
                 params: {header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getIdentityProfiles', {...response, signal}, validateProfileManagement, scope).data;
         }
-        return transport.allowedRead('identity/profiles', scope, readOwnedProfiles, signal);
+        return (await transport.readJson('identity/profiles', scope, readOwnedProfiles, 'getIdentityProfiles', validateProfileManagement, signal)).data;
     }
 
     /** Confirm the standalone creation independently of later session/roster display reads. */

@@ -5,6 +5,9 @@
  * You may obtain a copy at http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import {normalizeListMetadataPatch as normalizeDriversMetadataPatch} from '../../../controller/entityAdminController';
+
+
 import {Router, type Request, type Response} from 'express';
 import type {components} from '../../../../types/api/v1';
 import type {ApiOperationId, ApiResponseBody, ApiSuccessStatus, PreparedApiJsonResponse} from '../../../../types/ApiTransportTypes';
@@ -18,7 +21,7 @@ import {createEntityAdminApiRouter, createEntityArchiveApiRouter, createEntityPr
 import {attachAssignRoutes} from '../../../middleware/assignFlowFactory';
 import {createEntityHeaderUpdateRouter} from '../../../middleware/entityHeaderUpdateHandler';
 import {prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
-import {patchDriversMetadata, normalizeDriversMetadataPatch, readDriversMetadata, setDriversSelfAssignment} from '../../../controller/driversController';
+import {patchDriversMetadata, readDriversMetadata, setDriversSelfAssignment} from '../../../controller/driversController';
 
 const router = Router();
 router.use(createGuestFlowApiRouter(driversFlow));

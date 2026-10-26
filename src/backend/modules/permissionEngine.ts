@@ -155,7 +155,9 @@ async function loadEventParticipantPerms(eventId: string | null | undefined, pro
     return 0;
 }
 
+/** Expose separate subject/parent masks through the established permission predicates. */
 function makePermView(mask: number, parentMask: number): PermView {
+    // Capture both raw masks; only allow() consults caller-selected parent fallbacks.
     const selfHas = (k: PermType) => hasPerm(mask, PERM[k]);
     const parentHas = (k: PermType) => hasPerm(parentMask, PERM[k]);
 

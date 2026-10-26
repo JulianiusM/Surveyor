@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {fieldAttributes as creationFields} from '../../../../.generated/api/v1/browser/validateFinancePoolCreateInput.mjs';
 import {computed, reactive, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
 import {useActionState, useFrontend} from '../../app/context';
@@ -188,7 +189,7 @@ function acknowledge(): void {
                 <div class="row g-3">
                     <template v-if="!pool">
                         <FormField :id="`${id}-name`" v-model="draft.name" class="col-12" name="name"
-                            :label="messages.t('finance.poolName2')" required :required-marker="false" :max-length="255"
+                            :label="messages.t('finance.poolName2')" required :required-marker="false" :max-length="creationFields.name.maxLength"
                             :pending="command.pending.value" />
                         <FormField :id="`${id}-status`" class="col-12" :label="messages.t('finance.poolSubmissionState')">
                             <template #control>

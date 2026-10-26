@@ -63,7 +63,10 @@ export class AddProfiles1785610467095 implements MigrationInterface {
         return result[0]?.dataType?.toLowerCase() ?? null;
     }
 
+    /** Convert an existing numeric owner reference to its corresponding profile UUID. */
     private async migrateOwnerToProfile(queryRunner: QueryRunner, table: string): Promise<void> {
+        // Missing or already textual owner columns require no conversion; this
+        // permits the same migration to encounter partially prepared schemas.
         if (!await columnExists(queryRunner, table, 'owner_id')) {
             return;
         }
@@ -73,6 +76,8 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             return;
         }
 
+        // Backfill a temporary column while the old numeric reference is available,
+        // then replace that column only after the profile join has completed.
         await addColumnIfNotExists(queryRunner, table, 'owner_profile_id', 'varchar(36)', 'NULL');
         await queryRunner.query(
             `UPDATE \`${table}\` t
@@ -87,7 +92,10 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             CHANGE \`owner_profile_id\` \`owner_id\` varchar(36) NULL`);
     }
 
+    /** Recover numeric user ownership from profile references during rollback. */
     private async migrateOwnerToUser(queryRunner: QueryRunner, table: string): Promise<void> {
+        // Skip absent/already numeric references and retain NULL for profiles with
+        // no matching user, as the pre-profile ownership model requires.
         if (!await columnExists(queryRunner, table, 'owner_id')) {
             return;
         }
@@ -97,6 +105,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             return;
         }
 
+        // Keep the profile reference until the temporary user column is populated.
         await addColumnIfNotExists(queryRunner, table, 'owner_user_id', 'int', 'NULL');
         await queryRunner.query(
             `UPDATE \`${table}\` t
@@ -129,7 +138,11 @@ export class AddProfiles1785610467095 implements MigrationInterface {
         await createUniqueIndexIfNotExists(queryRunner, 'profiles', 'REL_74c607202390168d8cb82bfd1e', '`guest_id`');
     }
 
+    /** Backfill a table's declared profile/entity/item references before dropping
+     * its old columns, preserving any already populated destination values. */
     private async migrateRelationColumnsUp(queryRunner: QueryRunner, mapping: RelationMapping): Promise<void> {
+        // Resolve user/guest references through profiles only when the corresponding
+        // legacy columns are present; existing profile identifiers take precedence.
         if (mapping.profile) {
             await addColumnIfNotExists(queryRunner, mapping.table, 'profile_id', 'varchar(36)', 'NULL');
 
@@ -156,6 +169,8 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             }
         }
 
+        // Entity and item identifiers are direct renames through temporary columns,
+        // separate from the identity lookup needed by profile references.
         if (mapping.entity) {
             await addColumnIfNotExists(queryRunner, mapping.table, 'entity_id', mapping.entity.type, 'NULL');
             if (await columnExists(queryRunner, mapping.table, mapping.entity.old)) {
@@ -178,6 +193,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             }
         }
 
+        // Remove source columns only after every declared destination is backfilled.
         if (mapping.profile?.oldUser) {
             await dropColumnIfExists(queryRunner, mapping.table, mapping.profile.oldUser);
         }
@@ -192,7 +208,10 @@ export class AddProfiles1785610467095 implements MigrationInterface {
         }
     }
 
+    /** Restore legacy relation columns using the still-available shared references. */
     private async migrateRelationColumnsDown(queryRunner: QueryRunner, mapping: RelationMapping): Promise<void> {
+        // Recreate destinations first. Profile lookup must finish before the shared
+        // profile table is removed by the enclosing rollback.
         const hasProfiles = await tableExists(queryRunner, 'profiles');
 
         if (mapping.profile?.oldUser) {
@@ -228,6 +247,8 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             }
         }
 
+        // Preserve existing legacy values while copying back entity/item identifiers,
+        // then remove the corresponding shared columns.
         if (mapping.entity && await columnExists(queryRunner, mapping.table, 'entity_id')) {
             await queryRunner.query(
                 `UPDATE \`${mapping.table}\`
@@ -251,7 +272,11 @@ export class AddProfiles1785610467095 implements MigrationInterface {
         await dropColumnIfExists(queryRunner, mapping.table, 'profile_id');
     }
 
+    /** Migrate legacy identity references to profiles and shared relation columns,
+     * restoring foreign-key checking even if an intermediate DDL operation fails. */
     public async up(queryRunner: QueryRunner): Promise<void> {
+        // These inventories preserve the original constraint/index and table order;
+        // dependent references are rebuilt only after their data has been converted.
         const oldForeignKeys = [
             ['drivers_items', 'FK_357c0fbec24aac87ee423ba5168'],
             ['drivers_items', 'FK_ccd3f1ec65169179b395e5ba903'],
@@ -613,6 +638,8 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             }
         ];
 
+        // Temporarily release old references, create profiles and migrate their
+        // consumers before installing the replacement indexes and foreign keys.
         await queryRunner.query('SET FOREIGN_KEY_CHECKS = 0');
         try {
             for (const [table, fk] of oldForeignKeys) {
@@ -742,7 +769,11 @@ export class AddProfiles1785610467095 implements MigrationInterface {
         }
     }
 
+    /** Reconstruct legacy references before dropping profiles, then reinstall the
+     * old constraints; foreign-key checking is restored on success or failure. */
     public async down(queryRunner: QueryRunner): Promise<void> {
+        // Rollback uses its own historical mappings and index definitions rather
+        // than assuming every new reference has a symmetric legacy equivalent.
         const newForeignKeys = [
             ['surveys', 'FK_9532b923178387169ff592c12a9'],
             ['survey_combinations', 'FK_fd1e0eb96ae7d76e1c85363e726'],

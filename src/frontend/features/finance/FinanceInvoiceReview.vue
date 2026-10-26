@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import {fieldAttributes as acceptanceFields} from '../../../../.generated/api/v1/browser/validateFinanceAcceptanceInput.mjs';
+import {fieldAttributes as declineFields} from '../../../../.generated/api/v1/browser/validateFinanceDeclineInput.mjs';
+import {fieldAttributes as revisionFields} from '../../../../.generated/api/v1/browser/validateFinanceRevisionInput.mjs';
+import {fieldAttributes as rejectionFields} from '../../../../.generated/api/v1/browser/validateFinanceAcceptedRejectionInput.mjs';
 import type {FinanceInvoiceReviewInput, FinanceInvoiceReviewOwner} from '../../../types/FrontendFinanceReviewTypes';
 import type {FrontendPlainMessageKey} from '../../../types/FrontendUiTypes';
 import {useFrontend} from '../../app/context';
@@ -65,7 +69,7 @@ const {id, form, invoice, closedPool, operation, reviewing, inspected, completed
                         :placeholder="operation === 'approve' ? messages.t('finance.keep', {fmtMoney: financeMoney(invoice.amount, locale)}) : undefined"
                         :pending="command.pending.value" />
                     <FormField :id="`${id}-description`" v-model="draft.description" class="mb-3" name="correctedDescription" multiline :rows="3"
-                        :label="messages.t(operation === 'approve' ? 'finance.correctedDescription2' : 'finance.description')" :max-length="4000"
+                        :label="messages.t(operation === 'approve' ? 'finance.correctedDescription2' : 'finance.description')" :max-length="(operation === 'revise' ? revisionFields : acceptanceFields).correctedDescription.maxLength"
                         :placeholder="operation === 'approve' ? messages.t('finance.leaveBlankToKeepSubmittedDescription') : undefined"
                         :pending="command.pending.value">
                         <small v-if="operation === 'revise'" class="text-secondary">{{ messages.t('finance.leaveThisEmptyToRestoreTheOriginalDescription') }}</small>
@@ -74,7 +78,7 @@ const {id, form, invoice, closedPool, operation, reviewing, inspected, completed
                 <template v-if="rejection">
                     <p v-if="operation === 'reject'" class="small text-secondary">{{ messages.t('finance.rejectingRemovesThisAcceptedCostFromThePoolTotal') }}</p>
                     <FormField :id="`${id}-reason`" v-model="draft.reason" name="rejectionReason" class="mb-3" multiline :rows="3"
-                        :label="messages.t('finance.rejectionReason')" :max-length="4000" required :required-marker="false"
+                        :label="messages.t('finance.rejectionReason')" :max-length="(operation === 'reject' ? rejectionFields : declineFields).rejectionReason.maxLength" required :required-marker="false"
                         :pending="command.pending.value" />
                 </template>
                 <!-- Own-history Close supplies no amount to this question.

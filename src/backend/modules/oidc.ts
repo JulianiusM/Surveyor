@@ -16,8 +16,7 @@
 
 import type {Request} from 'express';
 import * as oidc from 'openid-client';
-import {getDefaultProfile} from "../controller/userController";
-import {findOrCreateUserFromOidc} from "./database/services/UserService";
+import type {OidcLoginEvidence} from '../../types/IdentityTypes';
 import {ExpectedError} from "./lib/errors";
 import {persistSession} from "./lib/session";
 import {rotateFrontendSessionContext} from './lib/frontendSession';
@@ -77,7 +76,8 @@ export async function startLogin(session: Request['session']) {
     return redirectTo.href;
 }
 
-export async function callback(req: Request) {
+/** Validate provider evidence without selecting a local account or saving authority. */
+export async function exchangeCallback(req: Request): Promise<OidcLoginEvidence> {
     if (!config) await initOIDC();
 
     const sess = req.session.oidc;
@@ -114,30 +114,10 @@ export async function callback(req: Request) {
     // Prefer userInfo claims if present, otherwise ID Token claims
     const identityClaims = (userInfo ?? claims) as any;
 
-    // JIT-provision or load your local user
-    // Persist your standard session identity (same model as manual login)
-    const user = await findOrCreateUserFromOidc(issuer, identityClaims, {
-        linkByEmail: true,
-    });
-    req.session.auth = {user};
-    req.session.profile = getDefaultProfile(user.profiles);
-    rotateFrontendSessionContext(req.session);
-
-    // Optionally keep tokens for logout/API calls
-    req.session.tokens = {
-        id_token: tokens.id_token,
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-        expires_at: tokens.expires_at, // epoch seconds if present
-        token_type: tokens.token_type,
-    };
-
-    // Clear transient OIDC artifacts
-    req.session.oidc = undefined;
-
-    await persistSession(req.session);
+    return {issuer, identityClaims, tokens};
 }
 
+/** Preserve provider logout's established local-clear, save and discovery order. */
 export async function logout(session: Request['session']) {
     const id_token_hint = session.tokens?.id_token;
     const isOidc = !!session.tokens;

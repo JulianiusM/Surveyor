@@ -44,13 +44,12 @@ export class DriversApi {
     async drivers(listId: string, scope: FrontendRequestScope, signal?: AbortSignal,
                   previous?: FrontendRead<List>): Promise<FrontendRead<List>> {
         const transport = this.transport;
-        async function readDrivers(): Promise<FrontendRead<List>> {
-            const response = await transport.client.GET('/drivers-lists/{listId}', {
+        function readDrivers() {
+            return transport.client.GET('/drivers-lists/{listId}', {
                 params: {path: {listId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
             });
-            return transport.read('getDriversList', {...response, signal}, validateDriversListView, scope, previous);
         }
-        return transport.allowedRead(`drivers/${listId}`, scope, readDrivers, signal);
+        return transport.readJson(`drivers/${listId}`, scope, readDrivers, 'getDriversList', validateDriversListView, signal, previous);
     }
 
     /** Obtain permitted root fields and usable comparison evidence together.
@@ -59,13 +58,12 @@ export class DriversApi {
     async metadata(listId: string, scope: FrontendRequestScope, signal?: AbortSignal,
                    previous?: FrontendRead<Metadata>): Promise<FrontendRead<Metadata>> {
         const transport = this.transport;
-        async function readMetadata(): Promise<FrontendRead<Metadata>> {
-            const response = await transport.client.GET('/drivers-lists/{listId}/metadata', {
+        function readMetadata() {
+            return transport.client.GET('/drivers-lists/{listId}/metadata', {
                 params: {path: {listId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
             });
-            return transport.read('getDriversMetadata', {...response, signal}, validateDriversMetadata, scope, previous);
         }
-        const result = await transport.allowedRead(`drivers/${listId}/metadata`, scope, readMetadata, signal);
+        const result = await transport.readJson(`drivers/${listId}/metadata`, scope, readMetadata, 'getDriversMetadata', validateDriversMetadata, signal, previous);
         this.transport.requireComparison(result.etag);
         return result;
     }
@@ -99,13 +97,12 @@ export class DriversApi {
      * cooldown while its generated validator checks the permitted panels/tokens. */
     async settings(listId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['DriversSettings']> {
         const transport = this.transport;
-        async function readSettings(): Promise<components['schemas']['DriversSettings']> {
-            const response = await transport.client.GET('/drivers-lists/{listId}/settings', {
+        function readSettings() {
+            return transport.client.GET('/drivers-lists/{listId}/settings', {
                 params: {path: {listId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getDriversSettings', {...response, signal}, validateDriversSettings, scope).data;
         }
-        return transport.allowedRead(`drivers/${listId}/settings`, scope, readSettings, signal);
+        return (await transport.readJson(`drivers/${listId}/settings`, scope, readSettings, 'getDriversSettings', validateDriversSettings, signal)).data;
     }
 
     /** Creation admission is distinct from the public duplication projection. The caller supplies
@@ -113,13 +110,12 @@ export class DriversApi {
     async createEntry(scope: FrontendRequestScope, signal?: AbortSignal,
                       returnTo?: string, eventId?: string): Promise<components['schemas']['DriversCreateEntry']> {
         const transport = this.transport;
-        async function readCreationEntry(): Promise<components['schemas']['DriversCreateEntry']> {
-            const response = await transport.client.GET('/drivers-lists/create-entry', {
+        function readCreationEntry() {
+            return transport.client.GET('/drivers-lists/create-entry', {
                 params: {query: {returnTo, eventId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getDriversCreateEntry', {...response, signal}, validateDriversCreateEntry, scope).data;
         }
-        return transport.allowedRead('drivers/create-entry/' + (returnTo ?? '') + '/' + (eventId ?? ''), scope, readCreationEntry, signal);
+        return (await transport.readJson('drivers/create-entry/' + (returnTo ?? '') + '/' + (eventId ?? ''), scope, readCreationEntry, 'getDriversCreateEntry', validateDriversCreateEntry, signal)).data;
     }
 
     /** Detail and explicit guest routes deliberately have different admission. Never
@@ -127,13 +123,12 @@ export class DriversApi {
     async resourceEntry(listId: string, view: 'detail' | 'guest', scope: FrontendRequestScope,
                         signal?: AbortSignal): Promise<components['schemas']['DriversResourceEntry']> {
         const transport = this.transport;
-        async function readResourceEntry(): Promise<components['schemas']['DriversResourceEntry']> {
-            const response = await transport.client.GET('/drivers-lists/{listId}/entry', {
+        function readResourceEntry() {
+            return transport.client.GET('/drivers-lists/{listId}/entry', {
                 params: {path: {listId}, query: {view}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getDriversResourceEntry', {...response, signal}, validateDriversResourceEntry, scope).data;
         }
-        return transport.allowedRead(`drivers/${listId}/entry/${view}`, scope, readResourceEntry, signal);
+        return (await transport.readJson(`drivers/${listId}/entry/${view}`, scope, readResourceEntry, 'getDriversResourceEntry', validateDriversResourceEntry, signal)).data;
     }
 
     /** Read only the server's permitted duplication surface. Destination selection
@@ -142,13 +137,12 @@ export class DriversApi {
     async duplicate(listId: string, scope: FrontendRequestScope, signal?: AbortSignal,
                     eventId?: string): Promise<components['schemas']['DriversDuplicate']> {
         const transport = this.transport;
-        async function readDuplicate(): Promise<components['schemas']['DriversDuplicate']> {
-            const response = await transport.client.GET('/drivers-lists/{listId}/duplicate', {
+        function readDuplicate() {
+            return transport.client.GET('/drivers-lists/{listId}/duplicate', {
                 params: {path: {listId}, query: {eventId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getDriversDuplicate', {...response, signal}, validateDriversDuplicate, scope).data;
         }
-        return transport.allowedRead(`drivers/${listId}/duplicate/${eventId ?? ''}`, scope, readDuplicate, signal);
+        return (await transport.readJson(`drivers/${listId}/duplicate/${eventId ?? ''}`, scope, readDuplicate, 'getDriversDuplicate', validateDriversDuplicate, signal)).data;
     }
 
     /** Submit the generated creation contract and optional image as one multipart command.
@@ -209,13 +203,12 @@ export class DriversApi {
     async events(query: FrontendEventPickerQuery,
                   scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
-        async function readEventOptions(): Promise<components['schemas']['EventPickerOptions']> {
-            const response = await transport.client.GET('/drivers-lists/events', {
+        function readEventOptions() {
+            return transport.client.GET('/drivers-lists/events', {
                 params: {query, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('searchDriversEvents', {...response, signal}, validateEventPickerOptions, scope).data;
         }
-        return transport.allowedRead(`drivers/events/${JSON.stringify(query)}`, scope, readEventOptions, signal);
+        return (await transport.readJson(`drivers/events/${JSON.stringify(query)}`, scope, readEventOptions, 'searchDriversEvents', validateEventPickerOptions, signal)).data;
     }
 
     async linkEvent(listId: string, input: components['schemas']['DriversEventChange'], token: string, scope: FrontendRequestScope) {
@@ -235,13 +228,12 @@ export class DriversApi {
      * transport; a displayed username never becomes the acting identity. */
     async profiles(listId: string, q: string, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
-        async function readProfileOptions(): Promise<components['schemas']['DriversProfileOptions']> {
-            const response = await transport.client.GET('/drivers-lists/{listId}/profiles', {
+        function readProfileOptions() {
+            return transport.client.GET('/drivers-lists/{listId}/profiles', {
                 params: {path: {listId}, query: {q}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('searchDriversProfiles', {...response, signal}, validateDriversProfileOptions, scope).data;
         }
-        return transport.allowedRead(`drivers/${listId}/profiles/${q}`, scope, readProfileOptions, signal);
+        return (await transport.readJson(`drivers/${listId}/profiles/${q}`, scope, readProfileOptions, 'searchDriversProfiles', validateDriversProfileOptions, signal)).data;
     }
 
     async addAdmin(listId: string, input: components['schemas']['DriversAdminInput'], token: string, scope: FrontendRequestScope) {
@@ -269,14 +261,13 @@ export class DriversApi {
          * ordinary JSON/text decoder and the shared validated rejection policy.
          * Binary recovery therefore observes the same actor and Retry-After owner
          * as JSON reads instead of introducing a second error parser or deadline. */
-        async function readHeader(): Promise<Blob> {
-            const result = await transport.client.GET('/drivers-lists/{listId}/header', {
+        function readHeader() {
+            return transport.client.GET('/drivers-lists/{listId}/header', {
                 params: {path: {listId}, header: transport.headers(scope)}, signal, cache: 'no-store', parseAs: 'blob',
             });
-            return transport.headerImage(result, scope, signal);
         }
 
-        return transport.allowedRead(`drivers/${listId}/header`, scope, readHeader, signal);
+        return transport.readHeaderImage(`drivers/${listId}/header`, scope, readHeader, signal);
     }
 
     /** Replace the header using the file draft's reviewed comparison token.
@@ -319,13 +310,12 @@ export class DriversApi {
      * separate identity command with its own confirmed context and destination. */
     async guestEntry(listId: string, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
-        async function readGuestEntry(): Promise<components['schemas']['GuestEntry']> {
-            const response = await transport.client.GET('/drivers-lists/{listId}/guest', {
+        function readGuestEntry() {
+            return transport.client.GET('/drivers-lists/{listId}/guest', {
                 params: {path: {listId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getDriversGuestEntry', {...response, signal}, validateGuestEntry, scope).data;
         }
-        return transport.allowedRead('drivers/' + listId + '/guest', scope, readGuestEntry, signal);
+        return (await transport.readJson('drivers/' + listId + '/guest', scope, readGuestEntry, 'getDriversGuestEntry', validateGuestEntry, signal)).data;
     }
 
     async registerGuest(listId: string, input: components['schemas']['GuestRegistrationInput'], scope: FrontendRequestScope) {

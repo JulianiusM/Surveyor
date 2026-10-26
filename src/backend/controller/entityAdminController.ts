@@ -16,6 +16,8 @@
 
 // src/backend/controller/entityAdminController.ts
 import Joi from 'joi';
+import {coerceLimit, getHeaderImageVersion, maskEmail, SQL_ALLOW_LIST} from '../modules/lib/util';
+import type {UserInfo} from '../../types/UserTypes';
 import {createHash} from 'node:crypto';
 import type {components} from '../../types/api/v1';
 import {ApiProblem, declaredApiProblem} from '../modules/api/problem';
@@ -32,12 +34,15 @@ import * as userService from '../modules/database/services/UserService';
 import {APIError} from '../modules/lib/errors';
 import {getPermMeta, getPresets, getPresetMask, PERM, toMask} from "../modules/lib/permissions";
 import {requireSessionProfileId} from '../modules/lib/session';
-import {evaluateEntities, evaluateSubject} from '../modules/permissionEngine';
-import type {BasicEntityPropertyPatch, EntityEventChangeResult, EntityMutationCompletion, EntityPropertyField, EntityPropertyPresentation} from '../../types/EntityPropertyTypes';
+import {evaluateEntities, evaluateSubject, saveDefaultPermsFromBody} from '../modules/permissionEngine';
+import type {BasicEntityPropertyPatch, EntityEventChangeResult, EntityMutationCompletion, EntityPropertyField, EntityPropertyPresentation, EntityDefaultReviewOptions, EntityAdministratorReviewOptions} from '../../types/EntityPropertyTypes';
 import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, ArchiveState, ArchiveTarget, LockedArchiveContext} from '../../types/ArchiveTypes';
 import type {EntityAdministratorCommand, EntityAdministratorOutcome, EntityDescriptor, PermType, PermView, SessionLike} from '../../types/PermissionTypes';
 import type {Entity, EntityBase, EntityViewAdmission} from '../../types/UserTypes';
 import type {CombEntityType, EntityType} from "../../types/UtilTypes";
+
+type ListType = 'packing' | 'drivers';
+type ListRoot = EntityBase & {archivedAt?: Date | null; event?: {archivedAt?: Date | null} | null};
 
 // One closed field policy drives both renderer projection and request authorization.
 // Feature controllers retain normalization and domain checks; arbitrary property bags are rejected.
@@ -101,6 +106,100 @@ export function comparisonToken(scope: string, id: string, session: SessionLike,
     return `"edit-${Buffer.from(JSON.stringify({context, fields})).toString('base64url')}"`;
 }
 
+/** Root field projection discloses only values permitted by the existing shared property policy. */
+export function listMetadataProjection<Type extends ListType>(type: Type, list: ListRoot, permissions: PermView) {
+    const values: components['schemas']['PackingMetadata']['values'] = {};
+    const editableFields: components['schemas']['PackingMetadata']['editableFields'] = [];
+    // Copy each value only after its direct field grant, retaining title/description disclosure order.
+    for (const field of ['title', 'description'] as const) {
+        if (!permissions.has(entityPropertyPermission(type, field)!)) continue;
+        editableFields.push(field);
+        if (field === 'title') values.title = list.title;
+        else values.description = list.description ?? null;
+    }
+    return {entityType: type, id: list.id, values, editableFields, currentEventId: list.eventId ?? null,
+        archived: Boolean(list.archivedAt), inheritedArchived: Boolean(list.event?.archivedAt)};
+}
+
+/** Presentation context hashes retain conditional reads while sparse writes compare submitted fields only. */
+export function listMetadataResult<Type extends ListType>(type: Type, list: ListRoot, permissions: PermView, session: SessionLike) {
+    const data = listMetadataProjection(type, list, permissions);
+    const etag = comparisonToken(`${type}-meta`, list.id, session, {...data.values,
+        currentEventId: data.currentEventId, archived: data.archived, inheritedArchived: data.inheritedArchived});
+    return {data, etag};
+}
+
+/** Reuse form trimming/clearing before generated validation; JSON omission never becomes a stored undefined. */
+export function normalizeListMetadataPatch(body: unknown): unknown {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return body;
+    const fields = {...body} as Record<string, unknown>;
+    // JSON cannot carry undefined, so v1 treats these keys as omitted. The separate
+    // direct adapter retains its original own-key validation.
+    for (const [key, value] of Object.entries(fields)) if (value === undefined) delete fields[key];
+    // Keep the existing form semantics: trim titles and interpret an empty description as an explicit clear.
+    if (typeof fields.title === 'string') fields.title = fields.title.trim();
+    if (fields.description === '') fields.description = null;
+    return fields;
+}
+
+/** Reject a disappeared or reassociated root after the DBAL acquires its existing parent/root locks. */
+export function assertListContext(context: LockedArchiveContext): void {
+    if (!context.root) throw new ApiProblem('NOT_FOUND');
+    if (context.initialEventId !== context.root.eventId
+        || (context.root.eventId && !context.parents.has(context.root.eventId))) throw new ApiProblem('ENTITY_CONTEXT_CHANGED');
+}
+
+/** Evaluate current root grants on the supplied snapshot, independently of page/profile admission. */
+export function listPermissions(type: ListType, manager: EntityManager, list: EntityBase,
+    session: SessionLike, caches?: import('../../types/PermissionTypes').PermEngineCaches): Promise<PermView> {
+    comparisonActor(session);
+    return evaluateSubject({kind: 'entity', entity: {entityType: type, entityId: list.id,
+        ownerId: list.ownerId, eventId: list.eventId}}, session, caches, manager);
+}
+
+/** Page reads require an actor and the existing feature admission before any detail projection. */
+export async function authorizeListRead(type: ListType, manager: EntityManager, list: EntityBase,
+    session: SessionLike, caches?: import('../../types/PermissionTypes').PermEngineCaches): Promise<PermView> {
+    if (!session.profile?.id) throw new ApiProblem('AUTH_REQUIRED');
+    const permissions = await listPermissions(type, manager, list, session, caches);
+    if (await getEntityViewAdmission(type, list, session, manager, permissions) !== 'render') throw new ApiProblem('FORBIDDEN');
+    return permissions;
+}
+
+/** Common item subject construction leaves each feature's method/fallback grants with its policy table. */
+export function listItemPermissions(type: ListType, manager: EntityManager, list: EntityBase,
+    item: {id: string; profileId: string}, session: SessionLike,
+    caches?: import('../../types/PermissionTypes').PermEngineCaches): Promise<PermView> {
+    return evaluateSubject({kind: 'item', item: {entityType: `${type}Item`, entityId: item.id,
+        ownerId: item.profileId, eventId: list.eventId}, parent: {entityType: type, entityId: list.id,
+        ownerId: list.ownerId, eventId: list.eventId}}, session, caches, manager);
+}
+
+/** Project authorized header addresses and opaque versions, never stored filesystem paths. */
+export function listHeaderProjection(type: ListType, list: EntityBase) {
+    return {headerUrl: list.headerImg ? `/api/v1/${type}-lists/${encodeURIComponent(list.id)}/header` : null,
+        headerVersion: getHeaderImageVersion(list.headerImg)};
+}
+
+/** Settings admission preserves independent ownership and account-only duplication without exposing ACL data. */
+export function mayOpenListSettings(type: ListType, list: EntityBase, permissions: PermView, session: SessionLike): boolean {
+    return permissions.has(entityPropertyPermission(type, 'title')!)
+        || permissions.has(entityPropertyPermission(type, 'description')!)
+        || permissions.allow(entityMethodPermission('editHeader'))
+        || permissions.allow(entityMethodPermission('changeEvent'))
+        || permissions.allow(entityMethodPermission('managePermissions'))
+        || list.ownerId === session.profile?.id
+        || Boolean(session.auth?.user && permissions.allow(entityMethodPermission('duplicate')));
+}
+
+/** Include private audience hashes only when the already admitted caller may manage that matrix. */
+export async function listSettingsToken(type: ListType, manager: EntityManager, list: EntityBase,
+    session: SessionLike, includeAccess = false): Promise<string> {
+    const defaults = includeAccess ? completeDefaults(await entityAdminService.getDefaultPerms(type, list.id, manager)) : null;
+    return comparisonToken(`${type}-settings`, list.id, session, {...(defaults ? defaultPermissionValues(defaults) : {}),
+        header: list.headerImg ?? null, eventId: list.eventId ?? null, ...(includeAccess ? {newAdmin: null} : {})});
+}
+
 /**
  * Compare selected fields with the freshly authorized locked baseline. Missing
  * review is 428; malformed, foreign or changed evidence is 412. Other fields may
@@ -139,6 +238,87 @@ export function requireFieldComparison(expected: string | undefined, current: st
 export function completeDefaults(defaults: Partial<components['schemas']['PermissionDefaults']>): components['schemas']['PermissionDefaults'] {
     return {public: defaults.public ?? 0, guest: defaults.guest ?? 0,
         authenticated: defaults.authenticated ?? 0, participant: defaults.participant ?? 0};
+}
+
+/** Use one audience-field vocabulary in full settings, narrow baselines and sparse writes. */
+export function defaultPermissionValues(defaults: components['schemas']['PermissionDefaults']): Record<string, number> {
+    return Object.fromEntries(Object.entries(defaults).map(([audience, mask]) => [`default:${audience}`, mask]));
+}
+
+/** Read already admitted permission data; feature owners retain their page/method checks and snapshots. */
+export async function readEntityDefaultsBaseline(type: EntityType, id: string, session: SessionLike,
+    manager?: EntityManager, comparison: EntityDefaultReviewOptions = {}) {
+    // Read masks first; Event's explicit token callback retains its subsequent full-settings read.
+    const defaultPermissions = completeDefaults(await entityAdminService.getDefaultPerms(type, id, manager));
+    const editToken = comparison.prepareToken ? await comparison.prepareToken()
+        : comparisonToken(`${type}-settings`, comparison.comparisonId ?? id, session, defaultPermissionValues(defaultPermissions));
+    return {defaultPermissions, editToken};
+}
+
+/** Compare submitted audiences and persist only their numeric masks on the feature's existing manager. */
+export async function updateEntityDefaults(type: EntityType, id: string,
+    defaults: components['schemas']['PermissionDefaultsPatch'], session: SessionLike, token?: string,
+    manager?: EntityManager, comparison: EntityDefaultReviewOptions = {}) {
+    // Omitted audiences retain their original values and never enter the comparison.
+    const current = completeDefaults(await entityAdminService.getDefaultPerms(type, id, manager));
+    const currentToken = comparison.prepareToken ? await comparison.prepareToken()
+        : comparisonToken(`${type}-settings`, comparison.comparisonId ?? id, session, defaultPermissionValues(current));
+    requireFieldComparison(token, currentToken, Object.keys(defaults).map(audience => `default:${audience}`));
+
+    // The existing collector retains all storage semantics; this owner shares only
+    // the versioned review and result policy, without adding a transaction or lock.
+    await saveDefaultPermsFromBody(type, id, {defaultPerms: defaults}, {manager, inputFormat: 'masks'});
+    return {changed: Object.keys(defaults).some(audience => defaults[audience as keyof typeof defaults]
+        !== current[audience as keyof typeof current])};
+}
+
+/** Keep existing zero grants distinct from an absent row in every feature's comparison scope. */
+export function entityAdministratorToken(type: EntityType, id: string, profileId: string,
+    mask: number | null, session: SessionLike): string {
+    return mask === null ? comparisonToken(`${type}-settings`, id, session, {newAdmin: null})
+        : comparisonToken(`${type}-admin`, `${id}:${profileId}`, session, {mask});
+}
+
+/** Features admit the method first; then this owner preserves profile-first baseline disclosure. */
+export async function readEntityAdministratorBaseline(type: EntityType, id: string,
+    profileId: string, session: SessionLike, manager?: EntityManager,
+    comparison: Pick<EntityAdministratorReviewOptions, 'comparisonId'> = {}) {
+    // A missing profile precedes grant disclosure. An existing zero mask remains a real baseline.
+    if (!await userService.getProfileById(profileId, manager)) throw new ApiProblem('NOT_FOUND');
+    const current = await entityAdminService.getAdminGrant(type, id, profileId, manager);
+    const mask = current?.perms ?? null;
+    return {mask, editToken: entityAdministratorToken(type, comparison.comparisonId ?? id, profileId, mask, session)};
+}
+
+/**
+ * Apply one reviewed administrator command after feature admission. Locked callers
+ * validate profile existence before review; Activity explicitly retains its legacy
+ * review-first order. No transaction, lock, save interceptor or receipt is introduced.
+ */
+export async function updateEntityAdministrator(type: EntityType, id: string, profileId: string,
+    mask: number | null, session: SessionLike, token?: string, manager?: EntityManager,
+    comparison: EntityAdministratorReviewOptions = {}) {
+    let previousMask: number | null = null;
+    /** Compare exactly the existing row or new-grant marker before selecting persistence. */
+    async function reviewGrant(): Promise<EntityAdministratorCommand> {
+        const current = await entityAdminService.getAdminGrant(type, id, profileId, manager);
+        previousMask = current?.perms ?? null;
+        requireFieldComparison(token, entityAdministratorToken(type, comparison.comparisonId ?? id, profileId, previousMask, session),
+            [current ? 'mask' : 'newAdmin']);
+        return mask === null ? {kind: 'remove'}
+            : {kind: current ? 'update' : 'add', mask, createdBy: session.profile?.userId};
+    }
+
+    // The caller explicitly selects its recorded validation order. In particular,
+    // sharing this implementation must not add locking to Activity's direct path.
+    const initial: EntityAdministratorCommand = mask === null ? {kind: 'remove'}
+        : {kind: 'add', mask, createdBy: session.profile?.userId};
+    const outcome = comparison.reviewOrder === 'review-first'
+        ? await applyEntityAdministrator(type, id, profileId, await reviewGrant(), manager)
+        : await applyEntityAdministrator(type, id, profileId, initial, manager, reviewGrant);
+    if (outcome === 'profile-missing') throw new ApiProblem('NOT_FOUND');
+    if (outcome === 'mask-required') throw new ApiProblem('VALIDATION_FAILED');
+    return {changed: previousMask !== mask};
 }
 
 /** Project the maintained permission/preset definitions for all creation/settings callers. */
@@ -501,11 +681,24 @@ export async function removeAdmin(entityType: CombEntityType, entityId: string, 
     return 'Admin removed';
 }
 
-/** Optional: GET /users/search?q=… — simple typeahead */
-export async function searchUsers(q: string, limit: number = 10) {
+/** Admit the existing search shape and project safe account-only choices in one business owner. */
+export async function searchUsers(q: string, limit = 10): Promise<UserInfo[]> {
+    // Preserve trimming, the existing minimum/character rule and bounded limit before SQL.
     const query = String(q || '').trim();
-    if (!query) return [];
-    return await userService.searchUsersSecure(query, limit) ?? [];
+    if (!query || !SQL_ALLOW_LIST.test(query)) return [];
+    const rows = await userService.queryUserProfiles(query, coerceLimit(limit, 10, 25));
+    // Account candidates retain the legacy masked-mail fallback without exposing full ORM records.
+    return rows.map(profile => ({id: profile.id, name: profile.name,
+        username: profile.user?.username ?? profile.guest?.username ?? '-',
+        email: profile.user?.email ? maskEmail(profile.user.email)
+            : profile.guest?.email ? maskEmail(profile.guest.email) : '-'}));
+}
+
+/** Project the same admitted account search into feature options without exposing even masked email fields. */
+export async function searchEntityProfiles(query: string): Promise<components['schemas']['PackingProfileOptions']> {
+    // Retain the established search and masking work; only this shared wire projection removes the unused address.
+    return (await searchUsers(query)).map(profile => ({profileId: profile.id, name: profile.name,
+        username: profile.username, isGuest: false}));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

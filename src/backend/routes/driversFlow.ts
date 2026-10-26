@@ -1,6 +1,9 @@
+import {searchEntityEvents} from '../modules/event/linkage';
+
+import {readEventLinkSelection} from '../modules/event/linkage';
 import * as controller from '../controller/driversController';
 import {getEntityViewAdmission} from '../controller/entityAdminController';
-import {readEventLinkSelection} from '../controller/eventController';
+
 import * as service from '../modules/database/services/DriverService';
 import type {DriversList} from '../modules/database/entities/drivers/DriversList';
 import {createGuestFlow, guestFlowResponse} from '../middleware/guestFlowFactory';
@@ -21,7 +24,7 @@ export const driversFlow = createGuestFlow<'drivers', DriversList>({
     readCreateContext: controller.readDriversCreateContext,
     requireCreation: controller.requireDriversCreation,
     selectEvent: readEventLinkSelection,
-    searchEvents: controller.searchDriversEvents,
+    searchEvents: searchEntityEvents,
     create(input, file, actor, lifecycle) {
         return controller.createDriversList(input, file, actor, lifecycle.prepare);
     },

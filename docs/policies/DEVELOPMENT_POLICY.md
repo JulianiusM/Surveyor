@@ -6,7 +6,7 @@ owner: project maintainers
 status: current
 last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: maintainer-authorized final-answer-only questions and complete outstanding requests added to agent review; prior approval, responsibility, session and delivery boundaries retained
+verification-scope: explicit R3 architecture-remediation authority and R4 administration-deferral amendment recorded; final-answer-only questions and prior responsibility, session and delivery boundaries retained
 source-anchors: AGENTS.md; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/development-check.json; scripts/check-development-policy.mjs; scripts/tests/development-policy-check.test.mjs; docs/DEVELOPMENT.md; docs/ARCHITECTURE.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; src/; tests/; package.json
 next-review: explicit-maintainer-policy-amendment
 -->
@@ -160,6 +160,29 @@ requirements to every delegated agent; require its acknowledgement. Track each a
 decision. Delegation or successful checks cannot grant approval or certify the quality of an explanation.
 Tests establish their exercised behavior, not design authorization. An agent-authored amendment, backlog closure or
 review claim cannot supply missing conversational approval or retroactively authorize its own implementation.
+
+### Task-scoped architecture remediation authority (2026-10-26)
+
+The maintainer explicitly approved **R3**, authorizing completion of the already reviewed, behavior-preserving
+architecture remediation in IMP-137 through IMP-146 and IMP-148 through IMP-158, plus retirement of the unused
+session validator identified under ARCH-005. For this effort only, those equivalent refactors and confirmed
+readability corrections do not require another individual implementation approval. The original approval rules
+above remain authoritative outside this exception, which expires when this recorded remediation is complete.
+
+Classify heuristic warnings before correcting debt. Apply scoped implementation, actual caller adoption,
+independent nonauthor and root source review, and appropriate checks throughout. Preserve observable behavior,
+security, identity/session rules, error statuses, reads/writes, transaction and lock order, file lifetimes,
+database schema and wire compatibility. Any required change to those, or conflict with another approved design,
+still needs its own complete approval request in the final answer. Broader session redesign and unrelated remedies
+remain outside this authority.
+
+The maintainer separately approved **R4**, lifting the explicit IMP-070 deferral for its matching administrator and
+default-permission orchestration. That bounded consolidation may proceed under R3 through the existing shared
+administration controller with actual adoption by Packing, Drivers, Event and Activity. Feature controllers retain
+admission; existing DBAL services retain transaction/lock ownership. Preserve grants, private projections, comparison
+tokens, validation order, zero versus absent grants and every feature's lock/commit order. The rejected earlier
+attempt and rollback remain historical; this amendment neither accepts that patch retrospectively nor authorizes
+changed administration rules or other excluded backend remedies.
 
 ## Implementation principles
 

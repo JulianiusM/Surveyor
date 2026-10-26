@@ -36,5 +36,8 @@ export interface ApiOperationContract {
     policy: {retryPolicy: 'read' | 'natural-idempotent' | 'reconcile-only'; precondition: 'none' | 'metadata' | 'item' | 'order' | 'settings'};
 }
 
-export interface ApiProblemContract {code: string; status: number; messageKey: string; paramsSchema: unknown;}
+export interface ApiProblemContract {code: string; status: number; messageKey: string; paramsSchema: unknown;
+    /** Authored compatibility for trusted controller APIError causes only. */
+    controllerStatusOverride?: true;
+}
 export interface ApiContractManifest {sourceHash: string; apiCompatibility: string; operations: ApiOperationContract[]; problems: ApiProblemContract[];}

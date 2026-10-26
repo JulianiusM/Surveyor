@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {useFileSelectionRelease} from '../composables/fileSelection';
 import FormField from './FormField.vue';
+import {imageFileAccept} from '../../common/lib/fileMedia';
 
 // Matching creation and settings choosers share their label/control markup.
 // The feature owns selected bytes and decides when a confirmed operation or
@@ -18,7 +19,7 @@ const props = withDefaults(defineProps<{
     accept?: string;
     required?: boolean;
     describedBy?: string;
-}>(), {labelClass: '', dark: true, accept: 'image/jpeg,image/png,image/gif'});
+}>(), {labelClass: '', dark: true, accept: imageFileAccept});
 const emit = defineEmits<{choose: [file: File | null]}>();
 const input = useFileSelectionRelease(() => props.selectedFile);
 

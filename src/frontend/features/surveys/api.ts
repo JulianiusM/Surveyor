@@ -30,58 +30,54 @@ export class SurveysApi {
     async survey(surveyId: string, scope: FrontendRequestScope, signal?: AbortSignal,
                  previous?: FrontendRead<Survey>): Promise<FrontendRead<Survey>> {
         const transport = this.transport;
-        async function readSurvey() {
+        function readSurvey() {
             // Carry the previous representation's validator through the same
             // captured actor and cancellation scope as this network read.
-            const result = await transport.client.GET('/surveys/{surveyId}', {
+            return transport.client.GET('/surveys/{surveyId}', {
                 params: {path: {surveyId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
             });
-            return transport.read('getSurvey', {...result, signal}, validateSurveyView, scope, previous);
         }
-        return transport.allowedRead(`survey/${surveyId}`, scope, readSurvey, signal);
+        return transport.readJson(`survey/${surveyId}`, scope, readSurvey, 'getSurvey', validateSurveyView, signal, previous);
     }
 
     /** Creation is an account-only journey, independently admitted from reading
      * a duplication source. Preserve the exact requested return destination. */
     async createEntry(scope: FrontendRequestScope, signal?: AbortSignal, returnTo?: string) {
         const transport = this.transport;
-        async function readEntry() {
+        function readEntry() {
             // The server chooses render/login/denied; the browser validates that
             // outcome instead of deriving account admission from cached identity.
-            const result = await transport.client.GET('/surveys/create-entry', {
+            return transport.client.GET('/surveys/create-entry', {
                 params: {query: {returnTo}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getSurveyCreateEntry', {...result, signal}, validateSurveyCreateEntry, scope).data;
         }
-        return transport.allowedRead('survey/create-entry/' + (returnTo ?? ''), scope, readEntry, signal);
+        return (await transport.readJson('survey/create-entry/' + (returnTo ?? ''), scope, readEntry, 'getSurveyCreateEntry', validateSurveyCreateEntry, signal)).data;
     }
 
     /** Explicit guest and detail URLs retain their distinct native admission.
      * A private detail grant cannot stand in for the public guest exception. */
     async resourceEntry(surveyId: string, view: 'detail' | 'guest', scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
-        async function readEntry() {
+        function readEntry() {
             // Carry route intent and actor through the same cancelable read.
-            const result = await transport.client.GET('/surveys/{surveyId}/entry', {
+            return transport.client.GET('/surveys/{surveyId}/entry', {
                 params: {path: {surveyId}, query: {view}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getSurveyResourceEntry', {...result, signal}, validateSurveyResourceEntry, scope).data;
         }
-        return transport.allowedRead(`survey/${surveyId}/entry/${view}`, scope, readEntry, signal);
+        return (await transport.readJson(`survey/${surveyId}/entry/${view}`, scope, readEntry, 'getSurveyResourceEntry', validateSurveyResourceEntry, signal)).data;
     }
 
     /** Copy only the admitted metadata and recurring choices. Votes, uploaded
      * files and ownership are never part of this independent creation draft. */
     async duplicate(surveyId: string, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
-        async function readDuplicate() {
+        function readDuplicate() {
             // Reading a copy does not authorize its later creation command.
-            const result = await transport.client.GET('/surveys/{surveyId}/duplicate', {
+            return transport.client.GET('/surveys/{surveyId}/duplicate', {
                 params: {path: {surveyId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getSurveyDuplicate', {...result, signal}, validateSurveyDuplicate, scope).data;
         }
-        return transport.allowedRead(`survey/${surveyId}/duplicate`, scope, readDuplicate, signal);
+        return (await transport.readJson(`survey/${surveyId}/duplicate`, scope, readDuplicate, 'getSurveyDuplicate', validateSurveyDuplicate, signal)).data;
     }
 
     /** Capture generated machine data and optional bytes in the native multipart
@@ -148,15 +144,14 @@ export class SurveysApi {
     async metadata(surveyId: string, scope: FrontendRequestScope, signal?: AbortSignal,
                    previous?: FrontendRead<Metadata>): Promise<FrontendRead<Metadata>> {
         const transport: FrontendApi = this.transport;
-        async function readMetadata() {
+        function readMetadata() {
             // The returned identity belongs to this admitted metadata baseline,
             // independently of public results and another profile's ballot.
-            const result = await transport.client.GET('/surveys/{surveyId}/metadata', {
+            return transport.client.GET('/surveys/{surveyId}/metadata', {
                 params: {path: {surveyId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
             });
-            return transport.read('getSurveyMetadata', {...result, signal}, validateSurveyMetadata, scope, previous);
         }
-        const result = await transport.allowedRead(`survey/${surveyId}/metadata`, scope, readMetadata, signal);
+        const result = await transport.readJson(`survey/${surveyId}/metadata`, scope, readMetadata, 'getSurveyMetadata', validateSurveyMetadata, signal, previous);
 
         // The shared editor requires a representation identity to reconcile
         // refreshes; this is not an optimistic server write precondition.
@@ -185,30 +180,28 @@ export class SurveysApi {
      * The projection supplies no event, administrator or permission controls. */
     async settings(surveyId: string, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
-        async function readSettings() {
+        function readSettings() {
             // The generated projection, rather than the detail's edit button,
             // decides which shared settings panels may be rendered.
-            const result = await transport.client.GET('/surveys/{surveyId}/settings', {
+            return transport.client.GET('/surveys/{surveyId}/settings', {
                 params: {path: {surveyId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getSurveySettings', {...result, signal}, validateSurveySettings, scope).data;
         }
-        return transport.allowedRead(`survey/${surveyId}/settings`, scope, readSettings, signal);
+        return (await transport.readJson(`survey/${surveyId}/settings`, scope, readSettings, 'getSurveySettings', validateSurveySettings, signal)).data;
     }
 
     /** Fetch authorized image bytes through the shared binary/error decoder.
      * Cancellation and cooldown share the JSON read's captured identity. */
     async header(surveyId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<Blob> {
         const transport = this.transport;
-        async function readHeader() {
+        function readHeader() {
             // Successful media becomes a Blob; Problems retain normal JSON
             // validation rather than entering a second image-only error path.
-            const result = await transport.client.GET('/surveys/{surveyId}/header', {
+            return transport.client.GET('/surveys/{surveyId}/header', {
                 params: {path: {surveyId}, header: transport.headers(scope)}, signal, cache: 'no-store', parseAs: 'blob',
             });
-            return transport.headerImage(result, scope, signal);
         }
-        return transport.allowedRead(`survey/${surveyId}/header`, scope, readHeader, signal);
+        return transport.readHeaderImage(`survey/${surveyId}/header`, scope, readHeader, signal);
     }
 
     /** Selected bytes retain their file draft but keep native unversioned image
@@ -258,14 +251,13 @@ export class SurveysApi {
      * Registering an identity remains a separate explicit command below. */
     async guestEntry(surveyId: string, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
-        async function readGuest() {
+        function readGuest() {
             // Keep the title surface independent from private ballots/settings.
-            const result = await transport.client.GET('/surveys/{surveyId}/guest', {
+            return transport.client.GET('/surveys/{surveyId}/guest', {
                 params: {path: {surveyId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getSurveyGuestEntry', {...result, signal}, validateGuestEntry, scope).data;
         }
-        return transport.allowedRead(`survey/${surveyId}/guest`, scope, readGuest, signal);
+        return (await transport.readJson(`survey/${surveyId}/guest`, scope, readGuest, 'getSurveyGuestEntry', validateGuestEntry, signal)).data;
     }
 
     /** Register the explicitly submitted guest through the existing identity

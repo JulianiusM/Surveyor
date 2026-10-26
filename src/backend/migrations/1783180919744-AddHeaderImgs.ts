@@ -20,7 +20,10 @@ import {addColumnIfNotExists, dropColumnIfExists} from "../modules/database/util
 export class AddHeaderImgs1783180919744 implements MigrationInterface {
     name = 'AddHeaderImgs1783180919744'
 
+    /** Add optional header storage to the five existing entity roots. */
     public async up(queryRunner: QueryRunner): Promise<void> {
+        // Keep the historical table order; conditional addition also tolerates a
+        // column already installed by an earlier schema preparation.
         const tables = [
             "drivers_lists",
             "packing_lists",
@@ -34,7 +37,9 @@ export class AddHeaderImgs1783180919744 implements MigrationInterface {
         }
     }
 
+    /** Remove the header columns in the original reverse feature order. */
     public async down(queryRunner: QueryRunner): Promise<void> {
+        // This migration changes metadata only; stored image cleanup is outside it.
         const tables = [
             "surveys",
             "activity_plans",

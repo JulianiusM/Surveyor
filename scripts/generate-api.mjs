@@ -65,6 +65,10 @@ function validatorSchema(value, id, additive = false, insideParameters = false) 
         if (key === '$ref') {
             if (!nested.startsWith('#/components/schemas/')) throw new Error(`Unsupported schema reference: ${nested}`);
             result.$ref = `${id}#/$defs/${nested.slice('#/components/schemas/'.length)}`;
+        } else if (key === 'x-surveyor-controller-status-override') {
+            // This reviewed controller-adapter annotation belongs to the
+            // manifest, not JSON payload validation or executable vocabulary.
+            continue;
         } else if (key === 'additionalProperties' && nested === false && additive && !insideParameters) {
             // New response fields are compatible. Never weaken known error parameter contracts.
             result[key] = true;
@@ -244,9 +248,27 @@ for (const [route, unresolvedPathItem] of Object.entries(document.paths)) {
 // Localization derives problem parameters from these authored variants; it must
 // not maintain another handwritten error inventory.
 const problems = [];
+const problemVariants = new Set(schemas.Problem.oneOf);
+validateControllerStatusOverrides(schemas);
 for (const variant of schemas.Problem.oneOf) {
     problems.push({code: variant.properties.code.const, status: variant.properties.status.const,
-        messageKey: variant.properties.messageKey.const, paramsSchema: variant.properties.params});
+        messageKey: variant.properties.messageKey.const, paramsSchema: variant.properties.params,
+        ...(variant['x-surveyor-controller-status-override'] === true ? {controllerStatusOverride: true} : {})});
+}
+
+/** Only authored Problem variants can retain a controller's legacy status override.
+ * Validate the annotation before stripping it from standalone schema compilation;
+ * no code-name whitelist or second Event-cause inventory participates. */
+function validateControllerStatusOverrides(value) {
+    if (!value || typeof value !== 'object') return;
+
+    // Placement and boolean shape are deliberate generation contracts. A typo
+    // must fail rather than silently change an existing controller error mapping.
+    if (Object.hasOwn(value, 'x-surveyor-controller-status-override')
+        && (!problemVariants.has(value) || typeof value['x-surveyor-controller-status-override'] !== 'boolean')) {
+        throw new Error('Controller status override must be a boolean annotation on a Problem variant');
+    }
+    for (const nested of Object.values(value)) validateControllerStatusOverrides(nested);
 }
 const apiCompatibility = document['x-surveyor-api-compatibility'];
 if (typeof apiCompatibility !== 'string' || !/^[a-zA-Z0-9-]{1,128}$/u.test(apiCompatibility)) throw new Error('Missing API compatibility family');
@@ -304,10 +326,34 @@ async function bundleBrowserValidator(exportName, reference, ajv, output) {
         bundle: true, write: false, platform: 'browser', format: 'esm', target: 'es2020', legalComments: 'none'});
 
     // Keep the lazy runtime and its declaration paired under the existing owner.
-    output.set(`${artifactDirectory}/browser/${exportName}.mjs`, banner + result.outputFiles[0].text);
+    const attributes = nativeFieldAttributes(exportName.slice('validate'.length));
+    const attributeEntries = Object.entries(attributes);
+    const attributeCode = attributeEntries.length ? `\nexport const fieldAttributes = Object.freeze({${attributeEntries.map(
+        ([field, value]) => `${JSON.stringify(field)}: Object.freeze(${JSON.stringify(value)})`).join(',')}});\n` : '';
+    const attributeTypes = attributeEntries.length ? `export const fieldAttributes: {${attributeEntries.map(
+        ([field, value]) => `readonly ${JSON.stringify(field)}: {readonly maxLength: ${value.maxLength}}`).join(';')}};\n` : '';
+    output.set(`${artifactDirectory}/browser/${exportName}.mjs`, banner + result.outputFiles[0].text + attributeCode);
     output.set(`${artifactDirectory}/browser/${exportName}.d.mts`, banner
         + `import type {ValidatorSet} from '../../../../src/types/api/validation-v1.js';\n`
-        + `export const ${exportName}: ValidatorSet['${exportName}'];\n`);
+        + `export const ${exportName}: ValidatorSet['${exportName}'];\n` + attributeTypes);
+}
+
+/** Project declared top-level request string bounds for matching native controls.
+ * This is static metadata beside the owning lazy validator, never another schema
+ * compiler. Native maxlength retains browser UTF-16 behavior while JSON validation
+ * keeps its existing code-point semantics and business checks remain server-owned. */
+function nativeFieldAttributes(name) {
+    if (!requestSchemas.has(name)) return {};
+    const schema = resolve(document, allSchemas[name]);
+    const attributes = {};
+
+    // Only an explicit authored bound is projected. No feature defaults, inferred
+    // database sizes or automatic field rendering enter the generated contract.
+    for (const [field, unresolved] of Object.entries(schema.properties ?? {})) {
+        const value = resolve(document, unresolved);
+        if (value.maxLength !== undefined) attributes[field] = {maxLength: value.maxLength};
+    }
+    return attributes;
 }
 
 for (const browser of [false, true]) {

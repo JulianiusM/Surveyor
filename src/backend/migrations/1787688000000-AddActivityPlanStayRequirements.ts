@@ -31,7 +31,9 @@ interface IdColumnMetadata {
     collation: string | null;
 }
 
+/** Admit only metadata identifiers safe to interpolate into the migration's DDL. */
 function assertSafeSqlName(value: string, label: string): void {
+    // Character set and collation names cannot be bound as SQL value parameters.
     if (!/^[a-zA-Z0-9_]+$/.test(value)) {
         throw new Error(`Unexpected ${label} in activity plan ID metadata`);
     }

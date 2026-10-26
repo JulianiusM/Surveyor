@@ -14,29 +14,15 @@
  * limitations under the License.
  */
 
+import type {AssignmentCandidate, RecommendationWarningOptions} from '../../../types/ActivityTypes';
+
+
 import {ActivitySlot} from "../database/entities/activity/ActivitySlot";
 import type {RecommendationInput, RecommendationWarningResult} from "../../../types/ActivityTypes";
-export type {RecommendationWarningResult} from '../../../types/ActivityTypes';
-import {AssignmentCandidate, AttendancePolicy, collectAssignmentWarnings, toAssignmentCandidate} from "./availability";
-import type {ParticipantAttendance} from "../../../types/ActivityRequirementTypes";
+
+import {collectAssignmentWarnings, toAssignmentCandidate} from './availability';
+
 import {toParticipantKey} from "../../../common/activity/requirements";
-
-/**
- * Shared helpers for staging and validating assignment recommendations. The functions here
- * normalize recommendation payloads, attach warnings for overlaps/attendance/capacity, and
- * keep per-participant queues consistent across the UI and controller layers.
- */
-
-export interface RecommendationWarningOptions {
-    slots: ActivitySlot[];
-    recommendations: RecommendationInput[];
-    existingAssignments?: Record<string, AssignmentCandidate[]>;
-    linkedAssignments?: Record<string, AssignmentCandidate[]>;
-    participantAttendance?: Record<string, ParticipantAttendance>;
-    slotCapacities?: Record<string, number>;
-    allowOverfill?: boolean;
-    attendancePolicy?: AttendancePolicy;
-}
 
 /** Supply canonical defaults for pure recommendation calculations; controllers validate inputs. */
 export function normalizeRecommendationInput(input: RecommendationInput): RecommendationInput {

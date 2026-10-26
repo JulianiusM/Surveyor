@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {fieldAttributes as adjustmentFields} from '../../../../.generated/api/v1/browser/validateFinanceAdjustmentInput.mjs';
 import {computed, nextTick, reactive, ref, shallowRef, useId} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {FinanceAdjustmentRemovalReview} from '../../../types/FrontendFinanceReviewTypes';
@@ -233,7 +234,7 @@ function close(): void {
                             :placeholder="messages.t('finance.adjustmentAmountExample')"
                             :described-by="`${id}-help`" required :required-marker="false"
                             :pending="command.pending.value" />
-                        <FormField :id="`${id}-note`" v-model="draft.note" class="col-12" :label="messages.t('finance.note')" required :required-marker="false" :max-length="4000"
+                        <FormField :id="`${id}-note`" v-model="draft.note" class="col-12" :label="messages.t('finance.note')" required :required-marker="false" :max-length="adjustmentFields.note.maxLength"
                             :placeholder="messages.t('finance.explainTheSurchargeOrRebate')" :pending="command.pending.value" />
                         <div class="col-12">
                             <div class="form-check form-switch">

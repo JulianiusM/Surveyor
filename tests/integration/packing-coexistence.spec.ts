@@ -1,3 +1,4 @@
+import {getLockedListAssignment} from '../../src/backend/modules/database/services/ListService';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {randomUUID} from 'node:crypto';
 import type {EntityManager, Logger} from 'typeorm';
@@ -143,7 +144,7 @@ describe('native and versioned Packing lock coexistence', function packingCoexis
         const pending: Promise<unknown>[] = [];
 
         async function holdItem(manager: EntityManager) {
-            await packingService.getLockedPackingAssignment(manager, item.id, owner.id);
+            await getLockedListAssignment('packing', manager, item.id, owner.id);
             fixtureItemLocked.release();
             await releaseItem.promise;
         }
@@ -273,7 +274,7 @@ describe('native and versioned Packing lock coexistence', function packingCoexis
         expect(ownerAssignment).toBe(2);
 
         await lifecycleService.withLockedArchiveTarget({type: 'packing', id}, async function observeRemoval(manager) {
-            const snapshot = await packingService.getLockedPackingAssignment(manager, item.id, participant.id);
+            const snapshot = await getLockedListAssignment('packing', manager, item.id, participant.id);
             expect(snapshot.count).toBe(2);
             await packingController.getAssignmentAccessMapping().unassign({itemId: item.id}, participant.id);
             const remaining = await packingService.getPackingAssignmentById(
@@ -291,7 +292,7 @@ describe('native and versioned Packing lock coexistence', function packingCoexis
         const itemLocked = milestone();
         const releaseVersioned = milestone();
         const versioned = lifecycleService.withLockedArchiveTarget({type: 'packing', id}, async function saveVersionedItem(manager) {
-            await packingService.getLockedPackingAssignment(manager, item.id, owner.id);
+            await getLockedListAssignment('packing', manager, item.id, owner.id);
             itemLocked.release();
             await releaseVersioned.promise;
             await packingService.updatePackingItem(item.id, {title: 'Versioned item'}, manager);

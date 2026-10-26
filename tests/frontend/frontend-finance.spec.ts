@@ -55,6 +55,7 @@ async function fillInvoice(wrapper: Awaited<ReturnType<typeof mountFrontendEvent
     await wrapper.get('input[name="description"]').setValue('Retained receipt');
     const file = new File(['same proof bytes'], 'receipt.pdf', {type: 'application/pdf'});
     const chooser = wrapper.get<HTMLInputElement>('input[name="proof"]');
+    expect(chooser.attributes('accept')).toBe('image/jpeg,image/png,image/gif,application/pdf');
     Object.defineProperty(chooser.element, 'files', {value: [file], configurable: true});
     await chooser.trigger('change');
     vi.spyOn(wrapper.get('form').element, 'reportValidity').mockReturnValue(true);

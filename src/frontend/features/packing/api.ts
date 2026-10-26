@@ -44,13 +44,12 @@ export class PackingApi {
     async packing(listId: string, scope: FrontendRequestScope, signal?: AbortSignal,
                   previous?: FrontendRead<List>): Promise<FrontendRead<List>> {
         const transport = this.transport;
-        async function readPacking(): Promise<FrontendRead<List>> {
-            const response = await transport.client.GET('/packing-lists/{listId}', {
+        function readPacking() {
+            return transport.client.GET('/packing-lists/{listId}', {
                 params: {path: {listId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
             });
-            return transport.read('getPackingList', {...response, signal}, validatePackingListView, scope, previous);
         }
-        return transport.allowedRead(`packing/${listId}`, scope, readPacking, signal);
+        return transport.readJson(`packing/${listId}`, scope, readPacking, 'getPackingList', validatePackingListView, signal, previous);
     }
 
     /** Obtain permitted root fields and usable comparison evidence together.
@@ -59,13 +58,12 @@ export class PackingApi {
     async metadata(listId: string, scope: FrontendRequestScope, signal?: AbortSignal,
                    previous?: FrontendRead<Metadata>): Promise<FrontendRead<Metadata>> {
         const transport = this.transport;
-        async function readMetadata(): Promise<FrontendRead<Metadata>> {
-            const response = await transport.client.GET('/packing-lists/{listId}/metadata', {
+        function readMetadata() {
+            return transport.client.GET('/packing-lists/{listId}/metadata', {
                 params: {path: {listId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
             });
-            return transport.read('getPackingMetadata', {...response, signal}, validatePackingMetadata, scope, previous);
         }
-        const result = await transport.allowedRead(`packing/${listId}/metadata`, scope, readMetadata, signal);
+        const result = await transport.readJson(`packing/${listId}/metadata`, scope, readMetadata, 'getPackingMetadata', validatePackingMetadata, signal, previous);
         this.transport.requireComparison(result.etag);
         return result;
     }
@@ -99,13 +97,12 @@ export class PackingApi {
      * cooldown while its generated validator checks the permitted panels/tokens. */
     async settings(listId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['PackingSettings']> {
         const transport = this.transport;
-        async function readSettings(): Promise<components['schemas']['PackingSettings']> {
-            const response = await transport.client.GET('/packing-lists/{listId}/settings', {
+        function readSettings() {
+            return transport.client.GET('/packing-lists/{listId}/settings', {
                 params: {path: {listId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getPackingSettings', {...response, signal}, validatePackingSettings, scope).data;
         }
-        return transport.allowedRead(`packing/${listId}/settings`, scope, readSettings, signal);
+        return (await transport.readJson(`packing/${listId}/settings`, scope, readSettings, 'getPackingSettings', validatePackingSettings, signal)).data;
     }
 
     /** Creation admission is distinct from the public duplication projection. The caller supplies
@@ -113,13 +110,12 @@ export class PackingApi {
     async createEntry(scope: FrontendRequestScope, signal?: AbortSignal,
                       returnTo?: string, eventId?: string): Promise<components['schemas']['PackingCreateEntry']> {
         const transport = this.transport;
-        async function readCreationEntry(): Promise<components['schemas']['PackingCreateEntry']> {
-            const response = await transport.client.GET('/packing-lists/create-entry', {
+        function readCreationEntry() {
+            return transport.client.GET('/packing-lists/create-entry', {
                 params: {query: {returnTo, eventId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getPackingCreateEntry', {...response, signal}, validatePackingCreateEntry, scope).data;
         }
-        return transport.allowedRead('packing/create-entry/' + (returnTo ?? '') + '/' + (eventId ?? ''), scope, readCreationEntry, signal);
+        return (await transport.readJson('packing/create-entry/' + (returnTo ?? '') + '/' + (eventId ?? ''), scope, readCreationEntry, 'getPackingCreateEntry', validatePackingCreateEntry, signal)).data;
     }
 
     /** Detail and explicit guest routes deliberately have different admission. Never
@@ -127,13 +123,12 @@ export class PackingApi {
     async resourceEntry(listId: string, view: 'detail' | 'guest', scope: FrontendRequestScope,
                         signal?: AbortSignal): Promise<components['schemas']['PackingResourceEntry']> {
         const transport = this.transport;
-        async function readResourceEntry(): Promise<components['schemas']['PackingResourceEntry']> {
-            const response = await transport.client.GET('/packing-lists/{listId}/entry', {
+        function readResourceEntry() {
+            return transport.client.GET('/packing-lists/{listId}/entry', {
                 params: {path: {listId}, query: {view}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getPackingResourceEntry', {...response, signal}, validatePackingResourceEntry, scope).data;
         }
-        return transport.allowedRead(`packing/${listId}/entry/${view}`, scope, readResourceEntry, signal);
+        return (await transport.readJson(`packing/${listId}/entry/${view}`, scope, readResourceEntry, 'getPackingResourceEntry', validatePackingResourceEntry, signal)).data;
     }
 
     /** Read only the server's permitted duplication surface. Destination selection
@@ -142,13 +137,12 @@ export class PackingApi {
     async duplicate(listId: string, scope: FrontendRequestScope, signal?: AbortSignal,
                     eventId?: string): Promise<components['schemas']['PackingDuplicate']> {
         const transport = this.transport;
-        async function readDuplicate(): Promise<components['schemas']['PackingDuplicate']> {
-            const response = await transport.client.GET('/packing-lists/{listId}/duplicate', {
+        function readDuplicate() {
+            return transport.client.GET('/packing-lists/{listId}/duplicate', {
                 params: {path: {listId}, query: {eventId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getPackingDuplicate', {...response, signal}, validatePackingDuplicate, scope).data;
         }
-        return transport.allowedRead(`packing/${listId}/duplicate/${eventId ?? ''}`, scope, readDuplicate, signal);
+        return (await transport.readJson(`packing/${listId}/duplicate/${eventId ?? ''}`, scope, readDuplicate, 'getPackingDuplicate', validatePackingDuplicate, signal)).data;
     }
 
     /** Submit the generated creation contract and optional image as one multipart command.
@@ -215,13 +209,12 @@ export class PackingApi {
     async events(query: FrontendEventPickerQuery,
                   scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
-        async function readEventOptions(): Promise<components['schemas']['EventPickerOptions']> {
-            const response = await transport.client.GET('/packing-lists/events', {
+        function readEventOptions() {
+            return transport.client.GET('/packing-lists/events', {
                 params: {query, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('searchPackingEvents', {...response, signal}, validateEventPickerOptions, scope).data;
         }
-        return transport.allowedRead(`packing/events/${JSON.stringify(query)}`, scope, readEventOptions, signal);
+        return (await transport.readJson(`packing/events/${JSON.stringify(query)}`, scope, readEventOptions, 'searchPackingEvents', validateEventPickerOptions, signal)).data;
     }
 
     async linkEvent(listId: string, input: components['schemas']['PackingEventChange'], token: string, scope: FrontendRequestScope) {
@@ -241,13 +234,12 @@ export class PackingApi {
      * transport; a displayed username never becomes the acting identity. */
     async profiles(listId: string, q: string, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
-        async function readProfileOptions(): Promise<components['schemas']['PackingProfileOptions']> {
-            const response = await transport.client.GET('/packing-lists/{listId}/profiles', {
+        function readProfileOptions() {
+            return transport.client.GET('/packing-lists/{listId}/profiles', {
                 params: {path: {listId}, query: {q}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('searchPackingProfiles', {...response, signal}, validatePackingProfileOptions, scope).data;
         }
-        return transport.allowedRead(`packing/${listId}/profiles/${q}`, scope, readProfileOptions, signal);
+        return (await transport.readJson(`packing/${listId}/profiles/${q}`, scope, readProfileOptions, 'searchPackingProfiles', validatePackingProfileOptions, signal)).data;
     }
 
     async addAdmin(listId: string, input: components['schemas']['PackingAdminInput'], token: string, scope: FrontendRequestScope) {
@@ -275,14 +267,13 @@ export class PackingApi {
          * ordinary JSON/text decoder and the shared validated rejection policy.
          * Binary recovery therefore observes the same actor and Retry-After owner
          * as JSON reads instead of introducing a second error parser or deadline. */
-        async function readHeader(): Promise<Blob> {
-            const result = await transport.client.GET('/packing-lists/{listId}/header', {
+        function readHeader() {
+            return transport.client.GET('/packing-lists/{listId}/header', {
                 params: {path: {listId}, header: transport.headers(scope)}, signal, cache: 'no-store', parseAs: 'blob',
             });
-            return transport.headerImage(result, scope, signal);
         }
 
-        return transport.allowedRead(`packing/${listId}/header`, scope, readHeader, signal);
+        return transport.readHeaderImage(`packing/${listId}/header`, scope, readHeader, signal);
     }
 
     /** Replace the header using the file draft's reviewed comparison token.
@@ -325,13 +316,12 @@ export class PackingApi {
      * separate identity command with its own confirmed context and destination. */
     async guestEntry(listId: string, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
-        async function readGuestEntry(): Promise<components['schemas']['GuestEntry']> {
-            const response = await transport.client.GET('/packing-lists/{listId}/guest', {
+        function readGuestEntry() {
+            return transport.client.GET('/packing-lists/{listId}/guest', {
                 params: {path: {listId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getPackingGuestEntry', {...response, signal}, validateGuestEntry, scope).data;
         }
-        return transport.allowedRead('packing/' + listId + '/guest', scope, readGuestEntry, signal);
+        return (await transport.readJson('packing/' + listId + '/guest', scope, readGuestEntry, 'getPackingGuestEntry', validateGuestEntry, signal)).data;
     }
 
     async registerGuest(listId: string, input: components['schemas']['GuestRegistrationInput'], scope: FrontendRequestScope) {

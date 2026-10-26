@@ -1,6 +1,6 @@
 schemas:
   ActivityCreateContext:
-    "$ref": "./drivers.yaml#/schemas/DriversCreateContext"
+    "$ref": "./common.yaml#/schemas/PackingCreateContext"
   ActivityCreateEntry:
     type: "object"
     additionalProperties: false
@@ -23,9 +23,9 @@ schemas:
           -
             type: "null"
   ActivityResourceEntry:
-    "$ref": "./packing.yaml#/schemas/PackingResourceEntry"
+    "$ref": "./common.yaml#/schemas/PackingResourceEntry"
   ActivityCreated:
-    "$ref": "./packing.yaml#/schemas/PackingCreated"
+    "$ref": "./common.yaml#/schemas/PackingCreated"
   ActivitySlotInput:
     type: "object"
     additionalProperties: false
@@ -98,7 +98,7 @@ schemas:
         items:
           "$ref": "#/schemas/ActivitySlotInput"
       defaultPermissions:
-        "$ref": "./packing.yaml#/schemas/PermissionDefaults"
+        "$ref": "./common.yaml#/schemas/PermissionDefaults"
   ActivityCreateForm:
     type: "object"
     additionalProperties: false
@@ -176,7 +176,7 @@ schemas:
         items:
           "$ref": "#/schemas/ActivityDuplicateSlot"
       defaultPermissions:
-        "$ref": "./packing.yaml#/schemas/PermissionDefaults"
+        "$ref": "./common.yaml#/schemas/PermissionDefaults"
       formContext:
         "$ref": "#/schemas/ActivityCreateContext"
       selectedEvent:
@@ -754,7 +754,7 @@ schemas:
           manageAutomation: {type: boolean}
           export: {type: boolean}
       currentEvent:
-        "$ref": "./packing.yaml#/schemas/PackingSettings/properties/currentEvent"
+        "$ref": "./common.yaml#/schemas/PackingSettings/properties/currentEvent"
       archive:
         type: object
         additionalProperties: false
@@ -767,7 +767,7 @@ schemas:
           eventUrl: {type: [string, "null"]}
           hasAutomaticSchedule: {type: boolean}
       access:
-        "$ref": "./packing.yaml#/schemas/PackingSettings/properties/access"
+        "$ref": "./common.yaml#/schemas/PackingSettings/properties/access"
   ActivitySlotPatch:
     type: "object"
     additionalProperties: false
@@ -1087,23 +1087,23 @@ schemas:
                 - "string"
                 - "null"
   ActivityEventOptions:
-    "$ref": "./drivers.yaml#/schemas/DriversEventOptions"
+    "$ref": "./common.yaml#/schemas/EventPickerOptions"
   ActivityEventChange:
-    "$ref": "./drivers.yaml#/schemas/DriversEventChange"
+    "$ref": "./common.yaml#/schemas/PackingEventChange"
   ActivityEventChanged:
-    "$ref": "./drivers.yaml#/schemas/DriversEventChanged"
+    "$ref": "./common.yaml#/schemas/PackingEventChanged"
   ActivityDefaultsBaseline:
-    "$ref": "./drivers.yaml#/schemas/DriversDefaultsBaseline"
+    "$ref": "./common.yaml#/schemas/PackingDefaultsBaseline"
   ActivityAdminBaseline:
-    "$ref": "./drivers.yaml#/schemas/DriversAdminBaseline"
+    "$ref": "./common.yaml#/schemas/PackingAdminBaseline"
   ActivityAdminInput:
-    "$ref": "./drivers.yaml#/schemas/DriversAdminInput"
+    "$ref": "./common.yaml#/schemas/PackingAdminInput"
   ActivityAdminPatch:
-    "$ref": "./drivers.yaml#/schemas/DriversAdminPatch"
+    "$ref": "./common.yaml#/schemas/PackingAdminPatch"
   ActivityProfileOptions:
-    "$ref": "./drivers.yaml#/schemas/DriversProfileOptions"
+    "$ref": "./common.yaml#/schemas/PackingProfileOptions"
   ActivityHeaderBaseline:
-    "$ref": "./drivers.yaml#/schemas/DriversHeaderBaseline"
+    "$ref": "./common.yaml#/schemas/PackingHeaderBaseline"
   ActivityRequirementsInput:
     type: object
     additionalProperties: false

@@ -1,6 +1,8 @@
+
+import {readEventLinkSelection} from '../modules/event/linkage';
 import * as controller from '../controller/activityController';
 import {getEntityViewAdmission} from '../controller/entityAdminController';
-import {readEventLinkSelection} from '../controller/eventController';
+
 import * as service from '../modules/database/services/ActivityService';
 import type {ActivityPlan} from '../modules/database/entities/activity/ActivityPlan';
 import {createGuestFlow, guestFlowResponse} from '../middleware/guestFlowFactory';

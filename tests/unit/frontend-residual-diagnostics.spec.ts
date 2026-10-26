@@ -1,5 +1,7 @@
+
+import {getEventLinkOptions} from '../../src/backend/modules/event/linkage';
 import {describe, expect, it} from 'vitest';
-import eventController, {getEventLinkOptions} from '../../src/backend/controller/eventController';
+import eventController from '../../src/backend/controller/eventController';
 import {createProfile, deactivateProfile, deleteAccount, updateProfile} from '../../src/backend/controller/userController';
 import {normalizeBasicProperties} from '../../src/backend/controller/entityAdminController';
 import type {Event} from '../../src/backend/modules/database/entities/event/Event';

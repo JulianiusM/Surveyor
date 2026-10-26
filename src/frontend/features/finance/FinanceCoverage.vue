@@ -5,6 +5,7 @@ import {useFrontend} from '../../app/context';
 import ActionButton from '../../components/ActionButton.vue';
 import FormField from '../../components/FormField.vue';
 import FinanceLedgerFooter from './FinanceLedgerFooter.vue';
+import {useFinancePagination} from './pagination';
 
 type Group = components['schemas']['FinancePool']['coverageGroups'][number];
 // Applied and pending rosters are separately supplied saved projections. This
@@ -17,15 +18,12 @@ const {messages, locale} = useFrontend();
 const id = useId();
 const search = ref('');
 const size = ref(10);
-const page = ref(0);
 const expanded = ref(new Set<string>());
 const filtered = computed(filteredGroups);
-const pages = computed(() => Math.max(1, Math.ceil(filtered.value.length / size.value)));
-const visible = computed(() => filtered.value.slice(page.value * size.value, (page.value + 1) * size.value));
+const {page, pages, visible} = useFinancePagination(() => filtered.value, size);
 const coveredCount = computed(() => props.groups.reduce((count, group) => count + group.beneficiaries.length, 0));
 watch(search, resetDisplay);
 watch(size, () => {page.value = 0;});
-watch(pages, count => {page.value = Math.min(page.value, count - 1);});
 
 /** Keep whole payer groups searchable while preserving the shared presenter's
  * roster membership; name ordering affects only these read-only rows. */

@@ -21,7 +21,10 @@ const columns = [
 export class IncreaseFreeTextLimits1789776000000 implements MigrationInterface {
     name = "IncreaseFreeTextLimits1789776000000";
 
+    /** Widen only the listed existing free-text columns, retaining nullable values. */
     public async up(queryRunner: QueryRunner): Promise<void> {
+        // Absent feature tables/columns are left alone; the inventory owns which
+        // historical varchar fields receive the wider storage type.
         for (const {table, column, type} of columns) {
             if (!await columnExists(queryRunner, table, column)) continue;
             await queryRunner.query(`ALTER TABLE \`${table}\` MODIFY \`${column}\` ${type} NULL`);

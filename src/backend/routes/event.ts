@@ -1,5 +1,7 @@
+
+import {eventMethodPermission} from '../modules/event/linkage';
 import type {Request} from 'express';
-import eventController, {eventMethodPermission} from '../controller/eventController';
+import eventController from '../controller/eventController';
 import invoiceController, {readEventInvoiceProof} from '../controller/eventPoolController';
 import {paramHandler} from '../middleware/paramHandler';
 import {isLoggedIn, requirePermission} from '../middleware/permissionMiddleware';

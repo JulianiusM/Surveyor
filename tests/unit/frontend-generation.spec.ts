@@ -232,6 +232,53 @@ process.once('SIGINT', stopGate);
 }
 
 describe('contract and catalog generation', () => {
+    it('derives controller status annotations and native bounds from detached authored inputs', async function derivesAuthoredAdapterMetadata() {
+        const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
+        try {
+            await prepareGenerationTree(temporary);
+            const commonPath = path.join(temporary, 'contracts/api/v1/common.yaml');
+            const financePath = path.join(temporary, 'contracts/api/v1/finance.yaml');
+            const common = YAML.parseDocument(await fs.readFile(commonPath, 'utf8'));
+            const finance = YAML.parseDocument(await fs.readFile(financePath, 'utf8'));
+            const variants = common.getIn(['schemas', 'Problem', 'oneOf']);
+            if (!YAML.isSeq(variants)) throw new Error('Problem fixture needs its authored variants.');
+            const flagged = variants.items.find(item => YAML.isMap(item) && item.get('x-surveyor-controller-status-override') === true);
+            const ordinary = variants.items.find(item => YAML.isMap(item) && !item.has('x-surveyor-controller-status-override'));
+            if (!YAML.isMap(flagged) || !YAML.isMap(ordinary)) throw new Error('Problem fixture needs both existing annotation states.');
+            const removedCode = flagged.getIn(['properties', 'code', 'const']);
+            const addedCode = ordinary.getIn(['properties', 'code', 'const']);
+
+            // Change author intent in this detached source, including a non-Event
+            // cause. Emission must follow metadata rather than another whitelist.
+            flagged.set('x-surveyor-controller-status-override', false);
+            ordinary.set('x-surveyor-controller-status-override', true);
+            finance.setIn(['schemas', 'FinanceAcceptanceInput', 'properties', 'correctedDescription', 'maxLength'], 12);
+            await fs.writeFile(commonPath, common.toString());
+            await fs.writeFile(financePath, finance.toString());
+            generate('generate-api.mjs', [], temporary);
+            const manifest = JSON.parse(await fs.readFile(path.join(temporary, '.generated/api/v1/operations.json'), 'utf8')) as ApiContractManifest;
+            expect(manifest.problems.find(problem => problem.code === removedCode)?.controllerStatusOverride).toBeUndefined();
+            expect(manifest.problems.find(problem => problem.code === addedCode)?.controllerStatusOverride).toBe(true);
+            const browser = await import(pathToFileURL(path.join(temporary, '.generated/api/v1/browser/validateFinanceAcceptanceInput.mjs')).href);
+            expect(browser.fieldAttributes.correctedDescription).toEqual({maxLength: 12});
+            expect(browser.validateFinanceAcceptanceInput({correctedDescription: 'a'.repeat(13)})).toBe(false);
+            // Native maxlength keeps UTF-16 semantics; projecting its numeric
+            // bound must not change JSON Schema's existing code-point validation.
+            expect(browser.validateFinanceAcceptanceInput({correctedDescription: '😀'.repeat(7)})).toBe(true);
+
+            ordinary.set('x-surveyor-controller-status-override', 'yes');
+            await fs.writeFile(commonPath, common.toString());
+            expect(() => generate('generate-api.mjs', [], temporary)).toThrow(/boolean annotation on a Problem variant/);
+            ordinary.set('x-surveyor-controller-status-override', true);
+            common.setIn(['schemas', 'ComparisonToken', 'x-surveyor-controller-status-override'], true);
+            await fs.writeFile(commonPath, common.toString());
+            expect(() => generate('generate-api.mjs', [], temporary)).toThrow(/boolean annotation on a Problem variant/);
+        } finally {
+            await removeDependencyLink(temporary);
+            await removeTemporary(temporary);
+        }
+    }, 120_000);
+
     it('watches atomically replaced shared declarations and publishes readiness only after successful dependent generation', async function watchesPermissionDependency(test) {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
         const started = Date.now();

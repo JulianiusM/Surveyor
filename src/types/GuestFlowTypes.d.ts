@@ -133,3 +133,14 @@ export interface GuestFlow<Type extends EntityType, Root extends EntityBase> {
     readResourceEntry(id: string, view: 'detail' | 'guest' | 'admin', actor: SessionLike, regToken?: string): Promise<GuestFlowResourceEntry>;
     readGuestEntry(id: string): Promise<components['schemas']['GuestEntry']>;
 }
+
+
+
+
+export type GuestRegistrationNags = {
+    accountRecommendationTitle?: string;
+    accountRecommendation?: string;
+    linkWarning: string;
+    emailRecommendation: string;
+    submitConfirmation?: string;
+};

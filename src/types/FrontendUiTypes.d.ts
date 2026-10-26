@@ -85,6 +85,14 @@ export interface FrontendFormFieldControlSlot {
 
 export interface FrontendRead<T> { data: T; etag: string | null; }
 
+/** Fetch decoding remains untrusted until the existing transport admits it. */
+export interface FrontendDecodedResponse {
+    data?: unknown;
+    error?: unknown;
+    response: Response;
+    signal?: AbortSignal;
+}
+
 /** A required authority family must perform a read. A separately confirmed owner
  * may also refresh optional dependents; their absence supplies no new authority. */
 export interface FrontendQueryRefreshOptions {

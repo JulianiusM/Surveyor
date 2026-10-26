@@ -1282,99 +1282,666 @@ schemas:
           - messageKey
           - status
           - params
-      - properties:
+      - x-surveyor-controller-status-override: true
+        properties:
           code: {const: EVENT_FULL}
           messageKey: {const: 'api:errors.EVENT_FULL'}
           status: {const: 403}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
-      - properties:
+      - x-surveyor-controller-status-override: true
+        properties:
           code: {const: EVENT_DATE_UPDATES_CLOSED}
           messageKey: {const: 'api:errors.EVENT_DATE_UPDATES_CLOSED'}
           status: {const: 403}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
-      - properties:
+      - x-surveyor-controller-status-override: true
+        properties:
           code: {const: EVENT_DIET_UPDATES_CLOSED}
           messageKey: {const: 'api:errors.EVENT_DIET_UPDATES_CLOSED'}
           status: {const: 403}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
-      - properties:
+      - x-surveyor-controller-status-override: true
+        properties:
           code: {const: EVENT_DEADLINE_PASSED}
           messageKey: {const: 'api:errors.EVENT_DEADLINE_PASSED'}
           status: {const: 403}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
-      - properties:
+      - x-surveyor-controller-status-override: true
+        properties:
           code: {const: EVENT_DATES_INVALID}
           messageKey: {const: 'api:errors.EVENT_DATES_INVALID'}
           status: {const: 400}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
-      - properties:
+      - x-surveyor-controller-status-override: true
+        properties:
           code: {const: EVENT_TOKEN_USED}
           messageKey: {const: 'api:errors.EVENT_TOKEN_USED'}
           status: {const: 409}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
-      - properties:
+      - x-surveyor-controller-status-override: true
+        properties:
           code: {const: EVENT_ALLERGY_INFO_REQUIRED}
           messageKey: {const: 'api:errors.EVENT_ALLERGY_INFO_REQUIRED'}
           status: {const: 400}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
-      - properties:
+      - x-surveyor-controller-status-override: true
+        properties:
           code: {const: EVENT_COMMENT_REQUIRED}
           messageKey: {const: 'api:errors.EVENT_COMMENT_REQUIRED'}
           status: {const: 400}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
-      - properties:
+      - x-surveyor-controller-status-override: true
+        properties:
           code: {const: EVENT_MEAL_REQUIRED}
           messageKey: {const: 'api:errors.EVENT_MEAL_REQUIRED'}
           status: {const: 400}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
-      - properties:
+      - x-surveyor-controller-status-override: true
+        properties:
           code: {const: EVENT_VEGETARIAN_CONFLICT}
           messageKey: {const: 'api:errors.EVENT_VEGETARIAN_CONFLICT'}
           status: {const: 400}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
-      - properties:
+      - x-surveyor-controller-status-override: true
+        properties:
           code: {const: EVENT_VEGAN_CONFLICT}
           messageKey: {const: 'api:errors.EVENT_VEGAN_CONFLICT'}
           status: {const: 400}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
-      - properties:
+      - x-surveyor-controller-status-override: true
+        properties:
           code: {const: EVENT_CANCELLATION_CLOSED}
           messageKey: {const: 'api:errors.EVENT_CANCELLATION_CLOSED'}
           status: {const: 403}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
-      - properties:
+      - x-surveyor-controller-status-override: true
+        properties:
           code: {const: EVENT_TIMEZONE_INVALID}
           messageKey: {const: 'api:errors.EVENT_TIMEZONE_INVALID'}
           status: {const: 400}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
-      - properties:
+      - x-surveyor-controller-status-override: true
+        properties:
           code: {const: EVENT_START_AFTER_END}
           messageKey: {const: 'api:errors.EVENT_START_AFTER_END'}
           status: {const: 400}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
-      - properties:
+      - x-surveyor-controller-status-override: true
+        properties:
           code: {const: EVENT_DEADLINE_INVALID}
           messageKey: {const: 'api:errors.EVENT_DEADLINE_INVALID'}
           status: {const: 400}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
-      - properties:
+      - x-surveyor-controller-status-override: true
+        properties:
           code: {const: EVENT_LINK_ACCOUNT_REQUIRED}
           messageKey: {const: 'api:errors.EVENT_LINK_ACCOUNT_REQUIRED'}
           status: {const: 401}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
+
+  PackingCreateEntry:
+    type: object
+    additionalProperties: false
+    required: [entry, context]
+    properties:
+      entry:
+        $ref: '#/schemas/PageEntryOutcome'
+      context:
+        anyOf:
+          - $ref: '#/schemas/PackingCreateContext'
+          - type: 'null'
+      selectedEvent:
+        description: Present only when eventId context was requested. Authorized initial URL selection; a missing or rejected selection is omitted from the creation draft.
+        anyOf:
+          - $ref: '#/schemas/EventPickerOption'
+          - type: 'null'
+
+  PackingResourceEntry:
+    type: object
+    additionalProperties: false
+    required: [entry, guest]
+    properties:
+      entry:
+        $ref: '#/schemas/PageEntryOutcome'
+      guest:
+        anyOf:
+          - $ref: ./auth.yaml#/schemas/GuestEntry
+          - type: 'null'
+
+  PackingAssignee:
+    type: object
+    additionalProperties: false
+    required:
+      - name
+      - assignmentId
+    properties:
+      name:
+        type: string
+      assignmentId:
+        anyOf:
+          - $ref: '#/schemas/DecimalId'
+          - type: "null"
+
+  PackingDescriptionValue:
+    type: [string, 'null']
+    maxLength: 16000
+
+  PackingMetadataPatch:
+    type: object
+    additionalProperties: false
+    minProperties: 1
+    properties:
+      title:
+        type: string
+        minLength: 1
+        maxLength: 255
+        pattern: \S
+      description:
+        $ref: '#/schemas/PackingDescriptionValue'
+
+  PackingDescriptionPatch:
+    description: Bounded adapter for the independently grantable description method; root properties remain profile-only.
+    type: object
+    additionalProperties: false
+    required: [description]
+    properties:
+      description:
+        $ref: '#/schemas/PackingDescriptionValue'
+
+  PackingDescriptionBaseline:
+    description: Only the method-authorized description and its actor/resource-bound field precondition; no root title, event or archival context.
+    type: object
+    additionalProperties: false
+    required: [description, editToken]
+    properties:
+      description:
+        type: [string, 'null']
+      editToken:
+        $ref: '#/schemas/FieldComparisonToken'
+
+  PackingDefaultsBaseline:
+    description: Audience masks independently authorized by MANAGE_PERMISSIONS; excludes roster, header, parent and root metadata.
+    type: object
+    additionalProperties: false
+    required: [defaultPermissions, editToken]
+    properties:
+      defaultPermissions:
+        $ref: '#/schemas/PermissionDefaults'
+      editToken:
+        $ref: '#/schemas/FieldComparisonToken'
+
+  PackingAdminBaseline:
+    description: One selected administrator mask, or null for the new-administrator comparison marker; no roster or profile presentation.
+    type: object
+    additionalProperties: false
+    required: [mask, editToken]
+    properties:
+      mask:
+        type: [integer, 'null']
+        minimum: 0
+        maximum: 2147483647
+      editToken:
+        $ref: '#/schemas/FieldComparisonToken'
+
+  PackingHeaderBaseline:
+    description: Method-authorized header field hash only; contains no stored path, image bytes, root title or parent context.
+    type: object
+    additionalProperties: false
+    required: [editToken]
+    properties:
+      editToken:
+        $ref: '#/schemas/FieldComparisonToken'
+
+  PackingAssignmentResult:
+    type: object
+    additionalProperties: false
+    required:
+      - listId
+      - itemId
+      - selfAssigned
+      - assignedCount
+      - maxAssignees
+    properties:
+      listId:
+        $ref: '#/schemas/Uuid'
+      itemId:
+        $ref: '#/schemas/Uuid'
+      selfAssigned:
+        type: boolean
+      assignedCount:
+        type: integer
+        minimum: 0
+      maxAssignees:
+        type:
+          - integer
+          - "null"
+
+  PermissionDefaults:
+    type: object
+    additionalProperties: false
+    required:
+      - public
+      - guest
+      - authenticated
+      - participant
+    properties:
+      public:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+      guest:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+      authenticated:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+      participant:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+
+  PermissionDefaultsPatch:
+    type: object
+    additionalProperties: false
+    minProperties: 1
+    description: Changed audience masks only. Unchanged audiences are retained and do not conflict with independent edits.
+    properties:
+      public:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+      guest:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+      authenticated:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+      participant:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+
+  PermissionDefinition:
+    type: object
+    additionalProperties: false
+    required:
+      - key
+      - bit
+    properties:
+      key:
+        type: string
+      bit:
+        type: integer
+        minimum: 1
+
+  PermissionPreset:
+    type: object
+    additionalProperties: false
+    required:
+      - key
+      - mask
+    properties:
+      key:
+        type: string
+      mask:
+        type: integer
+        minimum: 0
+
+  PackingCreateContext:
+    type: object
+    additionalProperties: false
+    required:
+      - defaults
+      - permissions
+      - presets
+    properties:
+      defaults:
+        $ref: "#/schemas/PermissionDefaults"
+      permissions:
+        type: array
+        items:
+          $ref: "#/schemas/PermissionDefinition"
+      presets:
+        type: array
+        items:
+          $ref: "#/schemas/PermissionPreset"
+
+  PackingCreated:
+    type: object
+    additionalProperties: false
+    required:
+      - id
+    properties:
+      id:
+        $ref: '#/schemas/Uuid'
+
+  MutationResult:
+    type: object
+    additionalProperties: false
+    required:
+      - changed
+    properties:
+      changed:
+        type: boolean
+
+  PackingOrderEditBaseline:
+    description: Method-authorized reorder baseline containing only ordered item identifiers, positions and the existing actor-bound order token.
+    type: object
+    additionalProperties: false
+    required: [items, orderToken]
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [id, position]
+          properties:
+            id:
+              $ref: '#/schemas/Uuid'
+            position:
+              $ref: '#/schemas/position'
+      orderToken:
+        $ref: '#/schemas/orderToken'
+
+  PackingItemOrder:
+    type: object
+    additionalProperties: false
+    required:
+      - itemIds
+    properties:
+      itemIds:
+        type: array
+        items:
+          $ref: '#/schemas/Uuid'
+        uniqueItems: true
+
+  PackingEventChange:
+    type: object
+    additionalProperties: false
+    required:
+      - eventId
+      - expectedEventId
+    properties:
+      eventId:
+        $ref: '#/schemas/NullableUuid'
+      expectedEventId:
+        $ref: '#/schemas/NullableUuid'
+
+  PackingEventChanged:
+    type: object
+    additionalProperties: false
+    required:
+      - changed
+      - canView
+    properties:
+      changed:
+        type: boolean
+      canView:
+        type: boolean
+
+  PackingProfileOption:
+    type: object
+    additionalProperties: false
+    required:
+      - profileId
+      - name
+      - isGuest
+      - username
+    properties:
+      profileId:
+        $ref: '#/schemas/Uuid'
+      name:
+        type: string
+      isGuest:
+        type: boolean
+      username:
+        type: string
+
+  PackingProfileOptions:
+    type: array
+    items:
+      $ref: "#/schemas/PackingProfileOption"
+
+  PackingAdmin:
+    type: object
+    additionalProperties: false
+    required:
+      - profileId
+      - name
+      - isGuest
+      - mask
+      - editToken
+    properties:
+      profileId:
+        $ref: '#/schemas/Uuid'
+      name:
+        type: string
+      isGuest:
+        type: boolean
+      mask:
+        type: integer
+        minimum: 0
+      editToken:
+        $ref: '#/schemas/FieldComparisonToken'
+
+  PackingAdminInput:
+    type: object
+    additionalProperties: false
+    required:
+      - profileId
+      - mask
+    properties:
+      profileId:
+        $ref: '#/schemas/Uuid'
+      mask:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+
+  PackingAdminPatch:
+    type: object
+    additionalProperties: false
+    required:
+      - mask
+    properties:
+      mask:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+
+  PackingCurrentEvent:
+    type: object
+    additionalProperties: false
+    required:
+      - id
+      - title
+      - startDate
+      - endDate
+      - url
+    properties:
+      id:
+        $ref: '#/schemas/Uuid'
+      title:
+        type:
+          - string
+          - "null"
+      startDate:
+        type:
+          - string
+          - "null"
+      endDate:
+        type:
+          - string
+          - "null"
+      url:
+        type:
+          - string
+          - "null"
+
+  PackingArchive:
+    type: object
+    additionalProperties: false
+    required:
+      - direct
+      - inherited
+      - archivedAt
+      - autoArchivePaused
+      - eventUrl
+    properties:
+      direct:
+        type: boolean
+      inherited:
+        type: boolean
+      archivedAt:
+        type:
+          - string
+          - "null"
+      autoArchivePaused:
+        type: boolean
+      eventUrl:
+        type:
+          - string
+          - "null"
+
+  PackingAccess:
+    type: object
+    additionalProperties: false
+    required:
+      - defaults
+      - admins
+      - permissions
+      - presets
+    properties:
+      defaults:
+        $ref: "#/schemas/PermissionDefaults"
+      admins:
+        type: array
+        items:
+          $ref: "#/schemas/PackingAdmin"
+      permissions:
+        type: array
+        items:
+          $ref: "#/schemas/PermissionDefinition"
+      presets:
+        type: array
+        items:
+          $ref: "#/schemas/PermissionPreset"
+
+  PackingSettings:
+    type: object
+    additionalProperties: false
+    required:
+      - id
+      - title
+      - headerUrl
+      - editableFields
+      - capabilities
+      - currentEvent
+      - archive
+      - access
+      - headerVersion
+      - settingsToken
+    properties:
+      id:
+        $ref: '#/schemas/Uuid'
+      title:
+        type: string
+      headerUrl:
+        type:
+          - string
+          - "null"
+      editableFields:
+        type: array
+        uniqueItems: true
+        items:
+          type: string
+          enum:
+            - title
+            - description
+      capabilities:
+        type: object
+        additionalProperties: false
+        required:
+          - editHeader
+          - linkEvent
+          - managePermissions
+          - duplicate
+          - remove
+          - archive
+          - restore
+          - manageArchive
+        properties:
+          editHeader:
+            type: boolean
+          linkEvent:
+            type: boolean
+          managePermissions:
+            type: boolean
+          duplicate:
+            type: boolean
+          remove:
+            type: boolean
+          archive:
+            type: boolean
+          restore:
+            type: boolean
+          manageArchive:
+            type: boolean
+      currentEvent:
+        anyOf:
+          - $ref: "#/schemas/PackingCurrentEvent"
+          - type: "null"
+      archive:
+        $ref: "#/schemas/PackingArchive"
+      access:
+        anyOf:
+          - $ref: "#/schemas/PackingAccess"
+          - type: "null"
+      headerVersion:
+        type:
+          - string
+          - "null"
+        description: Opaque image version; changes when the image is replaced without exposing its storage path.
+      settingsToken:
+        $ref: '#/schemas/FieldComparisonToken'
+
+  PackingHeaderUpload:
+    type: object
+    additionalProperties: false
+    required:
+      - image
+    properties:
+      image:
+        type: string
+        format: binary
+
+  PackingHeaderBinary:
+    type: string
+    format: binary
+
+  # Retain the previously generated public scalar identifiers after relocation.
+  position:
+    type: integer
+  orderToken:
+    type: string

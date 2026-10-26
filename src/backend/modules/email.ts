@@ -56,7 +56,9 @@ function renderMultiline(value: string): string {
     return escapeHtml(value).replace(/\r?\n/g, '<br>');
 }
 
+/** Admit only absolute HTTP(S) mail actions; malformed/other schemes omit the link. */
 function safeHttpUrl(value: string): string | null {
+    // URL parsing canonicalizes the same admitted destination used by HTML/text.
     try {
         const parsed = new URL(value);
         return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : null;
@@ -79,7 +81,9 @@ function contrastingTextColor(hexColor: string): string {
     return perceivedBrightness > 160 ? '#0f172a' : '#ffffff';
 }
 
+/** Choose the first supplied nonblank personal name with normalized whitespace. */
 export function resolveEmailRecipientName(...names: (string | null | undefined)[]): string {
+    // Ordered fallbacks belong to the caller; no address or invented name is substituted.
     for (const candidate of names) {
         const normalized = candidate?.replace(/\s+/g, ' ').trim();
         if (normalized) return normalized;
@@ -87,7 +91,9 @@ export function resolveEmailRecipientName(...names: (string | null | undefined)[
     return '';
 }
 
+/** Require a named recipient and reject header line breaks before rendering/sending. */
 function normalizeRecipient(recipient: EmailRecipient): EmailRecipient {
+    // Keep normalized display data separate from the original header safety check.
     const name = resolveEmailRecipientName(recipient.name);
     const address = recipient.address?.trim();
     if (!name || !address || /[\r\n]/.test(recipient.address)) {
@@ -125,7 +131,9 @@ function renderAction(action: EmailAction, accentColor: string, accentTextColor:
         <p style="margin: 12px 0 0; color: #64748b; font-size: 12px; line-height: 18px; overflow-wrap: anywhere;">If the button does not work, copy this address into your browser:<br><a href="${href}" style="color: ${accentColor}; text-decoration: underline;">${href}</a></p>`;
 }
 
+/** Render feature-supplied detail labels/values through the common escaped table. */
 function renderDetails(details: EmailDetail[]): string {
+    // No table is emitted for absent metrics; every present value stays escaped text.
     if (!details.length) return '';
     const rows = details.map((detail) => `
         <tr>
@@ -362,7 +370,9 @@ export function renderEmail(subject: string, rawContent: EmailContent, recipient
     return {text: renderText(content), html};
 }
 
+/** Preserve an explicit configured mailbox, otherwise attach the application name. */
 function createSender(): MailOptions['from'] {
+    // Existing operator-supplied mailbox syntax takes precedence over the default label.
     const configuredSender = settings.value.smtpEmail.trim();
     if (configuredSender.includes('<') && configuredSender.endsWith('>')) {
         return configuredSender;
@@ -517,7 +527,9 @@ function formatGuestCreatedAt(value: Date): string {
     }).format(value);
 }
 
+/** Deliver the admitted guest recovery links through the single named email renderer. */
 async function sendGuestRecoveryEmail(email: EmailRecipient, guestLinkData: GuestLinkData[]): Promise<void> {
+    // Each saved guest keeps its own creation context/action; links remain private data.
     await sendEmail(email, 'Your guest accounts', {
         eyebrow: 'Account recovery',
         heading: guestLinkData.length === 1 ? 'Your guest account' : 'Your guest accounts',

@@ -1,6 +1,6 @@
 import type {components, paths} from '../../types/api/v1';
 import type {ApiOperationId} from '../../types/ApiTransportTypes';
-import type {FrontendRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
+import type {FrontendDecodedResponse, FrontendRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
 import {FrontendTransport, ObsoleteRequestError, UnconfirmedResponseError} from './transport';
 import {validateSessionView} from '../../../.generated/api/v1/browser/validateSessionView.mjs';
 import {validatePasswordResetCheck} from '../../../.generated/api/v1/browser/validatePasswordResetCheck.mjs';
@@ -20,11 +20,10 @@ export class FrontendApi extends FrontendTransport {
      * previously captured actor is supplied to this identity admission request. */
     async bootstrap(signal?: AbortSignal): Promise<Session> {
         const transport = this;
-        async function readSession(): Promise<Session> {
-            const response = await transport.client.GET('/session', {signal, cache: 'no-store'});
-            return transport.read("getSession", {...response, signal}, validateSessionView).data;
+        function readSession() {
+            return transport.client.GET('/session', {signal, cache: 'no-store'});
         }
-        return this.allowedRead('session', undefined, readSession, signal);
+        return (await this.readJson('session', undefined, readSession, "getSession", validateSessionView, signal)).data;
     }
 
     async setLocale(locale: string, scope: FrontendRequestScope): Promise<Session> {
@@ -38,32 +37,31 @@ export class FrontendApi extends FrontendTransport {
      * remain with the transport; only validated admission reaches the reset form. */
     async checkPasswordReset(token: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['PasswordResetCheck']> {
         const transport = this;
-        async function readResetAdmission(): Promise<components['schemas']['PasswordResetCheck']> {
-            const response = await transport.client.GET('/auth/reset-password', {
+        function readResetAdmission() {
+            return transport.client.GET('/auth/reset-password', {
                 params: {query: {token}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read("checkPasswordReset", {...response, signal}, validatePasswordResetCheck, scope).data;
         }
-        return this.allowedRead(`identity/reset/${token}`, scope, readResetAdmission, signal);
+        return (await this.readJson(`identity/reset/${token}`, scope, readResetAdmission, "checkPasswordReset", validatePasswordResetCheck, signal)).data;
     }
 
     /** Validate a cookie-changing command from its still-current original actor.
      * Its response legitimately carries a new context; bind that header to the
      * returned session, leaving authoritative new-actor bootstrap to the context owner. */
-    identity(operationId: ApiOperationId, result: {data?: unknown; error?: unknown; response: Response}, scope: FrontendRequestScope) {
+    identity(operationId: ApiOperationId, result: FrontendDecodedResponse, scope: FrontendRequestScope) {
         return this.readIdentity(operationId, result, validateIdentityResult, scope);
     }
 
     /** Legacy workflow completion supplies a scalar actor receipt, not a fallible
      * postcommit SessionView. The same confirmation boundary admits either shape. */
-    workflow(operationId: ApiOperationId, result: {data?: unknown; error?: unknown; response: Response}, scope: FrontendRequestScope) {
+    workflow(operationId: ApiOperationId, result: FrontendDecodedResponse, scope: FrontendRequestScope) {
         return this.readIdentity(operationId, result, validateProfileWorkflowCompletion, scope);
     }
 
     /** Bind generated confirmation to the initiating actor and resulting header.
      * Only the existing authoritative session read can open the resulting identity. */
     private readIdentity<T extends IdentityEvidence>(operationId: ApiOperationId,
-        result: {data?: unknown; error?: unknown; response: Response},
+        result: FrontendDecodedResponse,
         validate: (value: unknown) => value is T, scope: FrontendRequestScope): T {
         if (!this.isCurrent(scope)) throw new ObsoleteRequestError();
 

@@ -23,6 +23,7 @@ import type {
     RequirementAnalysisInput, RequirementAnalysisResult, HypotheticalRoleCapacity, HypotheticalRoleMatch,
     HypotheticalRoleCoverageResult, RequirementPlanInput, BaselineSlotInput,
 } from "../../types/ActivityRequirementTypes";
+import {addCivilDays} from '../lib/civilDate';
 
 interface DaysWindow {
     start: string;
@@ -30,19 +31,16 @@ interface DaysWindow {
     days: number;
 }
 
-function addDays(dateStr: string, days: number): string {
-    const d = new Date(`${dateStr}T00:00:00Z`);
-    d.setUTCDate(d.getUTCDate() + days);
-    return d.toISOString().slice(0, 10);
-}
-
+/** Count an inclusive civil-date interval; a reversed interval contributes no days. */
 export function countInclusiveDays(start: string, end: string): number {
     if (start > end) return 0;
+    // Advance calendar dates in UTC so a local daylight-saving transition cannot
+    // add or remove a day from the attendance window.
     let cursor = start;
     let days = 0;
     while (cursor <= end) {
         days += 1;
-        cursor = addDays(cursor, 1);
+        cursor = addCivilDays(cursor, 1);
     }
     return days;
 }
@@ -60,7 +58,10 @@ export function clampAttendanceWindow(planStart: string, planEnd: string, arriva
     };
 }
 
+/** Apply the saved rounding choice, retaining CEIL for the default branch. */
 export function applyRounding(value: number, mode: RoundingMode): number {
+    // This is used when constructing proportional tables and baseline estimates;
+    // exact saved requirements are resolved separately without another rounding.
     switch (mode) {
         case "FLOOR":
             return Math.floor(value);
@@ -82,7 +83,11 @@ export function toParticipantName(participant: ParticipantAttendance): string {
     return "Participant";
 }
 
+/** Copy the supported override fields and reject invalid identity/count inputs
+ * in the established validation order, without mutating the supplied draft. */
 export function normalizeOverrideInput(input: RequirementOverrideInput): RequirementOverrideInput {
+    // Normalize optional identifiers while retaining the submitted count for the
+    // distinct missing, finite, integer and non-negative checks below.
     const normalized: RequirementOverrideInput = {
         id: input.id,
         roleId: input.roleId == null ? null : Number(input.roleId),
@@ -113,7 +118,10 @@ export function normalizeOverrideInput(input: RequirementOverrideInput): Require
     return normalized;
 }
 
+/** Normalize a role identifier and validate its exact non-negative shift count. */
 export function normalizeRoleRequirementInput(input: RoleRequirementInput): RoleRequirementInput {
+    // Validate the role before the count so callers retain the same first error
+    // when both fields are invalid.
     const normalized: RoleRequirementInput = {
         roleId: Number(input.roleId),
         requiredShifts: input.requiredShifts,
@@ -165,6 +173,7 @@ export function normalizeStayRequirementInput(input: StayRequirementInput): Stay
     return normalized;
 }
 
+/** Build one rounded requirement for each possible positive stay duration. */
 export function buildProportionalStayRequirements(
     planDays: number,
     fullStayRequirement: number,
@@ -172,6 +181,8 @@ export function buildProportionalStayRequirements(
 ): StayRequirementInput[] {
     if (!Number.isInteger(planDays) || planDays <= 0) return [];
 
+    // Rounding belongs to table creation; consumers later use these saved counts
+    // verbatim instead of recalculating each participant's fractional share.
     return Array.from({length: planDays}, (_, index) => {
         const stayDays = index + 1;
         return {
@@ -181,12 +192,14 @@ export function buildProportionalStayRequirements(
     });
 }
 
+/** Deduplicate slot identifiers by their string key, preserving first value/order. */
 function normalizeFeasibleSlots(slotIds: Array<string | number> | undefined): Array<string | number> {
     if (!slotIds) return [];
 
     const seen = new Set<string>();
     const normalized: Array<string | number> = [];
 
+    // Numeric and textual forms of the same identifier describe one feasible slot.
     for (const slotId of slotIds) {
         const key = String(slotId);
         if (seen.has(key)) continue;
@@ -209,10 +222,14 @@ function ensureNonNegativeInteger(value: number | null | undefined, fallback = 0
     return Math.max(0, Math.trunc(value));
 }
 
+/** Choose a participant's lowest matching role override before their general
+ * override; saved identifiers deterministically resolve equal requirements. */
 export function selectOverride(participant: ParticipantAttendance, overrides: RequirementOverrideLike[]): RequirementOverrideLike | undefined {
     const key = participant.profileId ?? null;
     const roleIds = participant.roleIds ?? [];
 
+    // Accept hydrated relations and plain projections through the same profile
+    // identity before considering the participant's current roles.
     const matching = overrides.filter((override) => {
         const profileId = override.profile?.id ?? override.profileId;
         return profileId != null && key === profileId;
@@ -227,17 +244,21 @@ export function selectOverride(participant: ParticipantAttendance, overrides: Re
 
     if (roleSpecific.length > 0) return roleSpecific[0];
 
+    // A general override is eligible only when no role-specific override matched.
     return matching
         .filter((override) => override.roleId == null)
         .sort((a, b) => (a.id ?? 0) - (b.id ?? 0))[0];
 }
 
+/** Resolve the smallest configured requirement among the participant's roles,
+ * keeping no matching role distinct from a matching zero requirement. */
 export function resolveRoleFixedRequirement(roleRequirements: RoleRequirementLike[], roleIds: number[] | undefined): number | null {
     if (!roleIds || roleIds.length === 0) return null;
 
     let minRequirement = Number.POSITIVE_INFINITY;
     let hasMatch = false;
 
+    // Multiple roles reduce to the least required count, never an additive total.
     for (const requirement of roleRequirements) {
         if (!roleIds.includes(Number(requirement.roleId))) continue;
         minRequirement = Math.min(minRequirement, ensureNonNegativeInteger(requirement.requiredShifts));
@@ -247,17 +268,22 @@ export function resolveRoleFixedRequirement(roleRequirements: RoleRequirementLik
     return hasMatch ? minRequirement : null;
 }
 
+/** Require exactly one entry for every duration from one through the plan length. */
 export function hasCompleteStayRequirements(planDays: number, stayRequirements: Array<Pick<StayRequirementInput, "stayDays">>): boolean {
     if (!Number.isInteger(planDays) || planDays <= 0 || stayRequirements.length !== planDays) return false;
+    // Cardinality alone cannot detect a duplicated duration or a missing middle day.
     const days = new Set(stayRequirements.map((requirement) => Number(requirement.stayDays)));
     return days.size === planDays && Array.from({length: planDays}, (_, index) => index + 1).every((day) => days.has(day));
 }
 
+/** Check the shared requirement value domain without throwing or changing drafts. */
 export function hasValidRequirementValues(
     roleRequirements: RoleRequirementLike[],
     overrides: RequirementOverrideLike[],
     stayRequirements: StayRequirementInput[],
 ): boolean {
+    // Keep role, personal and duration validation in one analysis predicate; an
+    // override accepts either its plain profile identifier or hydrated relation.
     const nonNegativeInteger = (value: number): boolean => Number.isInteger(value) && value >= 0;
     return roleRequirements.every((requirement) =>
         Number.isInteger(Number(requirement.roleId))
@@ -275,6 +301,9 @@ export function hasValidRequirementValues(
             && nonNegativeInteger(requirement.requiredShifts));
 }
 
+/** Resolve one participant's exact saved requirement: a personal override precedes
+ * a matching role, then the configured stay duration. Missing attendance dates use
+ * the full plan window; nonoverlapping attendance contributes zero. */
 export function calculateParticipantRequirement(
     plan: RequirementPlanInput,
     participant: ParticipantAttendance,
@@ -282,6 +311,8 @@ export function calculateParticipantRequirement(
     overrides: RequirementOverrideLike[],
     stayRequirements: StayRequirementInput[] = [],
 ): ParticipantRequirementResult {
+    // Clip attendance to the plan before selecting any requirement. Diagnostics
+    // still retain the saved rounding mode when no attendance overlaps the plan.
     const roundingMode: RoundingMode = plan.roundingMode ?? "CEIL";
     const planDays = countInclusiveDays(plan.startDate, plan.endDate);
     const attendance = clampAttendanceWindow(plan.startDate, plan.endDate, participant.arrivalDate ?? undefined, participant.departureDate ?? undefined);
@@ -345,6 +376,7 @@ export function calculateParticipantRequirement(
     };
 }
 
+/** Resolve the same saved requirement rules for each participant, keyed by profile. */
 export function calculateRequirementsForParticipants(
     plan: RequirementPlanInput,
     participants: ParticipantAttendance[],
@@ -352,6 +384,7 @@ export function calculateRequirementsForParticipants(
     overrides: RequirementOverrideLike[],
     stayRequirements: StayRequirementInput[] = [],
 ): Record<string, ParticipantRequirementResult> {
+    // Preserve input iteration and key replacement semantics for repeated profiles.
     const result: Record<string, ParticipantRequirementResult> = {};
     for (const participant of participants) {
         const requirement = calculateParticipantRequirement(plan, participant, roleRequirements, overrides, stayRequirements);
@@ -360,6 +393,8 @@ export function calculateRequirementsForParticipants(
     return result;
 }
 
+/** Combine resolved requirements with assignment counts for participant display,
+ * retaining the supplied participant order and optional attendance details. */
 export function summarizeParticipantRequirements(
     plan: RequirementPlanInput,
     participants: ParticipantAttendance[],
@@ -368,6 +403,8 @@ export function summarizeParticipantRequirements(
     assignments: Record<string, unknown[]>,
     stayRequirements: StayRequirementInput[] = [],
 ): ParticipantRequirementSummary[] {
+    // Calculate policy once, then project display counts without changing saved
+    // assignments or allowing an over-assignment to produce negative remaining work.
     const requirementMap = calculateRequirementsForParticipants(plan, participants, roleRequirements, overrides, stayRequirements);
 
     return participants.map((participant) => {
@@ -411,9 +448,11 @@ interface HeapEntry {
     distance: number;
 }
 
+/** Insert a shortest-path candidate into the in-place minimum-distance heap. */
 function pushHeap(heap: HeapEntry[], entry: HeapEntry): void {
     heap.push(entry);
     let index = heap.length - 1;
+    // Move larger ancestors down until the new candidate satisfies heap ordering.
     while (index > 0) {
         const parent = Math.floor((index - 1) / 2);
         if (heap[parent].distance <= entry.distance) break;
@@ -423,12 +462,15 @@ function pushHeap(heap: HeapEntry[], entry: HeapEntry): void {
     heap[index] = entry;
 }
 
+/** Remove the least-distance candidate, restoring the residual-path work heap. */
 function popHeap(heap: HeapEntry[]): HeapEntry | undefined {
     if (heap.length === 0) return undefined;
     const first = heap[0];
     const last = heap.pop()!;
     if (heap.length === 0) return first;
 
+    // Fill the root hole with the last candidate, moving the cheaper child up
+    // until that candidate can be placed without breaking minimum ordering.
     let index = 0;
     while (true) {
         const left = index * 2 + 1;
@@ -540,7 +582,10 @@ export function calculateHypotheticalRoleCoverage(options: {
     const maximumMatches = Math.min(participants.length, positions.length);
     const benefitMultiplier = (participants.length * positions.length + 1) * (maximumMatches + 1);
 
-    participants.forEach((participant, participantIndex) => {
+    /** Add a participant's unit-capacity path and attendance-compatible role matches;
+     * costs favor requirement reduction with a stable rank for deterministic ties. */
+    participants.forEach(function addParticipantMatches(participant, participantIndex) {
+        // Calculate the current requirement once before evaluating possible role changes.
         addFlowEdge(graph, source, participantOffset + participantIndex, 1, 0);
         const before = calculateParticipantRequirement(
             options.plan,
@@ -550,7 +595,9 @@ export function calculateHypotheticalRoleCoverage(options: {
             options.stayRequirements,
         ).requiredShifts;
 
-        positions.forEach((position, positionIndex) => {
+        /** Add one eligible role edge and retain its before/after requirement evidence. */
+        positions.forEach(function addAvailablePosition(position, positionIndex) {
+            // A hypothetical role cannot extend this participant's attendance.
             if (!isParticipantAvailableForRoleSlot(participant, position)) return;
             const hypotheticalParticipant = {...participant, roleIds: [position.roleId]};
             const after = calculateParticipantRequirement(
@@ -656,6 +703,8 @@ export function calculateHypotheticalRoleCoverage(options: {
     };
 }
 
+/** Compare plan capacity with requirements after maximum hypothetical role coverage,
+ * and report whether all saved requirement inputs form a complete configuration. */
 export function calculateRequirementCapacitySummary(
     plan: RequirementPlanInput,
     participants: ParticipantAttendance[],
@@ -664,6 +713,8 @@ export function calculateRequirementCapacitySummary(
     stayRequirements: StayRequirementInput[],
     slots: RequirementCapacitySlot[],
 ): RequirementCapacitySummary {
+    // Start with the current participant requirements, then remove only the
+    // reduction supported by the hypothetical role matching calculation.
     const requirements = calculateRequirementsForParticipants(
         plan,
         participants,
@@ -709,6 +760,8 @@ export function calculateRequirementCapacitySummary(
  * into the calculation.
  */
 export function calculateRequirementAnalysis(input: RequirementAnalysisInput): RequirementAnalysisResult {
+    // Resolve shared policy once for participant rows, then calculate capacity
+    // independently from the same supplied plan/configuration without persistence.
     const requirementMap = calculateRequirementsForParticipants(
         input.plan,
         input.participants,
@@ -750,6 +803,8 @@ export function calculateRequirementAnalysis(input: RequirementAnalysisInput): R
     };
 }
 
+/** Allocate remaining slot demand across attendance-weighted baseline participants,
+ * preserving explicit and role-fixed counts and reporting rounding surplus/deficit. */
 export function calculateShiftRequirementsForParticipants(
     slots: ShiftSlot[],
     participants: ShiftParticipant[],
@@ -763,7 +818,11 @@ export function calculateShiftRequirementsForParticipants(
 
     const slotDemand = slots.reduce((total, slot) => total + Math.max(0, slot.capacity ?? 0), 0);
 
-    const participantStates = participants.map((participant) => {
+    /** Resolve feasibility once and select fixed-count precedence before attendance
+     * weighting or allocation of the remaining baseline demand. */
+    const participantStates = participants.map(function resolveParticipantState(participant) {
+        // A caller resolver may narrow feasibility; fall back to the participant's
+        // supplied identifiers when it yields no value, then deduplicate once.
         const resolvedSlots = resolveSlots ? resolveSlots(participant) : participant.feasibleSlotIds;
         const feasibleSlotIds = normalizeFeasibleSlots(resolvedSlots ?? participant.feasibleSlotIds);
         const participantKey = toShiftParticipantKey(participant);
@@ -793,7 +852,10 @@ export function calculateShiftRequirementsForParticipants(
         return {...state, attendanceFactor};
     });
 
-    const fixedContributions = withAttendance.map((state) => {
+    /** Resolve the count already fixed for this participant before baseline distribution. */
+    const fixedContributions = withAttendance.map(function resolveFixedContribution(state) {
+        // A submitted personal count takes precedence over the role-fixed count;
+        // baseline participants leave all demand to the weighted calculation.
         if (state.group === "explicit") {
             return ensureNonNegativeInteger(state.participant.explicitFixedShifts);
         }
@@ -809,6 +871,8 @@ export function calculateShiftRequirementsForParticipants(
     const rawRemainingShifts = slotDemand - totalFixedShifts;
     const remainingShifts = Math.max(rawRemainingShifts, 0);
 
+    // Only baseline participants contribute attendance weight to the divisor;
+    // an empty pool with remaining demand is explicitly infeasible.
     const baselinePool = withAttendance
         .filter((state) => state.group === "baseline")
         .reduce((total, state) => total + state.attendanceFactor, 0);
@@ -816,7 +880,10 @@ export function calculateShiftRequirementsForParticipants(
     const infeasibleBaseline = remainingShifts > 0 && baselinePool === 0;
     const baseline = remainingShifts === 0 || baselinePool === 0 ? 0 : applyRounding(remainingShifts / baselinePool, roundingMode);
 
-    const participantResults: ShiftRequirementParticipantResult[] = withAttendance.map((state, index) => {
+    /** Project the fixed count or rounded attendance share with its explanatory inputs. */
+    const participantResults: ShiftRequirementParticipantResult[] = withAttendance.map(function projectParticipantRequirement(state, index) {
+        // Baseline weighting applies only to the baseline group; explicit and role
+        // groups retain the previously resolved exact fixed contribution.
         const fixedContribution = fixedContributions[index];
         const baselineContribution = state.group === "baseline"
             ? applyRounding(state.attendanceFactor * baseline, roundingMode)
@@ -877,7 +944,9 @@ export function calculateBaselineRequirementForPlan(options: {
         assignmentMode: "REQUIRED",
         generalRequiredShifts: null,
     };
+    /** Count slots within this participant's clipped inclusive attendance window. */
     const feasibleSlotCount = (participant: ParticipantAttendance): number => {
+        // A participant outside the plan contributes no feasible baseline slots.
         const attendance = clampAttendanceWindow(
             options.plan.startDate,
             options.plan.endDate,
@@ -906,7 +975,10 @@ export function calculateBaselineRequirementForPlan(options: {
     // Candidate analysis includes override precedence and hypothetical role
     // coverage. Cache complete evaluations while searching the integer range.
     const candidateCache = new Map<number, CandidateEvaluation>();
+    /** Evaluate an integer baseline once with the same requirement/capacity engines as saved analysis. */
     const evaluate = (candidate: number): CandidateEvaluation => {
+        // Reuse a complete candidate result during the bounded search; callers
+        // receive the duration table and the matching capacity diagnostics together.
         const baseline = ensureNonNegativeInteger(candidate);
         const cached = candidateCache.get(baseline);
         if (cached) return cached;

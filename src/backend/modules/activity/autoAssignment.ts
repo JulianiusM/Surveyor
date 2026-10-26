@@ -8,58 +8,28 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import type {ActivityPlan} from "../database/entities/activity/ActivityPlan";
-import type {ActivityPlanRequirement} from "../database/entities/activity/ActivityPlanRequirement";
-import type {ActivityPlanRequirementOverride} from "../database/entities/activity/ActivityPlanRequirementOverride";
-import type {ActivityPlanStayRequirement} from "../database/entities/activity/ActivityPlanStayRequirement";
-import type {ActivitySlot} from "../database/entities/activity/ActivitySlot";
-import type {RecommendationInput} from "../database/services/ActivityRecommendationService";
-import type {AssignmentCandidate} from "./availability";
-import type {ActivityLinkedPlanContext} from '../../../types/ActivityTypes';
-import {generateFairRecommendations} from "./fairAssignment";
+import type {AssignmentCandidate} from '../../../types/ActivityTypes';
+
+
+
+
+
+
+
+
+
+
+
 import type {ParticipantAttendance} from "../../../types/ActivityRequirementTypes";
 import {toParticipantKey} from "../../../common/activity/requirements";
 
-interface AutoAssignmentPlan
-    extends Pick<
-        ActivityPlan,
-        |
-        "assignmentMode"
-        | "generalRequiredShifts"
-        | "roundingMode"
-        | "startDate"
-        | "endDate"
-        | "allowOverfillAfterFull"
-        | "allowArrivalDayEvening"
-        | "allowDepartureDayMorning"
-    > {
-    /** Include relationship identity even when two events happen to have identical participants. */
-    eventId?: string | null;
-    allowExternalAssignees?: boolean;
-}
 
-export interface AutoAssignmentSlot extends ActivitySlot {
-    assignedCount?: number;
-}
-
-export interface AutoAssignmentContext {
-    plan: AutoAssignmentPlan;
-    slots: AutoAssignmentSlot[];
-    participants: ParticipantAttendance[];
-    roleRequirements: ActivityPlanRequirement[];
-    overrides: ActivityPlanRequirementOverride[];
-    stayRequirements: ActivityPlanStayRequirement[];
-    existingAssignments: Record<string, AssignmentCandidate[]>;
-    existingRecommendations?: RecommendationInput[];
-    /** Availability only: these shifts belong to other plans and cannot satisfy local requirements. */
-    linkedPlans?: ActivityLinkedPlanContext;
-}
-
-export function generateAutoRecommendations(context: AutoAssignmentContext): RecommendationInput[] {
-    return generateFairRecommendations(context);
-}
-
+/** Merge known participant identities in supplied group order.
+ * Later nonnull attendance/name/role fields replace earlier values; missing
+ * fields retain them, and the final result keeps stable participant-key order. */
 export function mergeParticipants(...groups: ParticipantAttendance[][]): ParticipantAttendance[] {
+    // Unknown identities cannot acquire an entry; each known key has one merge
+    // target regardless of which captured source group supplied its fields.
     const participants = new Map<string, ParticipantAttendance>();
     for (const group of groups) {
         for (const participant of group) {
@@ -75,10 +45,15 @@ export function mergeParticipants(...groups: ParticipantAttendance[][]): Partici
             } : participant);
         }
     }
+    // Sort only the merged projection, preserving the input collections.
     return [...participants.values()].sort((a, b) => toParticipantKey(a).localeCompare(toParticipantKey(b)));
 }
 
+/** Recover profile participant identities from the existing assignment-key map.
+ * Non-profile keys contribute nothing; this projection invents no attendance,
+ * role or display data from the associated slot collections. */
 export function participantsFromAssignments(assignments: Record<string, AssignmentCandidate[]>): ParticipantAttendance[] {
+    // Preserve the established key split and profile-only selection semantics.
     return Object.keys(assignments).flatMap((key) => {
         const [type, id] = key.split(":");
         return type === "profile" ? [{profileId: id}] : [];

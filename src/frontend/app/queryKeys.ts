@@ -25,112 +25,66 @@ export const eventKeys = {
     profiles: (context: string | null | undefined, id: string, q: string) => [...eventKeys.profilesFamily(context, id), {q}] as const,
 };
 
-/** Query families put the captured identity before feature data. Include locale only when the
- * server representation contains translated content. Machine state, user-authored content and
- * authority have one current projection; language aliases could resurrect an older grant. */
-export const packingKeys = {
-    all: (context: string | null | undefined) => ['v1', context, 'packing'] as const,
-    resource: (context: string | null | undefined, id: string) => [...packingKeys.all(context), id] as const,
-    detailFamily: (context: string | null | undefined, id: string) => [...packingKeys.resource(context, id), 'detail'] as const,
-    detail: (context: string | null | undefined, id: string) => packingKeys.detailFamily(context, id),
-    entry: (context: string | null | undefined, id: string, intent: 'guest' | 'detail') =>
-        [...packingKeys.resource(context, id), 'entry', intent] as const,
-    editors: (context: string | null | undefined, id: string) => [...packingKeys.resource(context, id), 'editors'] as const,
-    metadata: (context: string | null | undefined, id: string) =>
-        [...packingKeys.editors(context, id), 'metadata'] as const,
-    settings: (context: string | null | undefined, id: string) =>
-        [...packingKeys.editors(context, id), 'settings'] as const,
-    profilesFamily: (context: string | null | undefined, id: string) =>
-        [...packingKeys.editors(context, id), 'profiles'] as const,
-    profiles: (context: string | null | undefined, id: string, search: string) =>
-        [...packingKeys.profilesFamily(context, id), {search}] as const,
-    // URL preselection changes the admitted form projection. Keep it in the key;
-    // omitting it retains the family prefix for ordinary invalidation callers.
-    creation: (context: string | null | undefined, eventId?: string) =>
-        [...packingKeys.all(context), 'create-context', ...(eventId ? [{eventId}] : [])] as const,
-    duplicate: (context: string | null | undefined, id: string | null, eventId?: string) =>
-        [...packingKeys.all(context), id, 'duplicate', ...(eventId ? [{eventId}] : [])] as const,
-    guest: (context: string | null | undefined, id: string) => [...packingKeys.resource(context, id), 'guest'] as const,
-    events: (context: string | null | undefined) => [...packingKeys.all(context), 'events'] as const,
-    // The shared picker accepts locale for providers with translated representations. Packing's
-    // options contain user titles and machine dates only, so its provider deliberately omits it.
-    eventFilters: (context: string | null | undefined, _locale: string, filters: string) =>
-        [...packingKeys.events(context), {filters}] as const,
-    eventPage: (context: string | null | undefined, locale: string, filters: string, parameters: unknown) =>
-        [...packingKeys.eventFilters(context, locale, filters), parameters] as const,
-};
+/** Matching entity keys share their literal layout through this one owner.
+ * Feature extensions remain explicit; no constructor reads grants or cached data. */
+function entityQueryKeys<Feature extends string>(feature: Feature) {
+    // Every descendant derives from this actor/resource prefix, so grouped
+    // invalidation and private-data retirement retain their established layout.
+    const keys = {
+        all: (context: string | null | undefined) => ['v1', context, feature] as const,
+        resource: (context: string | null | undefined, id: string) => [...keys.all(context), id] as const,
+        detailFamily: (context: string | null | undefined, id: string) => [...keys.resource(context, id), 'detail'] as const,
+        detail: (context: string | null | undefined, id: string) => keys.detailFamily(context, id),
+        entry: (context: string | null | undefined, id: string, intent: 'guest' | 'detail') =>
+            [...keys.resource(context, id), 'entry', intent] as const,
+        editors: (context: string | null | undefined, id: string) => [...keys.resource(context, id), 'editors'] as const,
+        metadata: (context: string | null | undefined, id: string) => [...keys.editors(context, id), 'metadata'] as const,
+        settings: (context: string | null | undefined, id: string) => [...keys.editors(context, id), 'settings'] as const,
+        guest: (context: string | null | undefined, id: string) => [...keys.resource(context, id), 'guest'] as const,
+    };
+    return keys;
+}
 
-/** Drivers keeps ride data and editor authority scoped to its actual actor/list.
- * Like Packing, user-authored values do not acquire a second cache on locale changes. */
-export const driversKeys = {
-    all: (context: string | null | undefined) => ['v1', context, 'drivers'] as const,
-    resource: (context: string | null | undefined, id: string) => [...driversKeys.all(context), id] as const,
-    detailFamily: (context: string | null | undefined, id: string) => [...driversKeys.resource(context, id), 'detail'] as const,
-    detail: (context: string | null | undefined, id: string) => driversKeys.detailFamily(context, id),
-    entry: (context: string | null | undefined, id: string, intent: 'guest' | 'detail') =>
-        [...driversKeys.resource(context, id), 'entry', intent] as const,
-    editors: (context: string | null | undefined, id: string) => [...driversKeys.resource(context, id), 'editors'] as const,
-    metadata: (context: string | null | undefined, id: string) => [...driversKeys.editors(context, id), 'metadata'] as const,
-    settings: (context: string | null | undefined, id: string) => [...driversKeys.editors(context, id), 'settings'] as const,
-    profilesFamily: (context: string | null | undefined, id: string) => [...driversKeys.editors(context, id), 'profiles'] as const,
-    profiles: (context: string | null | undefined, id: string, search: string) => [...driversKeys.profilesFamily(context, id), {search}] as const,
-    creation: (context: string | null | undefined, eventId?: string) =>
-        [...driversKeys.all(context), 'create-context', ...(eventId ? [{eventId}] : [])] as const,
-    duplicate: (context: string | null | undefined, id: string | null, eventId?: string) =>
-        [...driversKeys.all(context), id, 'duplicate', ...(eventId ? [{eventId}] : [])] as const,
-    guest: (context: string | null | undefined, id: string) => [...driversKeys.resource(context, id), 'guest'] as const,
-    events: (context: string | null | undefined) => [...driversKeys.all(context), 'events'] as const,
-    eventFilters: (context: string | null | undefined, _locale: string, filters: string) =>
-        [...driversKeys.events(context), {filters}] as const,
-    eventPage: (context: string | null | undefined, locale: string, filters: string, parameters: unknown) =>
-        [...driversKeys.eventFilters(context, locale, filters), parameters] as const,
-};
+/** Event-linked lists share editor/search and creation-key composition.
+ * Optional event selection retains its exact previous spelling and family prefix;
+ * user-authored representations deliberately omit locale from these keys. */
+function listQueryKeys<Feature extends string>(feature: Feature) {
+    // Lists add only their shared search and Event-selection families; Activity
+    // extends this result and standalone Survey never acquires these branches.
+    const keys = {
+        ...entityQueryKeys(feature),
+        profilesFamily: (context: string | null | undefined, id: string) => [...keys.editors(context, id), 'profiles'] as const,
+        profiles: (context: string | null | undefined, id: string, search: string) => [...keys.profilesFamily(context, id), {search}] as const,
+        creation: (context: string | null | undefined, eventId?: string) =>
+            [...keys.all(context), 'create-context', ...(eventId ? [{eventId}] : [])] as const,
+        duplicate: (context: string | null | undefined, id: string | null, eventId?: string) =>
+            [...keys.all(context), id, 'duplicate', ...(eventId ? [{eventId}] : [])] as const,
+        events: (context: string | null | undefined) => [...keys.all(context), 'events'] as const,
+        eventFilters: (context: string | null | undefined, _locale: string, filters: string) =>
+            [...keys.events(context), {filters}] as const,
+        eventPage: (context: string | null | undefined, locale: string, filters: string, parameters: unknown) =>
+            [...keys.eventFilters(context, locale, filters), parameters] as const,
+    };
+    return keys;
+}
 
-/** Activity schedule, participants and editor grants belong to one admitted plan
- * and actor. Local schedule filters do not create another authority snapshot. */
+export const packingKeys = listQueryKeys('packing');
+export const driversKeys = listQueryKeys('drivers');
+
+/** Activity adds only its independently admitted requirement and job families. */
 export const activityKeys = {
-    all: (context: string | null | undefined) => ['v1', context, 'activity'] as const,
-    resource: (context: string | null | undefined, id: string) => [...activityKeys.all(context), id] as const,
-    detailFamily: (context: string | null | undefined, id: string) => [...activityKeys.resource(context, id), 'detail'] as const,
-    detail: (context: string | null | undefined, id: string) => activityKeys.detailFamily(context, id),
-    entry: (context: string | null | undefined, id: string, intent: 'guest' | 'detail') =>
-        [...activityKeys.resource(context, id), 'entry', intent] as const,
-    editors: (context: string | null | undefined, id: string) => [...activityKeys.resource(context, id), 'editors'] as const,
-    metadata: (context: string | null | undefined, id: string) => [...activityKeys.editors(context, id), 'metadata'] as const,
-    settings: (context: string | null | undefined, id: string) => [...activityKeys.editors(context, id), 'settings'] as const,
+    ...listQueryKeys('activity'),
     requirements: (context: string | null | undefined, id: string) => [...activityKeys.editors(context, id), 'requirements'] as const,
     recommendations: (context: string | null | undefined, id: string) => [...activityKeys.editors(context, id), 'recommendations'] as const,
     recommendationJob: (context: string | null | undefined, id: string, jobId: string) =>
         [...activityKeys.recommendations(context, id), 'job', jobId] as const,
-    profilesFamily: (context: string | null | undefined, id: string) => [...activityKeys.editors(context, id), 'profiles'] as const,
-    profiles: (context: string | null | undefined, id: string, search: string) => [...activityKeys.profilesFamily(context, id), {search}] as const,
-    creation: (context: string | null | undefined, eventId?: string) =>
-        [...activityKeys.all(context), 'create-context', ...(eventId ? [{eventId}] : [])] as const,
-    duplicate: (context: string | null | undefined, id: string | null, eventId?: string) =>
-        [...activityKeys.all(context), id, 'duplicate', ...(eventId ? [{eventId}] : [])] as const,
-    guest: (context: string | null | undefined, id: string) => [...activityKeys.resource(context, id), 'guest'] as const,
-    events: (context: string | null | undefined) => [...activityKeys.all(context), 'events'] as const,
-    eventFilters: (context: string | null | undefined, _locale: string, filters: string) =>
-        [...activityKeys.events(context), {filters}] as const,
-    eventPage: (context: string | null | undefined, locale: string, filters: string, parameters: unknown) =>
-        [...activityKeys.eventFilters(context, locale, filters), parameters] as const,
 };
 
-/** Survey ballots and named results belong to one admitted profile and standalone
- * survey. Editor authority remains a separate family from participation reads. */
+/** Surveys retain standalone creation and participation, without Event keys. */
 export const surveyKeys = {
-    all: (context: string | null | undefined) => ['v1', context, 'survey'] as const,
-    resource: (context: string | null | undefined, id: string) => [...surveyKeys.all(context), id] as const,
-    detailFamily: (context: string | null | undefined, id: string) => [...surveyKeys.resource(context, id), 'detail'] as const,
-    detail: (context: string | null | undefined, id: string) => surveyKeys.detailFamily(context, id),
-    entry: (context: string | null | undefined, id: string, intent: 'guest' | 'detail') =>
-        [...surveyKeys.resource(context, id), 'entry', intent] as const,
-    editors: (context: string | null | undefined, id: string) => [...surveyKeys.resource(context, id), 'editors'] as const,
-    metadata: (context: string | null | undefined, id: string) => [...surveyKeys.editors(context, id), 'metadata'] as const,
-    settings: (context: string | null | undefined, id: string) => [...surveyKeys.editors(context, id), 'settings'] as const,
+    ...entityQueryKeys('survey'),
     creation: (context: string | null | undefined) => [...surveyKeys.all(context), 'create-context'] as const,
     duplicate: (context: string | null | undefined, id: string | null) => [...surveyKeys.all(context), id, 'duplicate'] as const,
-    guest: (context: string | null | undefined, id: string) => [...surveyKeys.resource(context, id), 'guest'] as const,
 };
 
 /** Overview owns the mixed-feature projection, rather than placing five entity types in packing. */

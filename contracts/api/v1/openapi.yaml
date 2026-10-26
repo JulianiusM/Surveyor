@@ -1640,15 +1640,15 @@ components:
     SurveySettings:
       $ref: ./surveys.yaml#/schemas/SurveySettings
     DriversEventOption:
-      $ref: ./drivers.yaml#/schemas/DriversEventOption
+      $ref: ./common.yaml#/schemas/EventPickerOption
     DriversEventOptions:
-      $ref: ./drivers.yaml#/schemas/DriversEventOptions
+      $ref: ./common.yaml#/schemas/EventPickerOptions
     DriversCreateEntry:
-      $ref: ./drivers.yaml#/schemas/DriversCreateEntry
+      $ref: ./common.yaml#/schemas/PackingCreateEntry
     DriversResourceEntry:
-      $ref: ./drivers.yaml#/schemas/DriversResourceEntry
+      $ref: ./common.yaml#/schemas/PackingResourceEntry
     DriversAssignee:
-      $ref: ./drivers.yaml#/schemas/DriversAssignee
+      $ref: ./common.yaml#/schemas/PackingAssignee
     DriversItemView:
       $ref: ./drivers.yaml#/schemas/DriversItemView
     DriversListView:
@@ -1656,63 +1656,63 @@ components:
     DriversMetadata:
       $ref: ./drivers.yaml#/schemas/DriversMetadata
     DriversDescriptionValue:
-      $ref: ./drivers.yaml#/schemas/DriversDescriptionValue
+      $ref: ./common.yaml#/schemas/PackingDescriptionValue
     DriversMetadataPatch:
-      $ref: ./drivers.yaml#/schemas/DriversMetadataPatch
+      $ref: ./common.yaml#/schemas/PackingMetadataPatch
     DriversDescriptionPatch:
-      $ref: ./drivers.yaml#/schemas/DriversDescriptionPatch
+      $ref: ./common.yaml#/schemas/PackingDescriptionPatch
     DriversDescriptionBaseline:
-      $ref: ./drivers.yaml#/schemas/DriversDescriptionBaseline
+      $ref: ./common.yaml#/schemas/PackingDescriptionBaseline
     DriversDefaultsBaseline:
-      $ref: ./drivers.yaml#/schemas/DriversDefaultsBaseline
+      $ref: ./common.yaml#/schemas/PackingDefaultsBaseline
     DriversAdminBaseline:
-      $ref: ./drivers.yaml#/schemas/DriversAdminBaseline
+      $ref: ./common.yaml#/schemas/PackingAdminBaseline
     DriversHeaderBaseline:
-      $ref: ./drivers.yaml#/schemas/DriversHeaderBaseline
+      $ref: ./common.yaml#/schemas/PackingHeaderBaseline
     DriversAssignmentResult:
-      $ref: ./drivers.yaml#/schemas/DriversAssignmentResult
+      $ref: ./common.yaml#/schemas/PackingAssignmentResult
     DriversCreateContext:
-      $ref: ./drivers.yaml#/schemas/DriversCreateContext
+      $ref: ./common.yaml#/schemas/PackingCreateContext
     DriversNewItem:
       $ref: ./drivers.yaml#/schemas/DriversNewItem
     DriversCreateInput:
       $ref: ./drivers.yaml#/schemas/DriversCreateInput
     DriversCreated:
-      $ref: ./drivers.yaml#/schemas/DriversCreated
+      $ref: ./common.yaml#/schemas/PackingCreated
     DriversItemPatch:
       $ref: ./drivers.yaml#/schemas/DriversItemPatch
     DriversItemEditBaseline:
       $ref: ./drivers.yaml#/schemas/DriversItemEditBaseline
     DriversOrderEditBaseline:
-      $ref: ./drivers.yaml#/schemas/DriversOrderEditBaseline
+      $ref: ./common.yaml#/schemas/PackingOrderEditBaseline
     DriversItemOrder:
-      $ref: ./drivers.yaml#/schemas/DriversItemOrder
+      $ref: ./common.yaml#/schemas/PackingItemOrder
     DriversEventChange:
-      $ref: ./drivers.yaml#/schemas/DriversEventChange
+      $ref: ./common.yaml#/schemas/PackingEventChange
     DriversEventChanged:
-      $ref: ./drivers.yaml#/schemas/DriversEventChanged
+      $ref: ./common.yaml#/schemas/PackingEventChanged
     DriversProfileOption:
-      $ref: ./drivers.yaml#/schemas/DriversProfileOption
+      $ref: ./common.yaml#/schemas/PackingProfileOption
     DriversProfileOptions:
-      $ref: ./drivers.yaml#/schemas/DriversProfileOptions
+      $ref: ./common.yaml#/schemas/PackingProfileOptions
     DriversAdmin:
-      $ref: ./drivers.yaml#/schemas/DriversAdmin
+      $ref: ./common.yaml#/schemas/PackingAdmin
     DriversAdminInput:
-      $ref: ./drivers.yaml#/schemas/DriversAdminInput
+      $ref: ./common.yaml#/schemas/PackingAdminInput
     DriversAdminPatch:
-      $ref: ./drivers.yaml#/schemas/DriversAdminPatch
+      $ref: ./common.yaml#/schemas/PackingAdminPatch
     DriversCurrentEvent:
-      $ref: ./drivers.yaml#/schemas/DriversCurrentEvent
+      $ref: ./common.yaml#/schemas/PackingCurrentEvent
     DriversArchive:
-      $ref: ./drivers.yaml#/schemas/DriversArchive
+      $ref: ./common.yaml#/schemas/PackingArchive
     DriversAccess:
-      $ref: ./drivers.yaml#/schemas/DriversAccess
+      $ref: ./common.yaml#/schemas/PackingAccess
     DriversSettings:
-      $ref: ./drivers.yaml#/schemas/DriversSettings
+      $ref: ./common.yaml#/schemas/PackingSettings
     DriversHeaderUpload:
-      $ref: ./drivers.yaml#/schemas/DriversHeaderUpload
+      $ref: ./common.yaml#/schemas/PackingHeaderUpload
     DriversHeaderBinary:
-      $ref: ./drivers.yaml#/schemas/DriversHeaderBinary
+      $ref: ./common.yaml#/schemas/PackingHeaderBinary
     DriversCreateForm:
       $ref: ./drivers.yaml#/schemas/DriversCreateForm
     DriversDuplicate:
@@ -1782,9 +1782,9 @@ components:
     PageEntryOutcome:
       $ref: ./common.yaml#/schemas/PageEntryOutcome
     PackingCreateEntry:
-      $ref: ./packing.yaml#/schemas/PackingCreateEntry
+      $ref: ./common.yaml#/schemas/PackingCreateEntry
     PackingResourceEntry:
-      $ref: ./packing.yaml#/schemas/PackingResourceEntry
+      $ref: ./common.yaml#/schemas/PackingResourceEntry
     OverviewCard:
       $ref: ./overview.yaml#/schemas/OverviewCard
     OverviewRegion:
@@ -1864,7 +1864,7 @@ components:
     SessionView:
       $ref: ./session.yaml#/schemas/SessionView
     PackingAssignee:
-      $ref: ./packing.yaml#/schemas/PackingAssignee
+      $ref: ./common.yaml#/schemas/PackingAssignee
     PackingItemView:
       $ref: ./packing.yaml#/schemas/PackingItemView
     PackingListView:
@@ -1872,9 +1872,9 @@ components:
     PackingMetadata:
       $ref: ./packing.yaml#/schemas/PackingMetadata
     PackingMetadataPatch:
-      $ref: ./packing.yaml#/schemas/PackingMetadataPatch
+      $ref: ./common.yaml#/schemas/PackingMetadataPatch
     PackingAssignmentResult:
-      $ref: ./packing.yaml#/schemas/PackingAssignmentResult
+      $ref: ./common.yaml#/schemas/PackingAssignmentResult
     HelpDocumentSummary:
       $ref: ./help.yaml#/schemas/HelpDocumentSummary
     HelpNavigationGroup:
@@ -1886,47 +1886,47 @@ components:
     HelpPageData:
       $ref: ./help.yaml#/schemas/HelpPageData
     PermissionDefaultsPatch:
-      $ref: ./packing.yaml#/schemas/PermissionDefaultsPatch
+      $ref: ./common.yaml#/schemas/PermissionDefaultsPatch
     PermissionDefaults:
-      $ref: ./packing.yaml#/schemas/PermissionDefaults
+      $ref: ./common.yaml#/schemas/PermissionDefaults
     PermissionDefinition:
-      $ref: ./packing.yaml#/schemas/PermissionDefinition
+      $ref: ./common.yaml#/schemas/PermissionDefinition
     PermissionPreset:
-      $ref: ./packing.yaml#/schemas/PermissionPreset
+      $ref: ./common.yaml#/schemas/PermissionPreset
     PackingCreateContext:
-      $ref: ./packing.yaml#/schemas/PackingCreateContext
+      $ref: ./common.yaml#/schemas/PackingCreateContext
     PackingNewItem:
       $ref: ./packing.yaml#/schemas/PackingNewItem
     PackingCreateInput:
       $ref: ./packing.yaml#/schemas/PackingCreateInput
     PackingCreated:
-      $ref: ./packing.yaml#/schemas/PackingCreated
+      $ref: ./common.yaml#/schemas/PackingCreated
     MutationResult:
-      $ref: ./packing.yaml#/schemas/MutationResult
+      $ref: ./common.yaml#/schemas/MutationResult
     PackingItemPatch:
       $ref: ./packing.yaml#/schemas/PackingItemPatch
     PackingDescriptionValue:
-      $ref: ./packing.yaml#/schemas/PackingDescriptionValue
+      $ref: ./common.yaml#/schemas/PackingDescriptionValue
     PackingDescriptionPatch:
-      $ref: ./packing.yaml#/schemas/PackingDescriptionPatch
+      $ref: ./common.yaml#/schemas/PackingDescriptionPatch
     PackingDescriptionBaseline:
-      $ref: ./packing.yaml#/schemas/PackingDescriptionBaseline
+      $ref: ./common.yaml#/schemas/PackingDescriptionBaseline
     PackingDefaultsBaseline:
-      $ref: ./packing.yaml#/schemas/PackingDefaultsBaseline
+      $ref: ./common.yaml#/schemas/PackingDefaultsBaseline
     PackingAdminBaseline:
-      $ref: ./packing.yaml#/schemas/PackingAdminBaseline
+      $ref: ./common.yaml#/schemas/PackingAdminBaseline
     PackingHeaderBaseline:
-      $ref: ./packing.yaml#/schemas/PackingHeaderBaseline
+      $ref: ./common.yaml#/schemas/PackingHeaderBaseline
     PackingItemEditBaseline:
       $ref: ./packing.yaml#/schemas/PackingItemEditBaseline
     PackingOrderEditBaseline:
-      $ref: ./packing.yaml#/schemas/PackingOrderEditBaseline
+      $ref: ./common.yaml#/schemas/PackingOrderEditBaseline
     PackingItemOrder:
-      $ref: ./packing.yaml#/schemas/PackingItemOrder
+      $ref: ./common.yaml#/schemas/PackingItemOrder
     PackingEventChange:
-      $ref: ./packing.yaml#/schemas/PackingEventChange
+      $ref: ./common.yaml#/schemas/PackingEventChange
     PackingEventChanged:
-      $ref: ./packing.yaml#/schemas/PackingEventChanged
+      $ref: ./common.yaml#/schemas/PackingEventChanged
     EventPickerQuery:
       $ref: ./common.yaml#/schemas/EventPickerQuery
     EventPickerOption:
@@ -1941,30 +1941,34 @@ components:
     PackingEventOptions:
       $ref: ./common.yaml#/schemas/EventPickerOptions
     PackingProfileOption:
-      $ref: ./packing.yaml#/schemas/PackingProfileOption
+      $ref: ./common.yaml#/schemas/PackingProfileOption
     PackingProfileOptions:
-      $ref: ./packing.yaml#/schemas/PackingProfileOptions
+      $ref: ./common.yaml#/schemas/PackingProfileOptions
     PackingAdmin:
-      $ref: ./packing.yaml#/schemas/PackingAdmin
+      $ref: ./common.yaml#/schemas/PackingAdmin
     PackingAdminInput:
-      $ref: ./packing.yaml#/schemas/PackingAdminInput
+      $ref: ./common.yaml#/schemas/PackingAdminInput
     PackingAdminPatch:
-      $ref: ./packing.yaml#/schemas/PackingAdminPatch
+      $ref: ./common.yaml#/schemas/PackingAdminPatch
     PackingCurrentEvent:
-      $ref: ./packing.yaml#/schemas/PackingCurrentEvent
+      $ref: ./common.yaml#/schemas/PackingCurrentEvent
     PackingArchive:
-      $ref: ./packing.yaml#/schemas/PackingArchive
+      $ref: ./common.yaml#/schemas/PackingArchive
     PackingAccess:
-      $ref: ./packing.yaml#/schemas/PackingAccess
+      $ref: ./common.yaml#/schemas/PackingAccess
     PackingSettings:
-      $ref: ./packing.yaml#/schemas/PackingSettings
+      $ref: ./common.yaml#/schemas/PackingSettings
     PackingHeaderUpload:
-      $ref: ./packing.yaml#/schemas/PackingHeaderUpload
+      $ref: ./common.yaml#/schemas/PackingHeaderUpload
     PackingHeaderBinary:
-      $ref: ./packing.yaml#/schemas/PackingHeaderBinary
+      $ref: ./common.yaml#/schemas/PackingHeaderBinary
     PackingCreateForm:
       $ref: ./packing.yaml#/schemas/PackingCreateForm
     PackingDuplicate:
       $ref: ./packing.yaml#/schemas/PackingDuplicate
     PackingDuplicateItem:
       $ref: ./packing.yaml#/schemas/PackingDuplicateItem
+    position:
+      $ref: ./common.yaml#/schemas/position
+    orderToken:
+      $ref: ./common.yaml#/schemas/orderToken

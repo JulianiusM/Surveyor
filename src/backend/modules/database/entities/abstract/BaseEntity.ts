@@ -14,39 +14,15 @@
  * limitations under the License.
  */
 
+import type {EntityItemAssignment, DefaultRelationEntity} from '../../../../../types/EntityRelationTypes';
+
+
 import {Column, JoinColumn, ManyToOne, RelationId} from "typeorm";
 import type {EntityBase} from "../../../../../types/UserTypes";
 import {Profile} from "../user/Profile";
 import {BaseEntityItem} from "./BaseEntityItem";
-import type {EntityItemAssignment} from "./ProfileEntityItemAssignment";
+
 import {UuidBase} from "./TrackedBase";
-
-export interface ChildItemRelation {
-    items: BaseEntityItem[];
-}
-
-export interface ChildAssigmentRelation {
-    assignments: EntityItemAssignment[];
-}
-
-export interface DefaultRelationEntity extends ChildItemRelation, ChildAssigmentRelation {
-}
-
-export interface ParentEntityRelation {
-    entityId: string;
-    entity: BaseEntity;
-}
-
-export interface ParentItemRelation {
-    itemId: string;
-    item: BaseEntityItem;
-}
-
-export interface DefaultItemRelationEntity extends ParentEntityRelation, ChildAssigmentRelation {
-}
-
-export interface DefaultItemAssignmentRelationEntity extends ParentEntityRelation, ParentItemRelation {
-}
 
 export abstract class BaseEntity extends UuidBase implements EntityBase {
     /**

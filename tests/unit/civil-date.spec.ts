@@ -1,8 +1,20 @@
 import {describe, expect, it} from 'vitest';
-import {civilDateWeeks, formatCivilDate} from '../../src/common/lib/civilDate';
+import {addCivilDays, civilDateWeeks, formatCivilDate} from '../../src/common/lib/civilDate';
 import {formatEventCivilDate, formatEventDate, formatEventTimestamp} from '../../src/frontend/features/event/presentation';
 
 describe('shared civil calendar presentation', () => {
+    it.each([
+        ['2032-02-28', 1, '2032-02-29'], ['2032-02-29', 1, '2032-03-01'],
+        ['2027-12-31', 1, '2028-01-01'], ['2027-03-28', 1, '2027-03-29'],
+        ['2027-11-01', -1, '2027-10-31'], ['2027-02-29', 1, '2027-03-02'],
+    ] as const)('retains calculation-day stepping from %s by %s days', (day, days, expected) => {
+        expect(addCivilDays(day, days)).toBe(expected);
+    });
+
+    it('retains the calculation primitive\'s invalid-date failure separately from display validation', () => {
+        expect(() => addCivilDays('invalid', 1)).toThrow(RangeError);
+    });
+
     it.each([
         {start: '2032-02-28', end: '2032-03-02', weeks: [
             {start: '2032-02-23', days: ['2032-02-28', '2032-02-29']},

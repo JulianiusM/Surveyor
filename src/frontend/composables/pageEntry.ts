@@ -6,7 +6,7 @@ import type {QueryCacheNotifyEvent} from '@tanstack/vue-query';
 import type {components} from '../../types/api/v1';
 import type {FrontendConfirmedNavigation, FrontendContext, FrontendIdentityConfirmation, FrontendPageEntryDenial, FrontendPageEntrySource, FrontendRequestScope} from '../../types/FrontendUiTypes';
 import type {MessageKey} from '../../types/LocalizationTypes';
-import type {EntityRouteIntent} from '../../types/FrontendEntityEntryTypes';
+import type {EntityEntryRetirement, EntityEntryRetirementSource, EntityRouteIntent} from '../../types/FrontendEntityEntryTypes';
 import {frontendDocumentUrl, safeFrontendReturn} from '../../common/lib/frontendIdentity';
 import {isPlainMessageKey} from '../../common/localization/translator';
 import {canRetryRead, useActionState, useFrontend} from '../app/context';
@@ -15,6 +15,21 @@ import {invalidateQueryFamilies, queryFamilyReadError, refetchFreshQueries, refe
 import {belongsToQueryFamily} from '../app/queryKeys';
 import {useReadRetry, useReadRetryAt} from './feedback';
 import {observePageNavigation} from './pageNavigation';
+
+/** Select matching list-entry denial dependencies from their actual key owners.
+ * Missing resources additionally retire the other intent and future copies;
+ * EntityEntryPage keeps the producing denial and live creation drafts intact. */
+export function entityEntryRetirement(source: EntityEntryRetirementSource): EntityEntryRetirement {
+    const {status, actor, resource, intent, keys} = source;
+    const families = [keys.detailFamily(actor, resource), keys.editors(actor, resource), ...source.additionalFamilies];
+
+    // Ordinary denial does not revoke independent public guest admission. A
+    // missing root invalidates both intents without broadening feature authority.
+    if (status === 404) families.push(keys.entry(actor, resource, intent === 'guest' ? 'detail' : 'guest'), keys.guest(actor, resource));
+
+    // Only inactive copies retire; an already mounted duplicate owns its draft.
+    return {families, inactiveFamilies: status === 404 ? [keys.duplicate(actor, resource)] : []};
+}
 
 /** Follow the router's canonical resource record, rather than reparsing its URL.
  * Vue Router admits case and trailing-slash equivalents; all resource wrappers

@@ -381,3 +381,6 @@ export type InvoiceTextParameters = Readonly<Record<string, string | number>>;
 
 /** Per-call interface wording; existing invoice outputs retain their English default. */
 export type InvoiceTextFormatter = (key: InvoiceTextKey, parameters?: InvoiceTextParameters) => string;
+
+
+export type InvoiceStatus = 'NEW' | 'APPROVED' | 'REJECTED' | 'CLOSED' | 'RETRACTED';

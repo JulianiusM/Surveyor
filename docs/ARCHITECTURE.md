@@ -6,7 +6,7 @@ owner: architecture maintainers
 status: current
 last-verified: 2026-10-26
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved profile-UUID Activity count and request-local Finance pool selection recorded; source separation, rejected shared administration acceptance correction and prior rendering/domain contracts retained; no deployment or exhaustive verification claim
+verification-scope: approved R3/R4 directed identity/linkage and shared orchestration boundaries reconciled; profile-UUID Activity count and request-local Finance selection retained; no deployment or exhaustive verification claim
 source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: architecture-or-help-delivery-change
 -->
@@ -162,6 +162,12 @@ Browser-safe implementations used by both belong under `src/common/`, including 
 requirements engine. Shared declaration-only contracts retain their policy-owned `src/types/` directory; browser
 identity declarations are separate from server transaction contracts. `src/public/` contains only public static assets.
 
+`contracts/api/v1/common.yaml` owns matching wire shapes, with existing domain schema names retained as compatible
+references. `src/common/lib/fileMedia.ts` supplies shared image/proof media descriptors to the uploader and browser
+controls; each controller retains its own admitted-file policy. `modules/lib/storedFiles.ts` owns the matching stored
+path resolution used by API binary delivery, header delivery and invoice proofs. Their callers retain authorization,
+existence checks, cleanup and error selection. Shared civil-date stepping lives in `src/common/lib/civilDate.ts`.
+
 ### Routes
 
 `src/backend/routes/` defines URL shape, middleware order, request validation, controller invocation, redirects, and response
@@ -188,8 +194,8 @@ validator; a failed document/API projection therefore cannot repeat that failure
 
 `adminApiFactory` composes the existing administrator, property, archive/restore and scoped profile-search routes.
 Its typed callbacks invoke the existing feature operations, retaining their admission, comparison tokens and response
-preparation. Survey has no administrator/search routes; Event retains its distinct metadata adapter. Settings and
-default-permission handlers remain feature-owned. `referrerUpdater` preserves a valid internal return for login,
+preparation. Survey has no administrator/search routes; Event retains its distinct metadata adapter. Feature settings
+handlers retain admission and delegate matching permission orchestration to the shared controller. `referrerUpdater` preserves a valid internal return for login,
 registration and logout when no explicit destination was supplied, using the shared safe-return validation.
 
 ### Controllers
@@ -205,6 +211,16 @@ registration and logout when no explicit destination was supplied, using the sha
 
 Most feature controllers export a plain object of functions; other controllers use named function exports. Controllers do not instantiate class-based services and do not directly obtain TypeORM repositories.
 
+`entityAdminController` owns matching permission-default comparisons, administrator baselines/commands and safe
+profile-search projection. Packing, Drivers, Event and Activity retain their feature admission, private field policy
+and response preparation. Feature DBAL services retain the original snapshots, locks and commit boundaries;
+Activity's direct administration path retains its separate operation order. Matching Packing/Drivers metadata,
+context, settings and permission-subject mechanics also use this existing shared controller owner.
+
+`modules/event/linkage.ts` owns Event selection, linkage authorization and search for child creation and settings.
+The Event controller coordinates child deletion through each child's controller. Children and their flow adapters
+import the linkage owner directly, so those dependencies no longer point back to the Event controller.
+
 ### Database services
 
 `src/backend/modules/database/services/` is the pure database abstraction layer (DBAL). It exports repository queries, locks,
@@ -217,6 +233,10 @@ operation from the corresponding controller or its dedicated feature module with
 That operation checks the snapshot and calls DBAL writes with the same manager. Controllers orchestrate request context,
 feature operations, and service results; the controller layer decides whether absence,
 conflicts, capacity, or lifecycle state should reject the operation. Native database failures propagate normally.
+
+`ListService` supplies the matching Packing/Drivers root-lock transaction, item assignment evidence, assignment
+insertion and optional-parent creation transaction. Each domain service retains its own outer assignment locking
+sequence and CRUD operations; supplying a shared inner operation preserves the existing manager and callback timing.
 
 ### Feature modularization and source ownership
 
@@ -271,7 +291,7 @@ Surveyor separates an authentication record from the profile acting in the appli
 
 A local `User` can own several `Profile` records. Local registration creates an inactive account, sends an activation token by email, and requires activation before login. Password reset also uses email tokens.
 
-OIDC is implemented directly in `src/backend/modules/oidc.ts`:
+OIDC protocol exchange lives in `src/backend/modules/oidc.ts`; the user controller completes local identity:
 
 1. Discover the provider with `openid-client`.
 2. Generate PKCE material and state for each authorization request; use a nonce when provider metadata requires the compatibility path.
@@ -281,6 +301,10 @@ OIDC is implemented directly in `src/backend/modules/oidc.ts`:
 6. Persist the normal Surveyor session identity and tokens needed for provider logout.
 
 Both local and OIDC users therefore enter the same local account/profile model after authentication.
+`modules/identity/oidcAccounts.ts` selects existing linking, activation, name/address fallback and provisioning policy;
+`UserService` supplies queries, ORM construction and persistence. The user controller applies account/default-profile
+selection through one synchronous operation for local and provider login, while each journey retains its own save
+and token order. Provider protocol code has no dependency on that controller.
 
 ### Guests
 
@@ -463,6 +487,14 @@ prior credits, and signed transfers recorded in this calculation without inferri
 
 Activity plans contain dated slots, optional roles, assignments, shared fields, participant requirements, availability, recommendations, and review operations. The user guide owns the basic and advanced organizer workflows. [Activity Requirements and Assignment Recommendations](features/activity/ACTIVITY_REQUIREMENTS_ALGORITHM.md) is the canonical technical reference for precedence, coverage, fair allocation, bounded repair, overfill, background jobs, review states, and application persistence.
 
+The controller retains request admission, basic feature operations and API projection. Cohesive owners under
+`modules/activity/` assemble participant/linked-plan context, decode and analyze requirements, collect warnings,
+coordinate reviewed/generated recommendation persistence, execute generation/jobs and manage review commands.
+Review commands depend on execution and guarded persistence; those depend on shared context, warning and algorithm
+owners, with no dependency back to the controller. The execution owner has one job coordinator. Database services
+retain transactions and stored rows; the common requirements engine and fair allocator remain the sole calculations.
+`schedulePresentation.ts` builds print data from already selected inputs without performing database reads.
+
 Printable participant totals count distinct profile UUIDs from the plan's assignments and its linked event's
 registrations. The controller selects those scopes; one DBAL aggregate query unions UUIDs and returns a scalar count,
 without loading names, roles or a participant roster. Repeated assignments and registration overlap count once;
@@ -558,6 +590,7 @@ without an implemented production capability.
 
 TanStack Query owns authorized snapshots; feature or shared interaction drafts own original/local/current values and Router owns URL state.
 `app/queryKeys.ts` names actor/resource/filter families, adding locale only for translated representations.
+Its private family constructors supply the same prefixes to individual keys and retirement predicates.
 `app/context.ts` coordinates identity generations, session admission, language and updates without another data store.
 Ordinary session recovery pauses dispatch while readable content/drafts remain; actual actor retirement and validated
 resource denial retire protected state. `useQueryAdmission` keeps each observer's eligibility bound to its logical key.
@@ -566,6 +599,10 @@ A canceled refetch or manual cache alias is not a fresh receipt; shared fresh-re
 the affected query families; inactive copies retire without discarding a live creation draft. The producing admission family
 survives inactive-family removal even when initialization or session revalidation pauses its observer, because that
 query still owns the displayed denial. The shared component infers no feature permissions or query-key positions.
+`composables/pageEntry.ts` derives the matching denial-retirement inputs for Packing, Drivers, Survey and Activity;
+Event retains its distinct administration selection. `app/transport.ts` composes admitted JSON/header reads with the
+existing response validator and actor/cancellation checks. Feature API owners select endpoints, headers and cooldown
+keys; the shared composition creates no response cache or automatic command replay.
 
 Healthy active shared reads use 30-second polling and bounded recovery, honoring Retry-After, hidden tabs and disposal.
 Closed regions do not poll. Locale changes retire translated families only. `MetadataDraft` applies feature normalization
@@ -740,6 +777,11 @@ saves and failed follow-up reads. Matching controls use the shared `FormField` l
 finance wheel guard; intentionally normalized numeric consumers keep their existing binding. One Finance palette
 supplies readable secondary text in the admitted region and shared dialogs, including dialogs rendered outside
 their feature subtree.
+
+The Finance section supplies review rendering explicitly to saved history rows, keeping component dependencies
+directed while each row owns its review state. Matching local pagination uses one Finance helper; filtering, reset
+triggers and retained selections stay with each region. Generated lazy validator modules also expose the selected
+native text bounds from their authored schemas, preserving the browser's own native length semantics.
 
 Financial command money uses decimal strings retaining accepted precision; saved money uses the existing shared
 fixed-two-decimal presenter. Factors and numeric identifiers retain their canonical decimal-string contracts.

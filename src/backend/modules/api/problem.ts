@@ -30,19 +30,23 @@ function translateProblem(key: string, params: unknown, locale: string): string 
 }
 
 /** Preserve an explicitly annotated controller rejection through the authored API
- * contract. A trusted application error, exact status and closed empty parameter
+ * contract. A trusted application error, admitted status and closed empty parameter
  * declaration are all required; arbitrary causes, controller prose and renderer data
  * never become public messages. The manifest remains the sole code/key mapping. */
-export function declaredApiProblem(error: unknown): ApiProblem | null {
+export function declaredApiProblem(error: unknown, allowControllerStatusOverride = false): ApiProblem | null {
     if (!(error instanceof APIError || error instanceof ExpectedError || error instanceof ValidationError)
         || typeof error.cause !== 'string') return null;
 
     // Domain owners annotate only stable, parameter-free causes. Verify those
     // identities against the generated contract before constructing any reply.
-    // Form ValidationError has no HTTP status; its existing API fallback
-    // is 400. Higher-status identity causes retain their explicit mapping below.
+    // Ordinary direct callers retain exact-status matching. The final classifier
+    // alone opts into authored Event compatibility for trusted APIError causes;
+    // arbitrary objects and other error classes cannot borrow that override.
+    // ValidationError still has the existing 400 fallback before identity mapping.
     const status = error instanceof ValidationError ? 400 : error.status;
-    const declaration = apiContract.problems.find(candidate => candidate.code === error.cause && candidate.status === status);
+    const declaration = apiContract.problems.find(candidate => candidate.code === error.cause
+        && (candidate.status === status || allowControllerStatusOverride && error instanceof APIError
+            && candidate.controllerStatusOverride === true));
     const parameters = declaration?.paramsSchema as {type?: unknown; additionalProperties?: unknown; maxProperties?: unknown} | undefined;
     if (!declaration || parameters?.type !== 'object' || parameters.additionalProperties !== false || parameters.maxProperties !== 0) return null;
 
@@ -58,32 +62,8 @@ export function classifyApiError(error: unknown): ApiProblem {
 
     // Feature adapters use this same projection before their legacy conflict
     // fallback, so a meaningful annotated rejection is not collapsed a second time.
-    const declared = declaredApiProblem(error);
+    const declared = declaredApiProblem(error, true);
     if (declared) return declared;
-
-    // Event business owners annotate only recognized rejection identities. Keep
-    // controller prose/data private and preserve the original action-specific status;
-    // a string-shaped external exception never enters this trusted cause mapping.
-    if (error instanceof APIError) {
-        switch (error.cause) {
-            case 'EVENT_FULL': return new ApiProblem('EVENT_FULL');
-            case 'EVENT_DATE_UPDATES_CLOSED': return new ApiProblem('EVENT_DATE_UPDATES_CLOSED');
-            case 'EVENT_DIET_UPDATES_CLOSED': return new ApiProblem('EVENT_DIET_UPDATES_CLOSED');
-            case 'EVENT_DEADLINE_PASSED': return new ApiProblem('EVENT_DEADLINE_PASSED');
-            case 'EVENT_DATES_INVALID': return new ApiProblem('EVENT_DATES_INVALID');
-            case 'EVENT_TOKEN_USED': return new ApiProblem('EVENT_TOKEN_USED');
-            case 'EVENT_ALLERGY_INFO_REQUIRED': return new ApiProblem('EVENT_ALLERGY_INFO_REQUIRED');
-            case 'EVENT_COMMENT_REQUIRED': return new ApiProblem('EVENT_COMMENT_REQUIRED');
-            case 'EVENT_MEAL_REQUIRED': return new ApiProblem('EVENT_MEAL_REQUIRED');
-            case 'EVENT_VEGETARIAN_CONFLICT': return new ApiProblem('EVENT_VEGETARIAN_CONFLICT');
-            case 'EVENT_VEGAN_CONFLICT': return new ApiProblem('EVENT_VEGAN_CONFLICT');
-            case 'EVENT_CANCELLATION_CLOSED': return new ApiProblem('EVENT_CANCELLATION_CLOSED');
-            case 'EVENT_TIMEZONE_INVALID': return new ApiProblem('EVENT_TIMEZONE_INVALID');
-            case 'EVENT_START_AFTER_END': return new ApiProblem('EVENT_START_AFTER_END');
-            case 'EVENT_DEADLINE_INVALID': return new ApiProblem('EVENT_DEADLINE_INVALID');
-            case 'EVENT_LINK_ACCOUNT_REQUIRED': return new ApiProblem('EVENT_LINK_ACCOUNT_REQUIRED');
-        }
-    }
 
     // Controllers retain their operation-specific errors, but explicitly annotate stable identity
     // outcomes. Never interpret prose, arbitrary exception causes, or database error details.

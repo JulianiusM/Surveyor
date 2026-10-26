@@ -22,7 +22,10 @@ export class AddInvoiceShareRounding1789516800000 implements MigrationInterface 
         }
     }
 
+    /** Remove the rounding option without recalculating saved settlement results. */
     public async down(queryRunner: QueryRunner): Promise<void> {
+        // Only the option belongs to this rollback; existing revision/staleness
+        // metadata and previously calculated shares retain their current values.
         if (await tableExists(queryRunner, "event_invoice_pools")) {
             await dropColumnIfExists(queryRunner, "event_invoice_pools", "round_up_shares");
         }

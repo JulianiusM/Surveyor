@@ -16,12 +16,16 @@
 
 import {NextFunction, Request, Response} from 'express';
 
+/** Forward the existing asynchronous handler rejection to Express's error owner. */
 export function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => any) {
+    // Preserve handler arguments and completion; no business retry or translation occurs.
     return (req: Request, res: Response, next: NextFunction) =>
         Promise.resolve(fn(req, res, next)).catch(next);
 }
 
+/** Apply the same rejection handoff to an Express parameter loader. */
 export function asyncParamHandler(fn: (req: Request, res: Response, next: NextFunction, id: any) => any) {
+    // The matched ID remains the loader's input, independently of later admission.
     return (req: Request, res: Response, next: NextFunction, id: any) =>
         Promise.resolve(fn(req, res, next, id)).catch(next);
 }

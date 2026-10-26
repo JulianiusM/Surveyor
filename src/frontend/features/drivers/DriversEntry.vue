@@ -5,7 +5,7 @@ import type {components} from '../../../types/api/v1';
 import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {EntityEntryRetirement} from '../../../types/FrontendEntityEntryTypes';
 import {useFrontend} from '../../app/context';
-import {resourceRouteIntent} from '../../composables/pageEntry';
+import {entityEntryRetirement, resourceRouteIntent} from '../../composables/pageEntry';
 import {overviewKeys, driversKeys} from '../../app/queryKeys';
 import {useDriversApi} from './api';
 import DriversPage from './DriversPage.vue';
@@ -32,18 +32,8 @@ const initialEntry: components['schemas']['DriversResourceEntry'] | undefined = 
  * Public guest admission has its own policy; a participant denial does not revoke it.
  * Copied duplicate drafts also remain independent of their source list's read authority. */
 function deniedQueries(entry: {readonly status: number}, scope: FrontendRequestScope): EntityEntryRetirement {
-    const actor = scope.context;
-    const resource = listId.value;
-    const families: (readonly unknown[])[] = [driversKeys.detailFamily(actor, resource), driversKeys.editors(actor, resource),
-        driversKeys.events(actor), overviewKeys.all(actor)];
-    if (entry.status === 404) {
-        // Missing resources invalidate both intents. The shared owner handles the current
-        // admission family without canceling the response that produced this denial.
-        families.push(driversKeys.entry(actor, resource, guestRoute.value ? 'detail' : 'guest'), driversKeys.guest(actor, resource));
-    }
-    // A future duplicate visit needs fresh source admission after deletion. An observed
-    // copy already belongs to its independent creation draft and must remain intact.
-    return {families, inactiveFamilies: entry.status === 404 ? [driversKeys.duplicate(actor, resource)] : []};
+    return entityEntryRetirement({status: entry.status, actor: scope.context, resource: listId.value,
+        intent: guestRoute.value ? 'guest' : 'detail', keys: driversKeys, additionalFamilies: [driversKeys.events(scope.context), overviewKeys.all(scope.context)]});
 }
 
 /** The server owns the distinction between detail admission and the explicit public guest

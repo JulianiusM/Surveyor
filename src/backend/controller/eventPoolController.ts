@@ -15,6 +15,7 @@
  */
 
 import {Request} from 'express';
+import {isProofMimeType} from '../../common/lib/fileMedia';
 import fs from 'node:fs';
 import path from 'node:path';
 import {Event} from '../modules/database/entities/event/Event';
@@ -623,7 +624,7 @@ async function addOrganizerInvoice(event: Event, poolId: string, body: any, sess
         if (!session.profile?.id) throw new APIError(invoiceText('logInToRecordAPoolCost'), {}, 401);
         await ensurePool(event, poolId);
         const value = prepareOrganizerInvoice(body);
-        if (file && !['application/pdf', 'image/jpeg', 'image/png', 'image/gif'].includes(file.mimetype)) {
+        if (file && !isProofMimeType(file.mimetype)) {
             throw new APIError(invoiceText('unsupportedProofType'), {}, 400, {cause: invoiceRejectionCause('unsupportedProofType')});
         }
         // Preserve the organizer recorder separately from optional paid-by attribution. The existing domain operation

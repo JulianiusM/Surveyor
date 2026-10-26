@@ -1,5 +1,4 @@
 import type {Request, RequestHandler, Response} from 'express';
-import path from 'node:path';
 import fs from 'node:fs/promises';
 import type {ApiOperationId, ApiSuccessStatus, ApiResponseBody, PreparedApiJsonResponse} from '../../../types/ApiTransportTypes';
 import {contractValidator, operationContract} from './contracts';
@@ -7,6 +6,7 @@ import {ApiProblem} from './problem';
 import {requestLocale} from '../lib/http';
 import type {ErrorObject} from 'ajv';
 import {fieldDiagnostic} from '../../../common/localization/inputValidation';
+import {resolveStoredFile} from '../lib/storedFiles';
 
 /** Await the caller's uploader without changing its filename, byte or type policy.
  * Parser diagnostics stay private; routes retain admission and upload cleanup. */
@@ -192,10 +192,8 @@ export function sendValidatedBinary<Operation extends ApiOperationId>(req: Reque
 export async function sendStoredApiBinary<Operation extends ApiOperationId>(req: Request, res: Response, operationId: Operation,
     status: ApiSuccessStatus<NoInfer<Operation>>, directory: string, storedPath: string): Promise<void> {
     // Preserve the existing application-relative confinement policy before I/O.
-    const root = path.resolve(process.cwd(), directory);
-    const fullPath = path.resolve(process.cwd(), storedPath);
-    const relative = path.relative(root, fullPath);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) throw new ApiProblem('NOT_FOUND');
+    const fullPath = resolveStoredFile(directory, storedPath);
+    if (!fullPath) throw new ApiProblem('NOT_FOUND');
 
     let bytes: Buffer;
     try { bytes = await fs.readFile(fullPath); }

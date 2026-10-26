@@ -20,6 +20,7 @@ import {v4 as uuidv4} from 'uuid';
 import type {DashboardEntities, Entity, EntityBase} from "../../../types/UserTypes";
 import type {EntityItemType, EntityType} from "../../../types/UtilTypes";
 import settings from "../settings";
+import {addCivilDays} from '../../../common/lib/civilDate';
 
 
 // Generic currency helpers for invoice math
@@ -147,7 +148,9 @@ export function rewriteISOToZone(isoString: string, timeZone: string): string {
     return `${pad(Y, 4)}-${pad(M, 2)}-${pad(D, 2)}T${timeCore}${offsetStr}`;
 }
 
+/** Rebuild the existing timezone-free wall-clock fields as a UTC Date, ignoring suffixes. */
 export function fromISOtoLocal(isoDateStr: string) {
+    // This legacy conversion intentionally preserves fields rather than parsing an instant.
     const isoDate = isoDateStr.slice(0, 19);
     const [y, m, d] = isoDate.split('-');
     const [day, time] = d.split('T');
@@ -188,15 +191,6 @@ export function isWithinWindow(start: string | Date, end: string | Date, a: stri
 }
 
 /**
- * Utility: add N days to a YYYY-MM-DD string (UTC-safe).
- */
-function addDays(dateStr: string, days: number): string {
-    const d = new Date(dateStr + 'T00:00:00Z');
-    d.setUTCDate(d.getUTCDate() + days);
-    return d.toISOString().slice(0, 10);
-}
-
-/**
  * Utility: compare YYYY-MM-DD strings (lexicographic works for ISO dates).
  */
 function minDate(a: string, b: string) {
@@ -221,7 +215,7 @@ export function buildDateTotals(
     let cur = eventStart;
     while (cur <= eventEnd) {
         totals[cur] = 0;
-        cur = addDays(cur, 1);
+        cur = addCivilDays(cur, 1);
     }
 
     // Tally each registration
@@ -238,14 +232,16 @@ export function buildDateTotals(
         let d = start;
         while (d <= end) {
             totals[d] = (totals[d] ?? 0) + 1;
-            d = addDays(d, 1);
+            d = addCivilDays(d, 1);
         }
     }
 
     return totals;
 }
 
+/** Await a best-effort operation and retain its established warning-only failure handling. */
 export async function ignoreException(fct: () => any) {
+    // Recovery belongs to the caller; this boundary neither retries nor rethrows.
     try {
         return await fct();
     } catch (err) {
@@ -302,7 +298,9 @@ export function merge<A>(a: A[], b: A[], predicate = (a: A, b: A) => a === b) {
     return c;
 }
 
+/** Flatten the supplied feature collections into overview cards in their existing order. */
 export function convertToSingleList(entities: Partial<DashboardEntities>) {
+    // Feature-specific records enter the same card projector with an explicit root type.
     const list: Entity[] = [];
     for (const survey of entities.surveys ?? []) {
         list.push(convertEntity(survey, ENTITIES.SURVEY));
@@ -342,7 +340,9 @@ export function convertEntity(entity: EntityBase, entityType: EntityType) {
     } as Entity;
 }
 
+/** Preserve arrays, wrap one truthy value, or return the caller's existing fallback. */
 export function normalizeToArray<A>(thing: A | A[], fallback: A[] = []) {
+    // Preserve the original reference and false/zero absence semantics for legacy callers.
     let arr: A[] = fallback;
     if (Array.isArray(thing)) {
         arr = thing;

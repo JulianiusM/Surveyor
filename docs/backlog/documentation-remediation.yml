@@ -56,6 +56,47 @@ architecture_review_2026_10_26:
   disposition: IMP-136 through IMP-158 record new scoped findings. IMP-070 and ARCH-005 receive current corroboration;
     the three previously recorded type-forwarding exports remain owned by IMP-135 inherited-review debt. Recommendations
     are not implementation plans approved by the maintainer, and no existing rejection or exclusion is superseded.
+architecture_remediation_2026_10_26:
+  authority: The maintainer explicitly approves R3 to complete the remaining equivalent architecture refactors and
+    confirmed readability corrections, and separately approves R4 to lift the IMP-070 administration deferral.
+  governing_amendment: docs/policies/DEVELOPMENT_POLICY.md#task-scoped-architecture-remediation-authority-2026-10-26
+  scope: IMP-137 through IMP-146, IMP-148 through IMP-158, the unused-validator cleanup under ARCH-005, and IMP-070
+    under its separately approved deferral lift. Completed R1/IMP-136 and R2/IMP-147 retain their individual approvals.
+  provenance: The maintainer's final Decisions reply explicitly approves both R3 and R4 after the preceding partial
+    reply left R4 unanswered. The final reply supplies the authority; neither the partial reply nor silence did so.
+  status: complete
+  completed_on: 2026-10-26
+  result: All 21 remaining new findings and IMP-070 are resolved through actual shared owner adoption. R1/IMP-136
+    and R2/IMP-147 remain completed under their earlier individual approvals. ARCH-005 records only its approved
+    unused-validator retirement; its broader session/flash review and OPSV-004 remain separately scoped and open.
+  independent_acceptance: Root and independent nonauthor source reviews verify each resolution, actual production
+    adoption, declaration/DBAL boundaries, directed dependencies, meaningful comments and the recorded feature
+    exceptions. A second nonauthor independently confirms the root helper, error-mapping and comments-only work.
+    The final static relative-import graph has no non-ORM cycles; this is not a claim about dynamic loading or deployment.
+  verification:
+    - Full application build and final server, frontend/SSR and test typechecking pass. The server output was rebuilt
+      after the canonical-comparison correction before the built-app system run.
+    - The final database-free sweep passes all 2093 tests across 82 files; the guarded MariaDB 10.11.14 integration
+      project passes all 563 tests across 30 files, including the expanded 18-case shared-administration matrix.
+    - All 97 selected built-application E2E cases across eight files and seven focused built-browser client cases pass.
+      These are distinct runner boundaries; they do not claim every available browser/system suite was selected.
+    - The all-source development review and normal development-policy check pass, as do all 26 policy-tool regressions
+      and the whitespace check. Semantic review remains independent of checker presence.
+    - Independent baseline comparison preserves all 317 generated schema shapes, 237 operation records and the nine
+      tested legacy browser-alias behaviors; only the intended Event adapter annotation metadata is added.
+  corrections_during_verification: The initial broad database-free run exposed schema-alias validation drift; the
+    original canonical identifiers and strict/additive behavior were restored. The first full integration run exposed
+    Packing/Drivers comparison-ID drift and two stale test-only app imports. Canonical comparison and requested storage
+    identities are now explicit, four ORM cases were added, and the fixtures import the actual backend application.
+    Existing assertions, schema guards and timeout budgets were retained; the final full reruns above pass.
+  cleanup: The owned disposable container, both schemas and their temporary credential directory were removed after
+    the system/persistence runs. Existing local database services and credentials were untouched.
+  limits: No production deployment, external OIDC-provider journey or latency/load benchmark was performed. The
+    documentation advisory report retains its unregistered source-fingerprint finding; it is not a delivery gate.
+    Full command logs, bounded AST/emission comparisons and review artifacts remain in ignored
+    artifacts/architecture-review-20261026/ rather than creating another documentation destination.
+  history: Original review findings, rejected implementation claims, rollback evidence and exclusions remain below.
+    No closure or broad runtime-verification claim is inferred from this authorization.
 severity_definitions:
   critical: Likely to make a core task fail, create an incorrect access/security decision, or block safe operation.
   high: Materially misleading or missing for a common task, contributor workflow, or production responsibility.
@@ -1779,7 +1820,8 @@ implementation_defects:
       final client/compiler checks passed. Independent/root review confirms actual shared adoption without another
       owner or native/backend changes. Header has no native-equivalence claim; preceding failures remain historical.
   - id: IMP-070
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     rejected_closure_on: 2026-10-26
     discovered_on: 2026-10-18
     severity: medium
@@ -1824,8 +1866,17 @@ implementation_defects:
       persistence orchestration are actually adopted; the remaining duplication is controller business orchestration.
       Activity's legacy operation order, Event fields and Drivers precommit preparation are deliberate preservation
       constraints. This review supplies no new implementation approval and does not reopen the rejected closure.
+    approved_amendment_R4_2026_10_26: The maintainer explicitly lifts this deferral for behavior-preserving consolidation
+      under the separately approved R3 task exception. Matching operations belong in the existing shared administration
+      controller with actual Packing/Drivers/Event/Activity adoption; original admission, private projections,
+      comparison evidence, validation order and feature-specific transaction/lock/completion boundaries are retained.
+      This new authority does not accept the earlier rejected patch or authorize other excluded backend remedies.
     documentation_contract: Native and Vue retain their existing shared backend operations and feature-specific
       method/private-projection boundaries. Bounded readability corrections do not establish a new common owner.
+    disposition: The existing administration controller now owns matching defaults and administrator
+      review/orchestration for all four features. Feature admission, snapshots, locks, receipt timing, zero/absent
+      grants and validation order remain distinct. Explicit comparison options preserve loaded Packing/Drivers root
+      UUIDs independently of requested persistence IDs and raw target-profile spelling.
     closes_when:
       - A separately authorized backend maintenance change resolves the repeated orchestration through its existing
         logical owners without changing native or versioned permission, projection, comparison and result behavior.
@@ -3324,6 +3375,9 @@ implementation_defects:
       activity/recommendations.ts and database/services/ActivityRecommendationService.ts match the original backend
       baseline; they are inherited declaration debt rather than migration damage. Private stored-file alias targeting
       remains recorded once under OPSV-004. These findings do not establish a new runtime defect or authorize a repair.
+    approved_declaration_resolution_R3_2026_10_26: The later explicit R3 approval covers the declaration correction
+      under IMP-146. Those three forwarding exports are now retired and actual consumers import their declaration
+      owners directly. The preceding evidence and original lack of authority remain historical; OPSV-004 is unchanged.
   - id: IMP-136
     status: closed
     closed_on: 2026-10-26
@@ -3357,7 +3411,8 @@ implementation_defects:
       - An approved correction preserves distinct same-name profiles and agrees with the intended participant contract.
       - Real-persistence coverage checks same-name assigned and linked unassigned profiles and the print projection.
   - id: IMP-137
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: medium
     owner: identity maintainers
@@ -3370,14 +3425,18 @@ implementation_defects:
       transactions and storage alone. The no-request-error dependency check does not detect this semantic violation.
     governing_contract: docs/policies/DEVELOPMENT_POLICY.md implementation principles and docs/ARCHITECTURE.md database services.
     independent_review: Domain, root and independent reviewers traced the live provider callback and each policy branch.
-    disposition: Preserve existing linking, activation and provisioning behavior until separately approved. A cohesive
+    original_review_disposition: Preserve existing linking, activation and provisioning behavior until separately approved. A cohesive
       identity controller/business owner should choose policy; the existing service should own queries and persistence.
       No claim about provider trust or an exploitable account-linking defect is made by this architectural finding.
+    disposition: modules/identity/oidcAccounts.ts owns the existing linking, activation, naming and provisioning
+      decisions. UserService supplies raw queries, ORM record construction and persistence; the actual provider
+      completion uses this business owner with the original transaction and save sequence.
     closes_when:
       - Separately approved policy/persistence separation adopts the actual OIDC caller without changing identity rules.
       - Focused persistence/provider-boundary coverage protects linking, existing accounts and provisioning outcomes.
   - id: IMP-138
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: medium
     owner: identity and administration maintainers
@@ -3389,14 +3448,18 @@ implementation_defects:
     impact: Query persistence owns request admissibility and private presentation, coupling administration UI rules to DBAL.
     governing_contract: docs/ARCHITECTURE.md controllers and database services; development policy separation of concerns.
     independent_review: The independent reviewer confirmed live callers across four feature administration APIs.
-    disposition: A separately approved boundary correction should put input/limit policy and safe projection in the
+    original_review_disposition: A separately approved boundary correction should put input/limit policy and safe projection in the
       existing administration business owner while preserving scoped query and masked-data behavior. No raw-email
       disclosure is asserted and no search behavior change is approved.
+    disposition: entityAdminController owns search admission, bounds, masked display and the shared
+      administrator-option projection; UserService.queryUserProfiles retains the account-only prefix query. All four
+      feature searches retain their admission and consume the shared projection.
     closes_when:
       - Existing search consumers adopt controller-owned admission/projection and DBAL-only query operations.
       - Focused checks preserve invalid-query results, bounds, scope and email masking.
   - id: IMP-139
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: medium
     owner: Event and linked-resource maintainers
@@ -3410,13 +3473,17 @@ implementation_defects:
       reasoning about the entire cycle. No initialization crash was demonstrated.
     governing_contract: docs/ARCHITECTURE.md feature modularization and the maintainer's requested loose coupling/directed flow.
     independent_review: Independent import inventory and source/caller tracing corroborated every direction of the cycle.
-    disposition: A cohesive Event linkage business owner could hold authorization, selection and search while existing
+    original_review_disposition: A cohesive Event linkage business owner could hold authorization, selection and search while existing
       controllers retain child deletion and request orchestration. This ownership decision needs separate approval;
       a forwarding-only module or bypass of child authorization would not resolve it.
+    disposition: modules/event/linkage.ts owns the actual Event selection, permission, cursor and linkage operations.
+      Children and flow adapters import it directly; the Event controller retains child deletion through each feature
+      controller.
     closes_when:
       - An approved change removes the runtime cycle with actual caller adoption and preserves linkage/deletion behavior.
   - id: IMP-140
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: medium
     owner: identity maintainers
@@ -3431,14 +3498,18 @@ implementation_defects:
       changes must reconcile two implementations and a runtime import cycle.
     governing_contract: docs/ARCHITECTURE.md identity, controller and feature ownership; development policy DRY.
     independent_review: Independent source review confirmed the cycle, both assignment implementations and live callers.
-    disposition: Separately approve a directed boundary where provider code exchanges protocol evidence and the identity
+    original_review_disposition: Separately approve a directed boundary where provider code exchanges protocol evidence and the identity
       business owner applies shared local identity selection. Preserve PKCE, state, tokens, context rotation and existing
       persistence/finality differences; do not infer authority to repair deferred provider logout or session behavior.
+    disposition: OIDC protocol exchange returns validated evidence to the user controller. Local and provider login
+      share synchronous account/default-profile assignment while retaining their original token, transient-clear and
+      session-save sequence. The unused validator retirement is recorded under ARCH-005.
     closes_when:
       - An approved change removes the cycle and makes both applicable journeys adopt the shared identity operation.
       - Provider and local identity/session boundaries have focused coverage at their existing layers.
   - id: IMP-141
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: medium
     owner: Packing and Drivers maintainers
@@ -3454,14 +3525,18 @@ implementation_defects:
     impact: The same root policy/projection fixes require multiple feature edits despite existing shared administration helpers.
     governing_contract: docs/policies/DEVELOPMENT_POLICY.md DRY/single source of truth; architecture feature ownership.
     independent_review: An independent reviewer compared both bodies, actual callers and feature-specific exclusions.
-    disposition: Separate approved maintenance could share coherent root controller operations with explicit type/scope
+    original_review_disposition: Separate approved maintenance could share coherent root controller operations with explicit type/scope
       inputs. Preserve field privacy, page/method distinction, comparison-token scope and Drivers precommit versus
       Packing result-first completion. IMP-070 separately owns administrator/default-permission orchestration.
+    disposition: Packing and Drivers directly adopt matching root metadata, context, permission-subject, header,
+      settings and Event-search mechanics in the shared administration and Event-linkage business owners. Feature CRUD, privacy, admission
+      and result/commit timing remain with their original owners.
     closes_when:
       - Actual matching consumers adopt approved shared owners without conflating distinct CRUD or commit behavior.
       - Privacy, admission, sparse comparison and existing receipt/transaction behavior remain covered.
   - id: IMP-142
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: low
     owner: persistence maintainers
@@ -3473,13 +3548,17 @@ implementation_defects:
     impact: Matching persistence mechanics require parallel maintenance even where only entity targets differ.
     governing_contract: docs/policies/DEVELOPMENT_POLICY.md DRY and information hiding.
     independent_review: Independent body and controller-caller review confirms all four pairs are active and shareable.
-    disposition: Share only matching inner persistence mechanics through an approved DBAL owner. The complete Packing
+    original_review_disposition: Share only matching inner persistence mechanics through an approved DBAL owner. The complete Packing
       and Drivers assignment-lock wrappers intentionally differ; Packing's root-first coordination and Drivers' legacy
       order must retain their recorded DEC-006 boundaries. This finding does not establish a locking failure.
+    disposition: ListService owns the four identical inner persistence operations with closed entity targets and
+      actual caller adoption. Existing managers, isolation, queries and lock order remain intact; the complete
+      Packing and Drivers assignment-lock wrappers retain their deliberate differences.
     closes_when:
       - Approved common persistence mechanics are adopted without widening transactions or changing lock ordering.
   - id: IMP-143
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: medium
     owner: Activity maintainers
@@ -3494,14 +3573,19 @@ implementation_defects:
       140 top-level functions; pure policy and request orchestration are difficult to review independently.
     governing_contract: docs/ARCHITECTURE.md feature modularization and source ownership.
     independent_review: Domain and independent reviewers confirmed the concrete responsibilities and current module owners.
-    disposition: Controllers are permitted to own business checks; this finding concerns cohesion and the maintainability
+    original_review_disposition: Controllers are permitted to own business checks; this finding concerns cohesion and the maintainability
       of several large responsibilities. An approved responsibility-by-responsibility extraction should use existing
       Activity business owners, preserving controller authorization, DBAL transactions and the single requirements/
       allocation engines. File size alone is not the defect; no general rewrite or changed recommendation is authorized.
+    disposition: Seven cohesive Activity modules now own context, requirements, warnings, guarded recommendation
+      persistence, generation/jobs, review/application and pure print presentation. Controllers retain request
+      admission and feature adapters; dependencies point to the actual lower owners, with one coordinator and no
+      controller back-import.
     closes_when:
       - Separately approved cohesive business responsibilities leave a readable controller with directed dependencies.
   - id: IMP-144
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: medium
     owner: application maintainers
@@ -3517,13 +3601,18 @@ implementation_defects:
       the normal unchanged-file readability scope leaves this inherited debt invisible in an ordinary clean result.
     governing_contract: docs/policies/DEVELOPMENT_POLICY.md implementation principles; docs/DEVELOPMENT.md readability.
     independent_review: A separate reviewer inspected the concrete examples; automated counts are not semantic certification.
-    disposition: Review diagnostics in bounded approved maintenance scopes and explain actual contracts/steps rather than
+    original_review_disposition: Review diagnostics in bounded approved maintenance scopes and explain actual contracts/steps rather than
       adding ceremonial comments or running a blanket formatter. Historical migration behavior must remain immutable
       unless a separate authorized correction requires otherwise. No CI/documentation gate is proposed.
+    disposition: Confirmed readability debt now has reviewed contracts and meaningful internal phase comments across
+      controllers, algorithms, DBAL, helpers, Help, email/PDF and historical migrations. Independent semantic review
+      supplements the all-source checker; AST/emission comparisons establish the bounded comments-only changes
+      without claiming every type relocation emits identical code.
     closes_when:
       - Reviewed affected operations meet the existing readability contract, with false positives distinguished explicitly.
   - id: IMP-145
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: low
     owner: Activity maintainers
@@ -3539,13 +3628,17 @@ implementation_defects:
     impact: Equivalent projection changes have multiple owners and forwarding obscures the actual allocation owner.
     governing_contract: docs/policies/DEVELOPMENT_POLICY.md DRY; architecture direct source ownership.
     independent_review: Independent body/caller review confirms the projection duplication and no second allocation algorithm.
-    disposition: Share narrow structural projections in the appropriate existing feature owner after approval. Keep
+    original_review_disposition: Share narrow structural projections in the appropriate existing feature owner after approval. Keep
       analysis versus baseline semantics distinct. The forwarding function is small indirection debt; its module also
       contains real participant helpers and must not be removed wholesale.
+    disposition: Actual consumers share candidate, slot/role and recommendation projections and call the sole fair
+      allocator directly. The recommendation projection preserves saved ID order and complete ID omission from
+      memory; requirement analysis and baseline algorithms retain their distinct semantics.
     closes_when:
       - Approved matching consumers use one candidate/input projection and the actual allocation owner directly.
   - id: IMP-146
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: medium
     owner: shared contract maintainers
@@ -3563,9 +3656,12 @@ implementation_defects:
     impact: Consumers must depend on implementation modules to obtain shared contracts, contrary to the declaration owner.
     governing_contract: docs/policies/DEVELOPMENT_POLICY.md shared type-only contracts in src/types/*.d.ts.
     independent_review: A separate reviewer confirmed actual imports and distinguished private local types from shared exports.
-    disposition: Move consumed shared type-only contracts to their proper existing declarations in an approved maintenance
+    original_review_disposition: Move consumed shared type-only contracts to their proper existing declarations in an approved maintenance
       scope, keeping private details local and runtime enums executable. The three forbidden type forwarding exports
       remain recorded once under IMP-135 inherited_review_limits_2026_10_26; this is no approval to remove them.
+    disposition: Consumed shared declarations now live in src/types/*.d.ts and callers import their actual owners.
+      Runtime enums remain executable; private details remain local. The three inherited forwarding exports are
+      retired with their callers, without forwarding replacements.
     closes_when:
       - Actual consumers import the reviewed declaration owner directly and executable behavior is unchanged.
   - id: IMP-147
@@ -3606,7 +3702,8 @@ implementation_defects:
       - One coherent admitted graph supplies participant eligibility and Finance projection without duplicate hydration.
       - Focused query/consistency and participant-privacy coverage protects the approved result.
   - id: IMP-148
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: medium
     owner: Finance frontend maintainers
@@ -3618,12 +3715,16 @@ implementation_defects:
     impact: Read-only evidence and editable review composition depend on each other, increasing change coupling.
     governing_contract: Maintainer-requested loose coupling/directed flow and architecture coherent presentation ownership.
     independent_review: Independent import and template review confirms the cycle; Row's readOnly guard bounds recursion.
-    disposition: Separately approve acyclic read-only invoice evidence or higher-level dialog composition. Keep the one
+    original_review_disposition: Separately approve acyclic read-only invoice evidence or higher-level dialog composition. Keep the one
       invoiceReview.ts draft/command owner. No infinite rendering or runtime crash is asserted.
+    disposition: The Finance section supplies review composition through an explicit component/slot contract. History
+      and rows retain the existing review owner and read-only uncertain inspection while their runtime component
+      dependency graph is directed.
     closes_when:
       - Actual History/Row/Review consumers adopt an acyclic composition preserving inline and uncertain review behavior.
   - id: IMP-149
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: medium
     owner: frontend admission maintainers
@@ -3637,12 +3738,16 @@ implementation_defects:
     impact: A shared admission-retirement correction must be reconciled across several policy copies.
     governing_contract: docs/ARCHITECTURE.md shared cache/admission ownership and development policy DRY.
     independent_review: Independent source/caller review confirms the matching algorithm and intentional differences.
-    disposition: Separately approve a shared policy function receiving explicit feature families. Preserve Event intent,
+    original_review_disposition: Separately approve a shared policy function receiving explicit feature families. Preserve Event intent,
       Survey's standalone model, the producing denial observer and live duplicate-creation drafts; add no second cache.
+    disposition: pageEntry.ts owns the matching denial-retirement policy with explicit feature-family inputs.
+      Packing, Drivers, Survey and Activity adopt it; producing denial observers, live creation drafts and Event's
+      distinct intent policy are preserved.
     closes_when:
       - All matching entries consume one policy with focused denial/actor/draft preservation coverage.
   - id: IMP-150
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: low
     owner: frontend query maintainers
@@ -3654,12 +3759,15 @@ implementation_defects:
     impact: Matching key-layout changes require editing parallel constructors inside the same owner.
     governing_contract: Development policy DRY; architecture single query-key owner.
     independent_review: Independent source review confirms reasonable sharing; there is already one key module and cache owner.
-    disposition: Low-priority approved reuse may factor the common constructor while retaining exact key values,
+    original_review_disposition: Low-priority approved reuse may factor the common constructor while retaining exact key values,
       optional-event semantics, locale policy and feature extensions. No stale-authority/cache bug is demonstrated.
+    disposition: Private constructors inside queryKeys.ts supply matching entity-family keys and retirement prefixes.
+      Exact literal keys, optional Event context, translated families and feature extensions remain unchanged.
     closes_when:
       - A reviewed common constructor preserves actual keys and invalidation-family behavior across consumers.
   - id: IMP-151
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: low
     owner: frontend transport maintainers
@@ -3673,13 +3781,17 @@ implementation_defects:
     impact: Many normalized Packing/Drivers adapter function copies make transport-composition maintenance repetitive.
     governing_contract: Development policy DRY; architecture generated adapters through the existing shared transport.
     independent_review: Independent reviewer checked representative actual read bodies/callers and excluded endpoint declarations alone.
-    disposition: Approved reuse should extend the existing typed read composition, with features supplying their
+    original_review_disposition: Approved reuse should extend the existing typed read composition, with features supplying their
       operation/endpoint/validator. Preserve sparse comparison, Survey's no-If-Match boundary and command completion;
       these are not interchangeable entire APIs or duplicate business operations.
+    disposition: The existing transport composes admitted JSON/header reads with its original response validation,
+      actor, cancellation and retry boundaries. All 65 matching feature reads adopt it while endpoint/header
+      selection, cooldown keys and command completion remain feature-owned.
     closes_when:
       - Matching live reads adopt the existing transport composition without another transport/cache/authority owner.
   - id: IMP-152
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: low
     owner: Finance frontend maintainers
@@ -3691,12 +3803,15 @@ implementation_defects:
     impact: Common paging changes require parallel implementations.
     governing_contract: Development policy DRY and coherent reusable presentation.
     independent_review: Independent comparison confirms the repeated mechanics and distinct feature lifecycles.
-    disposition: Low-priority approved reuse should share pagination only; keep filters, settled-share row retention,
+    original_review_disposition: Low-priority approved reuse should share pagination only; keep filters, settled-share row retention,
       selection state and coverage-expansion resets with their feature owners.
+    disposition: The Finance pagination helper supplies count, slice and clamping to the three matching regions. Each
+      region retains its filters, reset triggers, selected/expanded state and settled-row retention.
     closes_when:
       - Matching pagination mechanics have one adopted owner without changing feature filters or draft lifetimes.
   - id: IMP-153
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: low
     owner: file transport and frontend maintainers
@@ -3709,12 +3824,16 @@ implementation_defects:
     impact: Supported file-type changes require reconciling chooser, binary response and upload admission lists.
     governing_contract: Development policy single source of truth and browser-safe common-code ownership.
     independent_review: Independent source comparison confirms matching media sets and actual form/transport/uploader consumers.
-    disposition: Approved reuse may share a browser-safe media descriptor/predicate. Keep server enforcement, extension
+    original_review_disposition: Approved reuse may share a browser-safe media descriptor/predicate. Keep server enforcement, extension
       checks, file size, cleanup and response ownership separate; preserve binary application/octet-stream fallback.
+    disposition: A browser-safe fileMedia descriptor supplies matching chooser, binary and uploader media sets.
+      Server MIME/extension enforcement, limits and cleanup retain their owners; participant image/* acceptance and
+      binary octet-stream fallback remain unchanged.
     closes_when:
       - Matching callers derive media sets from one owner without reducing server admission or widening file policy.
   - id: IMP-154
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: low
     owner: API contract maintainers
@@ -3727,12 +3846,17 @@ implementation_defects:
     impact: Unrelated domains depend on Packing's schema organization and sometimes an intermediary domain to obtain common shapes.
     governing_contract: Architecture coherent feature ownership, information hiding and authored wire-contract authority.
     independent_review: Independent reference tracing confirms actual generated consumers and that schemas are already single-source.
-    disposition: This is ownership/coupling debt, not duplicated schema implementations. Separately approved relocation
+    original_review_disposition: This is ownership/coupling debt, not duplicated schema implementations. Separately approved relocation
       of genuine common shapes to the existing common.yaml owner must preserve wire/version compatibility and feature exceptions.
+    disposition: Shared schemas now reside in common.yaml and consumers refer directly to that neutral owner. Legacy
+      schema identifiers are retained where generator canonicalization affects compatibility; independent baseline
+      comparison preserves all 317 exported shapes, 237 operations and the existing strict/additive browser alias
+      behavior.
     closes_when:
       - Shared shapes have a neutral canonical owner with compatible generated consumers and no unnecessary feature chain.
   - id: IMP-155
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: low
     owner: Finance contract and frontend maintainers
@@ -3744,13 +3868,17 @@ implementation_defects:
     impact: A matching constraint change requires updating both the wire declaration and native form attributes.
     governing_contract: Architecture authored schema authority and development policy single source of truth.
     independent_review: Independent source review confirms matching current values; native constraints are expected UX defense.
-    disposition: Low-priority approved generation of matching native field attributes could remove duplicate literals.
+    original_review_disposition: Low-priority approved generation of matching native field attributes could remove duplicate literals.
       Preserve deliberate UI/wire differences, including Event creation and capacities; no broken validation, alternate
       runtime schema or need for a universal form engine is asserted.
+    disposition: The existing generator emits selected authored native field bounds beside lazy request validators,
+      and matching Finance controls consume them. Native UTF-16 length behavior, JSON code-point validation and
+      intentional feature-specific constraints are preserved.
     closes_when:
       - Selected matching native attributes derive from authored constraints while intentional differences remain explicit.
   - id: IMP-156
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: low
     owner: common date helper maintainers
@@ -3762,12 +3890,15 @@ implementation_defects:
     impact: Matching calendar-step corrections require changes in two pure helper implementations.
     governing_contract: Development policy DRY and browser-safe shared code ownership.
     independent_review: Independent comparison confirms identical semantics and both live feature consumers.
-    disposition: Approved reuse may share only the primitive with its existing input/error semantics. Do not change
+    original_review_disposition: Approved reuse may share only the primitive with its existing input/error semantics. Do not change
       invoice attendance, deadlines, date validation or the explicitly bounded civilDate presentation correction.
+    disposition: Both former day-stepping consumers use common/lib/civilDate.addCivilDays directly. The primitive
+      retains the original UTC parse/increment/slice algorithm, normalization and invalid-input errors.
     closes_when:
       - Both applicable consumers use one reviewed UTC stepping primitive without changed domain date behavior.
   - id: IMP-157
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: low
     owner: stored-file maintainers
@@ -3779,13 +3910,17 @@ implementation_defects:
     impact: Matching confinement maintenance requires reconciling multiple implementations of the same path predicate.
     governing_contract: Development policy DRY; architecture distinct file admission/delivery/lifecycle owners.
     independent_review: Independent body comparison confirms shareable lexical resolution while delivery/deletion policies differ.
-    disposition: Share a pure resolver/predicate only after separate approval; preserve controller permission, status,
+    original_review_disposition: Share a pure resolver/predicate only after separate approval; preserve controller permission, status,
       read/stream/delete and best-effort cleanup contracts. Existing stored-file alias/symlink safety debt remains
       recorded once under OPSV-004 and must not be silently repaired or declared solved by deduplication.
+    disposition: API binary delivery, header delivery and invoice proofs use lib/storedFiles.resolveStoredFile for
+      the matching lexical resolution. Each caller retains authorization, statuses, I/O and cleanup; OPSV-004 remains
+      outside this refactor.
     closes_when:
       - Applicable file consumers adopt one predicate with their existing delivery and lifecycle behavior intact.
   - id: IMP-158
-    status: open
+    status: closed
+    closed_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: low
     owner: API error maintainers
@@ -3799,9 +3934,12 @@ implementation_defects:
     impact: Event problem additions and mapping changes have a handwritten second inventory despite generated contract authority.
     governing_contract: Architecture shared error/contract owners and development policy DRY/single source of truth.
     independent_review: Independent constructor/schema comparison confirms current redundancy and the mismatched-status distinction.
-    disposition: Approved consolidation should preserve or explicitly decide the existing status-adaptation behavior.
+    original_review_disposition: Approved consolidation should preserve or explicitly decide the existing status-adaptation behavior.
       Identity ValidationError mappings intentionally adapt statuses and are excluded. Removing the Event switch blindly
       would change behavior for trusted mismatched-status errors; no present user-visible misclassification is asserted.
+    disposition: Authored Problem annotations and their generated manifest now own the sixteen Event status
+      adaptations. Only the final classifier opts trusted APIError causes into that compatibility; direct declared
+      lookups stay strict and identity mappings remain separate.
     closes_when:
       - One reviewed Event mapping mechanism preserves the accepted error-class/status behavior and declared wire outcomes.
 findings:
@@ -4389,6 +4527,10 @@ findings:
       stageIdentitySession behavior, ordinary Express saves and documented transport differences are not defects.
       OIDC/user-controller cycle and repeated identity assignment are separately scoped in IMP-140. This static
       review does not close the requested whole-session/flash runtime verification or grant session-redesign authority.
+    scoped_retirement_R3_2026_10_26: The explicit R3 approval authorizes removal of unused validateSession only.
+      Its definition is retired with no production callers to replace; captured-actor admission remains authoritative.
+      Independent source/caller review and the completed identity persistence/system checks cover that bounded cleanup.
+      This entry stays open for the separately scoped whole-session/flash review and supplies no redesign approval.
     desired_outcome: Establish one reviewed session and flash concept with existing shared implementation owners and
       explicit transport differences, preserving server-owned authentication and authorization and native behavior.
     acceptance_criteria:

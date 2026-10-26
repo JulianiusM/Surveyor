@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+import type {Settings} from '../../types/SettingsTypes';
+
+
 // src/settings-csv.ts
 import * as dotenv from "dotenv";
 import crypto from "node:crypto";
@@ -25,54 +28,6 @@ const envPath =
     process.env.E2E_DOTENV_FILE ??
     (process.env.NODE_ENV === "e2e" ? ".env.e2e" : ".env");
 dotenv.config({path: envPath});
-
-export type Settings = {
-    appName: string;
-    appPort: number;
-    file: string;
-    dbType: "mariadb" | "mysql";
-    dbName: string;
-    dbHost: string;
-    dbPassword: string;
-    dbPort: number;
-    dbUser: string;
-    rootUrl: string;
-    sessionSecret: string;
-    smtpEmail: string;
-    smtpHost: string;
-    smtpPassword: string;
-    smtpPool: boolean;
-    smtpPort: number;
-    smtpSecure: boolean;
-    smtpUser: string;
-    emailAccentColor: string;
-    localLoginEnabled: boolean;
-    oidcEnabled: boolean;
-    oidcName: string;
-    oidcIssuerBaseUrl: string;
-    oidcClientId: string;
-    oidcClientSecret: string;
-    oidcRedirectUrl: string;
-    invoiceDir: string;
-    invoiceRetentionMonths: number;
-    /**
-     * Controls the background archival job; manual archival and personal choices remain available.
-     * This setting has no connection to invoice/file retention or permanent entity deletion.
-     */
-    autoArchiveEnabled: boolean;
-    /**
-     * Complete UTC days after the inclusive end date; zero still waits until the following day.
-     * The archival policy validates the integer and resulting database-date cutoff at startup.
-     */
-    autoArchiveAfterDays: number;
-    headerImgDir: string;
-    imprintUrl: string;
-    privacyPolicyUrl: string;
-    initialized: boolean;
-    activityAvailabilityWeight: number;
-    activitySwapOptimizationIterations: number;
-    activityArrivalDeparturePenalty: number;
-};
 
 const defaults: Settings = {
     initialized: false,

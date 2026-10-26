@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 
+import type {DefaultItemRelationEntity, EntityItemAssignment} from '../../../../../types/EntityRelationTypes';
+
+
 import {JoinColumn, ManyToOne, RelationId} from "typeorm";
 import {Profile} from "../user/Profile";
-import type {BaseEntity, DefaultItemRelationEntity} from "./BaseEntity";
+import type {BaseEntity} from './BaseEntity';
 import {NumericDescriptionEntityItem, UuidDescriptionEntityItem} from "./DescriptionEntityItem";
-import type {EntityItemAssignment} from "./ProfileEntityItemAssignment";
+
 
 export abstract class UuidProfileEntityItem extends UuidDescriptionEntityItem {
     @RelationId((a: UuidProfileEntityItem) => a.profile)

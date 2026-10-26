@@ -14,22 +14,14 @@
  * limitations under the License.
  */
 
-import type {ActivitySlot} from "../database/entities/activity/ActivitySlot";
+import type {SlotTimeboxCandidate, AttendanceCheck, AttendancePolicy} from '../../../types/ActivityTypes';
+
+
+
 import type {ParticipantAttendance} from "../../../types/ActivityRequirementTypes";
-import {parseTimeToMinutes, slotsOverlap, SlotTimeboxCandidate} from "./timebox";
+import {parseTimeToMinutes, slotsOverlap} from './timebox';
 import type {AssignmentCandidate, AssignmentWarning} from '../../../types/ActivityTypes';
-export type {AssignmentCandidate, AssignmentWarning, AssignmentWarningType} from '../../../types/ActivityTypes';
 
-/**
- * Availability helpers for assignment warnings. These utilities normalize slot assignments
- * into candidate structures, check attendance and overlap policies, and surface structured
- * warnings that the UI and recommendation engine can reuse.
- */
-
-export interface AttendanceCheck {
-    allowed: boolean;
-    boundary?: "arrival" | "departure" | "before" | "after";
-}
 
 function isBefore(a: string, b: string): boolean {
     return a < b;
@@ -39,17 +31,22 @@ function isAfter(a: string, b: string): boolean {
     return a > b;
 }
 
+/** Classify a saved civil day against the supplied optional attendance bounds.
+ * Outside days are rejected first; an arrival/departure match stays admitted
+ * with its boundary marker, preserving arrival precedence for a same-day stay. */
 export function checkAttendanceForDay(
     day: string,
     arrival?: string | null,
     departure?: string | null,
 ): AttendanceCheck {
+    // Saved ISO-day ordering supplies the existing inclusive range comparison.
     if (arrival && isBefore(day, arrival)) {
         return {allowed: false, boundary: "before"};
     }
     if (departure && isAfter(day, departure)) {
         return {allowed: false, boundary: "after"};
     }
+    // Boundary labels are separate from later time-of-day attendance policy.
     if (arrival && day === arrival) {
         return {allowed: true, boundary: "arrival"};
     }
@@ -59,7 +56,12 @@ export function checkAttendanceForDay(
     return {allowed: true};
 }
 
+/** Return conflicting saved slot IDs using the shared timebox overlap rule.
+ * A slot does not conflict with itself; result ordering follows the supplied
+ * commitments and disclosure remains the controller's separate responsibility. */
 export function findOverlapConflicts(candidate: AssignmentCandidate, existing: AssignmentCandidate[]): string[] {
+    // Retain the caller's order and exclude only this same slot identity before
+    // applying the established date/time overlap semantics.
     const conflicts: string[] = [];
     for (const slot of existing) {
         if (slot.id === candidate.id) continue;
@@ -68,11 +70,6 @@ export function findOverlapConflicts(candidate: AssignmentCandidate, existing: A
         }
     }
     return conflicts;
-}
-
-export interface AttendancePolicy {
-    allowArrivalDayEvening?: boolean;
-    allowDepartureDayMorning?: boolean;
 }
 
 const DEFAULT_POLICY: Required<AttendancePolicy> = {
@@ -144,7 +141,8 @@ export function collectAssignmentWarnings(
     return warnings;
 }
 
-export function toAssignmentCandidate(slot: ActivitySlot): AssignmentCandidate {
+export function toAssignmentCandidate(slot: Pick<AssignmentCandidate,
+    'id' | 'day' | 'startTime' | 'endTime' | 'pos' | 'isArrivalEvening' | 'isDepartureMorning'>): AssignmentCandidate {
     return {
         id: slot.id,
         day: slot.day,

@@ -5,6 +5,9 @@
  * You may obtain a copy at http://www.apache.org/licenses/LICENSE-2.0
  */
 
+import {normalizeListMetadataPatch as normalizePackingMetadataPatch} from '../../../controller/entityAdminController';
+
+
 import {Router} from 'express';
 import * as packingApi from '../../../controller/packingController';
 import {createGuestFlowApiRouter, createGuestFlowGuestRouter} from '../../../middleware/guestFlowFactory';
@@ -16,7 +19,7 @@ import {createEntityAdminApiRouter, createEntityArchiveApiRouter, createEntityPr
 import {attachAssignRoutes} from '../../../middleware/assignFlowFactory';
 import {createEntityHeaderUpdateRouter} from '../../../middleware/entityHeaderUpdateHandler';
 import {sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
-import {patchPackingMetadata, normalizePackingMetadataPatch, readPackingMetadata, setPackingSelfAssignment} from '../../../controller/packingController';
+import {patchPackingMetadata, readPackingMetadata, setPackingSelfAssignment} from '../../../controller/packingController';
 
 const router = Router();
 router.use(createGuestFlowApiRouter(packingFlow));

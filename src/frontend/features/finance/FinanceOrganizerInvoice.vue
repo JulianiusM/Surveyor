@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import {fieldAttributes as invoiceFields} from '../../../../.generated/api/v1/browser/validateFinanceOrganizerInvoiceInput.mjs';
+import {proofFileAccept} from '../../../common/lib/fileMedia';
 import {computed, reactive, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
 import {useActionState, useFrontend} from '../../app/context';
@@ -133,10 +135,10 @@ function acknowledge(): void {
                     <small :id="`${id}-participant-help`" class="text-secondary">{{ messages.t('finance.organizerInvoiceAttributionHelp') }}</small>
                 </FormField>
                 <FormField :id="`${id}-description`" v-model="draft.description" class="mb-3" name="description"
-                    :label="messages.t('finance.description')" multiline :rows="3" :max-length="4000" required :required-marker="false"
+                    :label="messages.t('finance.description')" multiline :rows="3" :max-length="invoiceFields.description.maxLength" required :required-marker="false"
                     :pending="command.pending.value" />
                 <FileField :id="`${id}-proof`" name="proof" class="mb-3" :label="messages.t('finance.proofOptional')"
-                    :selected-file="proof" accept="image/jpeg,image/png,image/gif,application/pdf" :described-by="`${id}-proof-help`" @choose="proof = $event">
+                    :selected-file="proof" :accept="proofFileAccept" :described-by="`${id}-proof-help`" @choose="proof = $event">
                     <small :id="`${id}-proof-help`" class="text-secondary">{{ messages.t('finance.attachAnImageOrPDFReceiptOrLeaveThis') }}</small>
                 </FileField>
             </fieldset>

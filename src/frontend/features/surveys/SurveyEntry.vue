@@ -5,7 +5,7 @@ import type {components} from '../../../types/api/v1';
 import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {EntityEntryRetirement} from '../../../types/FrontendEntityEntryTypes';
 import {useFrontend} from '../../app/context';
-import {resourceRouteIntent} from '../../composables/pageEntry';
+import {entityEntryRetirement, resourceRouteIntent} from '../../composables/pageEntry';
 import {overviewKeys, surveyKeys} from '../../app/queryKeys';
 import {useSurveysApi} from './api';
 import EntityEntryPage from '../../components/EntityEntryPage.vue';
@@ -24,11 +24,8 @@ const initialEntry: components['schemas']['SurveyResourceEntry'] | undefined = i
 /** Detail denial retires its private projections without revoking an independent
  * guest admission. An active copied creation draft owns its values separately. */
 function deniedQueries(entry: {readonly status: number}, scope: FrontendRequestScope): EntityEntryRetirement {
-    const actor = scope.context;
-    const id = surveyId.value;
-    const families: (readonly unknown[])[] = [surveyKeys.detailFamily(actor, id), surveyKeys.editors(actor, id), overviewKeys.all(actor)];
-    if (entry.status === 404) families.push(surveyKeys.entry(actor, id, guestRoute.value ? 'detail' : 'guest'), surveyKeys.guest(actor, id));
-    return {families, inactiveFamilies: entry.status === 404 ? [surveyKeys.duplicate(actor, id)] : []};
+    return entityEntryRetirement({status: entry.status, actor: scope.context, resource: surveyId.value,
+        intent: guestRoute.value ? 'guest' : 'detail', keys: surveyKeys, additionalFamilies: [overviewKeys.all(scope.context)]});
 }
 
 function readEntry(scope: FrontendRequestScope, signal: AbortSignal) {

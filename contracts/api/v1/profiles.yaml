@@ -160,7 +160,7 @@ paths:
           description: Confirmed profile creation; display data is refreshed separately
           content:
             application/json:
-              schema: {$ref: './packing.yaml#/schemas/MutationResult'}
+              schema: {$ref: './common.yaml#/schemas/MutationResult'}
         default: {$ref: './openapi.yaml#/components/responses/Problem'}
   current:
     get:
@@ -195,5 +195,5 @@ paths:
           description: Confirmed profile update; display data is refreshed separately
           content:
             application/json:
-              schema: {$ref: './packing.yaml#/schemas/MutationResult'}
+              schema: {$ref: './common.yaml#/schemas/MutationResult'}
         default: {$ref: './openapi.yaml#/components/responses/Problem'}

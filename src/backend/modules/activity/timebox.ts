@@ -14,19 +14,10 @@
  * limitations under the License.
  */
 
+import type {SlotTimeboxCandidate, SlotTimebox} from '../../../types/ActivityTypes';
+
+
 import {ActivitySlot} from "../database/entities/activity/ActivitySlot";
-
-export interface SlotTimeboxCandidate {
-    day: string;
-    startTime?: string | null;
-    endTime?: string | null;
-    pos?: number | null;
-}
-
-export interface SlotTimebox {
-    startMinutes: number | null;
-    endMinutes: number | null;
-}
 
 /**
  * Parse a database time string (HH:MM or HH:MM:SS) into minutes after midnight.

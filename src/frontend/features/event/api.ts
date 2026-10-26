@@ -35,13 +35,12 @@ export class EventApi {
     async metadata(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal,
                    previous?: FrontendRead<Metadata>): Promise<FrontendRead<Metadata>> {
         const transport = this.transport;
-        async function readMetadata(): Promise<FrontendRead<Metadata>> {
-            const response = await transport.client.GET('/events/{eventId}/metadata', {
+        function readMetadata() {
+            return transport.client.GET('/events/{eventId}/metadata', {
                 params: {path: {eventId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
             });
-            return transport.read('getEventMetadata', {...response, signal}, validateEventMetadata, scope, previous);
         }
-        const result = await transport.allowedRead(`event/${eventId}/metadata`, scope, readMetadata, signal);
+        const result = await transport.readJson(`event/${eventId}/metadata`, scope, readMetadata, 'getEventMetadata', validateEventMetadata, signal, previous);
         this.transport.requireComparison(result.etag);
         return result;
     }
@@ -67,13 +66,12 @@ export class EventApi {
      * cooldown while its generated validator checks the permitted panels/tokens. */
     async settings(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['EventSettings']> {
         const transport = this.transport;
-        async function readSettings(): Promise<components['schemas']['EventSettings']> {
-            const response = await transport.client.GET('/events/{eventId}/settings', {
+        function readSettings() {
+            return transport.client.GET('/events/{eventId}/settings', {
                 params: {path: {eventId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getEventSettings', {...response, signal}, validateEventSettings, scope).data;
         }
-        return transport.allowedRead(`event/${eventId}/settings`, scope, readSettings, signal);
+        return (await transport.readJson(`event/${eventId}/settings`, scope, readSettings, 'getEventSettings', validateEventSettings, signal)).data;
     }
 
     /** Creation admission is distinct from the public duplication projection. The caller supplies
@@ -81,13 +79,12 @@ export class EventApi {
     async createEntry(scope: FrontendRequestScope, signal?: AbortSignal,
                       returnTo?: string): Promise<components['schemas']['EventCreateEntry']> {
         const transport = this.transport;
-        async function readCreationEntry(): Promise<components['schemas']['EventCreateEntry']> {
-            const response = await transport.client.GET('/events/create-entry', {
+        function readCreationEntry() {
+            return transport.client.GET('/events/create-entry', {
                 params: {query: {returnTo}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getEventCreateEntry', {...response, signal}, validateEventCreateEntry, scope).data;
         }
-        return transport.allowedRead('event/create-entry/' + (returnTo ?? ''), scope, readCreationEntry, signal);
+        return (await transport.readJson('event/create-entry/' + (returnTo ?? ''), scope, readCreationEntry, 'getEventCreateEntry', validateEventCreateEntry, signal)).data;
     }
 
     /** Adapt the generated Event draft to multipart without changing its form-shaped
@@ -109,13 +106,12 @@ export class EventApi {
     async resourceEntry(eventId: string, view: 'detail' | 'guest' | 'admin', scope: FrontendRequestScope,
                         signal?: AbortSignal, regToken?: string): Promise<components['schemas']['EventResourceEntry']> {
         const transport = this.transport;
-        async function readResourceEntry(): Promise<components['schemas']['EventResourceEntry']> {
-            const response = await transport.client.GET('/events/{eventId}/entry', {
+        function readResourceEntry() {
+            return transport.client.GET('/events/{eventId}/entry', {
                 params: {path: {eventId}, query: {view, regToken}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getEventResourceEntry', {...response, signal}, validateEventResourceEntry, scope).data;
         }
-        return transport.allowedRead(`event/${eventId}/entry/${view}`, scope, readResourceEntry, signal);
+        return (await transport.readJson(`event/${eventId}/entry/${view}`, scope, readResourceEntry, 'getEventResourceEntry', validateEventResourceEntry, signal)).data;
     }
 
     /** Read only the server's permitted duplication surface. Destination selection
@@ -123,13 +119,12 @@ export class EventApi {
      * administrator grants and files stay excluded; copied values grant no creation permission. */
     async duplicate(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['EventDuplicate']> {
         const transport = this.transport;
-        async function readDuplicate(): Promise<components['schemas']['EventDuplicate']> {
-            const response = await transport.client.GET('/events/{eventId}/duplicate', {
+        function readDuplicate() {
+            return transport.client.GET('/events/{eventId}/duplicate', {
                 params: {path: {eventId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getEventDuplicate', {...response, signal}, validateEventDuplicate, scope).data;
         }
-        return transport.allowedRead(`event/${eventId}/duplicate`, scope, readDuplicate, signal);
+        return (await transport.readJson(`event/${eventId}/duplicate`, scope, readDuplicate, 'getEventDuplicate', validateEventDuplicate, signal)).data;
     }
 
     async setDefaults(eventId: string, defaults: components['schemas']['PermissionDefaultsPatch'], token: string, scope: FrontendRequestScope) {
@@ -143,13 +138,12 @@ export class EventApi {
      * transport; a displayed username never becomes the acting identity. */
     async profiles(eventId: string, q: string, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
-        async function readProfileOptions(): Promise<components['schemas']['PackingProfileOptions']> {
-            const response = await transport.client.GET('/events/{eventId}/profiles', {
+        function readProfileOptions() {
+            return transport.client.GET('/events/{eventId}/profiles', {
                 params: {path: {eventId}, query: {q}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('searchEventProfiles', {...response, signal}, validatePackingProfileOptions, scope).data;
         }
-        return transport.allowedRead(`event/${eventId}/profiles/${q}`, scope, readProfileOptions, signal);
+        return (await transport.readJson(`event/${eventId}/profiles/${q}`, scope, readProfileOptions, 'searchEventProfiles', validatePackingProfileOptions, signal)).data;
     }
 
     async addAdmin(eventId: string, input: components['schemas']['PackingAdminInput'], token: string, scope: FrontendRequestScope) {
@@ -177,14 +171,13 @@ export class EventApi {
          * ordinary JSON/text decoder and the shared validated rejection policy.
          * Binary recovery therefore observes the same actor and Retry-After owner
          * as JSON reads instead of introducing a second error parser or deadline. */
-        async function readHeader(): Promise<Blob> {
-            const result = await transport.client.GET('/events/{eventId}/header', {
+        function readHeader() {
+            return transport.client.GET('/events/{eventId}/header', {
                 params: {path: {eventId}, header: transport.headers(scope)}, signal, cache: 'no-store', parseAs: 'blob',
             });
-            return transport.headerImage(result, scope, signal);
         }
 
-        return transport.allowedRead(`event/${eventId}/header`, scope, readHeader, signal);
+        return transport.readHeaderImage(`event/${eventId}/header`, scope, readHeader, signal);
     }
 
     /** Replace the header using the file draft's reviewed comparison token.
@@ -224,49 +217,45 @@ export class EventApi {
     /** Read this independently admitted Event projection without broadening sibling access. */
     async event(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal, admin = false): Promise<components['schemas']['EventView']> {
         const transport = this.transport;
-        async function readProjection(): Promise<components['schemas']['EventView']> {
-            const response = await transport.client.GET('/events/{eventId}', {
+        function readProjection() {
+            return transport.client.GET('/events/{eventId}', {
                 params: {path: {eventId}, query: {view: admin ? 'admin' : 'detail'}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getEvent', {...response, signal}, validateEventView, scope).data;
         }
-        return transport.allowedRead(`event/${eventId}/${admin}`, scope, readProjection, signal);
+        return (await transport.readJson(`event/${eventId}/${admin}`, scope, readProjection, 'getEvent', validateEventView, signal)).data;
     }
 
     /** Read this independently admitted Event projection without broadening sibling access. */
     async participants(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['EventParticipants']> {
         const transport = this.transport;
-        async function readProjection(): Promise<components['schemas']['EventParticipants']> {
-            const response = await transport.client.GET('/events/{eventId}/participants', {
+        function readProjection() {
+            return transport.client.GET('/events/{eventId}/participants', {
                 params: {path: {eventId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getEventParticipants', {...response, signal}, validateEventParticipants, scope).data;
         }
-        return transport.allowedRead(`event/${eventId}/participants`, scope, readProjection, signal);
+        return (await transport.readJson(`event/${eventId}/participants`, scope, readProjection, 'getEventParticipants', validateEventParticipants, signal)).data;
     }
 
     /** Read this independently admitted Event projection without broadening sibling access. */
     async links(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['EventRegistrationLinks']> {
         const transport = this.transport;
-        async function readProjection(): Promise<components['schemas']['EventRegistrationLinks']> {
-            const response = await transport.client.GET('/events/{eventId}/links', {
+        function readProjection() {
+            return transport.client.GET('/events/{eventId}/links', {
                 params: {path: {eventId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('listEventRegistrationLinks', {...response, signal}, validateEventRegistrationLinks, scope).data;
         }
-        return transport.allowedRead(`event/${eventId}/links`, scope, readProjection, signal);
+        return (await transport.readJson(`event/${eventId}/links`, scope, readProjection, 'listEventRegistrationLinks', validateEventRegistrationLinks, signal)).data;
     }
 
     /** Read this independently admitted Event projection without broadening sibling access. */
     async thingsToDo(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal, admin = false): Promise<components['schemas']['EventThingsToDo']> {
         const transport = this.transport;
-        async function readProjection(): Promise<components['schemas']['EventThingsToDo']> {
-            const response = await transport.client.GET('/events/{eventId}/things-to-do', {
+        function readProjection() {
+            return transport.client.GET('/events/{eventId}/things-to-do', {
                 params: {path: {eventId}, query: {view: admin ? 'admin' : 'detail'}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getEventThingsToDo', {...response, signal}, validateEventThingsToDo, scope).data;
         }
-        return transport.allowedRead(`event/${eventId}/things-to-do/${admin}`, scope, readProjection, signal);
+        return (await transport.readJson(`event/${eventId}/things-to-do/${admin}`, scope, readProjection, 'getEventThingsToDo', validateEventThingsToDo, signal)).data;
     }
 
     /** Dispatch one deliberate shared operation; an unconfirmed delivery never replays. */
@@ -330,13 +319,12 @@ export class EventApi {
      * Reading or prefetching this boundary never spends a registration bypass use. */
     async guestEntry(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal, regToken?: string) {
         const transport = this.transport;
-        async function readGuestEntry(): Promise<components['schemas']['GuestEntry']> {
-            const response = await transport.client.GET('/events/{eventId}/guest', {
+        function readGuestEntry() {
+            return transport.client.GET('/events/{eventId}/guest', {
                 params: {path: {eventId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getEventGuestEntry', {...response, signal}, validateGuestEntry, scope).data;
         }
-        return transport.allowedRead(`event/${eventId}/guest`, scope, readGuestEntry, signal);
+        return (await transport.readJson(`event/${eventId}/guest`, scope, readGuestEntry, 'getEventGuestEntry', validateGuestEntry, signal)).data;
     }
 
     /** Identity completion is shared; the token remains an unconsumed registration input. */

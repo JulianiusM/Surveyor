@@ -13,7 +13,7 @@ schemas:
     properties:
       id: {$ref: './common.yaml#/schemas/Uuid'}
   EventCreateContext:
-    $ref: ./packing.yaml#/schemas/PackingCreateContext
+    $ref: ./common.yaml#/schemas/PackingCreateContext
   EventCreateEntry:
     type: object
     additionalProperties: false
@@ -28,7 +28,7 @@ schemas:
           - $ref: "#/schemas/EventCreateContext"
           - type: "null"
   EventResourceEntry:
-    $ref: ./packing.yaml#/schemas/PackingResourceEntry
+    $ref: ./common.yaml#/schemas/PackingResourceEntry
   EventMetadataPatch:
     type: object
     additionalProperties: false
@@ -120,7 +120,7 @@ schemas:
       allowRegDietUpdateAfterDeadline:
         type: boolean
       defaultPermissions:
-        $ref: ./packing.yaml#/schemas/PermissionDefaults
+        $ref: ./common.yaml#/schemas/PermissionDefaults
   EventDuplicate:
     type: object
     additionalProperties: false
@@ -399,7 +399,7 @@ schemas:
           manageAssignments:
             type: boolean
       archive:
-        $ref: ./packing.yaml#/schemas/PackingArchive
+        $ref: ./common.yaml#/schemas/PackingArchive
       hasInvoicePools:
         type: boolean
         description: Only own registered profiles receive pool existence for the finance destination; no finance
@@ -466,10 +466,10 @@ schemas:
           export:
             type: boolean
       archive:
-        $ref: ./packing.yaml#/schemas/PackingArchive
+        $ref: ./common.yaml#/schemas/PackingArchive
       access:
         anyOf:
-          - $ref: ./packing.yaml#/schemas/PackingAccess
+          - $ref: ./common.yaml#/schemas/PackingAccess
           - type: "null"
   EventParticipant:
     type: object
@@ -705,7 +705,7 @@ schemas:
       allowRegDietUpdateAfterDeadline:
         type: boolean
       defaultPermissions:
-        $ref: ./packing.yaml#/schemas/PermissionDefaults
+        $ref: ./common.yaml#/schemas/PermissionDefaults
   EventCreationSubmission:
     type: object
     additionalProperties: false
@@ -756,7 +756,7 @@ paths:
           description: Existing child deletion completed
           content:
             application/json:
-              schema: {$ref: './packing.yaml#/schemas/MutationResult'}
+              schema: {$ref: './common.yaml#/schemas/MutationResult'}
         default: {$ref: './openapi.yaml#/components/responses/Problem'}
   /events/create-entry:
     get:
@@ -887,7 +887,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
   /events/{eventId}/duplicate:
@@ -1009,7 +1009,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
       requestBody:
@@ -1035,7 +1035,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
   /events/{eventId}/participants:
@@ -1085,7 +1085,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
       requestBody:
@@ -1119,7 +1119,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
   /events/{eventId}/links:
@@ -1194,7 +1194,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
   /events/{eventId}/things-to-do:
@@ -1243,7 +1243,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/PackingDefaultsBaseline
+                $ref: ./common.yaml#/schemas/PackingDefaultsBaseline
           headers:
             ETag:
               schema:
@@ -1271,7 +1271,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
       security: []
@@ -1280,7 +1280,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ./packing.yaml#/schemas/PermissionDefaultsPatch
+              $ref: ./common.yaml#/schemas/PermissionDefaultsPatch
   /events/{eventId}/admins/{profileId}/edit-baseline:
     get:
       operationId: getEventAdminBaseline
@@ -1305,7 +1305,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/PackingAdminBaseline
+                $ref: ./common.yaml#/schemas/PackingAdminBaseline
           headers:
             ETag:
               schema:
@@ -1334,7 +1334,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
       security: []
@@ -1343,7 +1343,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ./packing.yaml#/schemas/PackingAdminInput
+              $ref: ./common.yaml#/schemas/PackingAdminInput
   /events/{eventId}/admins/{profileId}:
     patch:
       operationId: updateEventAdmin
@@ -1369,7 +1369,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
       security: []
@@ -1378,7 +1378,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ./packing.yaml#/schemas/PackingAdminPatch
+              $ref: ./common.yaml#/schemas/PackingAdminPatch
     delete:
       operationId: deleteEventAdmin
       x-surveyor-command:
@@ -1403,7 +1403,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
       security: []
@@ -1431,7 +1431,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/PackingProfileOptions
+                $ref: ./common.yaml#/schemas/PackingProfileOptions
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
       security: []
@@ -1453,7 +1453,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/PackingHeaderBaseline
+                $ref: ./common.yaml#/schemas/PackingHeaderBaseline
           headers:
             ETag:
               schema:
@@ -1482,7 +1482,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
       security: []
@@ -1491,7 +1491,7 @@ paths:
         content:
           multipart/form-data:
             schema:
-              $ref: ./packing.yaml#/schemas/PackingHeaderUpload
+              $ref: ./common.yaml#/schemas/PackingHeaderUpload
     delete:
       operationId: deleteEventHeader
       x-surveyor-command:
@@ -1510,7 +1510,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
       security: []
@@ -1530,7 +1530,7 @@ paths:
           content:
             application/octet-stream:
               schema:
-                $ref: ./packing.yaml#/schemas/PackingHeaderBinary
+                $ref: ./common.yaml#/schemas/PackingHeaderBinary
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
       security: []
@@ -1552,7 +1552,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
   /events/{eventId}/restore:
@@ -1573,7 +1573,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
   /events/{eventId}/things-to-do/{entityType}/{entityId}/archive:
@@ -1615,7 +1615,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
   /events/{eventId}/things-to-do/{entityType}/{entityId}/restore:
@@ -1657,7 +1657,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
   /events/{eventId}/things-to-do/{entityType}/{entityId}/automatic-archive:
@@ -1699,7 +1699,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
       requestBody:
@@ -1731,7 +1731,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./packing.yaml#/schemas/MutationResult
+                $ref: ./common.yaml#/schemas/MutationResult
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
       requestBody:

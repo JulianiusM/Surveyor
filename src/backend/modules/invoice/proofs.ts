@@ -16,20 +16,18 @@
 
 import {invoiceText, invoiceRejectionCause} from './wording';
 import fs from 'node:fs';
-import path from 'node:path';
 import settings from '../settings';
 import type {EventInvoice} from '../database/entities/event/EventInvoice';
 import {APIError} from '../lib/errors';
+import {resolveStoredFile} from '../lib/storedFiles';
 
 /** Files stay outside the DBAL and retain the existing configured-directory deletion boundary. */
 export async function deleteInvoiceProof(proofPath?: string | null): Promise<void> {
     if (!proofPath) return;
     // Resolve both paths in one filesystem context before allowing a proof to be deleted.
-    const invoiceRoot = path.resolve(process.cwd(), settings.value.invoiceDir);
-    const normalized = path.resolve(process.cwd(), proofPath);
-    const relativePath = path.relative(invoiceRoot, normalized);
-    // Reject paths outside the configured directory, including absolute relative-path results.
-    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    const normalized = resolveStoredFile(settings.value.invoiceDir, proofPath);
+    // Invalid paths retain best-effort retention's existing skip and warning.
+    if (!normalized) {
         console.warn(invoiceText('archivedProofSkipped', {path: proofPath}));
         return;
     }
@@ -51,12 +49,8 @@ export async function getInvoiceProofPath(invoice: EventInvoice | null, actorReg
     }
 
     // Sanitize and validate the proof path to prevent directory traversal
-    const uploadsDir = path.resolve(process.cwd(), settings.value.invoiceDir);
-    const fullPath = path.resolve(process.cwd(), invoice.proofPath);
-
-    // Use path.relative to ensure the resolved path is within uploads directory
-    const relativePath = path.relative(uploadsDir, fullPath);
-    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    const fullPath = resolveStoredFile(settings.value.invoiceDir, invoice.proofPath);
+    if (!fullPath) {
         throw new APIError(invoiceText('invalidProofPath'), {}, 400, {cause: invoiceRejectionCause('invalidProofPath')});
     }
 

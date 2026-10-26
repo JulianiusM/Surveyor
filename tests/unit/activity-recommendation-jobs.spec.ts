@@ -1,10 +1,7 @@
+import type {AutoAssignmentContext, RecommendationJobView} from '../../src/types/ActivityTypes';
 import {describe, expect, it} from 'vitest';
-import type {AutoAssignmentContext} from '../../src/backend/modules/activity/autoAssignment';
-import {
-    RecommendationJobCoordinator,
-    RecommendationJobView,
-    fingerprintRecommendationContext,
-} from '../../src/backend/modules/activity/recommendationJobs';
+
+import {RecommendationJobCoordinator, fingerprintRecommendationContext} from '../../src/backend/modules/activity/recommendationJobs';
 import {APIError} from '../../src/backend/modules/lib/errors';
 import {createAutoAssignmentContext} from '../factories/activityAutoAssignmentFactory';
 

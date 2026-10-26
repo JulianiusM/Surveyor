@@ -1,6 +1,7 @@
+import {isImageMimeType} from '../../common/lib/fileMedia';
 import createClient from 'openapi-fetch';
 import type {components, paths} from '../../types/api/v1';
-import type {FrontendPlainMessageKey, FrontendRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
+import type {FrontendDecodedResponse, FrontendPlainMessageKey, FrontendRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
 import {validateProblem} from '../../../.generated/api/v1/browser/validateProblem.mjs';
 import {validateSafeProblemDetails} from '../../../.generated/api/v1/browser/validateSafeProblemDetails.mjs';
 import {validateComparisonToken} from '../../../.generated/api/v1/browser/validateComparisonToken.mjs';
@@ -175,7 +176,7 @@ export class FrontendTransport {
     /** Admit one decoded response against the authored operation and captured
      * scope. A 304 can reuse only the caller's supplied snapshot after positive
      * context checks; malformed/empty success never confirms a command or read. */
-    read<T>(operationId: ApiOperationId, result: {data?: unknown; error?: unknown; response: Response; signal?: AbortSignal}, validate: Validator<T>,
+    read<T>(operationId: ApiOperationId, result: FrontendDecodedResponse, validate: Validator<T>,
                      scope?: FrontendRequestScope, previous?: FrontendRead<T>, checkLocale = false): FrontendRead<T> {
         const {response, data, error, signal} = result;
         // A transport adapter can finish headers/body decoding after cancellation.
@@ -200,6 +201,37 @@ export class FrontendTransport {
             throw new UnconfirmedResponseError();
         }
         return {data, etag: response.headers.get('ETag')};
+    }
+
+    /** Compose an admitted feature read with its existing generated decoder.
+     * Callers retain typed endpoint/headers/query selection and their exact cooldown
+     * key. This owner neither caches snapshots nor retries or dispatches a command. */
+    async readJson<T>(resource: string, scope: FrontendRequestScope | undefined,
+                      request: () => Promise<FrontendDecodedResponse>,
+                      operationId: ApiOperationId, validate: Validator<T>, signal?: AbortSignal,
+                      previous?: FrontendRead<T>, checkLocale = false): Promise<FrontendRead<T>> {
+        const transport = this;
+        // Admission runs before the supplied request. Delivery still passes through
+        // the same cancellation, actor, conditional-read and generated-shape checks.
+        return this.allowedRead(resource, scope, readResponse, signal);
+        async function readResponse(): Promise<FrontendRead<T>> {
+            const response = await request();
+            return transport.read(operationId, {...response, signal}, validate, scope, previous, checkLocale);
+        }
+    }
+
+    /** Header requests share read admission and binary decoding without another
+     * response parser, actor owner or Retry-After deadline. */
+    async readHeaderImage(resource: string, scope: FrontendRequestScope,
+                          request: () => Promise<FrontendDecodedResponse>,
+                          signal?: AbortSignal): Promise<Blob> {
+        const transport = this;
+        // The feature selects its authorized endpoint. Binary success and failure
+        // keep the established headerImage boundary after that single dispatch.
+        return this.allowedRead(resource, scope, readImage, signal);
+        async function readImage(): Promise<Blob> {
+            return transport.headerImage(await request(), scope, signal);
+        }
     }
 
     /** Send one proof upload with native transfer progress and the same generated
@@ -260,7 +292,7 @@ export class FrontendTransport {
     /** Admit a header image through the same captured-scope/error policy as JSON
      * reads. Features supply generated HTTP operations and retain their read key;
      * binary decoding never introduces another actor or retry owner. */
-    headerImage(result: {data?: unknown; error?: unknown; response: Response}, scope: FrontendRequestScope,
+    headerImage(result: FrontendDecodedResponse, scope: FrontendRequestScope,
                 signal?: AbortSignal): Blob {
         // Cancel before classifying errors so an obsolete response cannot publish
         // identity loss or a Retry-After lease into a newer image visit.
@@ -270,7 +302,7 @@ export class FrontendTransport {
         // Preserve the existing image boundary, including octet-stream delivery.
         // HTML redirects and malformed success remain unconfirmed responses.
         if (result.response.status !== 200 || !(result.data instanceof Blob)
-            || !['application/octet-stream', 'image/jpeg', 'image/png', 'image/gif'].includes(result.data.type))
+            || (result.data.type !== 'application/octet-stream' && !isImageMimeType(result.data.type)))
             throw new UnconfirmedResponseError();
         return result.data;
     }

@@ -1,3 +1,4 @@
+import {normalizeListMetadataPatch as normalizePackingMetadataPatch} from '../../src/backend/controller/entityAdminController';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import packingController from '../../src/backend/controller/packingController';
 import {archiveEntity, archiveExpiredEntities, changeEntityEvent, restoreEntity} from '../../src/backend/controller/entityAdminController';
@@ -10,7 +11,7 @@ import * as eventService from '../../src/backend/modules/database/services/Event
 import * as packingService from '../../src/backend/modules/database/services/PackingService';
 import * as userService from '../../src/backend/modules/database/services/UserService';
 import {PERM} from '../../src/backend/modules/lib/permissions';
-import {patchPackingMetadata as applyPackingMetadataCommand, normalizePackingMetadataPatch, readPackingList, readPackingMetadata, setPackingSelfAssignment} from '../../src/backend/controller/packingController';
+import {patchPackingMetadata as applyPackingMetadataCommand, readPackingList, readPackingMetadata, setPackingSelfAssignment} from '../../src/backend/controller/packingController';
 import type {components} from '../../src/types/api/v1';
 import type {SessionLike} from '../../src/types/PermissionTypes';
 import {createIntegrationEvent, createPackingListWithItem as createPackingFixture, persistIntegrationProfile} from '../keywords/coreDomainKeywords';

@@ -32,13 +32,12 @@ export class OverviewApi {
      * navigation generation and adopts the server's canonical page/query state. */
     async overview(query: NonNullable<paths['/overview']['get']['parameters']['query']>, scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
-        async function readOverview(): Promise<components['schemas']['OverviewRegion']> {
-            const response = await transport.client.GET('/overview', {
+        function readOverview() {
+            return transport.client.GET('/overview', {
                 params: {query, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getOverview', {...response, signal}, validateOverviewRegion, scope).data;
         }
-        return transport.allowedRead('overview/' + JSON.stringify(query), scope, readOverview, signal);
+        return (await transport.readJson('overview/' + JSON.stringify(query), scope, readOverview, 'getOverview', validateOverviewRegion, signal)).data;
     }
 
     async visibility(type: components['schemas']['OverviewCard']['type'], entityId: string, visibility: components['schemas']['OverviewVisibilityInput']['visibility'], scope: FrontendRequestScope) {

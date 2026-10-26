@@ -27,7 +27,10 @@ export class AddInvoicePoolFactors1789344000000 implements MigrationInterface {
         }
     }
 
+    /** Remove factor/recalculation metadata while preserving calculated share rows. */
     public async down(queryRunner: QueryRunner): Promise<void> {
+        // Reverse the added fields only on tables that exist; no settlement or
+        // payment status is recalculated as a side effect of this rollback.
         if (await tableExists(queryRunner, "event_invoice_pools")) {
             await dropColumnIfExists(queryRunner, "event_invoice_pools", "calculation_revision");
             await dropColumnIfExists(queryRunner, "event_invoice_pools", "needs_recalculation");

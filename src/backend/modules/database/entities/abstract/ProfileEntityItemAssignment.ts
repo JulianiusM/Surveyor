@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
+import type {DefaultItemAssignmentRelationEntity} from '../../../../../types/EntityRelationTypes';
+
+
 import {NumericProfileBase, UuidProfileBase} from "./Base";
-import type {BaseEntity, DefaultItemAssignmentRelationEntity} from "./BaseEntity";
+import type {BaseEntity} from './BaseEntity';
 import type {BaseEntityItem} from "./BaseEntityItem";
 
 export abstract class DefaultNumericEntityItemAssignment extends NumericProfileBase implements DefaultItemAssignmentRelationEntity {
@@ -31,6 +34,3 @@ export abstract class DefaultUuidEntityItemAssignment extends UuidProfileBase im
     abstract item: BaseEntityItem;
     abstract itemId: string;
 }
-
-export type EntityItemAssignment = NumericProfileBase | UuidProfileBase;
-export type DefaultEntityItemAssignment = DefaultNumericEntityItemAssignment | DefaultUuidEntityItemAssignment;

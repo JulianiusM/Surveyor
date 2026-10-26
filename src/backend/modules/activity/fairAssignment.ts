@@ -4,48 +4,19 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  */
 
-import type {ActivityPlanRequirement} from "../database/entities/activity/ActivityPlanRequirement";
-import type {ActivityPlanRequirementOverride} from "../database/entities/activity/ActivityPlanRequirementOverride";
-import type {ActivityPlanStayRequirement} from "../database/entities/activity/ActivityPlanStayRequirement";
-import type {RecommendationInput} from "../database/services/ActivityRecommendationService";
-import {AssignmentCandidate, AttendancePolicy, collectAssignmentWarnings, findOverlapConflicts} from "./availability";
+import {toAssignmentCandidate} from './availability';
+import type {RecommendationInput, AssignmentCandidate, AttendancePolicy, FairAssignmentSlot, FairAssignmentContext} from '../../../types/ActivityTypes';
+
+
+
+
+
+
+import {collectAssignmentWarnings, findOverlapConflicts} from './availability';
 import type {ParticipantAttendance} from "../../../types/ActivityRequirementTypes";
 import {calculateRequirementsForParticipants, countInclusiveDays, hasCompleteStayRequirements, toParticipantKey} from "../../../common/activity/requirements";
 import {compareSlotsByDayAndTime} from "./timebox";
-import type {ActivityLinkedPlanContext} from '../../../types/ActivityTypes';
 
-export interface FairAssignmentSlot {
-    id: string;
-    day: string;
-    startTime?: string | null;
-    endTime?: string | null;
-    pos?: number | null;
-    isArrivalEvening?: boolean | null;
-    isDepartureMorning?: boolean | null;
-    maxAssignees?: number | null;
-    assignedCount?: number;
-}
-
-export interface FairAssignmentContext {
-    plan: {
-        assignmentMode: "FREE" | "REQUIRED";
-        generalRequiredShifts?: number | null;
-        roundingMode?: "CEIL" | "ROUND" | "FLOOR" | null;
-        startDate: string;
-        endDate: string;
-        allowOverfillAfterFull?: boolean;
-        allowArrivalDayEvening?: boolean;
-        allowDepartureDayMorning?: boolean;
-    };
-    slots: FairAssignmentSlot[];
-    participants: ParticipantAttendance[];
-    roleRequirements: ActivityPlanRequirement[];
-    overrides: ActivityPlanRequirementOverride[];
-    stayRequirements: ActivityPlanStayRequirement[];
-    existingAssignments: Record<string, AssignmentCandidate[]>;
-    existingRecommendations?: RecommendationInput[];
-    linkedPlans?: ActivityLinkedPlanContext;
-}
 
 interface ParticipantState {
     key: string;
@@ -136,17 +107,6 @@ function nextTemporalAnchor(positions: number[], required: number): number {
     return available[0] ?? 0.5;
 }
 
-function toCandidate(slot: FairAssignmentSlot): AssignmentCandidate {
-    return {
-        id: slot.id,
-        day: slot.day,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        pos: slot.pos,
-        isArrivalEvening: slot.isArrivalEvening,
-        isDepartureMorning: slot.isDepartureMorning,
-    };
-}
 
 /**
  * Allocates only default-role recommendations. Named roles stay a manual decision;
@@ -190,7 +150,7 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
             if (target) {
                 const key = toParticipantKey({profileId: recommendation.profileId});
                 reviewedTargets[key] ??= [];
-                reviewedTargets[key].push(toCandidate(target));
+                reviewedTargets[key].push(toAssignmentCandidate(target));
             }
         }
         if (
@@ -204,7 +164,7 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
         if ((context.existingAssignments[key] ?? []).some((assignment) => assignment.id === slot.id)) continue;
         lockedRecommendations[key] ??= [];
         if (!lockedRecommendations[key].some((assignment) => assignment.id === slot.id)) {
-            lockedRecommendations[key].push(toCandidate(slot));
+            lockedRecommendations[key].push(toAssignmentCandidate(slot));
         }
     }
     const participants = context.participants
@@ -249,7 +209,7 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
         const eligible = new Set<string>();
         for (const slot of slots) {
             const warnings = collectAssignmentWarnings(
-                toCandidate(slot),
+                toAssignmentCandidate(slot),
                 state.participant,
                 [
                     ...(context.existingAssignments[state.key] ?? []),
@@ -317,7 +277,9 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
 
     const pendingForParticipant = (participantKey: string): PendingAssignment[] =>
         [...(pendingByParticipant.get(participantKey) ?? [])];
+    /** Count captured commitments plus pending additions, without counting moves twice. */
     const participantCount = (participantKey: string): number => {
+        // Relocations already retain their source commitment in actualCount.
         const state = participantByKey.get(participantKey);
         const addedAssignments = pendingForParticipant(participantKey)
             .filter((assignment) => !assignment.sourceSlotId)
@@ -332,12 +294,18 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
         const capacity = slotById.get(slotId)?.maxAssignees;
         return capacity == null ? Number.POSITIVE_INFINITY : Math.max(0, capacity);
     };
+    /** Project this participant's current trial commitments for eligibility/scoring.
+     * An excluded trial move is omitted; other moved sources are replaced with
+     * their proposed targets without changing captured assignments. */
     const assignmentsForParticipant = (participantKey: string, excluded?: PendingAssignment): AssignmentCandidate[] => {
+        // Build the same trial view from the remaining pending operations.
         const relevantPending = pendingForParticipant(participantKey)
             .filter((assignment) => assignment !== excluded);
         const movedSourceSlots = new Set(
             relevantPending.map((assignment) => assignment.sourceSlotId).filter(Boolean) as string[],
         );
+        // Remove only source slots replaced by those moves, retaining fixed and
+        // approved commitments before adding their known proposed target slots.
         const actual = [
             ...(context.existingAssignments[participantKey] ?? []),
             ...(lockedRecommendations[participantKey] ?? []),
@@ -345,10 +313,14 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
         const proposed = relevantPending
             .map((assignment) => slotById.get(assignment.slotId))
             .filter((slot): slot is FairAssignmentSlot => Boolean(slot))
-            .map((slot) => toCandidate(slot));
+            .map((slot) => toAssignmentCandidate(slot));
         return [...actual, ...proposed];
     };
+    /** Find the next unused distribution anchor within this participant's stay.
+     * Zero requirements keep the existing bypass; trial exclusions use the same
+     * commitment projection as the surrounding repair/scoring operations. */
     const temporalTarget = (state: ParticipantState, excluded?: PendingAssignment): number => {
+        // Normalize current commitments before selecting the next required anchor.
         if (state.required <= 0) return 0;
         const current = assignmentsForParticipant(state.key, excluded)
             .map((assignment) => normalizedAttendanceMoment(context.plan, state.participant, assignment));
@@ -359,18 +331,24 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
         slot: FairAssignmentSlot,
         excluded?: PendingAssignment,
     ): number => {
-        const candidate = normalizedAttendanceMoment(context.plan, state.participant, toCandidate(slot));
+        const candidate = normalizedAttendanceMoment(context.plan, state.participant, toAssignmentCandidate(slot));
         const target = temporalTarget(state, excluded);
         const distance = candidate - target;
         return distance * distance;
     };
+    /** Test this trial target against rejection memory, baseline and current trial conflicts.
+     * Reviewed targets and sibling commitments reserve their established timeboxes;
+     * the helper only evaluates eligibility and never modifies pending work. */
     const canTake = (state: ParticipantState, slot: FairAssignmentSlot, excluded?: PendingAssignment): boolean => {
+        // Cheap remembered/baseline exclusions precede the current trial projection.
         if (rejected.has(`${slot.id}:${state.participant.profileId}`)) return false;
         if (!baseEligibility.get(state.key)?.has(slot.id)) return false;
         const currentAssignments = [...assignmentsForParticipant(state.key, excluded), ...(reviewedTargets[state.key] ?? [])];
         if (currentAssignments.some((assignment) => assignment.id === slot.id)) return false;
+        // Apply shared attendance/overlap policy against the same
+        // trial commitments plus captured sibling-plan reservations.
         const warnings = collectAssignmentWarnings(
-            toCandidate(slot),
+            toAssignmentCandidate(slot),
             state.participant,
             [...currentAssignments, ...(context.linkedPlans?.commitments[state.key] ?? [])],
             policy,
@@ -397,7 +375,7 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
             .filter((assignment) => assignment.id !== source.id);
         if (projected.some((assignment) => assignment.id === slot.id)) return false;
         const warnings = collectAssignmentWarnings(
-            toCandidate(slot),
+            toAssignmentCandidate(slot),
             state.participant,
             [...projected, ...(context.linkedPlans?.commitments[state.key] ?? [])],
             policy,
@@ -517,7 +495,9 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
         if (a.alternativeCount !== b.alternativeCount) return a.alternativeCount - b.alternativeCount;
         return a.key.localeCompare(b.key);
     };
+    /** Compare score tuples lexicographically, retaining the current choice on ties. */
     const precedesScore = (candidate: number[], current: number[]): boolean => {
+        // The first unequal dimension alone chooses the better existing score.
         for (let index = 0; index < candidate.length; index += 1) {
             if (candidate[index] !== current[index]) return candidate[index] < current[index];
         }
@@ -535,7 +515,7 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
             for (let slotIndex = 0; slotIndex < slots.length; slotIndex += 1) {
                 const slot = slots[slotIndex];
                 if (slotCount(slot.id) >= slotCapacity(slot.id) || !canTake(state, slot)) continue;
-                const distance = normalizedAttendanceMoment(context.plan, state.participant, toCandidate(slot)) - anchor;
+                const distance = normalizedAttendanceMoment(context.plan, state.participant, toAssignmentCandidate(slot)) - anchor;
                 const score: [number, number, number, number, number] = [
                     baseSlotEligibilityCount.get(slot.id) ?? 0,
                     distance * distance,
@@ -665,9 +645,9 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
             if (rejected.has(`${slot.id}:${state.participant.profileId}`)) continue;
             if (local.some((assignment) => assignment.id === slot.id)) continue;
             if (!context.plan.allowOverfillAfterFull && slotCount(slot.id) >= slotCapacity(slot.id)) continue;
-            const warnings = collectAssignmentWarnings(toCandidate(slot), state.participant, local, policy);
+            const warnings = collectAssignmentWarnings(toAssignmentCandidate(slot), state.participant, local, policy);
             if (warnings.some((warning) => isBlockingWarning(warning.type))) continue;
-            const conflicts = findOverlapConflicts(toCandidate(slot), linked);
+            const conflicts = findOverlapConflicts(toAssignmentCandidate(slot), linked);
             if (!conflicts.length) continue;
             const overlapping = linked.filter((assignment) => conflicts.includes(assignment.id));
             if (overlapping.some((assignment) => assignment.assignmentMode !== 'FREE')) continue;

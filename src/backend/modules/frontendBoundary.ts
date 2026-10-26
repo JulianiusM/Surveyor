@@ -9,6 +9,7 @@ export const frontendBrowserDependencies = ['vue', 'vue-router', '@tanstack/vue-
     'i18next', 'i18next-vue', 'openapi-fetch', 'reka-ui'];
 
 const sharedFiles = new Set(['src/common/lib/frontendIdentity.ts', 'src/common/lib/helpNavigation.ts',
+    'src/common/lib/fileMedia.ts',
     'src/common/lib/civilDate.ts', 'src/common/activity/requirements.ts',
     'src/common/localization/translator.ts', 'src/common/localization/inputValidation.ts',
     'src/common/localization/permissionLabels.ts', 'src/common/localization/generated/resources.json',

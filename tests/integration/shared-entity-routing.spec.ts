@@ -17,6 +17,7 @@ import {Profile} from '../../src/backend/modules/database/entities/user/Profile'
 import {User} from '../../src/backend/modules/database/entities/user/User';
 import type {ApiActor} from '../../src/types/ApiTypes';
 import type {components} from '../../src/types/api/v1';
+import {prepareFileUploader} from '../../src/backend/modules/lib/fileCommons';
 
 const entityId = '84305c09-5386-47bc-b62d-520b8a8edbb2';
 const itemId = '52a92e09-e6c5-47ce-9eea-6329be8415f4';
@@ -88,6 +89,40 @@ function imageUpload(): FormData {
 }
 
 describe('shared entity routing components', () => {
+    it('retains the real uploader media, extension and rejected-file boundary', async function admitsReviewedUploadMedia() {
+        const fixture = await routingFixture(app => {
+            const upload = prepareFileUploader(settings.value.headerImgDir, true, true).single('file');
+            app.post('/media', function receiveFixtureUpload(req, res) {
+                // The real parser and disk storage run unchanged; only this
+                // fixture's final response is outside the production boundary.
+                upload(req, res, function completeFixtureUpload(error) {
+                    if (error) { res.status(400).json({rejected: true}); return; }
+                    res.json({name: req.file?.filename, mime: req.file?.mimetype});
+                });
+            });
+        });
+
+        // Matching accepted media retain case-normalized extensions. Filename
+        // and MIME rejection must not leave an additional stored file behind.
+        for (const [filename, mime, status] of [
+            ['image.JPG', 'image/jpeg', 200], ['image.png', 'image/png', 200], ['image.gif', 'image/gif', 200],
+            ['proof.pdf', 'application/pdf', 200], ['image.svg', 'image/svg+xml', 400],
+            ['forged.txt', 'image/png', 400], ['unknown.png', 'application/octet-stream', 400],
+        ] as const) {
+            const form = new FormData();
+            form.set('file', new Blob(['retained upload bytes'], {type: mime}), filename);
+            const result = await fetch(fixture.origin + '/media', {method: 'POST', body: form});
+            expect(result.status, filename).toBe(status);
+            if (status === 200) {
+                const saved = await result.json() as {name: string; mime: string};
+                expect(saved.mime).toBe(mime);
+                expect(path.extname(saved.name)).toBe(path.extname(filename).toLowerCase());
+                expect(await fs.readFile(path.join(fixture.directory, saved.name), 'utf8')).toBe('retained upload bytes');
+            }
+        }
+        expect(await fs.readdir(fixture.directory)).toHaveLength(4);
+    });
+
     it('admits and validates scoped searches before spending the shared limiter budget', async () => {
         const actor: ApiActor = {context: null, auth: {user: Object.assign(new User(), {id: 7})},
             profile: Object.assign(new Profile(), {id: entityId, userId: 7})};

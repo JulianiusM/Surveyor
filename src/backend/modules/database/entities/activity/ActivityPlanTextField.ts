@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
+import type {ParentEntityRelation} from '../../../../../types/EntityRelationTypes';
+
+
 import {Column, Entity, JoinColumn, ManyToOne, RelationId} from "typeorm";
-import {ParentEntityRelation} from "../abstract/BaseEntity";
+
 import {UuidEntityItem} from "../abstract/BaseEntityItem";
 import {ActivityPlan} from "./ActivityPlan";
 

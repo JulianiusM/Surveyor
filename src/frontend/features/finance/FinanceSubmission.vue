@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {proofFileAccept} from '../../../common/lib/fileMedia';
 import {computed, onBeforeUnmount, reactive, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
 import {useActionState, useFrontend} from '../../app/context';
@@ -154,7 +155,7 @@ function acknowledgeHistory(): void {
                         class="col-12"
                         :label="messages.t('finance.proofImageOrPDF')"
                         :selected-file="proof"
-                        accept="image/jpeg,image/png,image/gif,application/pdf"
+                        :accept="proofFileAccept"
                         required
                         @choose="proof = $event"
                     />

@@ -6,6 +6,7 @@ import {useFrontend} from '../../app/context';
 import {invoiceStatus, invoiceStatusClass} from './presentation';
 import FormField from '../../components/FormField.vue';
 import FinanceLedgerFooter from './FinanceLedgerFooter.vue';
+import {useFinancePagination} from './pagination';
 import FinanceInvoiceRow from './FinanceInvoiceRow.vue';
 
 type Invoice = components['schemas']['FinanceInvoice'];
@@ -20,7 +21,6 @@ const id = useId();
 const search = ref('');
 const status = ref('');
 const pageSize = ref(25);
-const page = ref(0);
 const statuses = ['NEW', 'APPROVED', 'REJECTED', 'CLOSED', 'RETRACTED'];
 const ordered = computed(orderedInvoices);
 // Locale-only reads retain lexical input. Actor/source/audience retirement must
@@ -28,10 +28,8 @@ const ordered = computed(orderedInvoices);
 const rowSource = computed(() => [context.epoch.value, context.session.value?.context, props.eventId,
     props.pool?.id, !!props.admin, !!props.readOnly].join(':'));
 const filtered = computed(filteredInvoices);
-const pages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize.value)));
-const visible = computed(() => filtered.value.slice(page.value * pageSize.value, (page.value + 1) * pageSize.value));
+const {page, pages, visible} = useFinancePagination(() => filtered.value, pageSize);
 watch([search, status, pageSize], () => {page.value = 0;});
-watch(pages, value => {page.value = Math.min(page.value, value - 1);});
 
 /** Match saved original, corrected and attribution evidence without interpreting
  * its text as markup; newest invoice rows retain the history ordering. */
@@ -127,7 +125,15 @@ function recorderName(invoice: Invoice): string {
                         :admin="admin" :read-only="readOnly" :disabled="disabled"
                         :event-id="eventId" :pool="pool" :refresh-saved="refreshSaved"
                         @retract="emit('retract', $event)" @close-invoice="emit('closeInvoice', $event)"
-                        @review="(row, action) => emit('review', row, action)" />
+                        @review="(row, action) => emit('review', row, action)">
+                        <!-- The parent supplies dialog composition. Row keeps its
+                             one owner; read-only inspection stays acyclic. -->
+                        <template #review="{owner, open}">
+                            <component :is="reviewComponent" v-if="reviewComponent && eventId && pool && refreshSaved"
+                                :owner="owner" :event-id="eventId" :invoice="invoice" :current-invoice="invoice" :pool="pool"
+                                action="approve" inline :open="open" :active="!disabled" :refresh="refreshSaved" />
+                        </template>
+                    </FinanceInvoiceRow>
                 </tbody>
             </table>
         </div>

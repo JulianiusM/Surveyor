@@ -44,7 +44,10 @@ function asText(value: string | number | null | undefined): string {
     return text.length ? text : '—';
 }
 
+/** Format an export instant in its selected zone, preserving absent/invalid
+ * fallbacks and the ISO fallback when Intl cannot use that zone. */
 export function formatDateTime(value: string | Date | null | undefined, timezone?: string | null): string {
+    // Distinguish an absent instant from an invalid supplied string before Intl.
     if (!value) return '—';
     const date = typeof value === 'string' ? new Date(value) : value;
     if (Number.isNaN(date.getTime())) {
@@ -54,6 +57,7 @@ export function formatDateTime(value: string | Date | null | undefined, timezone
         return '—';
     }
 
+    // Export formatting is best effort; an unsupported zone keeps a valid instant.
     try {
         return new Intl.DateTimeFormat(undefined, {
             timeZone: timezone || 'UTC',
@@ -65,13 +69,17 @@ export function formatDateTime(value: string | Date | null | undefined, timezone
     }
 }
 
+/** Divide admitted chip values into ordered rows without changing the source. */
 function chunk<T>(values: T[], size: number): T[][] {
+    // Each slice owns only this display row; caller order remains unchanged.
     const chunks: T[][] = [];
     for (let i = 0; i < values.length; i += size) chunks.push(values.slice(i, i + size));
     return chunks;
 }
 
+/** Describe one text-only badge with the export's shared typography and padding. */
 function chip(text: string): Content {
+    // A borderless one-cell table keeps the badge together across PDF layout.
     return {
         table: {
             widths: ['auto'],
@@ -98,7 +106,9 @@ function chip(text: string): Content {
     } as Content;
 }
 
+/** Render nonempty values as bounded badge rows, retaining the empty marker. */
 function chipGrid(values: Array<string | number | null | undefined>, maxPerRow = CHIP_MAX_PER_ROW): Content {
+    // Normalize before grouping so absent values consume no visual column.
     const items = values.map(asText).filter((value) => value !== '—');
     if (!items.length) return {text: '—', color: '#6b7280'};
 
@@ -126,23 +136,31 @@ function participantDates(participant: ParticipantRow): string {
     return `${participant.arrivalDate} -> ${participant.departureDate}`;
 }
 
+/** Select only supported saved dietary choices for this participant's export. */
 function participantDietaryChoices(participant: ParticipantRow): Array<string> {
+    // Unknown persisted labels never become a new dietary badge.
     return (participant.dietaryChoices || [])
         .map((choice) => choice.choice)
         .filter((choice): choice is (typeof ALLOWED_DIETARY)[number] => ALLOWED_DIETARY.includes(choice as (typeof ALLOWED_DIETARY)[number]));
 }
 
+/** Return the first saved allergy note or the shared absent-value marker. */
 function participantAllergyText(participant: ParticipantRow): string {
+    // Keep the note paired with its dietary choice rather than another free text.
     const allergyChoice = participant.dietaryChoices?.find((choice) => choice.choice === 'ALLERGIES');
     return asText(allergyChoice?.additionalInfo);
 }
 
+/** Return the first saved participant comment or the shared absence marker. */
 function participantCommentText(participant: ParticipantRow): string {
+    // Comments remain separate from medical/dietary notes in the export.
     const commentChoice = participant.dietaryChoices?.find((choice) => choice.choice === 'COMMENT');
     return asText(commentChoice?.additionalInfo);
 }
 
+/** Compose this participant's accepted dietary badges in their saved order. */
 function participantDietaryContent(participant: ParticipantRow): Content {
+    // Empty dietary evidence uses one marker rather than an empty nested stack.
     const choices = participantDietaryChoices(participant);
     if (!choices.length) return {text: '—', color: '#6b7280'};
 
@@ -152,7 +170,9 @@ function participantDietaryContent(participant: ParticipantRow): Content {
     };
 }
 
+/** Project one already-authorized participant into the five export columns. */
 function buildParticipantRow(participant: ParticipantRow): TableCell[] {
+    // Normalize contact/notes independently; neither note substitutes for the other.
     const email = participant.email ?? '—';
     const allergy = participantAllergyText(participant);
     const comment = participantCommentText(participant);
@@ -169,6 +189,7 @@ function buildParticipantRow(participant: ParticipantRow): TableCell[] {
         infoStack.push({text: '—', fontSize: FONT_SIZE_BASE});
     }
 
+    // Preserve column order and mail-link behavior after the optional note stack.
     return [
         {text: participant.name, fontSize: FONT_SIZE_BASE},
         email === '—'
@@ -180,7 +201,9 @@ function buildParticipantRow(participant: ParticipantRow): TableCell[] {
     ];
 }
 
+/** Build a repeatable-header participant table, including its five-column empty row. */
 export function buildParticipantsTable(participants: ParticipantRow[]): Table {
+    // Header and data share the same fixed column order and export widths.
     const body: TableCell[][] = [
         [
             {text: 'Name', bold: true, fillColor: '#e5e7eb'},
@@ -211,7 +234,9 @@ export function buildParticipantsTable(participants: ParticipantRow[]): Table {
     };
 }
 
+/** Compose available event metadata with separators only between real values. */
 function buildEventInfoInline(event: Event): Content {
+    // The local accumulator omits absent fields without leaving stray bullets.
     const fragments: Content[] = [];
     const push = (label: string, value?: string | null) => {
         if (!value) return;
@@ -234,7 +259,9 @@ function buildEventInfoInline(event: Event): Content {
     };
 }
 
+/** Display only positive totals through the existing common badge layout. */
 function buildTotalsStack(values: Record<string, number>): Content {
+    // Zero categories remain omitted; grouping never changes the supplied totals.
     const items = Object.entries(values)
         .filter(([, count]) => count > 0)
         .map(([key, count]) => `${key}: ${count}`);
@@ -242,6 +269,8 @@ function buildTotalsStack(values: Record<string, number>): Content {
     return chipGrid(items, 8);
 }
 
+/** Assemble the authorized participant document with existing sections, table
+ * and pagination. The caller-owned date totals receive the established Total row. */
 export function buildParticipantsPdfDefinition(
     data: {
         event: Event;
@@ -253,6 +282,7 @@ export function buildParticipantsPdfDefinition(
         generatedAt: string;
     },
 ): TDocumentDefinitions {
+    // Retain the existing input update before composing the summary and table.
     data.dateTotals['Total'] = data.participants.length;
     const content: Content[] = [
         {text: data.event.title, style: 'title', margin: [0, 0, 0, 8]},
@@ -281,6 +311,7 @@ export function buildParticipantsPdfDefinition(
         },
     ];
 
+    // Document-wide styles and footer apply after feature content is prepared.
     return {
         pageSize: 'A4',
         pageOrientation: 'portrait',

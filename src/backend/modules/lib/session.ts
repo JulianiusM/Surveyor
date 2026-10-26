@@ -112,14 +112,18 @@ export function requireSessionProfileId(session: SessionLike): string {
  * HTTP request.
  */
 export function persistSession(session: Request['session']): Promise<void> {
-    return new Promise((resolve, reject) => {
+    /** Observe the existing Session save callback without another store or lifecycle. */
+    return new Promise(function awaitSessionSave(resolve, reject) {
+        // Keep callback binding on the supplied Session, including scoped staging.
         const save = session.save?.bind(session);
         if (!save) {
             resolve();
             return;
         }
 
-        save((err) => {
+        /** Propagate the existing save's completion; this wrapper never retries it. */
+        save(function finishSessionSave(err) {
+            // Only the store callback acknowledges persistence or reports its failure.
             if (err) {
                 reject(err);
                 return;

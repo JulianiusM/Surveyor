@@ -34,15 +34,14 @@ export class FinanceApi {
      * this read never commits shares or reuses a cached financial review. */
     async preview(eventId: string, poolId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['FinancePreview']> {
         const transport = this.transport;
-        async function readPreview() {
-            const result = await transport.client.GET('/events/{eventId}/finance/pools/{poolId}/preview', {
+        function readPreview() {
+            return transport.client.GET('/events/{eventId}/finance/pools/{poolId}/preview', {
                 params: {path: {eventId, poolId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            // Cancellation/locale fencing belongs inside transport too: a retired
-            // response cannot publish identity/cooldown effects while decoding.
-            return transport.read('previewEventFinancePool', {...result, signal}, validateFinancePreview, scope, undefined, true).data;
         }
-        return transport.allowedRead(`event/${eventId}/finance/${poolId}/preview/${scope.locale}`, scope, readPreview, signal);
+        // Cancellation/locale fencing belongs inside transport too: a retired
+        // response cannot publish identity/cooldown effects while decoding.
+        return (await transport.readJson(`event/${eventId}/finance/${poolId}/preview/${scope.locale}`, scope, readPreview, 'previewEventFinancePool', validateFinancePreview, signal, undefined, true)).data;
     }
 
     /** Apply exactly the reviewed revision through the existing calculation
@@ -202,21 +201,20 @@ export class FinanceApi {
             // Never request the organizer representation on a participant page.
             const result = admin ? await transport.client.GET('/events/{eventId}/finance/organizer', options)
                 : await transport.client.GET('/events/{eventId}/finance', options);
-            return transport.read(admin ? 'getEventOrganizerFinance' : 'getEventFinance', {...result, signal}, validateFinanceView, scope, undefined, true).data;
+            return result;
         }
-        return transport.allowedRead(`event/${eventId}/finance/${admin}/${scope.locale}`, scope, readFinance, signal);
+        return (await transport.readJson(`event/${eventId}/finance/${admin}/${scope.locale}`, scope, readFinance, admin ? 'getEventOrganizerFinance' : 'getEventFinance', validateFinanceView, signal, undefined, true)).data;
     }
 
     /** One selected saved row is read lazily; no calculation/preview command runs. */
     async breakdown(eventId: string, poolId: string, shareId: string, admin: boolean, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['FinanceBreakdown']> {
         const transport = this.transport;
-        async function readBreakdown() {
-            const result = await transport.client.GET('/events/{eventId}/finance/pools/{poolId}/shares/{shareId}', {
+        function readBreakdown() {
+            return transport.client.GET('/events/{eventId}/finance/pools/{poolId}/shares/{shareId}', {
                 params: {path: {eventId, poolId, shareId}, query: {audience: admin ? 'organizer' : 'participant'}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read('getEventFinanceBreakdown', {...result, signal}, validateFinanceBreakdown, scope, undefined, true).data;
         }
-        return transport.allowedRead(`event/${eventId}/finance/${admin}/${poolId}/${shareId}/${scope.locale}`, scope, readBreakdown, signal);
+        return (await transport.readJson(`event/${eventId}/finance/${admin}/${poolId}/${shareId}/${scope.locale}`, scope, readBreakdown, 'getEventFinanceBreakdown', validateFinanceBreakdown, signal, undefined, true)).data;
     }
 
     /** Submit the exact chosen proof once, retaining progress separately from

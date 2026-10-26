@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
+import type {RecommendationStatus, RecommendationOperation} from '../../../../../types/ActivityTypes';
+
+
 import {Column, Entity, JoinColumn, ManyToOne, RelationId} from "typeorm";
 import {DefaultUuidEntityItemAssignment} from "../abstract/ProfileEntityItemAssignment";
 import {ActivityPlan} from "./ActivityPlan";
 import {ActivitySlot} from "./ActivitySlot";
-
-export type RecommendationStatus = "PENDING" | "APPROVED" | "APPLIED" | "REJECTED";
 export const RECOMMENDATION_STATUS: RecommendationStatus[] = ["PENDING", "APPROVED", "APPLIED", "REJECTED"];
-export type RecommendationOperation = "ASSIGN" | "REASSIGN" | "UNASSIGN";
 export const RECOMMENDATION_OPERATION: RecommendationOperation[] = ["ASSIGN", "REASSIGN", "UNASSIGN"];
 
 @Entity("activity_assignment_recommendations", {schema: "surveyor"})

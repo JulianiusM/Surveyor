@@ -15,12 +15,12 @@
  */
 
 import bcrypt from 'bcryptjs';
-import {EntityManager, In, MoreThan, Repository, type FindOptionsWhere, type SelectQueryBuilder} from "typeorm";
+import {EntityManager, In, MoreThan, type DeepPartial, type FindOptionsWhere, type SelectQueryBuilder} from "typeorm";
 import type {ArchiveReference, PersonalVisibility} from '../../../../types/ArchiveTypes';
-import type {Entity, OidcClaims, OverviewCollection, OverviewQuery, OverviewReadResult, UserInfo} from "../../../../types/UserTypes";
+import type {Entity, OverviewCollection, OverviewQuery, OverviewReadResult} from '../../../../types/UserTypes';
 import type {EntityType} from '../../../../types/UtilTypes';
 import {archiveKey} from '../../archive/policy';
-import {coerceLimit, convertEntity, generateUniqueToken, maskEmail, SQL_ALLOW_LIST} from '../../lib/util';
+import {convertEntity, generateUniqueToken} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {Guest} from '../entities/user/Guest';
 import {Profile} from "../entities/user/Profile";
@@ -290,26 +290,10 @@ export async function getGuestByEmail(email: string) {
  * ---- SSO / OIDC helpers ----
  */
 
-async function usernameExists(username: string): Promise<boolean> {
+export async function usernameExists(username: string): Promise<boolean> {
     const repo = AppDataSource.getRepository(User);
     const count = await repo.count({where: {username}});
     return count > 0;
-}
-
-async function toUniqueUsername(base: string): Promise<string> {
-    const sanitized = base
-        .toLowerCase()
-        .replace(/[^a-z0-9._-]/g, '')
-        .slice(0, 30) || 'user';
-    if (!(await usernameExists(sanitized))) return sanitized;
-
-    // add numeric suffix
-    for (let i = 1; i < 10_000; i++) {
-        const candidate = `${sanitized}-${i}`;
-        if (!(await usernameExists(candidate))) return candidate;
-    }
-    // fallback (should never happen)
-    return `${sanitized}-${Date.now()}`;
 }
 
 /**
@@ -343,105 +327,6 @@ export async function linkUserToOidc(
 ) {
     const repo = AppDataSource.getRepository(User);
     await repo.update({id: userId}, {oidcIssuer, oidcSub});
-}
-
-/**
- * Find or create a user from OIDC claims.
- * - Primary key: (issuer, sub)
- * - Optional fallback: email match (link existing local account)
- * - JIT-provisions a new user when needed.
- */
-export async function findOrCreateUserFromOidc(
-    oidcIssuer: string,
-    claims: OidcClaims,
-    {linkByEmail = true} = {}
-) {
-    const repo = AppDataSource.getRepository(User);
-    const {sub, email, preferred_username, name} = claims;
-
-    // 1) Try exact OIDC match first
-    let user = await repo.findOne({
-        where: {oidcIssuer, oidcSub: sub},
-        relations: {profiles: true},
-    });
-
-    // 2) If not found: try link-by-email (optional)
-    if (!user && linkByEmail && email) {
-        user = await repo.findOne({where: {email}, relations: {profiles: true}});
-        if (user) {
-            user.oidcIssuer = oidcIssuer;
-            user.oidcSub = sub;
-            if (user.isActive !== true) user.isActive = true;
-            await repo.save(user);
-        }
-    }
-
-    // 3) If still not found: create a new local user (JIT provisioning)
-    // inside findOrCreateUserFromOidc, in the "3) If still not found: create a new local user" block
-    if (!user) {
-        const baseUsername =
-            preferred_username ||
-            (email ? email.split('@')[0] : `oidc_${sub.slice(0, 8)}`);
-        const uniqueUsername = await toUniqueUsername(baseUsername);
-
-        // Ensure we don't violate unique(email)
-        let emailToUse = email || `${sub}@no-email.local`;
-
-        // If linkByEmail is disabled OR the email is already taken, use a synthetic email
-        if (email) {
-            const emailTaken = await repo.exists({where: {email}});
-            if (!linkByEmail || emailTaken) {
-                emailToUse = `${sub}@no-email.local`;
-            }
-        }
-
-        return await AppDataSource.transaction(async (em) => {
-            const newUsr = em.getRepository(User).create({
-                username: uniqueUsername,
-                name: name || baseUsername,
-                email: emailToUse,
-                password: null,
-                isActive: true,
-                oidcIssuer,
-                oidcSub: sub,
-            });
-            const newProfile = em.getRepository(Profile).create({
-                name: newUsr.name,
-                defaultForOwner: true,
-                user: newUsr
-            });
-            const savedProfile = await em.getRepository(Profile).save(newProfile);
-            user = await handleUserSaving(newUsr, sub, em.getRepository(User));
-            if (!user.profiles || user.profiles.length === 0) {
-                user.profiles = [savedProfile];
-            }
-
-            return user;
-        });
-    }
-
-    return user;
-}
-
-async function handleUserSaving(user: User, sub: string, repo?: Repository<User>) {
-    repo ??= AppDataSource.getRepository(User);
-    try {
-        user = await repo.save(user);
-    } catch (err: any) {
-        // Last-chance fallback for race conditions (MySQL/PG/SQLite)
-        const message = String(err?.message || '');
-        if (
-            err?.code === 'ER_DUP_ENTRY' || // MySQL/MariaDB
-            err?.code === '23505' ||        // Postgres
-            message.includes('UNIQUE')      // SQLite/others
-        ) {
-            user.email = `${sub}@no-email.local`;
-            user = await repo.save(user);
-        } else {
-            throw err;
-        }
-    }
-    return user;
 }
 
 /**
@@ -482,45 +367,16 @@ export async function findUserByNameOrEmail(identifier: string | number): Promis
         .getOne();
 }
 
-/**
- * Prefix search for username/email (index-friendly). Validates the query.
- * Returns { id, username, emailMasked } (no raw email by default).
- */
-export async function searchUsersSecure(query: string, limit = 10): Promise<Array<UserInfo>> {
-    const repo = AppDataSource.getRepository(Profile);
-    const q = (query || '').trim();
-
-    if (!SQL_ALLOW_LIST.test(q)) return [];            // too short / invalid chars -> no results
-    const lim = coerceLimit(limit, 10, 25);
-
-    const likePrefix = `${q}%`;
-
-    const rows = await repo
-        .createQueryBuilder('p')
+/** Query admitted account-profile prefixes; callers own input limits and safe display projection. */
+export async function queryUserProfiles(prefix: string, limit: number): Promise<Profile[]> {
+    // Preserve the account-only join, prefix matching, visible-name order and row limit.
+    const likePrefix = prefix + '%';
+    return AppDataSource.getRepository(Profile).createQueryBuilder('p')
         .innerJoinAndSelect('p.user', 'u')
         .where('p.name LIKE :pfx', {pfx: likePrefix})
         .orWhere('u.email LIKE :pfx', {pfx: likePrefix})
         .orWhere('u.username LIKE :pfx', {pfx: likePrefix})
-        .orderBy('p.name', 'ASC')
-        .limit(lim)
-        .getMany();
-
-    function doMailMask(p: Profile) {
-        let maskedMail = '-';
-        if (p.user?.email) {
-            maskedMail = maskEmail(p.user.email);
-        } else if (p.guest?.email) {
-            maskedMail = maskEmail(p.guest.email);
-        }
-        return maskedMail;
-    }
-
-    return rows.map(p => ({
-        id: p.id,
-        username: p.user?.username ?? p.guest?.username ?? '-',
-        email: doMailMask(p),
-        name: p.name
-    }));
+        .orderBy('p.name', 'ASC').limit(limit).getMany();
 }
 
 /** Optional helpers you might find useful elsewhere */
@@ -1012,10 +868,15 @@ export async function addProfileToUser(profileId: string, userId: number, em?: E
     })
 }
 
+/** Clear a profile's existing account/guest association and default flag.
+ * Return the former owner for controller-owned cleanup, using the caller's
+ * transaction when supplied; absent profiles/associations remain undefined. */
 export async function removeProfileFromOwner(profileId: string, em?: EntityManager) {
+    // Read both possible ownership relations through the same selected manager.
     const repo = em ? em.getRepository(Profile) : AppDataSource.getRepository(Profile);
     const profile = await repo.findOne({where: {id: profileId}, relations: {user: true, guest: true}});
     let owner;
+    // Preserve user-first selection and clear only that stored association.
     if (profile?.user) {
         owner = profile.user;
         await repo.update({id: profileId}, {user: null, defaultForOwner: false});
@@ -1032,10 +893,16 @@ export async function removeMigrationToken(profileId: string, em?: EntityManager
     await repo.update({id: profileId}, {migrationToken: null, migrationTokenExpiration: null});
 }
 
+/** Move a profile to an account and consume its migration token atomically.
+ * Controller admission remains separate; the existing transaction returns the
+ * previous owner so later feature cleanup can retain its established ordering. */
 export async function moveProfileToUserTx(profileId: string, userId: number) {
     return await AppDataSource.transaction(async em => {
+        // Clear the source/default relationship before assigning the destination.
         const owner = await removeProfileFromOwner(profileId, em);
         await addProfileToUser(profileId, userId, em);
+        // Retire the same token inside this transaction, without adding a lock
+        // or changing the controller's earlier token-admission contract.
         await removeMigrationToken(profileId, em);
         return owner;
     })
@@ -1086,4 +953,42 @@ export async function createProfile(userId: number, name: string) {
     const repo = AppDataSource.getRepository(Profile);
     const profile = repo.create({user: {id: userId}, name: name});
     return await repo.save(profile);
+}
+
+/** Read the same full account/profile projection used by provider identity policy. */
+export function findOidcAccount(oidcIssuer: string, oidcSub: string): Promise<User | null> {
+    return AppDataSource.getRepository(User).findOne({where: {oidcIssuer, oidcSub}, relations: {profiles: true}});
+}
+
+/** Read an email candidate without deciding whether it may be linked or activated. */
+export function findOidcEmailAccount(email: string): Promise<User | null> {
+    return AppDataSource.getRepository(User).findOne({where: {email}, relations: {profiles: true}});
+}
+
+/** Raw uniqueness evidence; the identity owner chooses any fallback address. */
+export function accountEmailExists(email: string): Promise<boolean> {
+    return AppDataSource.getRepository(User).exists({where: {email}});
+}
+
+/** Preserve the original provider provisioning transaction and its default isolation. */
+export function withUserTransaction<T>(operation: (manager: EntityManager) => Promise<T>): Promise<T> {
+    return AppDataSource.transaction(operation);
+}
+
+/** Persist the selected account values and propagate native constraint evidence. */
+export function saveOidcAccount(user: User, manager: EntityManager = AppDataSource.manager): Promise<User> {
+    return manager.getRepository(User).save(user);
+}
+
+/** Store the selected profile before the account, preserving the established provision order. */
+export function saveProvisionedProfile(profile: Profile, manager: EntityManager): Promise<Profile> {
+    return manager.getRepository(Profile).save(profile);
+}
+
+/** Materialize caller-selected records with the original ORM relation-copy semantics. */
+export function prepareOidcRecords(manager: EntityManager, values: DeepPartial<User>,
+    profileValues: Pick<Profile, 'name' | 'defaultForOwner'>) {
+    const user = manager.getRepository(User).create(values);
+    const profile = manager.getRepository(Profile).create({...profileValues, user});
+    return {user, profile};
 }

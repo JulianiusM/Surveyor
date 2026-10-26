@@ -21,44 +21,40 @@ import {v4 as uuidv4} from "uuid";
 import {EntityBase} from "../../../types/UserTypes";
 import type {ImageSwapReceipt} from '../../../types/UtilTypes';
 import {APIError} from "./errors";
+import {isImageMimeType, uploadFileMedia} from '../../../common/lib/fileMedia';
 
+/** Configure the existing disk uploader with its reviewed media switches.
+ * Filename/extension and MIME admission remain separate server checks; byte
+ * limits and storage timing retain the uploader's established behavior. */
 export function prepareFileUploader(dir: string, allowImg: boolean = true, allowPdf: boolean = false) {
-// Storage setup
+    // Select shared media once for this uploader, without changing its destination
+    // creation or original filename extension checks for each received file.
+    const media = uploadFileMedia(allowImg, allowPdf);
     const proofDir = path.join(process.cwd(), dir);
     const proofStorage = multer.diskStorage({
-        destination: (_req, _file, cb) => {
+        destination: function uploadDestination(_req, _file, cb) {
             fs.mkdirSync(proofDir, {recursive: true});
             cb(null, proofDir);
         },
-        filename: (_req, file, cb) => {
-            const allowedExts: string[] = [];
-            if (allowImg) {
-                allowedExts.push('.jpg', '.jpeg', '.png', '.gif');
-            }
-            if (allowPdf) {
-                allowedExts.push(".pdf");
-            }
+        /** Keep only a permitted original suffix and generate an opaque basename. */
+        filename: function uploadFilename(_req, file, cb) {
+            // Reject the original extension before allocating a stored filename.
             const ext = path.extname(file.originalname).toLowerCase();
-            if (!allowedExts.includes(ext)) {
+            if (!media.extensions.includes(ext)) {
                 return cb(new Error('Invalid file extension'), '');
             }
             cb(null, `${Date.now()}-${uuidv4()}${ext}`);
         },
     });
 
+    // File size and reported MIME still pass through Multer before any controller.
     const proofUpload = multer({
         storage: proofStorage,
         limits: {fileSize: 10 * 1024 * 1024},
-        fileFilter: (_req, file, cb) => {
-            const mimetypes: string[] = [];
-            if (allowImg) {
-                mimetypes.push("image/jpeg", "image/png", "image/gif");
-            }
-            if (allowPdf) {
-                mimetypes.push("application/pdf");
-            }
-
-            const ok = mimetypes.includes(file.mimetype);
+        /** Admit the reported MIME independently of filename and byte limits. */
+        fileFilter: function uploadMimeType(_req, file, cb) {
+            // The shared descriptor preserves this uploader's image/PDF switches.
+            const ok = media.mimeTypes.includes(file.mimetype);
             if (ok) {
                 cb(null, true);
             } else {
@@ -106,8 +102,7 @@ export async function performImageSwap<T extends void | ImageSwapReceipt>(
 /** Retain image-type admission and its invalid-upload cleanup. Multipart
  * byte/extension limits belong to the uploader; this helper checks the admitted MIME. */
 export function checkNewImage(file?: Express.Multer.File) {
-    const mimetypes = ["image/jpeg", "image/png", "image/gif"];
-    const isValidImg = file ? mimetypes.includes(file.mimetype) : false;
+    const isValidImg = file ? isImageMimeType(file.mimetype) : false;
     if (!isValidImg && file) {
         // Clean up unexpected uploads immediately to avoid orphan files
         removeImage(file.path);

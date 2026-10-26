@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
+import type {InvoiceStatus} from '../../../../../types/InvoicePoolTypes';
+
+
 import {Column, Entity, JoinColumn, ManyToOne, RelationId,} from "typeorm";
 import {NumericBase} from "../abstract/TrackedBase";
 import {Profile} from "../user/Profile";
 import {EventInvoicePool} from "./EventInvoicePool";
 import {EventRegistration} from "./EventRegistration";
-
-export type InvoiceStatus = 'NEW' | 'APPROVED' | 'REJECTED' | 'CLOSED' | 'RETRACTED';
 
 @Entity("event_invoices", {schema: "surveyor"})
 export class EventInvoice extends NumericBase {

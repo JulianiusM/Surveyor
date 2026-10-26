@@ -4,27 +4,18 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  */
 
+import type {AutoAssignmentContext, RecommendationInput, RecommendationJobStatus, RecommendationJobView, RecommendationJobCoordinatorOptions} from '../../../types/ActivityTypes';
+
+
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {Worker} from "node:worker_threads";
 import type {ActivityRecommendationPersistenceContext} from "../../../types/ActivityTypes";
-import type {AutoAssignmentContext} from "./autoAssignment";
+
 import {generateFairRecommendations} from "./fairAssignment";
-import type {RecommendationInput} from "../database/services/ActivityRecommendationService";
+
 import {APIError} from "../lib/errors";
-
-export type RecommendationJobStatus = "QUEUED" | "RUNNING" | "COMPLETE" | "FAILED" | "STALE";
-
-export interface RecommendationJobView {
-    id: string;
-    planId: string;
-    status: RecommendationJobStatus;
-    createdAt: string;
-    updatedAt: string;
-    recommendationCount?: number;
-    error?: string;
-}
 
 interface RecommendationJobRecord extends RecommendationJobView {
     createdAtMs: number;
@@ -47,7 +38,11 @@ export class RecommendationQueueFullError extends Error {
     }
 }
 
+/** Recursively sort object keys while retaining array order and scalar values.
+ * The resulting plain structure makes equivalent captured inputs hash alike. */
 function canonicalize(value: unknown): unknown {
+    // Arrays retain their caller-selected order; object members acquire a stable
+    // order before their nested values are normalized by this same operation.
     if (Array.isArray(value)) return value.map(canonicalize);
     if (value && typeof value === "object") {
         return Object.fromEntries(
@@ -61,6 +56,8 @@ function canonicalize(value: unknown): unknown {
 
 /** Normalize sibling commitments with straightforward loops; display labels do not affect allocation. */
 function summarizeLinkedPlans(context: AutoAssignmentContext): unknown {
+    // Select allocation/provenance facts only, then order each participant's
+    // commitments before the containing context receives its canonical hash.
     const linked = context.linkedPlans;
     const commitments: Record<string, unknown[]> = {};
     for (const key of Object.keys(linked?.commitments ?? {}).sort()) {
@@ -79,7 +76,11 @@ function summarizeLinkedPlans(context: AutoAssignmentContext): unknown {
     return {plans: [...(linked?.plans ?? [])].sort((a, b) => a.id.localeCompare(b.id)), commitments};
 }
 
+/** Hash the captured allocation inputs and reviewed recommendation decisions.
+ * Stable ordering excludes presentation-only fields while retaining sibling
+ * commitments that can invalidate cached or running recommendation work. */
 export function fingerprintRecommendationContext(context: AutoAssignmentContext): string {
+    // Project each input family and sort only its existing unordered collections.
     const stableContext = {
         plan: context.plan,
         slots: context.slots.map((slot) => ({
@@ -141,6 +142,7 @@ export function fingerprintRecommendationContext(context: AutoAssignmentContext)
         // changed priority, a reassignment, or a proposal deletion revokes cached work.
         linkedPlans: summarizeLinkedPlans(context),
     };
+    // Canonical object-key order and SHA-256 supply the existing revision identity.
     return crypto
         .createHash("sha256")
         .update(JSON.stringify(canonicalize(stableContext)))
@@ -155,11 +157,17 @@ class RecommendationWorkerExecutor {
         reject: (error: Error) => void;
     }>();
 
+    /** Reuse or lazily start the adjacent compiled allocation worker.
+     * Source mode returns undefined; worker replies/failures settle only the
+     * registered request promises and release the worker reference on failure. */
     private getWorker(): Worker | undefined {
+        // A source checkout can lack the compiled sibling; execute owns its
+        // established yielded fallback rather than starting another file path.
         if (this.worker) return this.worker;
         const workerPath = path.join(__dirname, "recommendationWorker.js");
         if (!fs.existsSync(workerPath)) return undefined;
 
+        // Correlate replies with their pending caller and consume each entry once.
         this.worker = new Worker(workerPath);
         this.worker.on("message", (message: {
             requestId: number;
@@ -172,13 +180,17 @@ class RecommendationWorkerExecutor {
             if (message.error) request.reject(new Error(message.error));
             else request.resolve(message.recommendations ?? []);
         });
+        /** Reject every outstanding caller before allowing a later worker start. */
         const rejectPending = (error: Error) => {
+            // Keep the original rejection/clear/reference-release order.
             for (const request of this.pending.values()) request.reject(error);
             this.pending.clear();
             this.worker = undefined;
         };
         this.worker.on("error", rejectPending);
+        /** Preserve failed-exit rejection and ordinary idle-worker retirement. */
         this.worker.on("exit", (code) => {
+            // Pending work makes even an otherwise clean exit a failed delivery.
             if (code !== 0 || this.pending.size > 0) {
                 rejectPending(new Error(`Recommendation worker exited with code ${code}`));
             } else {
@@ -188,7 +200,11 @@ class RecommendationWorkerExecutor {
         return this.worker;
     }
 
+    /** Calculate the supplied snapshot through the compiled worker when present.
+     * Source fallback yields once; worker mode correlates one serialized request
+     * with its existing pending promise, without persistence or replay. */
     async execute(context: AutoAssignmentContext): Promise<RecommendationInput[]> {
+        // Select the existing worker or the established source-mode fallback.
         const worker = this.getWorker();
         if (!worker) {
             // Source-mode development and unit tests have no adjacent compiled worker.
@@ -197,21 +213,13 @@ class RecommendationWorkerExecutor {
             return generateFairRecommendations(context);
         }
 
+        // Register before posting so an immediate reply has its receiving owner.
         const requestId = ++this.requestId;
         return await new Promise<RecommendationInput[]>((resolve, reject) => {
             this.pending.set(requestId, {resolve, reject});
             worker.postMessage({requestId, context: JSON.parse(JSON.stringify(context))});
         });
     }
-}
-
-export interface RecommendationJobCoordinatorOptions {
-    loadContext: (planId: string) => Promise<AutoAssignmentContext>;
-    execute?: (context: AutoAssignmentContext) => Promise<RecommendationInput[]>;
-    persist: (planId: string, recommendations: RecommendationInput[], expected: ActivityRecommendationPersistenceContext) => Promise<void>;
-    maxQueueSize?: number;
-    maxCachedJobs?: number;
-    cacheTtlMs?: number;
 }
 
 export class RecommendationJobCoordinator {
@@ -228,7 +236,11 @@ export class RecommendationJobCoordinator {
     private readonly cacheTtlMs: number;
     private running = false;
 
+    /** Bind context loading, calculation and persistence to this coordinator.
+     * Optional overrides retain the existing executor and cache/queue defaults. */
     constructor(options: RecommendationJobCoordinatorOptions) {
+        // Keep supplied operation boundaries and default resource limits together
+        // without creating another context snapshot or persistence implementation.
         this.executor = new RecommendationWorkerExecutor();
         this.loadContext = options.loadContext;
         this.executeContext = options.execute ?? ((context) => this.executor.execute(context));
@@ -238,7 +250,10 @@ export class RecommendationJobCoordinator {
         this.cacheTtlMs = options.cacheTtlMs ?? CACHE_TTL_MS;
     }
 
+    /** Reuse an active plan job or enqueue one new bounded in-process record.
+     * Return only its public view; scheduled draining retains the single runner. */
     enqueue(planId: string): {job: RecommendationJobView; coalesced: boolean} {
+        // Retire expired terminal state before coalescing active plan work.
         this.prune();
         const activeId = this.activeByPlan.get(planId);
         if (activeId) {
@@ -247,6 +262,8 @@ export class RecommendationJobCoordinator {
         }
         if (this.queue.length >= this.maxQueueSize) throw new RecommendationQueueFullError();
 
+        // Publish the job, active-plan identity and queue entry before scheduling
+        // the asynchronous drain; queue-full rejection still precedes publication.
         const now = Date.now();
         const record: RecommendationJobRecord = {
             id: crypto.randomUUID(),
@@ -281,13 +298,18 @@ export class RecommendationJobCoordinator {
      * Keep the old record so a polling browser receives an explicit stale result and can retry.
      */
     invalidate(planId: string): void {
+        // Preserve the old polling record while releasing this plan's active slot.
         const activeId = this.activeByPlan.get(planId);
         const active = activeId ? this.jobs.get(activeId) : undefined;
         if (active) this.update(active, 'STALE', {error: 'Activity plan context changed; generate recommendations again'});
         this.activeByPlan.delete(planId);
     }
 
+    /** Drain queued records sequentially under the existing in-process runner flag.
+     * Skip missing/invalidated entries and release the runner even after failure. */
     private async drain(): Promise<void> {
+        // Multiple scheduled drains coalesce at this guard; only this runner
+        // removes queue entries and awaits their existing run operation.
         if (this.running) return;
         this.running = true;
         try {
@@ -302,7 +324,11 @@ export class RecommendationJobCoordinator {
         }
     }
 
+    /** Calculate or reuse one captured context, then recheck before persistence.
+     * Existing lock-time checks arbitrate late invalidation; completion caches
+     * results only after persistence, and failures retain polling-visible state. */
     private async run(job: RecommendationJobRecord): Promise<void> {
+        // Capture inputs before consulting the bounded result cache or executor.
         this.update(job, "RUNNING");
         try {
             const context = await this.loadContext(job.planId);
@@ -312,6 +338,7 @@ export class RecommendationJobCoordinator {
                 ? cached.recommendations
                 : await this.executeContext(context);
 
+            // A changed fingerprint or invalidated job cannot persist old work.
             const freshContext = await this.loadContext(job.planId);
             if (this.isInvalidated(job) || fingerprintRecommendationContext(freshContext) !== fingerprint) {
                 this.update(job, "STALE", {error: "Plan inputs changed while recommendations were being calculated"});
@@ -330,6 +357,7 @@ export class RecommendationJobCoordinator {
                 isCurrent: this.isCurrentJob.bind(this, job),
             });
             if (this.isInvalidated(job)) return;
+            // Successful persistence renews result-cache order and completion data.
             this.resultCache.delete(fingerprint);
             this.resultCache.set(fingerprint, {
                 recommendations,
@@ -370,7 +398,12 @@ export class RecommendationJobCoordinator {
         });
     }
 
+    /** Retire expired results and terminal jobs within the existing size limits.
+     * Active jobs remain retained; encountering one at the oldest job position
+     * stops size eviction rather than discarding work still owned by a caller. */
     private prune(): void {
+        // Result-cache expiration and oldest-entry trimming are independent from
+        // the job records that polling callers continue to observe.
         const now = Date.now();
         for (const [fingerprint, cached] of this.resultCache) {
             if (cached.expiresAt <= now) this.resultCache.delete(fingerprint);
@@ -379,6 +412,7 @@ export class RecommendationJobCoordinator {
             this.resultCache.delete(this.resultCache.keys().next().value!);
         }
 
+        // Only terminal jobs expire, and oldest active jobs block size eviction.
         for (const [jobId, job] of this.jobs) {
             const terminal = ["COMPLETE", "FAILED", "STALE"].includes(job.status);
             if (terminal && now - job.updatedAtMs > this.cacheTtlMs) this.jobs.delete(jobId);
