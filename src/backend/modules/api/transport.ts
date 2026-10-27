@@ -157,6 +157,22 @@ export function prepareValidatedJson<Operation extends ApiOperationId, Status ex
         locale: requestLocale(req), context: context ?? undefined, json: JSON.stringify(data)});
 }
 
+/** Prepare every finite postcommit outcome while its owning transaction can still roll back.
+ * Identity delivery and domain follow-up work use the same validation/serialization
+ * procedure; after commit they select only an already prepared immutable receipt. */
+export function prepareValidatedJsonVariants<Variant extends string, Operation extends ApiOperationId,
+    Status extends ApiSuccessStatus<NoInfer<Operation>>>(req: Request, operationId: Operation, status: Status,
+    variants: Readonly<Record<Variant, ApiResponseBody<NoInfer<Operation>, NoInfer<Status>>>>,
+    context: string | null | undefined = req.apiActor?.context): Readonly<Record<Variant, PreparedApiJsonResponse>> {
+    const prepared = {} as Record<Variant, PreparedApiJsonResponse>;
+    // Enumeration order belongs to the explicit caller-supplied alternatives;
+    // a failed variant prevents the entire transaction from committing.
+    for (const variant of Object.keys(variants) as Variant[]) {
+        prepared[variant] = prepareValidatedJson(req, operationId, status, variants[variant], context);
+    }
+    return Object.freeze(prepared);
+}
+
 /** Deliver a prepared commit receipt without another read, validation or serialization. */
 export function sendPreparedJson(req: Request, res: Response, prepared: PreparedApiJsonResponse): void {
     // Only HTTP delivery remains fallible. An interrupted response cannot undo

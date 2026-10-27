@@ -20,11 +20,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {declaresDocumentationPublication} from './check-documentation.mjs';
+import {classifyHelpUri, isHelpRasterExtension} from '../src/common/lib/helpPolicy.ts';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const helpRoot = path.join(repositoryRoot, 'docs', 'user-guide');
-const allowedAssetExtensions = new Set(['.gif', '.jpeg', '.jpg', '.png', '.webp']);
-const safeSchemes = new Set(['http', 'https', 'mailto', 'tel']);
 const metadataPattern = /<!--\s*documentation-metadata\s*\r?\n[\s\S]*?-->\s*/iu;
 
 const errors = [];
@@ -100,30 +99,19 @@ function isInside(basePath, candidatePath) {
     return rel === '' || (!rel.startsWith(`..${path.sep}`) && rel !== '..' && !path.isAbsolute(rel));
 }
 
-function decodeReferences(value) {
-    return value
-        .replace(/&#x([0-9a-f]+);?/giu, (_match, code) => String.fromCodePoint(Number.parseInt(code, 16)))
-        .replace(/&#([0-9]+);?/gu, (_match, code) => String.fromCodePoint(Number.parseInt(code, 10)))
-        .replace(/&colon;/giu, ':')
-        .replace(/&tab;/giu, '\t')
-        .replace(/&newline;/giu, '\n')
-        .replace(/&amp;/giu, '&');
-}
-
 function validateUri(filePath, target) {
-    const decoded = decodeReferences(target.trim());
-    if (/[\u0000-\u001f\u007f]/u.test(decoded)) {
+    const issue = classifyHelpUri(target);
+    // Advisory wording/collection stays here; the runtime uses the same policy.
+    if (issue?.kind === 'control') {
         addError(filePath, `URI contains control characters: ${JSON.stringify(target)}`);
         return false;
     }
-    const probe = decoded.replace(/[\s\u00a0]+/gu, '');
-    if (probe.startsWith('//') || probe.startsWith('\\\\')) {
+    if (issue?.kind === 'protocol-relative') {
         addError(filePath, `Protocol-relative URI is not allowed: ${target}`);
         return false;
     }
-    const scheme = /^([a-z][a-z0-9+.-]*):/iu.exec(probe)?.[1]?.toLowerCase();
-    if (scheme && !safeSchemes.has(scheme)) {
-        addError(filePath, `Unsafe URI scheme "${scheme}" is not allowed: ${target}`);
+    if (issue?.kind === 'scheme') {
+        addError(filePath, `Unsafe URI scheme "${issue.scheme.toLowerCase()}" is not allowed: ${target}`);
         return false;
     }
     return true;
@@ -285,7 +273,7 @@ function validateAssetReference(filePath, target, corpus) {
     }
     const assetName = target.slice('assets/'.length);
     const extension = path.extname(assetName).toLowerCase();
-    if (!allowedAssetExtensions.has(extension)) {
+    if (!isHelpRasterExtension(extension)) {
         addError(filePath, `Unsupported help image type "${extension}": ${target}`);
         return;
     }
@@ -334,7 +322,7 @@ function validateAssets(corpus) {
             addError(assetPath, 'Nested directories and non-file entries are not allowed in the help asset directory');
             continue;
         }
-        if (!allowedAssetExtensions.has(path.extname(entry.name).toLowerCase())) {
+        if (!isHelpRasterExtension(path.extname(entry.name))) {
             addError(assetPath, 'Only reviewed raster image formats are allowed in the help asset directory');
         }
         if ((referencedAssets.get(relative(assetPath)) ?? 0) === 0) {

@@ -58,11 +58,11 @@ const propertyInputs = [
 
         <div v-for="option in flags.filter(option => fields?.includes(option.field))" :key="option.field"
             class="col-12">
-            <div class="form-check">
-                <input :id="prefix + '-' + option.field" v-model="values[option.field]" class="form-check-input"
-                    type="checkbox" :name="option.field" />
-                <label class="form-check-label" :for="prefix + '-' + option.field">{{ messages.t(option.field === 'allowDietComment' ? 'event.allowCommentLabel' : option.label) }}</label>
-            </div>
+            <!-- The surrounding editor retains effective fieldset disabling and
+                 permission-filtered boolean drafts; the field owns native mechanics. -->
+            <FormField :id="prefix + '-' + option.field" type="checkbox" :name="option.field"
+                :checked="values[option.field] === true" @update:checked="values[option.field] = $event"
+                :label="messages.t(option.field === 'allowDietComment' ? 'event.allowCommentLabel' : option.label)" />
         </div>
     </div>
 
@@ -118,11 +118,9 @@ const propertyInputs = [
         </div>
         <div class="row mb-3">
             <div v-for="option in flags" :key="option.field" class="col-md-4">
-                <div class="form-check">
-                    <input :id="prefix + '-' + option.field" v-model="values[option.field]" class="form-check-input"
-                        type="checkbox" :name="option.field" />
-                    <label class="form-check-label" :for="prefix + '-' + option.field"><i class="bi me-1" :class="option.icon" aria-hidden="true"></i>{{ messages.t(option.label) }}</label>
-                </div>
+                <FormField :id="prefix + '-' + option.field" type="checkbox" :name="option.field"
+                    :checked="values[option.field] === true" @update:checked="values[option.field] = $event"
+                    :label="messages.t(option.label)" :label-icon="option.icon" />
             </div>
         </div>
         <FormField :id="prefix + '-description'" class="mb-3" name="description" :model-value="String(values.description ?? '')"

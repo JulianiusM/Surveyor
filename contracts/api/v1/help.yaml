@@ -73,10 +73,10 @@ paths:
       summary: Read fixed-source help or search its contents
       security: []
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/HelpDocument"
-        - $ref: "./openapi.yaml#/components/parameters/HelpQuery"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./help.yaml#/parameters/HelpDocument"
+        - $ref: "./help.yaml#/parameters/HelpQuery"
       responses:
         "200":
           description: Current authorized representation
@@ -90,6 +90,24 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/HelpPageData"
+                $ref: "./help.yaml#/schemas/HelpPageData"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
+
+parameters:
+  HelpDocument:
+    in: query
+    name: doc
+    required: false
+    schema:
+      type: string
+      minLength: 1
+      maxLength: 100
+      pattern: ^[a-zA-Z0-9_-]+$
+  HelpQuery:
+    in: query
+    name: q
+    required: false
+    schema:
+      type: string
+      maxLength: 100

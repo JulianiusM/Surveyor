@@ -20,6 +20,7 @@ import type {ActivityPlanRequirementOverride} from '../backend/modules/database/
 import type {ActivityPlanStayRequirement} from '../backend/modules/database/entities/activity/ActivityPlanStayRequirement';
 import type {ActivitySlot} from '../backend/modules/database/entities/activity/ActivitySlot';
 import type {ParticipantAttendance} from './ActivityRequirementTypes';
+import type {components} from './api/v1';
 
 
 export type SlotAssignmentRow = {
@@ -153,6 +154,22 @@ export interface AssignmentWarning {
 export interface RecommendationWarningResult {
     recommendation: RecommendationInput;
     warnings: AssignmentWarning[];
+}
+
+/** The authored optional wire field supplies the finite completion identities. */
+export type RecommendationGenerationOutcome = NonNullable<components['schemas']['ActivityRecommendationApplyResult']['generationOutcome']>;
+
+/** Committed assignment evidence is projected before its transaction completes. */
+export interface RecommendationApplicationSummary {
+    message: string;
+    applied: number;
+    skipped: number;
+    warnings: RecommendationWarningResult[];
+}
+
+/** Generation is a separate follow-up; its failure cannot reject this application. */
+export interface RecommendationApplicationResult extends RecommendationApplicationSummary {
+    generationOutcome: RecommendationGenerationOutcome;
 }
 
 /** The opaque confirmation describes the observed overlaps, not a blanket permission to bypass checks. */
@@ -335,6 +352,16 @@ export interface RequirementConfiguration {
     roleRequirements: ActivityPlanRequirement[];
     overrides: ActivityPlanRequirementOverride[];
     stayRequirements: ActivityPlanStayRequirement[];
+}
+
+/** Already loaded inputs for the shared asynchronous requirement context.
+ * Each controller retains its own initial read set and supplies its manager explicitly. */
+export interface ActivityRequirementPreparationInputs {
+    plan: ActivityPlan;
+    configuration: RequirementConfiguration;
+    assignments: Record<string, AssignmentCandidate[]>;
+    slots: ActivitySlot[];
+    slotRoles: Record<string, {id: number; maxQty: number; assignedQty: number}[]>;
 }
 
 export type RecommendationStatus = "PENDING" | "APPROVED" | "APPLIED" | "REJECTED";

@@ -21,7 +21,8 @@ import type {EventInvoicePool} from '../database/entities/event/EventInvoicePool
 import * as invoiceService from '../database/services/EventInvoiceService';
 import settings from '../settings';
 import {requireLockedPool, savePoolChange} from './state';
-import {deleteInvoiceProof} from './proofs';
+import {cleanupInvoiceProofs, deleteInvoiceProof, rememberInvoiceProofs} from './proofs';
+import {createHourlyJob} from '../lib/util';
 
 /** Select expired invoices, enforce the proof directory boundary, and delete records under each pool lock. */
 export async function purgeExpiredInvoices(retentionMonths: number, now: Date = new Date()): Promise<number> {
@@ -30,7 +31,10 @@ export async function purgeExpiredInvoices(retentionMonths: number, now: Date = 
     const cutoffDate = format(subMonths(now, retentionMonths), 'yyyy-MM-dd');
     // The DBAL selects candidates; filesystem deletion obeys the configured invoice-directory boundary.
     const expired = await invoiceService.getExpiredInvoices(cutoffDate);
-    for (const invoice of expired) await deleteInvoiceProof(invoice.proofPath);
+    // Preserve imported/legacy ownership before any row disappears. File removal
+    // belongs strictly after the corresponding pool transaction has committed.
+    await rememberInvoiceProofs(expired);
+    const expiredById = new Map(expired.map(invoice => [invoice.id, invoice]));
     // Group deletions by their owning pool so each mutation shares the same lock as invoice workflows.
     const groups = new Map<string, number[]>();
     for (const invoice of expired) {
@@ -47,12 +51,12 @@ export async function purgeExpiredInvoices(retentionMonths: number, now: Date = 
             await savePoolChange(manager, pool, false);
         }
         await invoiceService.withLockedPool(poolId, purgeLocked);
+        // An unlink failure remains durable retry work and cannot reject this
+        // already committed removal. Other pools' live/shared references protect bytes.
+        for (const id of ids) await deleteInvoiceProof(expiredById.get(id)?.proofPath);
     }
     return expired.length;
 }
-
-const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
-let retentionTimer: NodeJS.Timeout | undefined;
 
 /** Apply the configured calendar retention policy and report a nonempty cleanup. */
 export async function runInvoiceRetentionCleanup(now: Date = new Date()): Promise<number> {
@@ -60,20 +64,16 @@ export async function runInvoiceRetentionCleanup(now: Date = new Date()): Promis
     if (deleted > 0) {
         console.log(invoiceText('retentionDeleted', {count: deleted}));
     }
+    // This also discovers cascaded invoices and uploads abandoned by a previous
+    // process. The proof owner bounds work and retains durable failures for retry.
+    await cleanupInvoiceProofs(100, now);
     return deleted;
 }
 
 /** Run startup cleanup and install the existing process-local hourly retention timer. */
-export async function startInvoiceRetentionJob(): Promise<void> {
-    // Startup performs one cleanup before installing a single process-local timer.
-    await runInvoiceRetentionCleanup();
-    if (retentionTimer) return;
+export const startInvoiceRetentionJob = createHourlyJob(runInvoiceRetentionCleanup, reportRetentionFailure);
 
-    // Background failures are reported without crashing the process or keeping shutdown alive.
-    /** Report a post-commit delivery or background failure without changing the saved financial result. */
-    function reportFailure(error: unknown): void { console.error(invoiceText('retentionCleanupFailed'), error); }
-    /** Schedule best-effort cleanup while reporting background errors. */
-    function cleanExpiredInvoices(): void { void runInvoiceRetentionCleanup().catch(reportFailure); }
-    retentionTimer = setInterval(cleanExpiredInvoices, CLEANUP_INTERVAL_MS);
-    retentionTimer.unref();
+/** Preserve this job's catalog/log policy while the shared utility owns timers. */
+function reportRetentionFailure(error: unknown): void {
+    console.error(invoiceText('retentionCleanupFailed'), error);
 }

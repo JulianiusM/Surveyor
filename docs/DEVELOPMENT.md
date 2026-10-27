@@ -6,7 +6,7 @@ owner: developer-experience maintainers
 status: current
 last-verified: 2026-10-27
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved shared UUID reference handling reconciled; prior neutral contracts, frontend admission, compiler and domain contracts retained; no deployment or exhaustive verification claim
+verification-scope: approved shared checkbox owner and native value channels reconciled; prior runtime choices, contract direction, Activity completion, proof maintenance and compiler boundaries retained; no deployment or exhaustive verification claim
 source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/check-development-policy.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: development-workflow-or-help-tooling-change
 -->
@@ -219,6 +219,7 @@ Do not hand-edit or commit these generated outputs:
 - `.generated/api/` and `.generated/frontend-ready.json`
 - `src/types/api/` generated declarations and `src/types/LocalizationTypes.d.ts`
 - `src/common/localization/generated/`
+- `src/common/generated/domainChoices.ts`
 
 - `src/public/style/print.css`
 - `dist/`
@@ -443,6 +444,18 @@ Shared schemas use neutral scope-correct names and direct generic consumers. Kee
 compatibility aliases at their feature boundary. Determine validator roles from exact authored request/response
 usage before bundling, never a schema prefix, suffix or bundler-selected canonical name. Strict request graphs
 and additive response graphs remain separate, including nested and multipart inputs.
+
+Feature references point to their actual schema owner rather than back through root export aliases. Survey
+recurrence and Event dietary schemas also own their allowed values. The existing generator validates their
+`x-surveyor-runtime-choices` declarations and emits frozen, dependency-free choices for ORM, Joi and Vue consumers.
+Keep translated labels and feature-specific transformations with the feature. The frontend import boundary permits
+that exact generated module; the development watcher publishes it with the existing successful-generation marker.
+Use the shared `ChoiceCheckboxes` component for the matching dietary controls, including the comment choice;
+the schema owns group membership and order, while the Event view owns group layout, draft updates and comment text.
+`FormField` owns the native checkbox and shared label/attribute mechanics used by both Event flag presentations
+and `ChoiceCheckboxes`. Checkbox callers use the boolean `checked` / `update:checked` channel, independent of the
+existing string `modelValue` channel. Native flags retain the default `on` value; dietary choices explicitly supply
+their lowercase `checkboxValue`. Features retain boolean maps or selected arrays and their effective disabled policy.
 
 Under the maintainer-approved R5, every frontend dispatch passes through the existing shared transport's generated
 body, serialized-parameter and authored-header admission, including Finance XHR. Lazy-validator load failures are
@@ -1814,6 +1827,11 @@ A schema change normally requires:
 6. Update configuration, operator, architecture, or user documentation where the data contract changes.
 
 Never rely on production `synchronize`; it is disabled.
+
+Invoice proof persistence uses the existing `EventInvoiceService`; its business lifecycle stays in
+`modules/invoice/proofs.ts`. See [database ownership](DATABASE.md#invoice-proof-ownership) and the
+[offline reconciliation procedure](OPERATIONS.md#invoice-proof-reconciliation) before changing allocation,
+attachment or cleanup. `npm run proof:reconcile -- --help` describes the maintenance tool without starting the app.
 
 ### Entity archival
 

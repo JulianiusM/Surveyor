@@ -520,6 +520,32 @@ describe('Activity production frontend consumers', () => {
         expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
     });
 
+    it('submits an explicit empty role set after removing the final selected slot role', async () => {
+        let current = {...view, slots: [{...slot, roles: [{id: '1', name: 'Kitchen lead', maxQty: 1,
+            assignedQty: 0, assignmentId: null, assigneeName: null, self: false}]}]};
+        const patches: components['schemas']['ActivitySlotPatch'][] = [];
+        const {wrapper} = await mounted(ActivityPage, async request => {
+            if (request.method === 'PATCH') {
+                patches.push(await request.json());
+                current = {...current, slots: [{...current.slots[0], roles: []}]};
+                return json({changed: true});
+            }
+            return json(current);
+        });
+        await wrapper.get('[data-slot-edit]').trigger('click');
+        await flushPromises();
+        document.querySelector<HTMLButtonElement>('#slotEditorRoleChips button')!.click();
+        await flushPromises();
+        expect(document.querySelector('#slotEditorRoleChips .badge')).toBeNull();
+        document.querySelector<HTMLFormElement>('#slotEditorForm')!.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
+        await flushPromises();
+        expect(patches).toHaveLength(1);
+        expect(patches[0].roles).toEqual([]);
+        await wrapper.get('[data-slot-edit]').trigger('click');
+        await flushPromises();
+        expect(document.querySelector('#slotEditorRoleChips .badge')).toBeNull();
+    });
+
     it('uses fresh settings for dated-only metadata, export and automatic archival controls', async () => {
         const settings = {id: planId, title: view.title, headerUrl: null, headerVersion: null, editableFields: ['startDate', 'endDate'],
             settingsToken: '"edit-settings-fixture"', currentEvent: null, access: null,

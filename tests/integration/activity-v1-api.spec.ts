@@ -17,13 +17,18 @@ import * as adminService from '../../src/backend/modules/database/services/Entit
 import * as eventService from '../../src/backend/modules/database/services/EventService';
 import * as recommendationService from '../../src/backend/modules/database/services/ActivityRecommendationService';
 import {contractValidator} from '../../src/backend/modules/api/contracts';
+import {prepareValidatedJsonVariants} from '../../src/backend/modules/api/transport';
 import {handleApiProblem} from '../../src/backend/modules/api/problem';
 import activityRouter from '../../src/backend/routes/api/v1/activity';
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {CascadeActivityRoleDependents1792886400000} from '../../src/backend/migrations/1792886400000-CascadeActivityRoleDependents';
+import {UpdateCheckSlotRoleTrigger1785689525000} from '../../src/backend/migrations/1785689525000-UpdateCheckSlotRoleTrigger';
+import {ActivitySlotRole} from '../../src/backend/modules/database/entities/activity/ActivitySlotRole';
 import {PERM} from '../../src/backend/modules/lib/permissions';
 import type {components} from '../../src/types/api/v1';
 import type {ApiActor} from '../../src/types/ApiTypes';
+import type {PreparedApiJsonResponse} from '../../src/types/ApiTransportTypes';
+import type {RecommendationGenerationOutcome} from '../../src/types/ActivityTypes';
 import type {SessionLike} from '../../src/types/PermissionTypes';
 import {createIntegrationEvent, persistIntegrationProfile} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
@@ -180,6 +185,43 @@ describe('versioned Activity production operations', () => {
         await expect(activity.setActivityOrder(id.toUpperCase(), {order: [{slotId: foreign.slot.id.toUpperCase(), position: 0}]}, actor(owner), current.editToken)).rejects.toMatchObject({status: 404});
         expect((await activityService.getActivitySlotById(foreign.slot.id))?.pos).toBe(0);
         await expect(activity.setActivityOrder(id, {order: [{slotId: slot.id, position: 10}]}, actor(owner), baseline.editToken)).rejects.toMatchObject({status: 412});
+    });
+
+    it('retains selected role mappings and quotas while allowing every slot role to be removed', async () => {
+        const {id, slot} = await fixture();
+        await activity.createActivityRole(id, {name: 'Retained coordinator'}, actor(owner));
+        await activity.createActivityRole(id, {name: 'Removable helper'}, actor(owner));
+        const roles = (await activityService.getAllRoles(id)).filter(role => role.title !== 'default');
+        const selected = roles.map(role => role.id);
+        await nativeActivity.addSlotRole(slot.id, {roles: selected});
+        const repository = AppDataSource.getRepository(ActivitySlotRole);
+        const mappings = await repository.find({where: {item: {id: slot.id}}});
+        // Make mapping identities observably different from role identities. A
+        // comparison against mapping IDs must fail this real-controller journey.
+        for (const mapping of mappings) await repository.update(mapping.id, {id: mapping.id + 1_000_000, maxQty: 3});
+        const original = await repository.find({where: {item: {id: slot.id}}, order: {id: 'ASC'}});
+        await activity.setActivityAssignment(id, slot.id, {assigned: true, role: roles[0].title}, actor(participant));
+        const assignments = await activityService.getActivitySlotAssigneeRows(id);
+
+        async function saveRoles(values: number[]): Promise<void> {
+            const baseline = await activity.readActivitySlotBaseline(id, slot.id, actor(owner));
+            await activity.patchActivitySlot(id, slot.id, {roles: values.map(String)}, actor(owner), baseline.editToken);
+        }
+        await saveRoles(selected);
+        expect(await repository.find({where: {item: {id: slot.id}}, order: {id: 'ASC'}})).toEqual(original);
+        await saveRoles([selected[0]]);
+        expect(await repository.find({where: {item: {id: slot.id}}})).toEqual([original.find(row => row.roleId === selected[0])]);
+        await saveRoles([]);
+        expect(await repository.find({where: {item: {id: slot.id}}})).toEqual([]);
+        expect((await activity.readActivitySlotBaseline(id, slot.id, actor(owner))).values.roles).toEqual([]);
+        // Removal is idempotent and does not delete the plan's reusable roles.
+        await saveRoles([]);
+        expect((await activityService.getAllRoles(id)).filter(role => role.title !== 'default').map(role => role.id)).toEqual(selected);
+        // Configured role links and existing assignment links have distinct
+        // lifecycles; removing every quota must not cascade through signups.
+        expect(await activityService.getActivitySlotAssigneeRows(id)).toEqual(assignments);
+        expect(await activityService.getActivitySlotAssignments(id, participant.id)).toEqual([slot.id]);
+        expect(await activityService.updateActivitySlot(randomUUID(), {})).toBe(false);
     });
 
     it('uses stored UUID text scope with the original comparison token and preserves foreign-field denial', async () => {
@@ -489,6 +531,55 @@ describe('versioned Activity production operations', () => {
         expect(await activityService.getActivitySlotAssignments(id, other.id)).toEqual([slot.id]);
     });
 
+    it('rolls back assignments and applied history when completion preparation fails', async () => {
+        const {id, slot} = await fixture();
+        await recommendationService.saveRecommendations(id, [{itemId: slot.id, profileId: participant.id,
+            status: 'APPROVED', operation: 'ASSIGN', manual: true}]);
+        const saved = (await recommendationService.getRecommendations(id))[0];
+        const input = {recommendations: [{id: saved.id, itemId: slot.id, profileId: participant.id,
+            status: 'APPROVED' as const, operation: 'ASSIGN' as const, manual: true}]};
+        await expect(activity.applyActivityRecommendations(id, input, actor(owner), function rejectCompletion() {
+            throw new Error('Synthetic response preparation failure');
+        })).rejects.toThrow('Synthetic response preparation failure');
+        expect(await activityService.getActivitySlotAssignments(id, participant.id)).toEqual([]);
+        expect((await recommendationService.getRecommendations(id))[0]).toMatchObject({id: saved.id, status: 'APPROVED'});
+    });
+
+    it('returns a prepared applied success when real follow-up generation persistence fails', async () => {
+        const eventId = await createIntegrationEvent(owner.id, 'Generation failure camp');
+        for (const profile of [participant, other]) await eventService.register(eventId, '2027-06-01', '2027-06-03', profile.id);
+        const {id, slot} = await fixture(eventId);
+        await updateRequirements(id, {assignmentMode: 'REQUIRED', bindingDeadline: '2020-01-01T00:00:00Z',
+            stayRequirements: [{stayDays: 1, requiredShifts: 0}, {stayDays: 2, requiredShifts: 0}, {stayDays: 3, requiredShifts: 1}]});
+        await recommendationService.saveRecommendations(id, [{itemId: slot.id, profileId: participant.id,
+            status: 'APPROVED', operation: 'ASSIGN', manual: true}]);
+        const saved = (await recommendationService.getRecommendations(id))[0];
+        // The disposable schema supplies a real persistence failure only for new
+        // generated work. Approved review/application writes still use production DBAL.
+        const trigger = 'trg_test_activity_followup_failure';
+        await AppDataSource.query(`CREATE TRIGGER ${trigger} BEFORE INSERT ON activity_assignment_recommendations
+            FOR EACH ROW BEGIN IF NEW.entity_id = '${id}' AND NEW.status = 'PENDING' THEN
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Synthetic generation persistence failure'; END IF; END`);
+        let prepared: Readonly<Record<RecommendationGenerationOutcome, PreparedApiJsonResponse>> | undefined;
+        const request = {headers: {}, apiActor: {context: 'activity-completion-fixture'}, get: () => undefined,
+            acceptsLanguages: () => ['en']} as unknown as Request;
+        try {
+            const result = await activity.applyActivityRecommendations(id, {recommendations: [{id: saved.id,
+                itemId: slot.id, profileId: participant.id, status: 'APPROVED', operation: 'ASSIGN', manual: true}]}, actor(owner),
+            function prepareApplication(variants) {
+                prepared = prepareValidatedJsonVariants(request, 'applyActivityRecommendations', 200, variants);
+            });
+            expect(result).toMatchObject({applied: 1, skipped: 0, generationOutcome: 'failed'});
+            expect(JSON.parse(prepared!.failed.json)).toEqual(result);
+            expect(prepared!.failed.status).toBe(200);
+            expect(await activityService.getActivitySlotAssignments(id, participant.id)).toEqual([slot.id]);
+            expect((await recommendationService.getRecommendations(id)).find(row => row.id === saved.id)?.status).toBe('APPLIED');
+            expect(await activityService.getActivitySlotAssignments(id, other.id)).toEqual([]);
+        } finally {
+            await AppDataSource.query(`DROP TRIGGER IF EXISTS ${trigger}`);
+        }
+    });
+
     it('scopes job observation to its plan and keeps read-only snapshots from dispatching work', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Job transport camp');
         await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id);
@@ -719,6 +810,34 @@ describe('versioned Activity production operations', () => {
         await activity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(participant));
         await activity.setActivityAssignment(id, slot.id, {assigned: false}, actor(participant));
         expect(await activityService.getActivitySlotAssignments(id, participant.id)).toEqual([]);
+    });
+
+    it('serializes competing named-role signups and retains the separate SQL integrity constraint', async () => {
+        const {id, slot} = await fixture();
+        await activity.createActivityRole(id, {name: 'Single coordinator'}, actor(owner));
+        const role = (await activityService.getAllRoles(id)).find(candidate => candidate.title === 'Single coordinator')!;
+        await nativeActivity.addSlotRole(slot.id, {roles: [role.id]});
+        const results = await Promise.allSettled([participant, other].map(profile =>
+            activity.setActivityAssignment(id, slot.id, {assigned: true, role: role.title}, actor(profile))));
+        expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+        expect(results.find(result => result.status === 'rejected')).toMatchObject({reason: {status: 409}});
+
+        // Synchronization fixtures do not install migrations. Install the real
+        // retained trigger explicitly to prove persistence still has its backstop.
+        expect(await AppDataSource.query("SHOW TRIGGERS WHERE `Trigger` = 'trg_check_slot_role_limit'")).toEqual([]);
+        const runner = AppDataSource.createQueryRunner();
+        await runner.connect();
+        try {
+            await new UpdateCheckSlotRoleTrigger1785689525000().up(runner);
+            const loser = results[0].status === 'rejected' ? participant : other;
+            await expect(activityService.withActivityTransaction(manager =>
+                activityService.saveActivityAssignmentRole(manager, id, slot.id, loser.id, role.id)))
+                .rejects.toThrow('Role capacity reached for this slot');
+            expect(await activityService.getActivitySlotAssignments(id, loser.id)).toEqual([]);
+        } finally {
+            await runner.query('DROP TRIGGER IF EXISTS trg_check_slot_role_limit');
+            await runner.release();
+        }
     });
 
     it('keeps external signup, capacity, overfill and deadline decisions with existing server owners', async () => {

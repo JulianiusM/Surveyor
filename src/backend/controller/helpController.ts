@@ -20,13 +20,12 @@ import path from 'node:path';
 import {ExpectedError} from '../modules/lib/errors';
 import {createTranslator, helpSourceDirectory, resolveLocale, resolveSupportedLocale} from '../../common/localization/translator';
 import {localizedHelpUrl} from '../../common/lib/helpNavigation';
+import {classifyHelpUri, hasSafeHelpScheme, isHelpRasterExtension} from '../../common/lib/helpPolicy';
 import type {HelpAssetSource, HelpDocumentSummary, HelpNavigationGroup, HelpTocEntry, HelpSearchResult, HelpPageData} from '../../types/HelpTypes';
 
 const DOCUMENTATION_METADATA_RE = /<!--\s*documentation-metadata\s*\r?\n[\s\S]*?-->\s*/iu;
 const HELP_DOC_SLUG_RE = /^[a-z0-9_-]+$/iu;
 const HELP_ASSET_NAME_RE = /^[a-z0-9][a-z0-9._-]*$/iu;
-const HELP_ASSET_EXTENSIONS = new Set(['.gif', '.jpeg', '.jpg', '.png', '.webp']);
-const SAFE_EXTERNAL_URI_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
 const MAX_SEARCH_QUERY_LENGTH = 100;
 
 const HELP_NAVIGATION = [
@@ -132,7 +131,7 @@ export function resolveHelpAssetPath(assetName: string, locale = 'en'): string |
 /** Keep the same closed raster-name policy at authored-reference and asset-response boundaries. */
 function isHelpAssetName(assetName: string): boolean {
     return HELP_ASSET_NAME_RE.test(assetName) && path.basename(assetName) === assetName
-        && HELP_ASSET_EXTENSIONS.has(path.extname(assetName).toLowerCase());
+        && isHelpRasterExtension(path.extname(assetName));
 }
 
 /** Asset responses use only the requested reviewed language. A complete English
@@ -150,40 +149,13 @@ function stripDocumentationMetadata(markdown: string): string {
     return markdown.replace(DOCUMENTATION_METADATA_RE, '');
 }
 
-/** Decode the supported URI character references before checking controls/schemes. */
-function decodeUriCharacterReferences(value: string): string {
-    // Numeric and named encodings must not hide a forbidden scheme or separator.
-    return value
-        .replace(/&#x([0-9a-f]+);?/giu, (_match, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
-        .replace(/&#([0-9]+);?/gu, (_match, code: string) => String.fromCodePoint(Number.parseInt(code, 10)))
-        .replace(/&colon;/giu, ':')
-        .replace(/&tab;/giu, '\t')
-        .replace(/&newline;/giu, '\n')
-        .replace(/&amp;/giu, '&');
-}
-
 /** Reject unsafe authored Help destinations under DEC-004's trusted-content contract. */
 function assertSafeHelpUri(href: string, sourceName: string): void {
-    // Empty links retain Markdown behavior; inspect decoded nonempty destinations.
-    const trimmed = href.trim();
-    if (!trimmed) {
-        return;
-    }
-
-    const decoded = decodeUriCharacterReferences(trimmed);
-    if (/[\u0000-\u001f\u007f]/u.test(decoded)) {
-        throw new Error(`${sourceName} contains a URI with control characters`);
-    }
-
-    const schemeProbe = decoded.replace(/[\s\u00a0]+/gu, '');
-    if (schemeProbe.startsWith('//') || schemeProbe.startsWith('\\\\')) {
-        throw new Error(`${sourceName} contains a protocol-relative URI: ${href}`);
-    }
-
-    const schemeMatch = /^([a-z][a-z0-9+.-]*):/iu.exec(schemeProbe);
-    if (schemeMatch && !SAFE_EXTERNAL_URI_SCHEMES.has(schemeMatch[1].toLowerCase())) {
-        throw new Error(`${sourceName} contains an unsafe URI scheme: ${schemeMatch[1]}`);
-    }
+    const issue = classifyHelpUri(href);
+    // Runtime retains source-specific rejection; the shared owner selects policy.
+    if (issue?.kind === 'control') throw new Error(`${sourceName} contains a URI with control characters`);
+    if (issue?.kind === 'protocol-relative') throw new Error(`${sourceName} contains a protocol-relative URI: ${href}`);
+    if (issue?.kind === 'scheme') throw new Error(`${sourceName} contains an unsafe URI scheme: ${issue.scheme}`);
 }
 
 /** Separate the earliest query/fragment suffix while retaining its original spelling. */
@@ -353,7 +325,7 @@ export function rewriteDocHrefToHelpRoute(href: string, locale = 'en', interface
     // External destinations retain their reviewed URL rather than becoming local
     // article lookups. Relative figures and Markdown topics are handled separately.
     const lower = href.toLowerCase();
-    if ([...SAFE_EXTERNAL_URI_SCHEMES].some(scheme => lower.startsWith(`${scheme}:`))) {
+    if (hasSafeHelpScheme(lower)) {
         return href;
     }
 

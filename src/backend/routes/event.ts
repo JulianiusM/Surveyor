@@ -35,10 +35,11 @@ router.get('/:eventId/invoice-pools/:poolId/invoices/:invoiceId/proof',
     }), handleApiProblem);
 
 // Event outputs retain document guest admission before their method grants.
-router.use('/:id/export', function admitEventOutput(req, res, next) {
-    if (req.session.profile) return next();
+router.use('/:id/export', asyncHandler(async function admitEventOutput(req, res, next) {
+    // Use the same hydrated actor as the independent output grant middleware.
+    if ((await captureApiActor(req)).profile) return next();
     res.redirect(`/event/${encodeURIComponent(String(req.params.id))}/guest`);
-});
+}));
 
 /** Resolve output permission from the same loaded resource as the original
  * document adapter. Permission middleware remains the grant owner. */

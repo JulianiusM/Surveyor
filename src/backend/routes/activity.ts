@@ -11,6 +11,7 @@ import type {EntityDescriptor} from '../../types/PermissionTypes';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {createGuestFlowHeaderRouter, createGuestFlowRouter} from '../middleware/guestFlowFactory';
 import {activityFlow} from './activityFlow';
+import {captureApiActor} from '../modules/api/session';
 
 const router = createGuestFlowRouter(activityFlow);
 
@@ -27,12 +28,13 @@ function activityPermission(req: Request): EntityDescriptor {
 
 router.get('/:id/export/schedule', asyncHandler(async function admitSchedule(req, res, next) {
     const plan = getResource(req, 'activity');
+    const actor = await captureApiActor(req);
     // Preserve document admission before the independent export grant.
     if (plan.event) {
-        if (!await canAccessEntityView('activity', {...plan, eventId: plan.event.id}, req.session)) {
+        if (!await canAccessEntityView('activity', {...plan, eventId: plan.event.id}, actor)) {
             throw new ExpectedError('You must be registered for the event to access this resource');
         }
-    } else if (!req.session.profile) {
+    } else if (!actor.profile) {
         res.redirect(`/activity/${encodeURIComponent(plan.id)}/guest`);
         return;
     }

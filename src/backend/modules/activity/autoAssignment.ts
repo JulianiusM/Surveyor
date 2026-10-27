@@ -8,7 +8,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import type {AssignmentCandidate, SlotAssignmentMap} from '../../../types/ActivityTypes';
+import type {AssignmentCandidate, SlotAssignmentMap, ActivityRequirementPreparationInputs} from '../../../types/ActivityTypes';
 import type {EntityManager} from 'typeorm';
 import {ActivityPlan} from '../database/entities/activity/ActivityPlan';
 import type {ActivitySlot} from '../database/entities/activity/ActivitySlot';
@@ -260,6 +260,39 @@ export async function buildParticipantAttendanceMap(
     }
 
     return attendance;
+}
+
+/** Prepare the matching analysis/baseline context after each caller's own initial reads.
+ * This operation is deliberately asynchronous: Event participants, missing names
+ * and persisted participant roles are read in their existing order on the supplied manager. */
+export async function prepareActivityRequirementContext(
+    {plan, configuration, assignments, slots, slotRoles}: ActivityRequirementPreparationInputs,
+    manager?: EntityManager,
+) {
+    // Read only the already selected parent, then retain registered and historical
+    // assignee attendance through the existing shared enrichment operation.
+    const eventParticipants = plan.event
+        ? projectEventParticipants(await eventService.getEventParticipantRows(plan.event.id, manager)) : [];
+    const attendance = await buildParticipantAttendanceMap(plan, configuration.overrides, assignments, [], eventParticipants, manager);
+
+    // Both calculations consume the same slot-role quantities and assignment counts;
+    // their distinct arithmetic and presentation remain with the existing engines/callers.
+    const slotsWithRoles = projectRequirementSlots(slots, slotRoles);
+    const assignedShiftCounts = Object.fromEntries(Object.entries(assignments)
+        .map(([participantKey, participantAssignments]) => [participantKey, participantAssignments.length]));
+    return {eventParticipants, calculation: {plan, participants: Object.values(attendance),
+        roleRequirements: configuration.roleRequirements, overrides: configuration.overrides,
+        stayRequirements: configuration.stayRequirements, slots: slotsWithRoles, assignedShiftCounts}};
+}
+
+/** Project stored role identity and quantities once for both requirement engines. */
+function projectRequirementSlots(slots: ActivityRequirementPreparationInputs['slots'],
+    slotRoles: ActivityRequirementPreparationInputs['slotRoles']) {
+    // Normalize UUID/role identities without changing capacity, timeboxes or assigned quantities.
+    return slots.map(slot => ({id: uuidKey(slot.id), day: slot.day, startTime: slot.startTime,
+        endTime: slot.endTime, maxAssignees: slot.maxAssignees,
+        roles: (slotRoles[uuidKey(slot.id)] ?? []).map(role => ({roleId: Number(role.id),
+            maxQty: role.maxQty, assignedQty: role.assignedQty}))}));
 }
 
 /** Preserve saved row identity for review; context memory deliberately excludes it from allocation fingerprints. */

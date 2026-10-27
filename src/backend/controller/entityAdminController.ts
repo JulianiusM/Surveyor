@@ -20,7 +20,7 @@ import {coerceLimit, getHeaderImageVersion, maskEmail, SQL_ALLOW_LIST, sameUuid,
 import type {UserInfo} from '../../types/UserTypes';
 import {comparisonActor, comparisonToken, requireComparisonToken, requireFieldComparison} from '../modules/api/transport';
 import {getLockedListAssignment} from '../modules/database/services/ListService';
-import type {ListPersistenceType, ListRootRows} from '../../types/ListPersistenceTypes';
+import type {ListPersistenceType, ListRootRows, ListItemRows} from '../../types/ListPersistenceTypes';
 import type {ListItemCommandOperations} from '../../types/EntityPropertyTypes';
 import type {components} from '../../types/api/v1';
 import {ApiProblem} from '../modules/api/problem';
@@ -214,6 +214,58 @@ export async function listSettingsToken(type: ListType, manager: EntityManager, 
     const defaults = includeAccess ? completeDefaults(await entityAdminService.getDefaultPerms(type, list.id, manager)) : null;
     return comparisonToken(`${type}-settings`, uuidKey(list.id), session, {...(defaults ? defaultPermissionValues(defaults) : {}),
         header: list.headerImg ?? null, eventId: list.eventId ?? null, ...(includeAccess ? {newAdmin: null} : {})});
+}
+
+/** Header-only editors compare the stored reference without learning its path.
+ * Keep the existing feature token domain and exact field subset shared by writes. */
+export function listHeaderToken(type: ListType, list: EntityBase, session: SessionLike): string {
+    return comparisonToken(`${type}-settings`, uuidKey(list.id), session, {header: list.headerImg ?? null});
+}
+
+/** Read one independently authorized item baseline without requiring a profile
+ * or detail-page admission. The feature retains row, field and token policy. */
+export async function readListItemEditBaseline<Type extends ListPersistenceType, Patch extends object, Values extends object>(
+    id: string, itemId: string, session: SessionLike,
+    reads: Pick<ListReadOperations<ListRootRows[Type], ListItemRows[Type], unknown>, 'withSnapshot' | 'requireRoot'>,
+    operations: ListItemCommandOperations<Type, Patch, Values>) {
+    comparisonActor(session);
+    /** Resolve root/item scope before checking the current editable-field projection. */
+    async function readSnapshot(manager: EntityManager, row: ListRootRows[Type] | null) {
+        const list = reads.requireRoot(row);
+        const item = await operations.item(manager, itemId);
+        if (!item || !sameUuid(item.entityId, list.id)) throw new ApiProblem('NOT_FOUND');
+        const permissions = await listItemPermissions(operations.type, manager, list, item, session);
+        const projection = operations.projectItem(item, permissions);
+        // No assignment evidence or unrelated root fields enter this response.
+        if (!projection.editableFields.length) throw new ApiProblem('FORBIDDEN');
+        return {id: item.id, ...projection, editToken: operations.itemToken(list, item, session, projection.values)};
+    }
+    return reads.withSnapshot(id, readSnapshot);
+}
+
+/** Supply only a header comparison token to an independently granted writer. */
+export async function readListHeaderBaseline<Root extends ListReadRoot, Item extends ListReadItem, Description>(
+    type: ListType, id: string, session: SessionLike, operations: ListReadOperations<Root, Item, Description>) {
+    async function readHeaderVersion(manager: EntityManager, row: Root | null) {
+        const list = operations.requireRoot(row);
+        // Method-only authority never implies access to the actual image bytes.
+        if (!operations.mayPerform(await listPermissions(type, manager, list, session), 'editHeader')) throw new ApiProblem('FORBIDDEN');
+        return {editToken: listHeaderToken(type, list, session)};
+    }
+    return operations.withSnapshot(id, readHeaderVersion);
+}
+
+/** Resolve a saved image only under the feature's full detail-read admission. */
+export async function readListHeaderPath<Root extends ListReadRoot, Item extends ListReadItem, Description>(
+    type: ListType, id: string, session: SessionLike, operations: ListReadOperations<Root, Item, Description>): Promise<string> {
+    async function readHeaderPath(manager: EntityManager, row: Root | null): Promise<string> {
+        const list = operations.requireRoot(row);
+        // Reuse the existing admission owner on this same read snapshot.
+        await authorizeListRead(type, manager, list, session);
+        if (!list.headerImg) throw new ApiProblem('NOT_FOUND');
+        return list.headerImg;
+    }
+    return operations.withSnapshot(id, readHeaderPath);
 }
 
 /** Read root metadata in the feature's existing snapshot after its profile admission.

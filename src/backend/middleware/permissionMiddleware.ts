@@ -18,6 +18,7 @@ import {NextFunction, Request, Response} from "express";
 import {ExpectedError} from "../modules/lib/errors";
 import {normalizeToArray} from "../modules/lib/util";
 import {can} from "../modules/permissionEngine";
+import {captureApiActor} from '../modules/api/session';
 import type {EntityGetter, Subject} from "../../types/PermissionTypes";
 
 type ErrorAdapter = {
@@ -31,8 +32,11 @@ const expectedErrors: ErrorAdapter = {
 };
 
 /** Retained print/download routes use the existing account-or-guest redirect. */
-export function isLoggedIn(req: Request, res: Response, next: NextFunction) {
-    if (req.session.auth && req.session.profile) return next();
+export async function isLoggedIn(req: Request, res: Response, next: NextFunction) {
+    // Document admission already captured this actor. Reuse it without treating
+    // optional ORM relations serialized in the Session as current authority.
+    const actor = await captureApiActor(req);
+    if (actor.auth && actor.profile) return next();
     req.flash("info", "You must be logged in to access this site.");
     let nxt = "";
     if (typeof req.query.next === "string") {
@@ -52,12 +56,13 @@ function requirePermInternal(
     requiredParentPerm?: number | number[],
 ) {
     return /** Admit one independent subject; partial grants never combine. */ async (req: Request, _res: Response, next: NextFunction) => {
+        const actor = await captureApiActor(req);
         let ok = false;
         // Keep alternative roots independent: combining their masks here could
         // admit a document even when no individual subject grants its operation.
         for (const getSubject of getSubjects) {
             const subject = await getSubject(req);
-            ok = await can(subject, req.session ?? {}, requiredPerm, requiredParentPerm)
+            ok = await can(subject, actor, requiredPerm, requiredParentPerm)
             if (ok) break; // break early
         }
         if (!ok) {

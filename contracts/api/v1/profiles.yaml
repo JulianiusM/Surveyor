@@ -89,9 +89,9 @@ paths:
       x-surveyor-command: {retryPolicy: natural-idempotent, precondition: none}
       summary: Preview a submitted transfer token without changing ownership or consuming it
       parameters:
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
-        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
+        - {$ref: "./common.yaml#/parameters/Csrf"}
       requestBody:
         required: true
         content:
@@ -103,7 +103,7 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/schemas/ProfileMigrationPreviewOutcome'}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   entry:
     get:
       operationId: getProfileAdministrationEntry
@@ -111,8 +111,8 @@ paths:
       summary: Read account or guest page admission without disclosing profile data
       security: []
       parameters:
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
         - name: view
           in: query
           required: true
@@ -126,30 +126,30 @@ paths:
           content:
             application/json:
               schema: {$ref: './common.yaml#/schemas/PageEntryOutcome'}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   profiles:
     get:
       operationId: getIdentityProfiles
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read only the signed-in account's profiles
       parameters:
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
       responses:
         '200':
           description: Account-owned profile management
           content:
             application/json:
               schema: {$ref: '#/schemas/ProfileManagement'}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
     post:
       operationId: createIdentityProfile
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: Create an account profile without selecting it
       parameters:
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
-        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
+        - {$ref: "./common.yaml#/parameters/Csrf"}
       requestBody:
         required: true
         content:
@@ -161,30 +161,30 @@ paths:
           content:
             application/json:
               schema: {$ref: './common.yaml#/schemas/MutationResult'}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   current:
     get:
       operationId: getIdentityProfile
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read the active account or guest profile's editable fields
       parameters:
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
       responses:
         '200':
           description: Active-profile settings
           content:
             application/json:
               schema: {$ref: '#/schemas/ProfileSettings'}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
     patch:
       operationId: updateIdentityProfile
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: Save active-profile fields through the shared controller operation
       parameters:
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
-        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
+        - {$ref: "./common.yaml#/parameters/Csrf"}
       requestBody:
         required: true
         content:
@@ -196,4 +196,4 @@ paths:
           content:
             application/json:
               schema: {$ref: './common.yaml#/schemas/MutationResult'}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}

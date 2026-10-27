@@ -14,6 +14,7 @@ const artifacts = ['.generated/api/v1/openapi.json', '.generated/api/v1/operatio
     'src/types/api/v1.d.ts', 'src/types/api/validation-v1.d.ts', 'src/types/LocalizationTypes.d.ts',
     'src/common/localization/generated/resources.json', 'src/common/localization/generated/manifest.json',
     'src/common/localization/generated/permissions.ts', '.generated/api/v1/policy.mjs',
+    'src/common/generated/domainChoices.ts',
     '.generated/api/v1/browser/validatePackingListView.mjs', '.generated/api/v1/browser/validateRegistrationInput.mjs'];
 
 /** Run the real generators in an empty output tree; never substitute hand-authored validators. */
@@ -233,6 +234,104 @@ process.once('SIGINT', stopGate);
 }
 
 describe('contract and catalog generation', () => {
+    // This offline inventory parses every authored contract and loads both full
+    // compiled graphs. Its budget is distinct from an HTTP/browser latency test.
+    it('keeps contract composition directed toward actual owners and preserves public profile aliases', async function verifiesOwnedContracts() {
+        const directory = path.join(root, 'contracts/api/v1');
+        // Inspect the authored reference graph, including parsed YAML aliases.
+        // Root exports remain public; feature documents cannot depend back on it.
+        function inspect(value: unknown): void {
+            if (!value || typeof value !== 'object') return;
+            const node = value as Record<string, unknown>;
+            if (typeof node.$ref === 'string') expect(node.$ref).not.toMatch(/(?:^|\/)openapi\.yaml#/u);
+            Object.values(node).forEach(inspect);
+        }
+        for (const filename of (await fs.readdir(directory)).filter(name => name.endsWith('.yaml') && name !== 'openapi.yaml')) {
+            inspect(YAML.parse(await fs.readFile(path.join(directory, filename), 'utf8')));
+        }
+
+        // Existing public validator names retain strict server and additive
+        // browser behavior after their schema bodies adopt one common owner.
+        const server = (await import(pathToFileURL(path.join(root, '.generated/api/v1/server.cjs')).href)).default;
+        const browser = await import(pathToFileURL(path.join(root, '.generated/api/v1/browser.mjs')).href);
+        const profile = {id: '11111111-1111-4111-8111-111111111111', name: 'Profile'};
+        for (const name of ['validateSessionProfile', 'validateActivityRecommendationProfile']) {
+            expect(server[name](profile)).toBe(true);
+            expect(server[name]({...profile, extra: true})).toBe(false);
+            expect(browser[name]({...profile, extra: true})).toBe(true);
+            expect(server[name]({id: profile.id})).toBe(false);
+            expect(browser[name]({id: 'invalid', name: profile.name})).toBe(false);
+        }
+    }, 30_000);
+
+    it('derives neutral runtime choices and validator admission from one authored inventory', async function projectsRuntimeChoices() {
+        const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
+        try {
+            await prepareGenerationTree(temporary);
+            const surveyPath = path.join(temporary, 'contracts/api/v1/surveys.yaml');
+            const survey = YAML.parseDocument(await fs.readFile(surveyPath, 'utf8'));
+            survey.addIn(['schemas', 'SurveyCombinationInput', 'properties', 'weekday', 'enum'], 'FUTURE_DAY');
+            survey.addIn(['schemas', 'SurveyCombinationInput', 'properties', 'nthWeek', 'enum'], '5');
+            await fs.writeFile(surveyPath, survey.toString());
+            const eventPath = path.join(temporary, 'contracts/api/v1/events.yaml');
+            const event = YAML.parseDocument(await fs.readFile(eventPath, 'utf8'));
+            event.addIn(['schemas', 'EventDietaryChoice', 'enum'], 'FUTURE_DISH');
+            event.addIn(['schemas', 'EventDietaryChoice', 'x-surveyor-runtime-choices', 'groups', 'meal'], 'FUTURE_DISH');
+            await fs.writeFile(eventPath, event.toString());
+            generate('generate-api.mjs', [], temporary);
+
+            // A real Node consumer loads the same erasable neutral source used by
+            // the server compiler and browser graph, without importing ORM or API.
+            const choicesUrl = pathToFileURL(path.join(temporary, 'src/common/generated/domainChoices.ts')).href;
+            const validatorsUrl = pathToFileURL(path.join(temporary, '.generated/api/v1/server.cjs')).href;
+            execFileSync(process.execPath, ['--input-type=module', '-e', `
+                const choices = await import(${JSON.stringify(choicesUrl)});
+                const validators = (await import(${JSON.stringify(validatorsUrl)})).default;
+                if (!choices.surveyWeekdays.includes('FUTURE_DAY') || !choices.surveyOccurrences.includes('5')) throw new Error('Survey choices drift');
+                if (!validators.validateSurveyCombinationInput({weekday: 'FUTURE_DAY', nthWeek: '5'})) throw new Error('Survey validator drift');
+                if (!choices.eventDietaryChoices.includes('FUTURE_DISH') || !choices.eventDietaryGroups.meal.includes('FUTURE_DISH')) throw new Error('Dietary choices drift');
+                if (!validators.validateEventRegistrationInput({arrivalDate: '2027-06-01', departureDate: '2027-06-02', dietary: ['FUTURE_DISH']})) throw new Error('Dietary validator drift');
+                if (!Object.isFrozen(choices.eventDietaryChoices) || !Object.isFrozen(choices.eventDietaryGroups.meal)) throw new Error('Mutable shared choices');
+            `], {cwd: temporary, stdio: 'pipe'});
+        } finally {
+            await removeDependencyLink(temporary);
+            await removeTemporary(temporary);
+        }
+    }, 60_000);
+
+    it('rejects incomplete runtime choice metadata before publishing generated artifacts', async function rejectsChoiceDrift() {
+        const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
+        try {
+            await prepareGenerationTree(temporary);
+            const eventPath = path.join(temporary, 'contracts/api/v1/events.yaml');
+            const original = await fs.readFile(eventPath, 'utf8');
+            const output = path.join(temporary, 'src/common/generated/domainChoices.ts');
+            await fs.mkdir(path.dirname(output), {recursive: true});
+            await fs.writeFile(output, 'Unchanged previous successful choices');
+            const metadata = ['schemas', 'EventDietaryChoice', 'x-surveyor-runtime-choices'];
+            // Missing membership, duplicate membership, foreign values and invalid
+            // export spelling are source defects, never a reason to weaken Ajv.
+            for (const [suffix, value] of [
+                [['groups', 'text'], ['UNKNOWN']],
+                [['groups', 'meal'], ['MEAT', 'MEAT', 'FISH', 'VEGETARIAN', 'VEGAN']],
+                [['groups', 'requirement'], ['HALAL']],
+                [['exportName'], 'default'],
+                [['exportName'], 'arguments'],
+                [['exportName'], 'eval'],
+                [['unexpected'], true],
+            ] as const) {
+                const event = YAML.parseDocument(original);
+                event.setIn([...metadata, ...suffix], value);
+                await fs.writeFile(eventPath, event.toString());
+                expect(() => generate('generate-api.mjs', [], temporary)).toThrow(/Runtime choice/u);
+                expect(await fs.readFile(output, 'utf8')).toBe('Unchanged previous successful choices');
+            }
+        } finally {
+            await removeDependencyLink(temporary);
+            await removeTemporary(temporary);
+        }
+    }, 60_000);
+
     it('keeps authored request roles independent of alias names, ordering and response reuse', async function preservesAuthoredAliasRoles() {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
         try {
@@ -351,10 +450,10 @@ describe('contract and catalog generation', () => {
             await prepareGenerationTree(temporary);
             const commonPath = path.join(temporary, 'contracts/api/v1/common.yaml');
             const financePath = path.join(temporary, 'contracts/api/v1/finance.yaml');
-            const entryPath = path.join(temporary, 'contracts/api/v1/openapi.yaml');
+            const helpPath = path.join(temporary, 'contracts/api/v1/help.yaml');
             const common = YAML.parseDocument(await fs.readFile(commonPath, 'utf8'));
             const finance = YAML.parseDocument(await fs.readFile(financePath, 'utf8'));
-            const entry = YAML.parseDocument(await fs.readFile(entryPath, 'utf8'));
+            const help = YAML.parseDocument(await fs.readFile(helpPath, 'utf8'));
             const variants = common.getIn(['schemas', 'Problem', 'oneOf']);
             if (!YAML.isSeq(variants)) throw new Error('Problem fixture needs its authored variants.');
             const flagged = variants.items.find(item => YAML.isMap(item) && item.get('x-surveyor-controller-status-override') === true);
@@ -368,10 +467,10 @@ describe('contract and catalog generation', () => {
             flagged.set('x-surveyor-controller-status-override', false);
             ordinary.set('x-surveyor-controller-status-override', true);
             finance.setIn(['schemas', 'FinanceAcceptanceInput', 'properties', 'correctedDescription', 'maxLength'], 12);
-            entry.setIn(['components', 'parameters', 'HelpQuery', 'schema', 'maxLength'], 17);
+            help.setIn(['parameters', 'HelpQuery', 'schema', 'maxLength'], 17);
             await fs.writeFile(commonPath, common.toString());
             await fs.writeFile(financePath, finance.toString());
-            await fs.writeFile(entryPath, entry.toString());
+            await fs.writeFile(helpPath, help.toString());
             generate('generate-api.mjs', [], temporary);
             const manifest = JSON.parse(await fs.readFile(path.join(temporary, '.generated/api/v1/operations.json'), 'utf8')) as ApiContractManifest;
             expect(manifest.problems.find(problem => problem.code === removedCode)?.controllerStatusOverride).toBeUndefined();

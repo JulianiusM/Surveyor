@@ -531,7 +531,9 @@ export async function getActivitySlotById(slotId: string, manager: EntityManager
     return await manager.getRepository(ActivitySlot).findOneBy({id: slotId});
 }
 
-export async function updateActivitySlot(slotId: string, fields: Partial<ActivitySlot>, manager: EntityManager = AppDataSource.manager) {
+/** Persist admitted scalar fields, distinguishing a missing slot from an unchanged save.
+ * Role-only commands still confirm existence on their supplied transaction manager. */
+export async function updateActivitySlot(slotId: string, fields: Partial<ActivitySlot>, manager: EntityManager = AppDataSource.manager): Promise<boolean> {
     const repo = manager.getRepository(ActivitySlot);
 
     // Build partial update object conditionally
@@ -545,10 +547,14 @@ export async function updateActivitySlot(slotId: string, fields: Partial<Activit
     if (fields.endTime !== undefined) updateData.endTime = fields.endTime;
     if (fields.day !== undefined) updateData.day = fields.day;
 
-    if (Object.keys(updateData).length === 0) return;
+    // A role-only edit deliberately supplies no scalar columns. It remains a
+    // successful save when the row exists; no synthetic scalar write is needed.
+    if (Object.keys(updateData).length === 0) return repo.existsBy({id: slotId});
 
     const result = await repo.update(slotId, updateData);
-    return result.affected === 1;
+    // Drivers may report zero changed rows for an identical value. Confirm the
+    // row rather than treating an idempotent save as a vanished slot.
+    return result.affected === 1 || repo.existsBy({id: slotId});
 }
 
 export async function deleteActivitySlot(slotId: string) {
@@ -801,32 +807,29 @@ export async function addActivitySlotRoles(slotId: string, roles: number[]) {
     await repo.save(entries);
 }
 
-/** Apply the existing slot-role link diff in one transaction; callers own role validation.
- * Removals and additions retain their distinct identifier comparisons, and newly
- * inserted role links start with the existing quantity of one. */
+/** Replace this slot's selected role links in one transaction; callers own plan-role admission.
+ * Retained mappings keep their identity and quota, an empty selection removes all
+ * mappings, and new links start with the existing quantity of one. */
 export async function updateActivitySlotRoles(slotId: string, roles: number[]) {
     await AppDataSource.transaction(
-    /** Apply the current mapping-ID removal and role-ID insertion comparisons in their existing transaction. */
+    /** Compare related role identities for both sides of the replacement. */
     async (manager) => {
         const repo = manager.getRepository(ActivitySlotRole);
 
         // Read this slot's current mapping rows and related role IDs before
         // calculating either side of the existing replacement operation.
         const currentRoles = await repo.find({
-            where: {item: {id: slotId}}, // relations ARE allowed in find()
-            select: {
-                id: true,
-                role: true
-            },
-            relations: {
-                role: true
-            }
+            // The normal mapping read includes the role foreign key required by
+            // @RelationId. A partial relation selection omits that identity.
+            where: {item: {id: slotId}},
         });
 
-        // Preserve the existing split comparison: removal uses mapping-row IDs
-        // against supplied IDs, while additions compare the stored role IDs.
-        const toDelete = currentRoles.filter(r => !roles.includes(r.id));
-        const toCreate = roles.filter(id => !currentRoles.map(r => r.roleId).includes(id))
+        // The submitted identities name plan roles, never slot-role mapping rows.
+        // In particular, an empty selected set deliberately removes every link.
+        const selectedRoleIds = new Set(roles);
+        const currentRoleIds = new Set(currentRoles.map(row => row.roleId));
+        const toDelete = currentRoles.filter(row => !selectedRoleIds.has(row.roleId));
+        const toCreate = [...selectedRoleIds].filter(id => !currentRoleIds.has(id));
 
         // Remove selected mapping rows before creating missing role links on
         // the same manager, retaining the operation's original write order.

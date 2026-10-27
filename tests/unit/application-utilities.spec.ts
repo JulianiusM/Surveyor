@@ -1,4 +1,4 @@
-import {describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 import {
     buildDateTotals,
     convertToSingleList,
@@ -7,6 +7,7 @@ import {
     projectEventParticipants,
     resolveActorLabel,
     resolveInvoiceAmount,
+    acceptedInvoiceCosts, invoiceCostTotals, countListItems, createHourlyJob,
     sanitizeForEmail,
     toAmount,
     uuidKey, sameUuid, indexByUuid, groupByUuid, resolveUuidReferences, resolveCompleteUuidOrder,
@@ -22,6 +23,72 @@ import {Profile} from '../../src/backend/modules/database/entities/user/Profile'
 const survey = createEntityBase({id: 'survey-1', title: 'Camp Survey', headerImg: 'survey.png'});
 const activity = createEntityBase({id: 'activity-1', title: 'Morning Activities', eventId: 'event-1'});
 const event = createEntityBase({id: 'event-1', title: 'Summer Camp'});
+
+describe('shared monetary and list projections', () => {
+    it('keeps accepted corrected costs, open costs and redistributed adjustments distinct without rounding', () => {
+        const rows = [
+            {status: 'APPROVED', amount: '10.10', correctedAmount: '9.25'},
+            {status: 'CLOSED', amount: '0.20', correctedAmount: ''},
+            {status: 'NEW', amount: '999.00'}, {status: 'REJECTED', amount: '888.00'},
+            {status: 'RETRACTED', amount: '777.00'},
+        ];
+        expect(acceptedInvoiceCosts(rows)).toEqual(rows.slice(0, 2));
+        expect(acceptedInvoiceCosts(rows)[0]).toBe(rows[0]);
+        expect(invoiceCostTotals(rows, [{amount: '-2.10', subtractFromPool: true},
+            {amount: '1.01', subtractFromPool: false}])).toEqual({invoiceTotal: 9.45, openAmount: 9.25,
+            extraAmount: 1.01, subtractiveAmount: -2.1});
+        expect(invoiceCostTotals([{status: 'APPROVED', amount: 0.1}, {status: 'APPROVED', amount: 0.2}], [])
+            .invoiceTotal).toBe(0.30000000000000004);
+    });
+
+    it('counts UUID aliases once and keeps nullable capacity separate from open items', () => {
+        const id = 'a103fc16-052d-4269-8abc-432853059a6c';
+        const profile = 'b204fc16-052d-4269-8abc-432853059a6d';
+        const rows = [{id: id.toUpperCase(), maxAssignees: 3, assignedCount: 0},
+            {id: 'unlimited', maxAssignees: null, assignedCount: 0}, {id: 'full', maxAssignees: 1, assignedCount: 1}];
+        const assignments = new Map([[id, [{profileId: profile.toUpperCase()}, {name: 'Historical guest'}]],
+            ['full', [{profileId: profile}, {name: 'Historical guest'}]]]);
+        expect(countListItems(rows, assignments)).toEqual({participants: 2, open: 1, empty: 2});
+    });
+});
+
+describe('independent maintenance timer lifecycle', () => {
+    afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.restoreAllMocks(); });
+
+    it('repeats initial catch-up without registering a second timer and keeps jobs independent', async () => {
+        vi.useFakeTimers();
+        const first = vi.fn().mockResolvedValue(undefined);
+        const second = vi.fn().mockResolvedValue(undefined);
+        const startFirst = createHourlyJob(first, vi.fn());
+        const startSecond = createHourlyJob(second, vi.fn());
+        await startFirst();
+        await startFirst();
+        await startSecond();
+        expect(first).toHaveBeenCalledTimes(2);
+        expect(second).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(2);
+        await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+        expect(first).toHaveBeenCalledTimes(3);
+        expect(second).toHaveBeenCalledTimes(2);
+    });
+
+    it('propagates initial failure before registration and reports a later failure without stopping its schedule', async () => {
+        vi.useFakeTimers();
+        const failure = new Error('Unavailable maintenance source');
+        const task = vi.fn().mockRejectedValueOnce(failure).mockResolvedValue(undefined);
+        const report = vi.fn();
+        const start = createHourlyJob(task, report);
+        await expect(start()).rejects.toBe(failure);
+        expect(vi.getTimerCount()).toBe(0);
+        await start();
+        task.mockRejectedValueOnce(failure);
+        await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+        expect(report).toHaveBeenCalledWith(failure);
+        await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+        expect(task).toHaveBeenCalledTimes(4);
+        expect(vi.getTimerCount()).toBe(1);
+    });
+});
 
 describe('backend application behavior suite', () => {
     describe('shared UUID reference identity', () => {

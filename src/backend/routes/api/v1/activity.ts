@@ -6,11 +6,13 @@
 import {Router, type ErrorRequestHandler, type Request, type Response} from 'express';
 import * as activityApi from '../../../controller/activityController';
 import type {ActivitySimpleMutationOperation} from '../../../../types/ActivityV1Types';
+import type {RecommendationGenerationOutcome} from '../../../../types/ActivityTypes';
+import type {PreparedApiJsonResponse} from '../../../../types/ApiTransportTypes';
 import {ApiProblem, declaredApiProblem} from '../../../modules/api/problem';
 import {APIError} from '../../../modules/lib/errors';
 import {RecommendationQueueFullError} from '../../../modules/activity/recommendationJobs';
 import {requireApiContext} from '../../../modules/api/session';
-import {prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
+import {prepareValidatedJson, prepareValidatedJsonVariants, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import {createEntityAdminApiRouter, createEntityArchiveApiRouter, createEntityPropertyApiRouter,
     createUserSearchApiRouter} from '../../../middleware/adminApiFactory';
@@ -285,8 +287,14 @@ router.post('/:planId/recommendations/apply', asyncHandler(async function applyA
     const actor = await requireApiContext(req, res);
     // Apply once through the existing controller; no postcommit read renews admission.
     validateOperationRequest(req, 'applyActivityRecommendations');
-    sendValidatedJson(req, res, 'applyActivityRecommendations', 200,
-        await activityApi.applyActivityRecommendations(String(req.params.planId), req.body, actor));
+    let prepared: Readonly<Record<RecommendationGenerationOutcome, PreparedApiJsonResponse>>;
+    // Reuse the same finite-receipt preparation as account/guest delivery.
+    // All variants are validated and serialized inside the assignment transaction.
+    const result = await activityApi.applyActivityRecommendations(String(req.params.planId), req.body, actor,
+        function prepareApplication(variants) {
+            prepared = prepareValidatedJsonVariants(req, 'applyActivityRecommendations', 200, variants);
+        });
+    sendPreparedJson(req, res, prepared![result.generationOutcome!]);
 }));
 
 router.post('/:planId/recommendations/auto', asyncHandler(async function generateActivityRecommendations(req, res) {

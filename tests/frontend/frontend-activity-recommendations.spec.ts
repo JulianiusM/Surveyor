@@ -524,6 +524,24 @@ describe('Activity recommendation review production frontend', () => {
         expect(root.text()).not.toMatch(/\bSaved\b/u);
     });
 
+    it('retains applied success and shows failed suggestion refresh without replaying application', async () => {
+        const {root, requests} = await mounted(async request => {
+            if (path(request).endsWith('/warnings')) return json({warnings: []});
+            if (path(request).endsWith('/apply')) return json({applied: 1, skipped: 0, warnings: [], generationOutcome: 'failed'});
+            return json(workspace());
+        });
+        await button(root, 'Approve').trigger('click');
+        await flushPromises();
+        await root.get('[data-recommendations-apply]').trigger('click');
+        await flushPromises();
+        expect(root.text()).toContain('Applied 1; skipped 0');
+        expect(root.text()).toContain('Assignments were applied, but suggestions could not be refreshed.');
+        const action = root.get('[data-recommendations-auto]').text();
+        expect(root.text()).toContain(`Use ${action} to try refreshing suggestions again.`);
+        expect(requests.filter(request => path(request).endsWith('/apply'))).toHaveLength(1);
+        expect(requests.some(request => path(request).endsWith('/auto'))).toBe(false);
+    });
+
     it('keeps two staged swaps independent across status, removal and serialization', async () => {
         const saved = reciprocalWorkspace();
         saved.recommendations = [];

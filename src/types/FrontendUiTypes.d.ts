@@ -8,6 +8,14 @@ import type {FrontendPageCompletion, FrontendBootstrap} from './FrontendTypes';
 import type {FrontendApi} from '../frontend/app/api';
 import type {HeadersOptions, Middleware} from 'openapi-fetch';
 
+/** A controlled checkbox list renders values supplied by its feature owner.
+ * Submitted spelling may differ from the domain value without another local draft. */
+export interface FrontendCheckboxChoice<Value extends string = string> {
+    value: Value;
+    label: string;
+    inputValue?: string;
+}
+
 /** Runtime interception preserves the generated client's typed public methods. */
 export interface FrontendDispatchOptions extends Omit<RequestInit, 'body' | 'headers'> {
     params?: {header?: HeadersOptions; path?: object; query?: object};

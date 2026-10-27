@@ -37,8 +37,15 @@ import type {BasicEntityPropertyPatch} from '../../types/EntityPropertyTypes';
 import type {components} from '../../types/api/v1';
 import type {SurveyAnswer, SurveyMutationPreparation, WeekDay, WeekInMonth} from "../../types/SurveyTypes";
 import type {EntityBase} from "../../types/UserTypes";
+import {surveyWeekdays, surveyOccurrences} from '../../common/generated/domainChoices';
 
 const CREATE_TEMPLATE = 'surveyor/survey-create';
+
+/** Legacy forms submit numeric occurrences and string sentinels separately;
+ * derive both branches from the same authored choices used by JSON and storage. */
+function isNumericOccurrence(value: string): boolean {
+    return /^\d+$/u.test(value);
+}
 
 /** Normalize legacy form combinations, validate the closed creation shape and
  * project its week values into the existing persisted nthWeek representation. */
@@ -62,10 +69,11 @@ function preprocessCreate(body: any): Partial<Survey> & { combinations: Partial<
             .items(
                 Joi.object({
                     weekday: Joi.string()
-                        .valid('MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN')
+                        .valid(...surveyWeekdays)
                         .required(),
                     week: Joi.alternatives()
-                        .try(Joi.number().integer().min(1).max(4), Joi.string().valid('LAST'))
+                        .try(Joi.number().integer().valid(...surveyOccurrences.filter(isNumericOccurrence).map(Number)),
+                            Joi.string().valid(...surveyOccurrences.filter(value => !isNumericOccurrence(value))))
                         .required()
                 })
             )

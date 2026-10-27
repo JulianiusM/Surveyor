@@ -69,6 +69,10 @@ function validatorSchema(value, id, additive = false, insideParameters = false) 
             // This reviewed controller-adapter annotation belongs to the
             // manifest, not JSON payload validation or executable vocabulary.
             continue;
+        } else if (key === 'x-surveyor-runtime-choices') {
+            // Generation validates this annotation against its owning enum. It
+            // selects shared runtime data, never another JSON validation rule.
+            continue;
         } else if (key === 'additionalProperties' && nested === false && additive && !insideParameters) {
             // New response fields are compatible. Never weaken known error parameter contracts.
             result[key] = true;
@@ -279,6 +283,63 @@ for (const file of files) {
 }
 
 const authoredRequests = authoredRequestSchemas(authoredDocuments, path.join(sourceDirectory, 'openapi.yaml'));
+const runtimeChoices = runtimeChoiceDeclarations(authoredDocuments);
+
+/** Derive runtime option data from annotated authored enums, independently of
+ * bundler aliases. Metadata selects exports/groups; the enum owns allowed values.
+ * Invalid or incomplete grouping fails before any generated file is published. */
+function runtimeChoiceDeclarations(documents) {
+    const declarations = new Map();
+    const reserved = new Set('arguments await break case catch class const continue debugger default delete do else enum eval export extends false finally for function if implements import in instanceof interface let new null package private protected public return static super switch this throw true try typeof var void while with yield'.split(' '));
+
+    /** Reserve a valid unique runtime export before emitting executable text. */
+    function reserve(name, value) {
+        if (typeof name !== 'string' || !/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name) || reserved.has(name)
+            || declarations.has(name)) throw new Error('Runtime choice exports must have unique JavaScript identifiers');
+        declarations.set(name, value);
+    }
+
+    /** Visit original documents once. References do not create another enum owner. */
+    function inspect(value, source) {
+        if (!value || typeof value !== 'object') return;
+        const annotation = value['x-surveyor-runtime-choices'];
+        if (annotation !== undefined) {
+            // Only finite string enums can supply choices. No default, union or
+            // executable metadata may silently change another layer's inventory.
+            if (!annotation || typeof annotation !== 'object' || Array.isArray(annotation)
+                || Object.keys(annotation).some(key => !['exportName', 'groupsExportName', 'groups'].includes(key))
+                || value.type !== 'string' || !Array.isArray(value.enum) || !value.enum.length
+                || value.enum.some(choice => typeof choice !== 'string') || new Set(value.enum).size !== value.enum.length) {
+                throw new Error(`Runtime choices require a finite string enum and explicit export metadata: ${source}`);
+            }
+            reserve(annotation.exportName, value.enum);
+            if (annotation.groups !== undefined || annotation.groupsExportName !== undefined) {
+                const groups = annotation.groups;
+                if (!groups || typeof groups !== 'object' || Array.isArray(groups) || !Object.keys(groups).length) {
+                    throw new Error(`Runtime choice groups must partition their enum: ${source}`);
+                }
+                const grouped = [];
+                for (const [group, choices] of Object.entries(groups)) {
+                    if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(group) || !Array.isArray(choices) || !choices.length
+                        || choices.some(choice => typeof choice !== 'string' || !value.enum.includes(choice))) {
+                        throw new Error(`Runtime choice groups must contain only their enum values: ${source}`);
+                    }
+                    grouped.push(...choices);
+                }
+                // A value belongs to one presentation group, including text-only
+                // choices. Missing/duplicate membership cannot disappear in the UI.
+                if (grouped.length !== value.enum.length || new Set(grouped).size !== grouped.length) {
+                    throw new Error(`Runtime choice groups must partition their enum: ${source}`);
+                }
+                reserve(annotation.groupsExportName, groups);
+            }
+        }
+        for (const nested of Object.values(value)) inspect(nested, source);
+    }
+
+    for (const [source, document] of documents) inspect(document, source);
+    return declarations;
+}
 
 const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-contract-'));
 let document;
@@ -444,6 +505,16 @@ for (const operation of operations) {
 }
 
 const output = new Map();
+// Both ORM/server code and browser controls import this neutral generated source.
+// Server compilation packages it normally; no request/ORM implementation enters
+// its graph. Frozen tuples keep values/order stable and cannot be mutated by a UI.
+let choiceSource = banner;
+for (const [name, value] of runtimeChoices) {
+    if (Array.isArray(value)) choiceSource += `export const ${name} = Object.freeze(${JSON.stringify(value)} as const);\n`;
+    else choiceSource += `export const ${name} = Object.freeze({${Object.entries(value).map(
+        ([group, choices]) => `[${JSON.stringify(group)}]: Object.freeze(${JSON.stringify(choices)} as const)`).join(',')}});\n`;
+}
+output.set('src/common/generated/domainChoices.ts', choiceSource);
 const headerValidatorNames = new Map();
 // Every dispatch uses the strict request graph, even when the bundler selected
 // an explicitly response-only alias as the body's canonical exported name.

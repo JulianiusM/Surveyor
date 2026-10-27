@@ -424,8 +424,8 @@ paths:
       summary: Read account-only creation admission and public form context
       security: []
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - name: returnTo
           in: query
           schema:
@@ -442,9 +442,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversCreateEntry
+                $ref: "./drivers.yaml#/schemas/DriversCreateEntry"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}/entry:
     get:
       operationId: getDriversResourceEntry
@@ -454,9 +454,9 @@ paths:
       summary: Read detail or guest-entry admission without disclosing protected list data
       security: []
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
         - name: view
           in: query
           required: true
@@ -471,9 +471,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversResourceEntry
+                $ref: "./drivers.yaml#/schemas/DriversResourceEntry"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}/guest:
     get:
       operationId: getDriversGuestEntry
@@ -483,9 +483,9 @@ paths:
       summary: get Drivers Guest Entry
       security: []
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
       responses:
         "200":
           description: Confirmed operation result
@@ -496,9 +496,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/GuestEntry
+                $ref: "./auth.yaml#/schemas/GuestEntry"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
     post:
       operationId: registerDriversGuest
       x-surveyor-command:
@@ -507,16 +507,16 @@ paths:
       summary: register Drivers Guest
       security: []
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/ListId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/GuestRegistrationInput
+              $ref: "./auth.yaml#/schemas/GuestRegistrationInput"
       responses:
         "200":
           description: Confirmed operation result
@@ -527,9 +527,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/IdentityResult
+                $ref: "./auth.yaml#/schemas/IdentityResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}:
     get:
       operationId: getDriversList
@@ -538,10 +538,10 @@ paths:
         precondition: none
       summary: Read an authorized drivers list
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Current authorized representation
@@ -558,11 +558,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversListView
+                $ref: "./drivers.yaml#/schemas/DriversListView"
         "304":
           description: Authorized representation unchanged; no response body
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
     delete:
       operationId: deleteDriversList
       x-surveyor-command:
@@ -570,19 +570,19 @@ paths:
         precondition: none
       summary: delete Drivers List
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}/metadata:
     get:
       operationId: getDriversMetadata
@@ -591,10 +591,10 @@ paths:
         precondition: none
       summary: Read only editable drivers metadata
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Current authorized representation
@@ -611,11 +611,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversMetadata
+                $ref: "./drivers.yaml#/schemas/DriversMetadata"
         "304":
           description: Authorized representation unchanged; no response body
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
     patch:
       operationId: updateDriversMetadata
       x-surveyor-command:
@@ -623,17 +623,17 @@ paths:
         precondition: metadata
       summary: Update selected drivers metadata with an exact edit precondition
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/DriversMetadataPatch
+              $ref: "./drivers.yaml#/schemas/DriversMetadataPatch"
       responses:
         "200":
           description: Current authorized representation
@@ -650,9 +650,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversMetadata
+                $ref: "./drivers.yaml#/schemas/DriversMetadata"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}/description:
     get:
       operationId: getDriversDescription
@@ -661,10 +661,10 @@ paths:
         precondition: none
       summary: Read only the independently granted description field
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Current independently authorized field baseline
@@ -675,11 +675,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversDescriptionBaseline
+                $ref: "./drivers.yaml#/schemas/DriversDescriptionBaseline"
         "304":
           description: Authorized baseline unchanged; no response body
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
     patch:
       operationId: updateDriversDescription
       x-surveyor-command:
@@ -687,11 +687,11 @@ paths:
         precondition: metadata
       summary: Update only the independently granted description field
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Updated description field baseline
@@ -702,15 +702,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversDescriptionBaseline
+                $ref: "./drivers.yaml#/schemas/DriversDescriptionBaseline"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/DriversDescriptionPatch
+              $ref: "./drivers.yaml#/schemas/DriversDescriptionPatch"
   /drivers-lists/{listId}/items/{itemId}/self-assignment:
     put:
       operationId: assignDriversItem
@@ -719,11 +719,11 @@ paths:
         precondition: none
       summary: Idempotently take a drivers item as the active profile
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/ItemId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/ItemId"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Current authorized representation
@@ -737,9 +737,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversAssignmentResult
+                $ref: "./drivers.yaml#/schemas/DriversAssignmentResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
     delete:
       operationId: unassignDriversItem
       x-surveyor-command:
@@ -747,11 +747,11 @@ paths:
         precondition: none
       summary: Remove the active profile's drivers commitment
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/ItemId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/ItemId"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Current authorized representation
@@ -765,9 +765,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversAssignmentResult
+                $ref: "./drivers.yaml#/schemas/DriversAssignmentResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/create-context:
     get:
       operationId: getDriversCreateContext
@@ -776,17 +776,17 @@ paths:
         precondition: none
       summary: get Drivers Create Context
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversCreateContext
+                $ref: "./drivers.yaml#/schemas/DriversCreateContext"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists:
     post:
       operationId: createDriversList
@@ -795,24 +795,24 @@ paths:
         precondition: none
       summary: create Drivers List
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "201":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversCreated
+                $ref: "./drivers.yaml#/schemas/DriversCreated"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/DriversCreateForm
+              $ref: "./drivers.yaml#/schemas/DriversCreateForm"
             encoding:
               data:
                 contentType: application/json
@@ -824,57 +824,57 @@ paths:
         precondition: none
       summary: search Drivers Events
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - name: q
           in: query
           required: false
           schema:
-            $ref: ./openapi.yaml#/components/schemas/EventPickerQuery/properties/q
+            $ref: "./events.yaml#/schemas/EventPickerQuery/properties/q"
         - name: from
           in: query
           required: false
           schema:
-            $ref: ./openapi.yaml#/components/schemas/EventPickerQuery/properties/from
+            $ref: "./events.yaml#/schemas/EventPickerQuery/properties/from"
         - name: to
           in: query
           required: false
           schema:
-            $ref: ./openapi.yaml#/components/schemas/EventPickerQuery/properties/to
+            $ref: "./events.yaml#/schemas/EventPickerQuery/properties/to"
         - name: period
           in: query
           required: false
           schema:
-            $ref: ./openapi.yaml#/components/schemas/EventPickerQuery/properties/period
+            $ref: "./events.yaml#/schemas/EventPickerQuery/properties/period"
         - name: archive
           in: query
           required: false
           schema:
-            $ref: ./openapi.yaml#/components/schemas/EventPickerQuery/properties/archive
+            $ref: "./events.yaml#/schemas/EventPickerQuery/properties/archive"
         - name: deadline
           in: query
           required: false
           schema:
-            $ref: ./openapi.yaml#/components/schemas/EventPickerQuery/properties/deadline
+            $ref: "./events.yaml#/schemas/EventPickerQuery/properties/deadline"
         - name: cursor
           in: query
           required: false
           schema:
-            $ref: ./openapi.yaml#/components/schemas/EventPickerQuery/properties/cursor
+            $ref: "./events.yaml#/schemas/EventPickerQuery/properties/cursor"
         - name: selectedId
           in: query
           required: false
           schema:
-            $ref: ./openapi.yaml#/components/schemas/EventPickerQuery/properties/selectedId
+            $ref: "./events.yaml#/schemas/EventPickerQuery/properties/selectedId"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/EventPickerOptions
+                $ref: "./events.yaml#/schemas/EventPickerOptions"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}/duplicate:
     get:
       operationId: getDriversDuplicate
@@ -883,9 +883,9 @@ paths:
         precondition: none
       summary: get Drivers Duplicate
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
         - name: eventId
           in: query
           description: Optional destination selection, independently authorized rather than copied from the source.
@@ -897,9 +897,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversDuplicate
+                $ref: "./drivers.yaml#/schemas/DriversDuplicate"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}/settings:
     get:
       operationId: getDriversSettings
@@ -908,18 +908,18 @@ paths:
         precondition: none
       summary: get Drivers Settings
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversSettings
+                $ref: "./drivers.yaml#/schemas/DriversSettings"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}/items:
     post:
       operationId: createDriversItem
@@ -928,25 +928,25 @@ paths:
         precondition: none
       summary: create Drivers Item
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "201":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversCreated
+                $ref: "./drivers.yaml#/schemas/DriversCreated"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/DriversNewItem
+              $ref: "./drivers.yaml#/schemas/DriversNewItem"
   /drivers-lists/{listId}/items/{itemId}/edit-baseline:
     get:
       operationId: getDriversItemEditBaseline
@@ -955,11 +955,11 @@ paths:
         precondition: none
       summary: Read permitted item edit values independently of detail-page admission
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/ItemId
-        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/ItemId"
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Current method-authorized item edit baseline
@@ -970,11 +970,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversItemEditBaseline
+                $ref: "./drivers.yaml#/schemas/DriversItemEditBaseline"
         "304":
           description: Authorized edit baseline unchanged; no response body
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}/items/{itemId}:
     patch:
       operationId: updateDriversItem
@@ -983,27 +983,27 @@ paths:
         precondition: item
       summary: update Drivers Item
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/ItemId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/ItemId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/DriversItemPatch
+              $ref: "./drivers.yaml#/schemas/DriversItemPatch"
     delete:
       operationId: deleteDriversItem
       x-surveyor-command:
@@ -1011,20 +1011,20 @@ paths:
         precondition: none
       summary: delete Drivers Item
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/ItemId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/ItemId"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}/item-order:
     get:
       operationId: getDriversItemOrderBaseline
@@ -1033,10 +1033,10 @@ paths:
         precondition: none
       summary: Read permitted order values independently of detail-page admission
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Current method-authorized item order baseline
@@ -1047,11 +1047,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversOrderEditBaseline
+                $ref: "./drivers.yaml#/schemas/DriversOrderEditBaseline"
         "304":
           description: Authorized order baseline unchanged; no response body
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
     put:
       operationId: reorderDriversItems
       x-surveyor-command:
@@ -1059,26 +1059,26 @@ paths:
         precondition: order
       summary: reorder Drivers Items
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/DriversItemOrder
+              $ref: "./drivers.yaml#/schemas/DriversItemOrder"
   /drivers-lists/{listId}/assignments/{assignmentId}:
     delete:
       operationId: deleteDriversAssignment
@@ -1087,20 +1087,20 @@ paths:
         precondition: none
       summary: delete Drivers Assignment
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/AssignmentId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/AssignmentId"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}/event:
     put:
       operationId: changeDriversEvent
@@ -1111,26 +1111,26 @@ paths:
       description: Current authorization is always required. An already selected event returns unchanged without writing, even with an absent or
         stale comparison; an actual relationship change requires the reviewed If-Match and expectedEventId.
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/EventIfMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/EventIfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversEventChanged
+                $ref: "./common.yaml#/schemas/EntityEventChangeResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/DriversEventChange
+              $ref: "./drivers.yaml#/schemas/DriversEventChange"
   /drivers-lists/{listId}/default-permissions:
     get:
       operationId: getDriversDefaultsBaseline
@@ -1139,10 +1139,10 @@ paths:
         precondition: none
       summary: Read only granted audience masks for a reviewed defaults update
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Current independently authorized field baseline
@@ -1153,11 +1153,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversDefaultsBaseline
+                $ref: "./drivers.yaml#/schemas/DriversDefaultsBaseline"
         "304":
           description: Authorized baseline unchanged; no response body
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
     put:
       operationId: updateDriversDefaults
       x-surveyor-command:
@@ -1165,26 +1165,26 @@ paths:
         precondition: settings
       summary: update Drivers Defaults
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/PermissionDefaultsPatch
+              $ref: "./common.yaml#/schemas/PermissionDefaultsPatch"
   /drivers-lists/{listId}/admins:
     post:
       operationId: addDriversAdmin
@@ -1193,26 +1193,26 @@ paths:
         precondition: settings
       summary: add Drivers Admin
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/DriversAdminInput
+              $ref: "./drivers.yaml#/schemas/DriversAdminInput"
   /drivers-lists/{listId}/admins/{profileId}/edit-baseline:
     get:
       operationId: getDriversAdminBaseline
@@ -1221,11 +1221,11 @@ paths:
         precondition: none
       summary: Read only one granted administrator mask or new-grant marker
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/ProfileId
-        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/ProfileId"
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Current independently authorized field baseline
@@ -1236,11 +1236,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversAdminBaseline
+                $ref: "./drivers.yaml#/schemas/DriversAdminBaseline"
         "304":
           description: Authorized baseline unchanged; no response body
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}/admins/{profileId}:
     patch:
       operationId: updateDriversAdmin
@@ -1249,27 +1249,27 @@ paths:
         precondition: settings
       summary: update Drivers Admin
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/ProfileId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/ProfileId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/DriversAdminPatch
+              $ref: "./drivers.yaml#/schemas/DriversAdminPatch"
     delete:
       operationId: deleteDriversAdmin
       x-surveyor-command:
@@ -1277,21 +1277,21 @@ paths:
         precondition: settings
       summary: delete Drivers Admin
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/ProfileId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/ProfileId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}/profiles:
     get:
       operationId: searchDriversProfiles
@@ -1300,19 +1300,19 @@ paths:
         precondition: none
       summary: search Drivers Profiles
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/SearchQuery
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/SearchQuery"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversProfileOptions
+                $ref: "./drivers.yaml#/schemas/DriversProfileOptions"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}/header/edit-baseline:
     get:
       operationId: getDriversHeaderBaseline
@@ -1321,10 +1321,10 @@ paths:
         precondition: none
       summary: Read only the granted header comparison hash
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Current independently authorized field baseline
@@ -1335,11 +1335,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversHeaderBaseline
+                $ref: "./drivers.yaml#/schemas/DriversHeaderBaseline"
         "304":
           description: Authorized baseline unchanged; no response body
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}/header:
     put:
       operationId: uploadDriversHeader
@@ -1348,26 +1348,26 @@ paths:
         precondition: settings
       summary: upload Drivers Header
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/DriversHeaderUpload
+              $ref: "./drivers.yaml#/schemas/DriversHeaderUpload"
     delete:
       operationId: deleteDriversHeader
       x-surveyor-command:
@@ -1375,20 +1375,20 @@ paths:
         precondition: settings
       summary: delete Drivers Header
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
     get:
       operationId: getDriversHeader
       x-surveyor-command:
@@ -1396,18 +1396,18 @@ paths:
         precondition: none
       summary: Read the authorized drivers header image
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
       responses:
         "200":
           description: Stored JPEG, PNG or GIF bytes; media policy is enforced by the file endpoint
           content:
             application/octet-stream:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/DriversHeaderBinary
+                $ref: "./drivers.yaml#/schemas/DriversHeaderBinary"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}/archive:
     post:
       operationId: archiveDriversList
@@ -1416,19 +1416,19 @@ paths:
         precondition: none
       summary: archive Drivers List
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /drivers-lists/{listId}/restore:
     post:
       operationId: restoreDriversList
@@ -1437,16 +1437,16 @@ paths:
         precondition: none
       summary: restore Drivers List
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/ListId
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"

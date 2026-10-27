@@ -1632,6 +1632,10 @@ schemas:
       - skipped
       - warnings
     properties:
+      generationOutcome:
+        description: Application has committed; this independently reports the existing follow-up suggestion refresh.
+        type: string
+        enum: [not-required, complete, failed]
       applied:
         type: integer
         minimum: 0
@@ -1781,16 +1785,7 @@ schemas:
           - string
           - "null"
   ActivityRecommendationProfile:
-    type: object
-    additionalProperties: false
-    required:
-      - id
-      - name
-    properties:
-      id:
-        $ref: ./common.yaml#/schemas/Uuid
-      name:
-        type: string
+    $ref: ./common.yaml#/schemas/PublicProfileReference
   ActivityRecommendationWarning:
     type: object
     additionalProperties: false
@@ -1844,9 +1839,9 @@ paths:
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: Pause or resume an activity plan's existing automatic archival schedule
       parameters:
-        - "$ref": "./openapi.yaml#/components/parameters/Context"
-        - "$ref": "./openapi.yaml#/components/parameters/Locale"
-        - "$ref": "./openapi.yaml#/components/parameters/Csrf"
+        - "$ref": "./common.yaml#/parameters/Context"
+        - "$ref": "./common.yaml#/parameters/Locale"
+        - "$ref": "./common.yaml#/parameters/Csrf"
         - name: planId
           in: path
           required: true
@@ -1864,9 +1859,9 @@ paths:
           content:
             application/json:
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   "/activity-plans/create-entry":
     get:
       operationId: "getActivityCreateEntry"
@@ -1876,9 +1871,9 @@ paths:
       summary: "get Activity Create Entry"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "returnTo"
           in: "query"
@@ -1891,7 +1886,7 @@ paths:
           schema:
             type: "string"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+          "$ref": "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -1904,7 +1899,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivityCreateEntry"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       security: []
   "/activity-plans/create-context":
     get:
@@ -1915,11 +1910,11 @@ paths:
       summary: "get Activity Create Context"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+          "$ref": "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -1932,7 +1927,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivityCreateContext"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   "/activity-plans/events":
     get:
       operationId: "searchActivityEvents"
@@ -1942,9 +1937,9 @@ paths:
       summary: "search Activity Events"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "q"
           in: "query"
@@ -1981,7 +1976,7 @@ paths:
           schema:
             "$ref": "./events.yaml#/schemas/EventPickerQuery/properties/cursor"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+          "$ref": "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -1994,7 +1989,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivityEventOptions"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   "/activity-plans/{planId}/entry":
     get:
       operationId: "getActivityResourceEntry"
@@ -2004,9 +1999,9 @@ paths:
       summary: "get Activity Resource Entry"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2023,7 +2018,7 @@ paths:
               - "guest"
           required: true
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+          "$ref": "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2036,7 +2031,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivityResourceEntry"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       security: []
   "/activity-plans/{planId}/guest":
     get:
@@ -2047,9 +2042,9 @@ paths:
       summary: "get Activity Guest Entry"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2057,7 +2052,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+          "$ref": "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2068,9 +2063,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/GuestEntry"
+                "$ref": "./auth.yaml#/schemas/GuestEntry"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       security: []
     post:
       operationId: "registerActivityGuest"
@@ -2080,9 +2075,9 @@ paths:
       summary: "register Activity Guest"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2090,7 +2085,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2101,16 +2096,16 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/IdentityResult"
+                "$ref": "./auth.yaml#/schemas/IdentityResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       security: []
       requestBody:
         required: true
         content:
           "application/json":
             schema:
-              "$ref": "./openapi.yaml#/components/schemas/GuestRegistrationInput"
+              "$ref": "./auth.yaml#/schemas/GuestRegistrationInput"
   "/activity-plans":
     post:
       operationId: "createActivityPlan"
@@ -2120,11 +2115,11 @@ paths:
       summary: "create Activity Plan"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
       responses:
         "201":
           description: "Authorized operation result"
@@ -2137,7 +2132,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivityCreated"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -2153,9 +2148,9 @@ paths:
       summary: "get Activity Plan"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2163,7 +2158,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+          "$ref": "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2176,7 +2171,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivityView"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
     delete:
       operationId: "deleteActivityPlan"
       x-surveyor-command:
@@ -2185,9 +2180,9 @@ paths:
       summary: "delete Activity Plan"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2195,7 +2190,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2206,9 +2201,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   "/activity-plans/{planId}/duplicate":
     get:
       operationId: "getActivityDuplicate"
@@ -2218,9 +2213,9 @@ paths:
       summary: "get Activity Duplicate"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2233,7 +2228,7 @@ paths:
           schema:
             type: "string"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+          "$ref": "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2246,7 +2241,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivityDuplicate"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   "/activity-plans/{planId}/metadata":
     get:
       operationId: "getActivityMetadata"
@@ -2256,9 +2251,9 @@ paths:
       summary: "get Activity Metadata"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2266,7 +2261,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+          "$ref": "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2279,7 +2274,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivityMetadata"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
     patch:
       operationId: "updateActivityMetadata"
       x-surveyor-command:
@@ -2288,9 +2283,9 @@ paths:
       summary: "update Activity Metadata"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2298,9 +2293,9 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+          "$ref": "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2313,7 +2308,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivityMetadata"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -2329,9 +2324,9 @@ paths:
       summary: "get Activity Settings"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2339,7 +2334,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+          "$ref": "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2352,7 +2347,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivitySettings"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   "/activity-plans/{planId}/event":
     put:
       operationId: "updateActivityEvent"
@@ -2362,9 +2357,9 @@ paths:
       summary: "update Activity Event"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2372,9 +2367,9 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+          "$ref": "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2387,7 +2382,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivityEventChanged"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -2403,9 +2398,9 @@ paths:
       summary: "get Activity Defaults Baseline"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2413,7 +2408,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+          "$ref": "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2426,7 +2421,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivityDefaultsBaseline"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
     put:
       operationId: "updateActivityDefaults"
       x-surveyor-command:
@@ -2435,9 +2430,9 @@ paths:
       summary: "update Activity Defaults"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2445,9 +2440,9 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+          "$ref": "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2458,15 +2453,15 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           "application/json":
             schema:
-              "$ref": "./openapi.yaml#/components/schemas/PermissionDefaultsPatch"
+              "$ref": "./common.yaml#/schemas/PermissionDefaultsPatch"
   "/activity-plans/{planId}/admins":
     post:
       operationId: "addActivityAdmin"
@@ -2476,9 +2471,9 @@ paths:
       summary: "add Activity Admin"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2486,9 +2481,9 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+          "$ref": "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2499,9 +2494,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -2517,9 +2512,9 @@ paths:
       summary: "get Activity Admin Baseline"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2533,7 +2528,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+          "$ref": "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2546,7 +2541,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivityAdminBaseline"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   "/activity-plans/{planId}/admins/{profileId}":
     patch:
       operationId: "updateActivityAdmin"
@@ -2556,9 +2551,9 @@ paths:
       summary: "update Activity Admin"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2572,9 +2567,9 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+          "$ref": "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2585,9 +2580,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -2602,9 +2597,9 @@ paths:
       summary: "delete Activity Admin"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2618,9 +2613,9 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+          "$ref": "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2631,9 +2626,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   "/activity-plans/{planId}/profiles":
     get:
       operationId: "searchActivityProfiles"
@@ -2643,9 +2638,9 @@ paths:
       summary: "search Activity Profiles"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2658,7 +2653,7 @@ paths:
           schema:
             type: "string"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+          "$ref": "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2671,7 +2666,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivityProfileOptions"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   "/activity-plans/{planId}/header/edit-baseline":
     get:
       operationId: "getActivityHeaderBaseline"
@@ -2681,9 +2676,9 @@ paths:
       summary: "get Activity Header Baseline"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2691,7 +2686,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+          "$ref": "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2704,7 +2699,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivityHeaderBaseline"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   "/activity-plans/{planId}/header":
     get:
       operationId: "getActivityHeader"
@@ -2714,9 +2709,9 @@ paths:
       summary: "get Activity Header"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2733,9 +2728,9 @@ paths:
           content:
             "application/octet-stream":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/EntityHeaderBinary"
+                "$ref": "./common.yaml#/schemas/EntityHeaderBinary"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
     put:
       operationId: "uploadActivityHeader"
       x-surveyor-command:
@@ -2744,9 +2739,9 @@ paths:
       summary: "upload Activity Header"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2754,9 +2749,9 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+          "$ref": "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2767,15 +2762,15 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           "multipart/form-data":
             schema:
-              "$ref": "./openapi.yaml#/components/schemas/EntityHeaderUpload"
+              "$ref": "./common.yaml#/schemas/EntityHeaderUpload"
     delete:
       operationId: "deleteActivityHeader"
       x-surveyor-command:
@@ -2784,9 +2779,9 @@ paths:
       summary: "delete Activity Header"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2794,9 +2789,9 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+          "$ref": "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2807,9 +2802,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   "/activity-plans/{planId}/archive":
     post:
       operationId: "archiveActivityPlan"
@@ -2819,9 +2814,9 @@ paths:
       summary: "archive Activity Plan"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2829,7 +2824,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2840,9 +2835,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   "/activity-plans/{planId}/restore":
     post:
       operationId: "restoreActivityPlan"
@@ -2852,9 +2847,9 @@ paths:
       summary: "restore Activity Plan"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2862,7 +2857,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2873,9 +2868,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   "/activity-plans/{planId}/slots":
     post:
       operationId: "addActivitySlot"
@@ -2885,9 +2880,9 @@ paths:
       summary: "add Activity Slot"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2895,7 +2890,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2906,9 +2901,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -2924,9 +2919,9 @@ paths:
       summary: "get Activity Slot Baseline"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2940,7 +2935,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+          "$ref": "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2953,7 +2948,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivitySlotBaseline"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   "/activity-plans/{planId}/slots/{slotId}":
     patch:
       operationId: "updateActivitySlot"
@@ -2963,9 +2958,9 @@ paths:
       summary: "update Activity Slot"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -2979,9 +2974,9 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+          "$ref": "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -2992,9 +2987,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -3009,9 +3004,9 @@ paths:
       summary: "delete Activity Slot"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -3025,7 +3020,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: "Authorized operation result"
@@ -3036,9 +3031,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   "/activity-plans/{planId}/slot-order":
     get:
       operationId: "getActivityOrderBaseline"
@@ -3048,9 +3043,9 @@ paths:
       summary: "get Activity Order Baseline"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -3058,7 +3053,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+          "$ref": "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -3071,7 +3066,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivityOrderBaseline"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
     put:
       operationId: "updateActivityOrder"
       x-surveyor-command:
@@ -3080,9 +3075,9 @@ paths:
       summary: "update Activity Order"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -3090,9 +3085,9 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+          "$ref": "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -3103,9 +3098,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -3121,9 +3116,9 @@ paths:
       summary: "preview Activity Assignment"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -3137,7 +3132,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: "Authorized operation result"
@@ -3150,7 +3145,7 @@ paths:
               schema:
                 "$ref": "#/schemas/ActivityWarningPreview"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -3166,9 +3161,9 @@ paths:
       summary: "set Activity Assignment"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -3182,7 +3177,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: "Authorized operation result"
@@ -3193,9 +3188,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -3211,9 +3206,9 @@ paths:
       summary: "remove Activity Assignment"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -3227,7 +3222,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/DecimalId"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: "Authorized operation result"
@@ -3238,9 +3233,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   "/activity-plans/{planId}/roles":
     post:
       operationId: "addActivityRole"
@@ -3250,9 +3245,9 @@ paths:
       summary: "add Activity Role"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -3260,7 +3255,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: "Authorized operation result"
@@ -3271,9 +3266,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -3289,9 +3284,9 @@ paths:
       summary: "update Activity Role Assignments"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -3305,7 +3300,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: "Authorized operation result"
@@ -3316,9 +3311,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -3334,9 +3329,9 @@ paths:
       summary: "add Activity Text Field"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -3344,7 +3339,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: "Authorized operation result"
@@ -3355,9 +3350,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -3373,9 +3368,9 @@ paths:
       summary: "update Activity Text Field"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -3389,9 +3384,9 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
         -
-          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+          "$ref": "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: "Authorized operation result"
@@ -3402,9 +3397,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -3419,9 +3414,9 @@ paths:
       summary: "delete Activity Text Field"
       parameters:
         -
-          "$ref": "./openapi.yaml#/components/parameters/Context"
+          "$ref": "./common.yaml#/parameters/Context"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Locale"
+          "$ref": "./common.yaml#/parameters/Locale"
         -
           name: "planId"
           in: "path"
@@ -3435,7 +3430,7 @@ paths:
           schema:
             "$ref": "./common.yaml#/schemas/Uuid"
         -
-          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+          "$ref": "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: "Authorized operation result"
@@ -3446,9 +3441,9 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./common.yaml#/schemas/MutationResult"
         default:
-          "$ref": "./openapi.yaml#/components/responses/Problem"
+          "$ref": "./common.yaml#/responses/Problem"
   /activity-plans/{planId}/requirements:
     get:
       operationId: getActivityRequirements
@@ -3457,8 +3452,8 @@ paths:
         precondition: none
       summary: getActivityRequirements
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - name: planId
           in: path
           required: true
@@ -3476,19 +3471,19 @@ paths:
               schema:
                 $ref: "#/schemas/ActivityRequirements"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
     put:
       operationId: updateActivityRequirements
       summary: updateActivityRequirements
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - name: planId
           in: path
           required: true
           schema:
             $ref: ./common.yaml#/schemas/Uuid
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
@@ -3499,9 +3494,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       x-surveyor-command:
         retryPolicy: reconcile-only
         precondition: none
@@ -3519,8 +3514,8 @@ paths:
         precondition: none
       summary: getActivityRecommendations
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - name: planId
           in: path
           required: true
@@ -3538,20 +3533,20 @@ paths:
               schema:
                 $ref: "#/schemas/ActivityRecommendations"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /activity-plans/{planId}/recommendations/entry:
     post:
       operationId: enterActivityRecommendations
       summary: enterActivityRecommendations
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - name: planId
           in: path
           required: true
           schema:
             $ref: ./common.yaml#/schemas/Uuid
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
@@ -3564,7 +3559,7 @@ paths:
               schema:
                 $ref: "#/schemas/ActivityRecommendations"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       x-surveyor-command:
         retryPolicy: reconcile-only
         precondition: none
@@ -3573,14 +3568,14 @@ paths:
       operationId: previewActivityRecommendations
       summary: previewActivityRecommendations
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - name: planId
           in: path
           required: true
           schema:
             $ref: ./common.yaml#/schemas/Uuid
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
@@ -3593,7 +3588,7 @@ paths:
               schema:
                 $ref: "#/schemas/ActivityRecommendationPreview"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       x-surveyor-command:
         retryPolicy: reconcile-only
         precondition: none
@@ -3608,14 +3603,14 @@ paths:
       operationId: applyActivityRecommendations
       summary: applyActivityRecommendations
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - name: planId
           in: path
           required: true
           schema:
             $ref: ./common.yaml#/schemas/Uuid
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
@@ -3628,7 +3623,7 @@ paths:
               schema:
                 $ref: "#/schemas/ActivityRecommendationApplyResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       x-surveyor-command:
         retryPolicy: reconcile-only
         precondition: none
@@ -3643,14 +3638,14 @@ paths:
       operationId: generateActivityRecommendations
       summary: generateActivityRecommendations
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - name: planId
           in: path
           required: true
           schema:
             $ref: ./common.yaml#/schemas/Uuid
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "202":
           description: Authorized operation result
@@ -3663,7 +3658,7 @@ paths:
               schema:
                 $ref: "#/schemas/ActivityRecommendationQueued"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       x-surveyor-command:
         retryPolicy: reconcile-only
         precondition: none
@@ -3675,8 +3670,8 @@ paths:
         precondition: none
       summary: getActivityRecommendationJob
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - name: planId
           in: path
           required: true
@@ -3699,4 +3694,4 @@ paths:
               schema:
                 $ref: "#/schemas/ActivityRecommendationJobResult"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"

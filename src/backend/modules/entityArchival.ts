@@ -12,7 +12,7 @@ import {ApiProblem, declaredApiProblem} from './api/problem';
 import {APIError} from './lib/errors';
 import {requireSessionProfileId} from './lib/session';
 import {entityPermissionKey, evaluateEntities, isOwner} from './permissionEngine';
-import {sameUuid, uuidKey} from './lib/util';
+import {sameUuid, uuidKey, createHourlyJob} from './lib/util';
 import * as lifecycleService from './database/services/EntityLifecycleService';
 import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, ArchiveState, ArchiveTarget, LockedArchiveContext} from '../../types/ArchiveTypes';
 import type {EntityDescriptor, PermView, SessionLike} from '../../types/PermissionTypes';
@@ -20,10 +20,8 @@ import type {EntityMutationCompletion} from '../../types/EntityPropertyTypes';
 import type {Entity} from '../../types/UserTypes';
 import settings from './settings';
 
-const ARCHIVE_INTERVAL_MS = 60 * 60 * 1000;
 // These guards are local to this application process. Database eligibility checks
 // remain necessary because another process may run the same sweep concurrently.
-let archivalTimer: NodeJS.Timeout | undefined;
 let running: Promise<number> | undefined;
 
 /** Run one metadata-only sweep with the initialized settings and a single captured time. */
@@ -54,30 +52,12 @@ export async function runEntityArchival(now: Date = new Date()): Promise<number>
     }
 }
 
-async function runScheduledArchival(): Promise<void> {
-    try {
-        await runEntityArchival();
-    } catch (error) {
-        // Timer failures are logged without terminating the server; the next tick can
-        // retry. The initial startup sweep deliberately propagates errors instead.
-        console.error('[entity-archival] Archival failed:', error);
-    }
+function reportArchivalFailure(error: unknown): void {
+    console.error('[entity-archival] Archival failed:', error);
 }
 
-/** Catch up after downtime, then follow the app's immediate/hourly job convention. */
-export async function startEntityArchivalJob(): Promise<void> {
-    // Complete the first sweep before serving requests, including periods that ended
-    // while the application was offline. Startup must not silently skip schema errors.
-    await runEntityArchival();
-    if (archivalTimer) {
-        // Repeated initialization may request another catch-up sweep, but must never
-        // register a second hourly timer in this process.
-        return;
-    }
-    archivalTimer = setInterval(runScheduledArchival, ARCHIVE_INTERVAL_MS);
-    // The maintenance timer should not keep an otherwise stopped process alive.
-    archivalTimer.unref();
-}
+/** The shared timer owns registration; this module retains sweep/overlap policy. */
+export const startEntityArchivalJob = createHourlyJob(runEntityArchival, reportArchivalFailure);
 
 /** Interpret locking reads; the controller rejects deletion or a parent changed after discovery. */
 export function requireLockedArchiveRoot(context: LockedArchiveContext): ArchiveTarget {

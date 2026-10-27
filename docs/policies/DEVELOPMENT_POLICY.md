@@ -6,7 +6,7 @@ owner: project maintainers
 status: current
 last-verified: 2026-10-27
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit R6 single shared UUID implementation and R7 provenance correction approvals recorded; prior remediation history and responsibility/session/delivery boundaries retained
+verification-scope: explicit R21 checkbox-owner approval recorded alongside all twenty preceding architecture decisions; prior complete-role-removal, UUID/provenance and responsibility/session/delivery boundaries retained
 source-anchors: AGENTS.md; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/development-check.json; scripts/check-development-policy.mjs; scripts/tests/development-policy-check.test.mjs; docs/DEVELOPMENT.md; docs/ARCHITECTURE.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; src/; tests/; package.json
 next-review: explicit-maintainer-policy-amendment
 -->
@@ -204,6 +204,27 @@ the existing recommendation resolver uses its assignment-detail match when a sup
 preserving saved provenance and legitimate new manual proposals. Current-plan ownership remains authoritative;
 an unknown submitted ID supplies no authority over another plan's saved row. These decisions supersede the two
 pending requests, not unrelated exclusions or the ordinary approval rules for future consequences.
+
+**Further architecture implementation decisions (2026-10-27):** the maintainer explicitly approves all **R1–R20**
+from the complete implementation-plan answer immediately preceding that approval. These identifiers belong to that
+answer, not earlier uses of R1–R7. The scope is IMP-177 through IMP-191, the concrete retained-export actor finding
+under ARCH-005, and the separately approved IMP-013, IMP-016 and IMP-079 remedies. The existing backlog records the
+individual mapping and acceptance evidence. This authority includes the reviewed proof ledger/entity/migration and
+offline historical reconciliation tooling; it does not authorize deployment or unspecified real-installation file actions.
+
+The maintainer expressly requires **R2** to preserve complete role removal from both frontend and backend, including
+an empty selection. For **R3 and R7–R20**, reuse established procedures and existing modules with the same or similar
+responsibility; moving or copying an implementation alone is insufficient. Frontend controls must be reusable shared
+implementations without duplicate copies. Adopt the actual owner at all live callers and retire obsolete implementations.
+All previously recorded decisions remain historical. Broader session/flash redesign and unrelated operational remedies
+remain excluded; the specifically approved proof cleanup boundary and historical reconciliation retain their plan scope.
+
+**Additional explicit decision (2026-10-27):** the maintainer approves **R21**, the independently reviewed Event flag
+checkbox proposal from the preceding final answer. Extend the existing `FormField` owner with a separate controlled
+boolean checked channel and adopt it in both Event flag presentations and the dietary choice renderer. Preserve the
+existing string model API, native flag names/default values/unchecked omission, dietary submitted values, layout,
+labels/icons, disabled behavior and feature-owned drafts. This resolves IMP-192's pending approval; it does not
+authorize unrelated checkbox, backend or form-behavior changes.
 
 ## Implementation principles
 

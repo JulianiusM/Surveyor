@@ -16,7 +16,6 @@
 
 import {Request} from 'express';
 import {isProofMimeType} from '../../common/lib/fileMedia';
-import fs from 'node:fs';
 import path from 'node:path';
 import {Event} from '../modules/database/entities/event/Event';
 import * as invoiceService from '../modules/database/services/EventInvoiceService';
@@ -39,7 +38,7 @@ import {
     notifyTakeoverChanges, notifySavedInvoiceChange, notifyAcceptedInvoice, notifyClosedInvoice,
     notifyRejectedInvoice, notifyShareSettlement, notifySubmittedInvoice, notifyPoolShareSettlements,
 } from '../modules/invoice/notifications';
-import {getInvoiceProofPath} from '../modules/invoice/proofs';
+import {getInvoiceProofPath, withInvoiceProofUpload} from '../modules/invoice/proofs';
 import {assertInvoiceSharesExportable} from '../modules/invoice/validation';
 import {invoiceText, invoiceRejectionCause} from '../modules/invoice/wording';
 import {
@@ -583,44 +582,46 @@ async function updateTakeovers(event: Event, poolId: string, body: any, session:
 // Validate and submit a new invoice with its proof file attached.
 /** Coordinate participant eligibility, proof attribution, locked submission, and a post-commit receipt. */
 async function submitInvoice(event: Event, poolId: string, body: any, session: SessionLike, file?: Express.Multer.File | undefined) {
-    // Resolve authenticated membership before normalizing invoice fields and checking this pool's eligibility.
-    const regId = await getActorRegistrationId(event, session);
-    if (!regId) throw new APIError(invoiceText('mustBeRegisteredToSubmit'), body, 401);
-    const value = prepareSubmittedInvoice(body);
+    /** Retain upload ownership through all admission, persistence and receipt work. */
+    return withInvoiceProofUpload(file, async function persistOwnedProof() {
+        // Resolve authenticated membership before normalizing invoice fields and checking this pool's eligibility.
+        const regId = await getActorRegistrationId(event, session);
+        if (!regId) throw new APIError(invoiceText('mustBeRegisteredToSubmit'), body, 401);
+        const value = prepareSubmittedInvoice(body);
 
-    const pool = await ensurePool(event, poolId);
-    if (pool.status !== 'OPEN') throw new APIError(invoiceText('poolIsClosedForInvoiceSubmissions'), body, 400, {cause: invoiceRejectionCause('poolIsClosedForInvoiceSubmissions')});
-    const isAssigned = pool.assignAll || pool.assignments?.some((a) => a.registration.id === regId);
-    if (!isAssigned) throw new APIError(invoiceText('notAllowedForThisPool'), body, 403);
-    // Participant uploads keep their established mandatory proof and accepted MIME types.
-    if (!file) throw new APIError(invoiceText('proofRequired'), body, 400, {cause: invoiceRejectionCause('proofRequired')});
-    const isValidProof = file.mimetype === 'application/pdf' || file.mimetype.startsWith('image/');
-    if (!isValidProof) {
-        // Clean up unexpected uploads immediately to avoid orphan files
-        void fs.promises.unlink(file.path).catch(() => undefined);
-        throw new APIError(invoiceText('unsupportedProofType'), body, 400, {cause: invoiceRejectionCause('unsupportedProofType')});
-    }
-    // Give the locked operation a portable proof descriptor; only a successful save can produce a receipt.
-    const proofPath = path.relative(process.cwd(), file.path);
-    const invoiceId = await invoiceOperations.persistSubmittedInvoice(poolId, regId, value.amount, value.description || null, {
-        path: proofPath,
-        originalName: file.originalname,
-        mimeType: file.mimetype,
+        const pool = await ensurePool(event, poolId);
+        if (pool.status !== 'OPEN') throw new APIError(invoiceText('poolIsClosedForInvoiceSubmissions'), body, 400, {cause: invoiceRejectionCause('poolIsClosedForInvoiceSubmissions')});
+        const isAssigned = pool.assignAll || pool.assignments?.some((a) => a.registration.id === regId);
+        if (!isAssigned) throw new APIError(invoiceText('notAllowedForThisPool'), body, 403);
+        // Participant uploads keep their established mandatory proof and accepted MIME types.
+        if (!file) throw new APIError(invoiceText('proofRequired'), body, 400, {cause: invoiceRejectionCause('proofRequired')});
+        const isValidProof = file.mimetype === 'application/pdf' || file.mimetype.startsWith('image/');
+        if (!isValidProof) {
+            throw new APIError(invoiceText('unsupportedProofType'), body, 400, {cause: invoiceRejectionCause('unsupportedProofType')});
+        }
+        // Give the locked operation a portable proof descriptor; only a successful save can produce a receipt.
+        const proofPath = path.relative(process.cwd(), file.path);
+        const invoiceId = await invoiceOperations.persistSubmittedInvoice(poolId, regId, value.amount, value.description || null, {
+            path: proofPath,
+            originalName: file.originalname,
+            mimeType: file.mimetype,
+        });
+        // Load persisted attribution after commit and prepare the receipt independently of SMTP delivery.
+        try {
+            const invoice = await invoiceService.getInvoiceWithRegistration(poolId, invoiceId);
+            notifySubmittedInvoice(event, pool, invoice, value);
+        } catch (error) {
+            console.error(invoiceText('receiptPreparationFailed'), error);
+        }
     });
-    // Load persisted attribution after commit and prepare the receipt independently of SMTP delivery.
-    try {
-        const invoice = await invoiceService.getInvoiceWithRegistration(poolId, invoiceId);
-        notifySubmittedInvoice(event, pool, invoice, value);
-    } catch (error) {
-        console.error(invoiceText('receiptPreparationFailed'), error);
-    }
 }
 
 // Organizers can enter a shared pool cost without becoming an event participant.
 /** Coordinate an accepted organizer expense and clean a rejected request’s optional upload. */
 async function addOrganizerInvoice(event: Event, poolId: string, body: any, session: Request['session'], file?: Express.Multer.File) {
-    // Organizers may record an accepted pool cost without registering, using optional bounded proof input.
-    try {
+    /** Retain upload ownership through all admission, persistence and receipt work. */
+    return withInvoiceProofUpload(file, async function persistOwnedProof() {
+        // Organizers may record an accepted pool cost without registering, using optional bounded proof input.
         if (!session.profile?.id) throw new APIError(invoiceText('logInToRecordAPoolCost'), {}, 401);
         await ensurePool(event, poolId);
         const value = prepareOrganizerInvoice(body);
@@ -632,11 +633,7 @@ async function addOrganizerInvoice(event: Event, poolId: string, body: any, sess
         return await invoiceOperations.persistOrganizerInvoice(poolId, session.profile.id, value.amount, value.description, file ? {
             path: path.relative(process.cwd(), file.path), originalName: file.originalname, mimeType: file.mimetype,
         } : null, value.registrationId);
-    } catch (error) {
-        // A rejected cost must not leave its newly uploaded optional proof orphaned.
-        if (file) await fs.promises.unlink(file.path).catch(() => undefined);
-        throw error;
-    }
+    });
 }
 
 // Accept an invoice, preserve optional organizer corrections, and notify the submitter.

@@ -13,3 +13,6 @@ export interface HelpAssetSource {
     readonly filePath: string;
     readonly locale?: string;
 }
+
+/** Pure destination classification; each reader owns its diagnostics and parser. */
+export type HelpUriIssue = {kind: 'control' | 'protocol-relative'} | {kind: 'scheme'; scheme: string};

@@ -25,68 +25,77 @@ import {resolveEmailRecipientName} from '../email';
 import type {InvoiceProof, InvoiceCorrections, InvoiceRevision, ConfirmedInvoiceChange} from '../../../types/InvoicePoolTypes';
 import {requireLockedPool, assertLockedParticipant, savePoolChange} from './state';
 import {assertPositiveInvoiceAmount, assertConfirmedInvoiceChange} from './validation';
+import {attachInvoiceProof, withInvoiceProofUpload} from './proofs';
 
 /** The creator owns proof validation; persistence receives already selected attribution and status. */
 export async function persistSubmittedInvoice(poolId: string, registrationId: number, amount: number, description: string | null, proof: InvoiceProof = null): Promise<number> {
-    /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
-    async function submitLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<number> {
-        // The DBAL holds the pool lock throughout policy checks and dependent writes.
-        const pool = requireLockedPool(row);
-        // Recheck submission eligibility after acquiring the lock, including concurrent closure or membership edits.
-        if (pool.status !== 'OPEN') throw new APIError(invoiceText('poolIsClosedForInvoiceSubmissions'), {}, 409, {cause: invoiceRejectionCause('poolIsClosedForInvoiceSubmissions', 409)});
-        await assertLockedParticipant(manager, pool, registrationId);
-        // New participant costs require review and retain the original proof and submitted amount.
-        const invoice = await invoiceService.saveInvoice({
-            pool: {id: poolId}, registration: {id: registrationId}, amount: formatAmount(amount),
-            description: description || null, status: 'NEW', correctedAmount: null, correctedDescription: null,
-            rejectionReason: null, proofPath: proof?.path || null, proofOriginalName: proof?.originalName || null,
-            proofMimeType: proof?.mimeType || null,
-        }, manager);
-        // Invalidate previews and closed-pool inputs after persistence, inside the same transaction.
-        await savePoolChange(manager, pool);
-        return invoice.id;
-    }
-    return invoiceService.withLockedPool(poolId, submitLocked);
+    /** Retain upload ownership through all admission, persistence and receipt work. */
+    return withInvoiceProofUpload(proof, async function persistOwnedProof() {
+        /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
+        async function submitLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<number> {
+            // The DBAL holds the pool lock throughout policy checks and dependent writes.
+            const pool = requireLockedPool(row);
+            // Recheck submission eligibility after acquiring the lock, including concurrent closure or membership edits.
+            if (pool.status !== 'OPEN') throw new APIError(invoiceText('poolIsClosedForInvoiceSubmissions'), {}, 409, {cause: invoiceRejectionCause('poolIsClosedForInvoiceSubmissions', 409)});
+            await assertLockedParticipant(manager, pool, registrationId);
+            // New participant costs require review and retain the original proof and submitted amount.
+            await attachInvoiceProof(proof, manager);
+            const invoice = await invoiceService.saveInvoice({
+                pool: {id: poolId}, registration: {id: registrationId}, amount: formatAmount(amount),
+                description: description || null, status: 'NEW', correctedAmount: null, correctedDescription: null,
+                rejectionReason: null, proofPath: proof?.path || null, proofOriginalName: proof?.originalName || null,
+                proofMimeType: proof?.mimeType || null,
+            }, manager);
+            // Invalidate previews and closed-pool inputs after persistence, inside the same transaction.
+            await savePoolChange(manager, pool);
+            return invoice.id;
+        }
+        return invoiceService.withLockedPool(poolId, submitLocked);
+    }, proof?.path);
 }
 
 /** Record an accepted organizer invoice, optionally attributing its payment to an eligible participant. */
 export async function persistOrganizerInvoice(poolId: string, profileId: string, amount: number, description: string,
     proof: InvoiceProof = null, registrationId?: number): Promise<number> {
-    // Organizer costs are already accepted, but still obey the shared money and description constraints.
-    if (typeof profileId !== 'string' || !profileId.trim()) throw new APIError(invoiceText('organizerProfileNotFound'), {}, 401);
-    assertPositiveInvoiceAmount(amount);
-    if (typeof description !== 'string' || !description.trim() || description.trim().length > 4000) {
-        throw new APIError(invoiceText('enterADescriptionOfUpToCharacters'), {}, 400, {cause: invoiceRejectionCause('enterADescriptionOfUpToCharacters')});
-    }
-    // Direct domain callers obey the same explicit-ID contract as multipart requests; zero never means attribution.
-    if (registrationId !== undefined && (!Number.isSafeInteger(registrationId) || registrationId <= 0)) {
-        throw new APIError(invoiceText('participantNotAssignedToThisPool'), {}, 400, {cause: invoiceRejectionCause('participantNotAssignedToThisPool')});
-    }
-    /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
-    async function submitLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<number> {
-        // The DBAL holds the pool lock throughout policy checks and dependent writes.
-        const pool = requireLockedPool(row);
-        // Resolve the authenticated recorder independently from the optional person who paid the expense.
-        const profile = await invoiceService.getProfile(profileId, manager);
-        if (!profile) throw new APIError(invoiceText('organizerProfileNotFound'), {}, 401);
-        // Repeat event and pool eligibility inside the root lock. A concurrent assignment removal or foreign ID
-        // rejects the complete creation rather than silently omitting credit or adding participant membership.
-        if (registrationId !== undefined) await assertLockedParticipant(manager, pool, registrationId);
-        // Save a display-name snapshot so the cost remains traceable if the recorder later changes profile data.
-        const name = resolveEmailRecipientName(profile.name, profile.user?.name, profile.user?.username, profile.guest?.username) || invoiceText('organizer');
-        const invoice = await invoiceService.saveInvoice({
-            pool: {id: poolId}, registration: registrationId === undefined ? null : {id: registrationId},
-            recordedByProfile: profile, recordedByName: name.slice(0, 50),
-            amount: formatAmount(amount), description: description.trim(), status: 'APPROVED',
-            correctedAmount: null, correctedDescription: null, rejectionReason: null,
-            proofPath: proof?.path || null, proofOriginalName: proof?.originalName || null, proofMimeType: proof?.mimeType || null,
-        }, manager);
-        // Registration attribution reuses existing personal credit/history rules. Unattributed entries stay shared costs.
-        // Invalidate previews and closed-pool inputs after persistence, inside the same transaction.
-        await savePoolChange(manager, pool);
-        return invoice.id;
-    }
-    return invoiceService.withLockedPool(poolId, submitLocked);
+    /** Retain upload ownership through all admission, persistence and receipt work. */
+    return withInvoiceProofUpload(proof, async function persistOwnedProof() {
+        // Organizer costs are already accepted, but still obey the shared money and description constraints.
+        if (typeof profileId !== 'string' || !profileId.trim()) throw new APIError(invoiceText('organizerProfileNotFound'), {}, 401);
+        assertPositiveInvoiceAmount(amount);
+        if (typeof description !== 'string' || !description.trim() || description.trim().length > 4000) {
+            throw new APIError(invoiceText('enterADescriptionOfUpToCharacters'), {}, 400, {cause: invoiceRejectionCause('enterADescriptionOfUpToCharacters')});
+        }
+        // Direct domain callers obey the same explicit-ID contract as multipart requests; zero never means attribution.
+        if (registrationId !== undefined && (!Number.isSafeInteger(registrationId) || registrationId <= 0)) {
+            throw new APIError(invoiceText('participantNotAssignedToThisPool'), {}, 400, {cause: invoiceRejectionCause('participantNotAssignedToThisPool')});
+        }
+        /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
+        async function submitLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<number> {
+            // The DBAL holds the pool lock throughout policy checks and dependent writes.
+            const pool = requireLockedPool(row);
+            // Resolve the authenticated recorder independently from the optional person who paid the expense.
+            const profile = await invoiceService.getProfile(profileId, manager);
+            if (!profile) throw new APIError(invoiceText('organizerProfileNotFound'), {}, 401);
+            // Repeat event and pool eligibility inside the root lock. A concurrent assignment removal or foreign ID
+            // rejects the complete creation rather than silently omitting credit or adding participant membership.
+            if (registrationId !== undefined) await assertLockedParticipant(manager, pool, registrationId);
+            // Save a display-name snapshot so the cost remains traceable if the recorder later changes profile data.
+            const name = resolveEmailRecipientName(profile.name, profile.user?.name, profile.user?.username, profile.guest?.username) || invoiceText('organizer');
+            await attachInvoiceProof(proof, manager);
+            const invoice = await invoiceService.saveInvoice({
+                pool: {id: poolId}, registration: registrationId === undefined ? null : {id: registrationId},
+                recordedByProfile: profile, recordedByName: name.slice(0, 50),
+                amount: formatAmount(amount), description: description.trim(), status: 'APPROVED',
+                correctedAmount: null, correctedDescription: null, rejectionReason: null,
+                proofPath: proof?.path || null, proofOriginalName: proof?.originalName || null, proofMimeType: proof?.mimeType || null,
+            }, manager);
+            // Registration attribution reuses existing personal credit/history rules. Unattributed entries stay shared costs.
+            // Invalidate previews and closed-pool inputs after persistence, inside the same transaction.
+            await savePoolChange(manager, pool);
+            return invoice.id;
+        }
+        return invoiceService.withLockedPool(poolId, submitLocked);
+    }, proof?.path);
 }
 
 /** Review decisions are checked again under the pool lock, so only the winning decision is notified. */

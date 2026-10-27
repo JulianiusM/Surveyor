@@ -1108,6 +1108,25 @@ for (const locale of ['en', 'de'] as const) {
                 await page.goto(delivery.url);
                 await waitForFrontendHydration(page);
                 const settings = page.locator('[data-creation-permissions]');
+                if (family === 'event') {
+                    // Exercise the real browser's native flag collection. Happy DOM
+                    // does not exclude descendants of a disabled fieldset in FormData;
+                    // this built-control case verifies that boundary without a polyfill.
+                    const flag = page.locator('input[name="allowDietComment"]');
+                    const form = page.locator('#eventForm');
+                    const original = await flag.isChecked();
+                    await flag.uncheck();
+                    expect(await form.evaluate(element => new FormData(element as HTMLFormElement).get('allowDietComment'))).toBeNull();
+                    await flag.check();
+                    expect(await form.evaluate(element => new FormData(element as HTMLFormElement).get('allowDietComment'))).toBe('on');
+                    await flag.evaluate(input => {input.closest('fieldset')!.disabled = true;});
+                    try {
+                        await expect(flag).toBeDisabled();
+                        expect(await flag.evaluate(input => (input as HTMLInputElement).disabled)).toBe(false);
+                        expect(await form.evaluate(element => new FormData(element as HTMLFormElement).get('allowDietComment'))).toBeNull();
+                    } finally { await flag.evaluate(input => {input.closest('fieldset')!.disabled = false;}); }
+                    await flag.setChecked(original);
+                }
                 const toggle = settings.locator('button[aria-controls]');
                 const panel = settings.locator('[role="region"]');
                 await expect(settings).toHaveCount(1);

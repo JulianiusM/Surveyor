@@ -5,9 +5,9 @@ documentation-metadata
 audience: operators; site reliability engineers; incident responders; maintainers
 owner: application operators
 status: current
-last-verified: 2026-10-25
+last-verified: 2026-10-27
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
+verification-scope: approved durable proof retention and offline manifest reconciliation reconciled with source and disposable rehearsals; prior deployment guidance retained; no real-installation cleanup or deployment claim
 source-anchors: src/backend/modules/entityArchival.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/migrations/1789862400000-AddEntityArchival.ts; src/backend/migrations/1789689600000-AddInvoiceRetraction.ts; src/backend/migrations/1789603200000-AddOrganizerInvoices.ts; src/backend/migrations/1789516800000-AddInvoiceShareRounding.ts; src/backend/modules/invoice/settlementEmail.ts; src/backend/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/backend/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; src/backend/server.ts; src/backend/app.ts; src/backend/modules/settings.ts; src/backend/modules/database/dataSource.ts; src/backend/modules/invoice/retention.ts; src/backend/modules/database/services/EventInvoiceService.ts; src/backend/modules/lib/fileCommons.ts; src/backend/modules/lib/pdf.ts; src/backend/controller/helpController.ts; src/backend/controller/eventPoolController.ts; src/backend/modules/email.ts; src/backend/modules/oidc.ts; docs/UPGRADING.md; src/backend/modules/invoice/invoiceOperations.ts; src/backend/modules/invoice/calculation.ts; src/frontend/composables/command.ts; src/frontend/composables/feedback.ts; src/frontend/features/finance/
 next-review: release-layout-or-operational-procedure-change
 -->
@@ -431,6 +431,8 @@ differences; no money moves. Payment-status notification behavior is separate fr
 Automatic invoice retention updates cost totals while preserving historical settlement shares. It does not itself mark
 a closed pool for recalculation. Recalculating later uses only retained invoice records, so coordinate retention and
 settlement review with organizers before costs needed for a revised calculation expire.
+Proof cleanup uses the durable ownership ledger after record removal commits; unlink failure remains retry work rather
+than reversing a completed command. Storage-root failures retain ownership evidence for later inspection/retry.
 Signed rebates may produce credits owed to participants. Surveyor records those amounts but never transfers money.
 
 Invoice upload success confirms persistence and does not wait for confirmation email delivery. If a user reports an
@@ -459,6 +461,41 @@ Authorized organizers can choose **Export shares PDF with example** or **Export 
 to download all saved shares as portrait A4 pages. The export includes
 current recorded payments and indicates pending recalculation; screen filters do not limit its contents. Treat exported
 copies as sensitive financial data with an appropriate storage and deletion policy.
+
+## Invoice proof reconciliation
+
+Use the matching source checkout with development dependencies and the service's `SETTINGS_FILE`. Stop the application,
+take a verified paired database/files backup, and verify the effective database and canonical `INVOICE_DIR` before
+continuing. This is an offline maintenance operation; `--offline` is the operator's explicit acknowledgement that the
+application is stopped. It is not a detector for another running process or a multiple-replica coordination mechanism.
+
+Create a new, protected inventory without overwriting earlier evidence:
+
+```bash
+npm run proof:reconcile -- --offline --expected-database surveyor --mode inventory --recovery-days 30 --output /protected/proof-manifest.json
+```
+
+Replace the example database and output with the verified target. Review the candidate manifest before selecting it.
+Live invoice and ledger references protect files; symlinks, nonregular or ambiguous entries require inspection. The
+manifest binds the database, canonical root, byte identities and recovery window. It can contain private stored paths
+and belongs with restricted maintenance evidence, never in the repository or public Help.
+
+Quarantine only the reviewed manifest, then keep it for recovery:
+
+```bash
+npm run proof:reconcile -- --offline --expected-database surveyor --mode quarantine --manifest /protected/proof-manifest.json
+```
+
+The command rechecks references and byte identity, records durable intent and transfers bytes without overwriting a
+destination. Recovery copies live under `.proof-quarantine` within the proof root and require hard-link support on that
+filesystem. An unsupported or failed transfer retains its source/recovery evidence for inspection and retry.
+Repeat the same command to resume interrupted work. No neighboring file is selected by a manifest entry.
+
+Use `--mode restore` with that same manifest to recover quarantined bytes without overwriting a newer file. A restored
+orphan remains explicitly preserved from automatic cleanup. Use `--mode purge` only after the recorded recovery window
+has elapsed and the exact manifest's final removal is authorized. Purge is explicit; it is not an automatic startup
+directory purge. Both actions reuse the lifecycle owner's locks, confinement and retry handling. Keep the application
+stopped until the maintenance action finishes, then validate normal proof reads before resuming service.
 
 ## Mail and sign-in smoke tests
 

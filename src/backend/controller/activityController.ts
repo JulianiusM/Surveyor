@@ -18,7 +18,7 @@ import {defaultPermissionValues as activityDefaultValues, readEntityDefaultsBase
 import type {RequirementOverrideInput} from '../../types/ActivityRequirementTypes';
 import * as requirementService from '../modules/database/services/ActivityRequirementService';
 import {calculateRequirementAnalysis, calculateBaselineRequirementForPlan, countInclusiveDays, toParticipantKey, toParticipantName} from '../../common/activity/requirements';
-import {buildParticipantAttendanceMap, projectActivityAssignees} from '../modules/activity/autoAssignment';
+import {projectActivityAssignees, prepareActivityRequirementContext} from '../modules/activity/autoAssignment';
 import type {ActivityPrintDay, ActivityPrintWeek, SlotAssignmentMap} from '../../types/ActivityTypes';
 import {getRecommendations, getRecommendationWarningPreview, applyRecommendations} from '../modules/activity/recommendations';
 import {invalidateEventContext, queueAutoGenerateRecommendations, getAutoRecommendationJob} from '../modules/activity/autoAssignment';
@@ -38,15 +38,15 @@ import type {EntityManager} from "typeorm";
 import type {ActivityAssignment} from "../modules/database/entities/activity/ActivityAssignment";
 import {comparisonToken, entityTag, requireFieldComparison} from '../modules/api/transport';
 import {searchEntityProfiles, completeDefaults, getEntityPropertyPresentation, readEntitySettingsAccess, entityCreationPermissionContext} from './entityAdminController';
-import {assertEntityPropertyContext, getAuthorizedEventUrl, getEntityViewAdmission, changeEntityEvent, projectEntitySettingsEvent} from '../modules/event/linkage';
+import {assertEntityPropertyContext, readAuthorizedEventUrl, getEntityViewAdmission, changeEntityEvent, projectEntitySettingsEvent} from '../modules/event/linkage';
 import {archiveEntity, getArchivePresentations, restoreEntity, setAutomaticArchival} from '../modules/entityArchival';
-import {entityMethodPermission, entityPropertyPermission, entityPermissionKey} from '../modules/permissionEngine';
+import {entityMethodPermission, entityPropertyPermission} from '../modules/permissionEngine';
 
 import {ApiProblem} from '../modules/api/problem';
 import {checkNewImage, removeImage} from '../modules/lib/fileCommons';
 import * as adminService from '../modules/database/services/EntityAdminService';
 import {getHeaderImageVersion, projectEventParticipants, uuidKey, sameUuid, indexByUuid, resolveUuidReferences} from '../modules/lib/util';
-import {civilDateWeeks} from '../../common/lib/civilDate';
+import {civilDateWeeks, parseCivilDate} from '../../common/lib/civilDate';
 import {archiveKey} from '../modules/archive/policy';
 import type {components} from '../../types/api/v1';
 import type {ActivityCommandPreparation, ActivityPropertyTransportContext, ActivitySlotAdmission} from '../../types/ActivityV1Types';
@@ -68,8 +68,9 @@ import {APIError, ValidationError} from '../modules/lib/errors';
 import {performImageSwap} from "../modules/lib/fileCommons";
 
 import {ENTITIES, fromISOtoLocal, generateUniqueId} from '../modules/lib/util';
-import {buildPermBundle, evaluateEntities, evaluateSubject, isOwner, saveDefaultPermsFromBody} from "../modules/permissionEngine";
-import type {ActivityCreationCompletion, ActivityPropertyPatch, AssignmentWarningPreview, RecommendationWarningResult} from '../../types/ActivityTypes';
+import {buildPermBundle, evaluateSubject, isOwner, saveDefaultPermsFromBody} from "../modules/permissionEngine";
+import type {ActivityCreationCompletion, ActivityPropertyPatch, AssignmentWarningPreview, RecommendationWarningResult,
+    RecommendationGenerationOutcome, RecommendationApplicationSummary} from '../../types/ActivityTypes';
 import type {PermBundle, PermView, PermType, PermissionFieldRule, SessionLike} from "../../types/PermissionTypes";
 import type {EntityBase} from "../../types/UserTypes";
 
@@ -449,8 +450,8 @@ async function deleteEntity(plan: ActivityPlan, session: Request['session']) {
 
 /** Calendar dates remain DATE values; reject rollover dates rather than letting JavaScript normalize them. */
 function validatePropertyDate(value: string, helpers: Joi.CustomHelpers): string | Joi.ErrorReport {
-    const date = new Date(`${value}T00:00:00.000Z`);
-    if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value || value < '1000-01-01') {
+    const date = parseCivilDate(value);
+    if (!date || value < '1000-01-01') {
         return helpers.error('any.invalid');
     }
     return value;
@@ -546,14 +547,14 @@ function validateSlotDate(plan: ActivityPlan, day?: string): void {
 }
 
 /** Serialize edits with narrowing the parent range; missing snapshots become controller errors. */
-async function saveActivitySlot(slotId: string, fields: Partial<ActivitySlot>, admit?: ActivitySlotAdmission): Promise<boolean | undefined> {
+async function saveActivitySlot(slotId: string, fields: Partial<ActivitySlot>, admit?: ActivitySlotAdmission): Promise<boolean> {
     const current = await activityService.getActivitySlotById(slotId);
     if (!current) throw new APIError('Activity slot not found', {slotId}, 404);
     const planId = current.entityId;
 
     /** Revalidate this edit against the locked plan and optional current slot authority.
      * The initial lookup supplies only its plan; the transaction owns admission and the write. */
-    async function saveSlot(manager: EntityManager): Promise<boolean | undefined> {
+    async function saveSlot(manager: EntityManager): Promise<boolean> {
         const plan = await requireRecommendationContext(manager, planId);
         // Optional transport authority is evaluated against this locked plan and
         // current slot, independently from the old browser's presentation bundle.
@@ -805,9 +806,7 @@ async function authorizeSelfAssignment(
     if (requestedRole && requestedRole.maxQty > 0) {
         const alreadyHasRole = existingAssignee?.roles.includes(requestedRole.name);
         const roleCount = assignees.filter((assignee) => assignee.roles.includes(requestedRole!.name)).length;
-        if (!alreadyHasRole && roleCount >= requestedRole.maxQty) {
-            throw new APIError('This activity role is already full', {planId, slotId, roleName}, 409, {cause: 'ACTIVITY_ROLE_FULL'});
-        }
+        if (!alreadyHasRole) assertActivityRoleCapacity(roleCount + 1, requestedRole.maxQty, {planId, slotId, roleName});
     }
 }
 
@@ -883,9 +882,7 @@ async function updateRoleAssignments(slotId: string, body: any) {
             if (assignmentId === null) continue;
             if (!assignmentIds.has(assignmentId)) throw new APIError('Assignment not found in this slot', body, 400, {cause: 'ACTIVITY_ASSIGNMENT_INVALID'});
             const count = (requestedCounts.get(entry.role) ?? 0) + 1;
-            if (entry.role !== 'default' && count > (role.maxQty ?? 0)) {
-                throw new APIError('This activity role is already full', {slotId, role: entry.role}, 409, {cause: 'ACTIVITY_ROLE_FULL'});
-            }
+            if (entry.role !== 'default') assertActivityRoleCapacity(count, role.maxQty ?? 0, {slotId, role: entry.role});
             requestedCounts.set(entry.role, count);
             rows.push({assignmentId, roleId: role.role.id});
         }
@@ -943,9 +940,7 @@ async function assignActivityAssignmentRole(itemId: string, profileId: string, r
                 if (assignmentHasRole(assignment, roleId)) roleCount++;
             }
             // Slot overfill does not relax the independently configured named-role quota.
-            if (slotRole.maxQty != null && roleCount >= slotRole.maxQty) {
-                throw new APIError('This activity role is already full', {itemId, roleName}, 409, {cause: 'ACTIVITY_ROLE_FULL'});
-            }
+            assertActivityRoleCapacity(roleCount + 1, slotRole.maxQty, {itemId, roleName});
         }
         // Only the default role may be created here; the selected saved role
         // attaches to the existing signup when one already belongs to this profile.
@@ -959,6 +954,17 @@ async function assignActivityAssignmentRole(itemId: string, profileId: string, r
 function assignmentHasRole(assignment: ActivityAssignment, roleId: number): boolean {
     // Only the stored role identity determines whether this signup is already present.
     return assignment.activityAssignmentRoles.some((entry) => entry.role.id === roleId);
+}
+
+/** Reject a projected named-role quantity beyond its admitted quota.
+ * Callers retain role availability, default-role and retry exemptions and select
+ * the quota interpretation appropriate to their existing operation. */
+function assertActivityRoleCapacity(projectedCount: number, maxQty: number | null | undefined, data: object): void {
+    // A missing locked quota remains unrestricted. Replacement callers explicitly
+    // supply zero for their existing absent-quota rule before reaching this owner.
+    if (maxQty != null && projectedCount > maxQty) {
+        throw new APIError('This activity role is already full', data, 409, {cause: 'ACTIVITY_ROLE_FULL'});
+    }
 }
 
 /** Removing the last role ends the signup; the controller owns this domain decision. */
@@ -1228,11 +1234,7 @@ export async function readActivityPlan(id: string, session: SessionLike) {
                     departureDate: participant.attendance.departureDate ?? null} : null});
         }
     }
-    let currentEventUrl: string | null = null;
-    if (plan.event) {
-        const views = await evaluateEntities([{entityType: 'event', entityId: plan.event.id, ownerId: plan.event.ownerId, eventId: plan.event.id}], session);
-        currentEventUrl = getAuthorizedEventUrl(plan.event.id, views.get(entityPermissionKey('event', plan.event.id))!)?.replace(/^\/event(?=\/|$)/u, '/event') ?? null;
-    }
+    const currentEventUrl = await readAuthorizedEventUrl(plan.event, session);
     const metadata = activityMetadataProjection(plan, permissions);
     const data: components['schemas']['ActivityView'] = {
         entityType: 'activity', id, title: plan.title, description: plan.description ?? null,
@@ -1705,13 +1707,27 @@ export async function previewActivityRecommendations(id: string, input: componen
     return {warnings: activityRecommendationWarnings(result.warnings), overlapConfirmation: result.overlapConfirmation};
 }
 
-/** Apply the submitted batch once, preserving skipped counts, reciprocal moves and
- * inherited postcommit regeneration behavior. No adapter refresh follows the command. */
-export async function applyActivityRecommendations(id: string, input: components['schemas']['ActivityRecommendationApplication'], session: SessionLike): Promise<components['schemas']['ActivityRecommendationApplyResult']> {
+/** Apply once and prepare all finite completion variants before assignment commit.
+ * Existing guarded generation reports a separate outcome; postcommit delivery
+ * cannot repeat projection, authorization or the assignment operation. */
+export async function applyActivityRecommendations(id: string, input: components['schemas']['ActivityRecommendationApplication'],
+    session: SessionLike, prepare?: ActivityCommandPreparation<Readonly<Record<RecommendationGenerationOutcome,
+        components['schemas']['ActivityRecommendationApplyResult']>>>): Promise<components['schemas']['ActivityRecommendationApplyResult']> {
     // The existing controller rechecks the warning review before its transaction writes.
     await requireActivityMethod(id, 'MANAGE_ASSIGNMENTS', session);
-    const result = await applyRecommendations(id, input, session);
-    return {applied: result.applied, skipped: result.skipped, warnings: activityRecommendationWarnings(result.warnings)};
+    let variants: Record<RecommendationGenerationOutcome, components['schemas']['ActivityRecommendationApplyResult']>;
+    /** Project the same safe committed evidence before any variant is serialized. */
+    function prepareApplication(result: RecommendationApplicationSummary): void {
+        const data = {applied: result.applied, skipped: result.skipped,
+            warnings: activityRecommendationWarnings(result.warnings)};
+        // Both the direct controller result and the transport use these exact
+        // projections. A failure in any callback still rolls back application.
+        variants = {'not-required': {...data, generationOutcome: 'not-required'},
+            complete: {...data, generationOutcome: 'complete'}, failed: {...data, generationOutcome: 'failed'}};
+        prepare?.(variants);
+    }
+    const result = await applyRecommendations(id, input, session, prepareApplication);
+    return variants![result.generationOutcome];
 }
 
 /** Explicit generation reuses the existing coordinator and coalescing identity. */
@@ -1864,31 +1880,11 @@ export async function getRequirements(planId: string, includeNameProvenance = fa
         throw new APIError('Activity plan not found', {planId}, 404);
     }
 
-    const eventParticipants = plan.event ? await eventService.getEventParticipantRows(plan.event.id).then(projectEventParticipants) : [];
-
-    const attendance = await buildParticipantAttendanceMap(
-        plan,
-        requirementConfig.overrides,
-        assignments,
-        [],
-        eventParticipants,
-    );
-
-    const slotsWithRoles = projectRequirementSlots(slots, slotRoles);
-    const assignedShiftCounts = Object.fromEntries(
-        Object.entries(assignments).map(([participantKey, participantAssignments]) => [participantKey, participantAssignments.length]),
-    );
+    const {eventParticipants, calculation} = await prepareActivityRequirementContext({plan,
+        configuration: requirementConfig, assignments, slots, slotRoles});
     // The pure engine remains the sole owner of requirement arithmetic. Optional
     // label provenance below changes neither its inputs nor its saved results.
-    const analysis = calculateRequirementAnalysis({
-        plan,
-        participants: Object.values(attendance),
-        roleRequirements: requirementConfig.roleRequirements,
-        overrides: requirementConfig.overrides,
-        stayRequirements: requirementConfig.stayRequirements,
-        slots: slotsWithRoles,
-        assignedShiftCounts,
-    });
+    const analysis = calculateRequirementAnalysis(calculation);
     const roleTitles = new Map(allRoles.map((role) => [Number(role.id), role.title]));
     const participants = analysis.participants.map((participant) => ({
         ...participant,
@@ -1912,9 +1908,9 @@ export async function getRequirements(planId: string, includeNameProvenance = fa
         participants,
         capacitySummary: analysis.capacitySummary,
         calculationContext: {
-            participants: Object.values(attendance),
-            assignedShiftCounts,
-            slots: slotsWithRoles,
+            participants: calculation.participants,
+            assignedShiftCounts: calculation.assignedShiftCounts,
+            slots: calculation.slots,
         },
         overrideTargets,
     };
@@ -1935,25 +1931,12 @@ export async function calculateBaselineRequirement(planId: string) {
         throw new APIError('Activity plan not found', {planId}, 404);
     }
 
-    // Registered and already assigned identities use the same attendance policy as requirement analysis.
-    const eventParticipants = plan.event ? await eventService.getEventParticipantRows(plan.event.id).then(projectEventParticipants) : [];
-    const attendance = await buildParticipantAttendanceMap(
-        plan,
-        requirementConfig.overrides,
-        assignments,
-        [],
-        eventParticipants,
-    );
-
-    const slotsWithRoles = projectRequirementSlots(slots, slotRoles);
+    // Registered and already assigned identities use the same asynchronous context
+    // as analysis, without changing this operation's preceding independent reads.
+    const {calculation} = await prepareActivityRequirementContext({plan,
+        configuration: requirementConfig, assignments, slots, slotRoles});
     // Share structural slot inputs while retaining the baseline algorithm's distinct arithmetic.
-    const baseline = calculateBaselineRequirementForPlan({
-        plan,
-        slots: slotsWithRoles,
-        participants: Object.values(attendance),
-        roleRequirements: requirementConfig.roleRequirements,
-        overrides: requirementConfig.overrides,
-    });
+    const baseline = calculateBaselineRequirementForPlan(calculation);
 
     return baseline;
 }
@@ -2112,22 +2095,4 @@ export async function updateRequirements(planId: string, body: any, removedOverr
     }
     await activityService.withActivityTransaction(saveRequirements);
     return 'Requirements updated';
-}
-
-/** Project stored slot/role inputs once for analysis and baseline calculations, preserving their distinct engines. */
-function projectRequirementSlots(slots: ActivitySlot[],
-    slotRoles: Awaited<ReturnType<typeof activityService.getActivitySlotRoles>>) {
-    // Normalize role identity only; keep capacity and assignment quantities unchanged.
-    return slots.map((slot) => ({
-        id: uuidKey(slot.id),
-        day: slot.day,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        maxAssignees: slot.maxAssignees,
-        roles: (slotRoles[uuidKey(slot.id)] ?? []).map((role) => ({
-            roleId: Number(role.id),
-            maxQty: role.maxQty,
-            assignedQty: role.assignedQty,
-        })),
-    }));
 }

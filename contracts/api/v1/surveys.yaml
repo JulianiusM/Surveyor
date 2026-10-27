@@ -25,9 +25,11 @@ schemas:
       weekday:
         type: string
         enum: [MON, TUE, WED, THU, FRI, SAT, SUN]
+        x-surveyor-runtime-choices: {exportName: surveyWeekdays}
       nthWeek:
         type: string
         enum: ['1', '2', '3', '4', LAST]
+        x-surveyor-runtime-choices: {exportName: surveyOccurrences}
   SurveyCombination:
     type: object
     additionalProperties: false
@@ -197,8 +199,8 @@ paths:
         precondition: none
       summary: Read account-only standalone survey creation admission
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - name: returnTo
           in: query
           schema:
@@ -214,9 +216,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/SurveyCreateEntry
+                $ref: "./surveys.yaml#/schemas/SurveyCreateEntry"
         default: &a1
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       security: []
   /surveys/{surveyId}/entry:
     get:
@@ -226,8 +228,8 @@ paths:
         precondition: none
       summary: Read standalone survey detail or guest page admission
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - &a2
           name: surveyId
           in: path
@@ -252,7 +254,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/SurveyResourceEntry
+                $ref: "./surveys.yaml#/schemas/SurveyResourceEntry"
         default: *a1
       security: []
   /surveys/{surveyId}/guest:
@@ -263,8 +265,8 @@ paths:
         precondition: none
       summary: Read the public survey guest-entry title
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a2
       responses:
         "200":
@@ -276,7 +278,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/GuestEntry
+                $ref: "./auth.yaml#/schemas/GuestEntry"
         default: *a1
       security: []
     post:
@@ -286,10 +288,10 @@ paths:
         precondition: none
       summary: Register a guest through the shared identity owner
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a2
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
@@ -300,7 +302,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/IdentityResult
+                $ref: "./auth.yaml#/schemas/IdentityResult"
         default: *a1
       security: []
       requestBody:
@@ -308,7 +310,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/GuestRegistrationInput
+              $ref: "./auth.yaml#/schemas/GuestRegistrationInput"
   /surveys:
     post:
       operationId: createSurvey
@@ -317,9 +319,9 @@ paths:
         precondition: none
       summary: Create a standalone recurring-choice survey through its existing operation
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "201":
           description: Authorized operation result
@@ -330,14 +332,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/SurveyCreated
+                $ref: "./surveys.yaml#/schemas/SurveyCreated"
         default: *a1
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/SurveyCreateForm
+              $ref: "./surveys.yaml#/schemas/SurveyCreateForm"
   /surveys/{surveyId}:
     get:
       operationId: getSurvey
@@ -346,10 +348,10 @@ paths:
         precondition: none
       summary: Read recurring choices and named ballots for an admitted profile
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a2
-        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Authorized operation result
@@ -363,7 +365,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/SurveyView
+                $ref: "./surveys.yaml#/schemas/SurveyView"
         "304":
           description: Authorized representation unchanged; no body
         default: *a1
@@ -374,10 +376,10 @@ paths:
         precondition: none
       summary: Permanently delete a survey as its owner
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a2
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
@@ -388,7 +390,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default: *a1
   /surveys/{surveyId}/duplicate:
     get:
@@ -398,8 +400,8 @@ paths:
         precondition: none
       summary: Copy standalone survey form content without ballots or lifecycle state
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a2
       responses:
         "200":
@@ -411,7 +413,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/SurveyDuplicate
+                $ref: "./surveys.yaml#/schemas/SurveyDuplicate"
         default: *a1
   /surveys/{surveyId}/settings:
     get:
@@ -421,8 +423,8 @@ paths:
         precondition: none
       summary: Read applicable owner-only survey settings
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a2
       responses:
         "200":
@@ -434,7 +436,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/SurveySettings
+                $ref: "./surveys.yaml#/schemas/SurveySettings"
         default: *a1
   /surveys/{surveyId}/metadata:
     get:
@@ -444,10 +446,10 @@ paths:
         precondition: none
       summary: Read owner-editable metadata with a presentation-only refresh identity
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a2
-        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Authorized operation result
@@ -461,7 +463,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/SurveyMetadata
+                $ref: "./surveys.yaml#/schemas/SurveyMetadata"
         "304":
           description: Authorized representation unchanged; no body
         default: *a1
@@ -472,10 +474,10 @@ paths:
         precondition: none
       summary: Save owner metadata with existing last-write behavior
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a2
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
@@ -489,14 +491,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/SurveyMetadata
+                $ref: "./surveys.yaml#/schemas/SurveyMetadata"
         default: *a1
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/SurveyMetadataPatch
+              $ref: "./surveys.yaml#/schemas/SurveyMetadataPatch"
   /surveys/{surveyId}/ballot:
     put:
       operationId: submitSurveyBallot
@@ -505,10 +507,10 @@ paths:
         precondition: none
       summary: Replace this profile ballot through the existing non-atomic operation
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a2
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
@@ -519,14 +521,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default: *a1
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/SurveyBallotInput
+              $ref: "./surveys.yaml#/schemas/SurveyBallotInput"
   /surveys/{surveyId}/combinations:
     post:
       operationId: addSurveyCombination
@@ -535,10 +537,10 @@ paths:
         precondition: none
       summary: Add a recurring choice as any admitted account or registered guest profile
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a2
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
@@ -549,14 +551,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default: *a1
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/SurveyCombinationInput
+              $ref: "./surveys.yaml#/schemas/SurveyCombinationInput"
   /surveys/{surveyId}/header:
     get:
       operationId: getSurveyHeader
@@ -565,8 +567,8 @@ paths:
         precondition: none
       summary: Read header bytes after detail admission
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a2
       responses:
         "200":
@@ -587,10 +589,10 @@ paths:
         precondition: none
       summary: Replace the survey header through its existing image operation
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a2
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
@@ -601,14 +603,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default: *a1
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/EntityHeaderUpload
+              $ref: "./common.yaml#/schemas/EntityHeaderUpload"
     delete:
       operationId: deleteSurveyHeader
       x-surveyor-command:
@@ -616,10 +618,10 @@ paths:
         precondition: none
       summary: Remove the survey header through its existing image operation
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a2
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
@@ -630,7 +632,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default: *a1
   /surveys/{surveyId}/archive:
     post:
@@ -640,10 +642,10 @@ paths:
         precondition: none
       summary: Archive a survey as its owner without deletion
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a2
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
@@ -654,7 +656,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default: *a1
   /surveys/{surveyId}/restore:
     post:
@@ -664,10 +666,10 @@ paths:
         precondition: none
       summary: Restore a survey as its owner
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a2
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
@@ -678,5 +680,5 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./openapi.yaml#/components/schemas/MutationResult
+                $ref: "./common.yaml#/schemas/MutationResult"
         default: *a1

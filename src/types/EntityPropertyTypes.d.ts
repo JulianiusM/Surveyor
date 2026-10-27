@@ -102,12 +102,13 @@ export interface ListReadOperations<Root extends EntityBase, Item extends {id: s
     orderToken(root: Root, items: Item[], session: SessionLike): string;
 }
 
-/** Feature differences consumed by the matching locked item workflows.
+/** Feature differences consumed by matching item baselines and locked workflows.
  * Outer command admission/transactions and receipt timing remain with each feature. */
 export interface ListItemCommandOperations<Type extends ListPersistenceType, Patch extends object, Values extends object> {
     readonly type: Type;
     mayEditField(permissions: PermView, field: keyof Patch): boolean;
-    projectItem(item: ListItemRows[Type], permissions: PermView): {values: Values};
+    item(manager: EntityManager, id: string): Promise<ListItemRows[Type] | null>;
+    projectItem(item: ListItemRows[Type], permissions: PermView): {values: Values; editableFields: (keyof Values & string)[]};
     itemToken(root: ListRootRows[Type], item: ListItemRows[Type], session: SessionLike, values: Values): string;
     applyPatch(itemId: string, fields: Patch, context: {kind: 'versioned'; manager: EntityManager; item: ListItemRows[Type]}): Promise<boolean>;
     capabilities(permissions: PermView): {removeItem: boolean; removeAssignments: boolean};

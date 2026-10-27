@@ -5,9 +5,9 @@ documentation-metadata
 audience: operators; site reliability engineers; database administrators; maintainers
 owner: application operators
 status: current
-last-verified: 2026-10-25
+last-verified: 2026-10-27
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
+verification-scope: approved proof ownership migration and paired file/database rollback constraints reconciled; prior cutover guidance retained; no real-installation migration or deployment claim
 source-anchors: src/backend/modules/invoice/invoiceOperations.ts; src/backend/modules/invoice/requests.ts; src/backend/modules/database/entities/event/EventInvoice.ts; src/backend/migrations/1789862400000-AddEntityArchival.ts; src/backend/modules/entityArchival.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/migrations/1789689600000-AddInvoiceRetraction.ts; src/backend/migrations/1789603200000-AddOrganizerInvoices.ts; src/backend/migrations/1789516800000-AddInvoiceShareRounding.ts; src/backend/modules/invoice/settlementEmail.ts; src/backend/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/backend/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; scripts/runMigration.ts; migrationDataSource.ts; src/backend/server.ts; src/backend/modules/settings.ts; src/backend/modules/invoice/retention.ts; docs/DATABASE.md; docs/OPERATIONS.md
 next-review: release-or-rollback-compatibility-change
 -->
@@ -202,6 +202,12 @@ contracts. No retained old-client asset directory is required.
 This browser recovery does not remove the maintenance window, schema checks or rollback boundaries above.
 
 ### 5. Start and validate
+
+Apply `1793059200000-AddInvoiceProofFiles.ts` before starting the matching release. It preserves invoice paths and
+backfills durable ownership; it does not touch files. Include the proof ledger and complete proof tree, including
+quarantine/recovery copies, in the same rollback snapshot. Its down migration refuses a nonempty ledger; never clear
+ownership evidence to force reversal. Historical orphan cleanup is a separate, explicit
+[offline operation](OPERATIONS.md#invoice-proof-reconciliation), not an unattended upgrade step.
 
 For the invoice-pool updates, apply the factor/recalculation, settlement-credit/snapshot, share-rounding, and
 `1789603200000-AddOrganizerInvoices.ts` and `1789689600000-AddInvoiceRetraction.ts` migrations

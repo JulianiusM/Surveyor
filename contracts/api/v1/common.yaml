@@ -1,4 +1,11 @@
 schemas:
+  PublicProfileReference:
+    type: object
+    additionalProperties: false
+    required: [id, name]
+    properties:
+      id: {$ref: '#/schemas/Uuid'}
+      name: {type: string}
   ComparisonToken:
     description: Bounded opaque current-value precondition. Its owning controller checks strong-tag syntax and current authorization before comparison.
     type: string
@@ -1936,3 +1943,98 @@ schemas:
               total: {type: integer, minimum: 0}
               matching: {type: integer, minimum: 0}
           - type: 'null'
+
+parameters:
+  Context:
+    in: header
+    name: X-Surveyor-Context
+    required: false
+    description: Required when the server session has context evidence. Sessionless
+      public requests and initial identity actions omit it; omission never
+      selects an anonymous actor or grants permission.
+    schema:
+      type: string
+      minLength: 1
+      maxLength: 256
+  Locale:
+    in: header
+    name: X-Surveyor-Locale
+    required: false
+    schema:
+      $ref: "#/schemas/LocaleTag"
+  Csrf:
+    in: header
+    name: X-CSRF-Token
+    required: false
+    description: Required for mutations when the server session has CSRF evidence.
+      Sessionless actions retain server-owned origin and request protections;
+      omission never bypasses authentication or authorization.
+    schema:
+      type: string
+      minLength: 1
+      maxLength: 256
+  ListId:
+    in: path
+    name: listId
+    required: true
+    schema:
+      $ref: "#/schemas/Uuid"
+  ItemId:
+    in: path
+    name: itemId
+    required: true
+    schema:
+      $ref: "#/schemas/Uuid"
+  IfMatch:
+    in: header
+    name: If-Match
+    required: true
+    schema:
+      $ref: "#/schemas/ComparisonToken"
+  EventIfMatch:
+    in: header
+    name: If-Match
+    required: false
+    description: Ignored for an authorized unchanged choice, which returns without
+      comparing or writing. An actual relationship change requires a
+      ComparisonToken and current-value comparison under the existing locks.
+    schema:
+      type: string
+  IfNoneMatch:
+    in: header
+    name: If-None-Match
+    required: false
+    schema:
+      type: string
+      maxLength: 4096
+  ProfileId:
+    in: path
+    name: profileId
+    required: true
+    schema:
+      $ref: "#/schemas/Uuid"
+  AssignmentId:
+    in: path
+    name: assignmentId
+    required: true
+    schema:
+      $ref: "#/schemas/DecimalId"
+  SearchQuery:
+    in: query
+    name: q
+    required: false
+    schema:
+      type: string
+  SelectedEvent:
+    in: query
+    name: selected
+    required: false
+    schema:
+      $ref: "#/schemas/Uuid"
+responses:
+  Problem:
+    description: A safe localized RFC 9457 problem; machine code controls recovery
+    content:
+      application/problem+json:
+        schema:
+          $ref: "#/schemas/Problem"

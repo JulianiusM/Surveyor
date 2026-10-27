@@ -19,14 +19,15 @@ import fs from "node:fs";
 import path from "node:path";
 import {v4 as uuidv4} from "uuid";
 import {EntityBase} from "../../../types/UserTypes";
-import type {ImageSwapReceipt} from '../../../types/UtilTypes';
+import type {ImageSwapReceipt, UploadFileAllocation} from '../../../types/UtilTypes';
 import {APIError} from "./errors";
 import {isImageMimeType, uploadFileMedia} from '../../../common/lib/fileMedia';
 
 /** Configure the existing disk uploader with its reviewed media switches.
  * Filename/extension and MIME admission remain separate server checks; byte
  * limits and storage timing retain the uploader's established behavior. */
-export function prepareFileUploader(dir: string, allowImg: boolean = true, allowPdf: boolean = false) {
+export function prepareFileUploader(dir: string, allowImg: boolean = true, allowPdf: boolean = false,
+    beforeFileWrite?: UploadFileAllocation) {
     // Select shared media once for this uploader, without changing its destination
     // creation or original filename extension checks for each received file.
     const media = uploadFileMedia(allowImg, allowPdf);
@@ -37,13 +38,20 @@ export function prepareFileUploader(dir: string, allowImg: boolean = true, allow
             cb(null, proofDir);
         },
         /** Keep only a permitted original suffix and generate an opaque basename. */
-        filename: function uploadFilename(_req, file, cb) {
+        filename: function uploadFilename(req, file, cb) {
             // Reject the original extension before allocating a stored filename.
             const ext = path.extname(file.originalname).toLowerCase();
             if (!media.extensions.includes(ext)) {
                 return cb(new Error('Invalid file extension'), '');
             }
-            cb(null, `${Date.now()}-${uuidv4()}${ext}`);
+            const filename = `${Date.now()}-${uuidv4()}${ext}`;
+            // A feature may reserve durable ownership before storage opens a stream.
+            // The generic uploader neither imports DBAL nor decides a file lifecycle.
+            if (!beforeFileWrite) return cb(null, filename);
+            beforeFileWrite(req, path.join(proofDir, filename)).then(
+                function allocated() { cb(null, filename); },
+                function allocationFailed(error: unknown) { cb(error instanceof Error ? error : new Error('File allocation failed'), ''); },
+            );
         },
     });
 

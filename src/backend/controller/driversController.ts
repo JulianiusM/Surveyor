@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import {projectEntityEventOption} from '../modules/event/linkage';
+import {projectEntityEventOption, readAuthorizedEventUrl} from '../modules/event/linkage';
 import {withListRootLock, getLockedListAssignment, insertListAssignment, withListCreationTransaction} from '../modules/database/services/ListService';
-import {readListMetadata, readListDescription, readListOrderBaseline, readListSettings, listMetadataResult, listPermissions, authorizeListRead, listItemPermissions, listHeaderProjection, mayOpenListSettings, listSettingsToken, assertListContext} from './entityAdminController';
+import {readListItemEditBaseline, readListHeaderBaseline, readListHeaderPath, listHeaderToken, readListMetadata, readListDescription, readListOrderBaseline, readListSettings, listMetadataResult, listPermissions, authorizeListRead, listItemPermissions, listHeaderProjection, mayOpenListSettings, listSettingsToken, assertListContext} from './entityAdminController';
 import {readEntityDefaultsBaseline, updateEntityDefaults, readEntityAdministratorBaseline, updateEntityAdministrator} from './entityAdminController';
 import {updateListItem, deleteListItem, reorderListItems, requireListAssignmentHandle, deleteListAssignment} from './entityAdminController';
 import type {ListItemCommandOperations} from '../../types/EntityPropertyTypes';
@@ -29,7 +29,7 @@ import {Request} from "express";
 import type {EntityManager} from 'typeorm';
 import {comparisonToken, comparisonActor, requireFieldComparison, entityTag} from '../modules/api/transport';
 import {searchEntityProfiles, completeDefaults, normalizeBasicProperties, entityCreationPermissionContext} from './entityAdminController';
-import {assertEntityPropertyContext, changeEntityEvent, getAuthorizedEventUrl, getEntityViewAdmission} from '../modules/event/linkage';
+import {assertEntityPropertyContext, changeEntityEvent, getEntityViewAdmission} from '../modules/event/linkage';
 import {classifyArchiveCommandError, archiveEntity, restoreEntity} from '../modules/entityArchival';
 import {entityPropertyPermission, entityMethodPermission} from '../modules/permissionEngine';
 
@@ -52,8 +52,8 @@ import {ApiProblem} from '../modules/api/problem';
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {performImageSwap} from "../modules/lib/fileCommons";
 import {checkNewImage, removeImage} from '../modules/lib/fileCommons';
-import {ENTITIES, generateUniqueId, sameUuid, uuidKey, groupByUuid} from '../modules/lib/util';
-import {saveDefaultPermsFromBody, evaluateEntities, evaluateSubject, isOwner, entityPermissionKey} from "../modules/permissionEngine";
+import {ENTITIES, generateUniqueId, sameUuid, uuidKey, groupByUuid, countListItems} from '../modules/lib/util';
+import {saveDefaultPermsFromBody, evaluateSubject, isOwner} from "../modules/permissionEngine";
 import {SessionLike} from "../../types/PermissionTypes";
 import type {EntityBase} from "../../types/UserTypes";
 import type {DriversCommandPreparation, DriversMethod} from '../../types/DriversTypes';
@@ -128,7 +128,7 @@ async function fetchForView(list: DriversList, req: Request) {
         items,
         assignments,
         assigneeLists,
-        counters: driversCounters(items, new Map(Object.entries(assigneeLists)))
+        counters: countListItems(items, new Map(Object.entries(assigneeLists)))
     };
 }
 
@@ -356,16 +356,7 @@ export async function readDriversList(id: string, session: SessionLike) {
 
         // Child admission never implies permission to open its parent. Reuse the authorized Event URL
         // policy, but evaluate the captured parent inside this projection's existing snapshot.
-        let currentEventUrl: string | null = null;
-        if (list.event) {
-            const parentViews = await evaluateEntities([{
-                entityType: 'event', entityId: list.event.id, ownerId: list.event.ownerId, eventId: list.event.id,
-            }], session, manager);
-            const eventUrl = getAuthorizedEventUrl(list.event.id, parentViews.get(entityPermissionKey('event', list.event.id))!);
-            // Preserve the shared owner's admission and selected admin/detail path;
-            // this versioned projection supplies the corresponding Vue destination.
-            currentEventUrl = eventUrl?.replace(/^\/event(?=\/|$)/u, '/event') ?? null;
-        }
+        const currentEventUrl = await readAuthorizedEventUrl(list.event, session, manager);
 
         // Group persisted assignments once before building rows and shared counters.
         const {items, assignments} = await driverService.getDriversSnapshotRows(manager, id);
@@ -417,7 +408,7 @@ export async function readDriversList(id: string, session: SessionLike) {
                 manageSettings: mayOpenListSettings('drivers', list, permissions, session)
             },
             orderToken: orderEditToken(list, items, session),
-            counters: driversCounters(itemRows, assignmentsByItem),
+            counters: countListItems(itemRows, assignmentsByItem),
             items: itemRows,
         };
         return {data, etag: entityTag('drivers-view', {data, profileId})};
@@ -449,21 +440,7 @@ export async function readDriversMetadata(id: string, session: SessionLike) {
  */
 export async function readDriversItemEditBaseline(id: string, itemId: string, session: SessionLike):
     Promise<components['schemas']['DriversItemEditBaseline']> {
-    comparisonActor(session);
-
-    /** Resolve the actual child/root scope before projecting its currently
-     * writable values. This snapshot does not query private assignment evidence. */
-    async function readSnapshot(manager: EntityManager, row: DriversList | null): Promise<components['schemas']['DriversItemEditBaseline']> {
-        const list = requireList(row);
-        const item = await driverService.getDriversSnapshotItem(manager, itemId);
-        if (!item || !sameUuid(item.entityId, list.id)) throw new ApiProblem('NOT_FOUND');
-        const permissions = await listItemPermissions('drivers', manager, list, item, session);
-        const projection = itemEditProjection(item, permissions);
-        if (!projection.editableFields.length) throw new ApiProblem('FORBIDDEN');
-
-        return {id: item.id, ...projection, editToken: itemEditToken(list, item, session, projection.values)};
-    }
-    return driverService.withDriversReadSnapshot(id, readSnapshot);
+    return readListItemEditBaseline(id, itemId, session, driversListReadOperations, listItemCommandOperations);
 }
 
 /** A reorder grant discloses only the compared order. Use the existing method
@@ -776,7 +753,7 @@ async function withDriversManagement<T>(id: string, session: SessionLike,
 // Only existing Drivers policy/projection/persistence choices vary inside the shared item workflows.
 const listItemCommandOperations: ListItemCommandOperations<'drivers', components['schemas']['DriversItemPatch'],
     components['schemas']['DriversItemEditBaseline']['values']> = {
-    type: 'drivers', mayEditField: mayEditItemField, projectItem: itemEditProjection, itemToken: itemEditToken,
+    type: 'drivers', item: driverService.getDriversSnapshotItem, mayEditField: mayEditItemField, projectItem: itemEditProjection, itemToken: itemEditToken,
     applyPatch: applyDriversItemPatch, capabilities: itemCapabilities, deleteItem,
     mayPerform: mayPerformDriversMethod, items: driverService.getDriversSnapshotItems, orderToken: orderEditToken,
     reorder: reorderItems, assignment: driverService.getDriversAssignmentById, deleteAssignment,
@@ -1077,7 +1054,7 @@ export async function setDriversHeader(
             // Upload existence does not replace current method authority or the
             // actor-bound comparison on this freshly locked root.
             if (!mayPerformDriversMethod(permissions, 'editHeader')) throw new ApiProblem('FORBIDDEN');
-            requireFieldComparison(token, headerEditToken(list, session), ['header']);
+            requireFieldComparison(token, listHeaderToken('drivers', list, session), ['header']);
 
             await driverService.updateHeaderImage(listId, path, manager);
 
@@ -1094,32 +1071,16 @@ export async function setDriversHeader(
     return {changed: result.changed};
 }
 
-/** A header writer compares the stored reference hash without receiving its path,
- * bytes or the list/parent projection. Existing profile settings tokens still match. */
-function headerEditToken(list: DriversList, session: SessionLike): string {
-    return comparisonToken('drivers-settings', uuidKey(list.id), session, {header: list.headerImg ?? null});
-}
-
 /** A header writer receives only its reviewed field token after a current
  * method check. Upload preflight uses this operation without protected byte reads. */
 export async function readDriversHeaderBaseline(id: string, session: SessionLike): Promise<components['schemas']['DriversHeaderBaseline']> {
-    async function readHeaderVersion(manager: EntityManager, row: DriversList | null) {
-        const list = requireList(row);
-        if (!mayPerformDriversMethod(await listPermissions('drivers', manager, list, session), 'editHeader')) throw new ApiProblem('FORBIDDEN');
-        return {editToken: headerEditToken(list, session)};
-    }
-    return driverService.withDriversReadSnapshot(id, readHeaderVersion);
+    return readListHeaderBaseline('drivers', id, session, driversListReadOperations);
 }
 
 /** Resolve the stored image only for an actor admitted to the full detail read.
  * Method-only header writers must use their hash baseline rather than this path. */
 export async function readDriversHeaderPath(id: string, session: SessionLike): Promise<string> {
-    return driverService.withDriversReadSnapshot(id, async function headerPath(manager, row) {
-        const list = requireList(row);
-        await authorizeListRead('drivers', manager, list, session);
-        if (!list.headerImg) throw new ApiProblem('NOT_FOUND');
-        return list.headerImg;
-    });
+    return readListHeaderPath('drivers', id, session, driversListReadOperations);
 }
 
 /** Hard deletion stays the simple feature repository operation, separate from archival coordination. */
@@ -1140,22 +1101,4 @@ export async function deleteDriversList(id: string, session: SessionLike, expect
     });
     if (oldPath) removeImage(oldPath);
     return {changed: true};
-}
-
-/** Both renderer projections count passenger profiles once across all offered
- * rides. Drivers are excluded unless they separately hold a passenger assignment;
- * nullable maximum is not an open ride, matching the displayed counters. */
-function driversCounters(items: readonly (Pick<DriversItem, 'id' | 'maxAssignees'> & {assignedCount: number})[],
-    assignees: ReadonlyMap<string, readonly {profileId?: string | null; name?: string}[]>) {
-    const participants = new Set<string | undefined>();
-    let open = 0;
-    let empty = 0;
-    for (const item of items) {
-        for (const assignment of assignees.get(uuidKey(item.id)) ?? []) {
-            participants.add(assignment.profileId ? 'p_' + uuidKey(assignment.profileId) : assignment.name);
-        }
-        if (item.assignedCount === 0) empty++;
-        if (item.assignedCount < (item.maxAssignees ?? 0)) open++;
-    }
-    return {participants: participants.size, open, empty};
 }

@@ -5,9 +5,9 @@ documentation-metadata
 audience: database administrators; operators; site reliability engineers; maintainers
 owner: application operators
 status: current
-last-verified: 2026-10-25
+last-verified: 2026-10-27
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
+verification-scope: approved durable invoice-proof ledger migration and recovery boundaries reconciled against source; existing targeting and cutover safety retained; no deployment claim
 source-anchors: src/backend/migrations/1789862400000-AddEntityArchival.ts; src/backend/modules/database/entities/archive/EntityVisibilityPreference.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; src/backend/controller/packingController.ts; src/backend/modules/database/services/PackingService.ts; src/backend/modules/api/contracts.ts; src/backend/modules/database/entities/session/Session.ts; src/backend/migrations; package.json; .github/workflows/ci.yml
 next-review: database-schema-or-targeting-change
 -->
@@ -274,6 +274,27 @@ revisions and saved settlement history retain their own persistence contracts.
 Controllers own authorization and business decisions against the locked evidence supplied by database services.
 The services own queries, locks, transactions and persistence. Diagnose conflicting writes through the actual application
 operations and database logs; do not bypass the checks or change transaction isolation as an operational workaround.
+
+## Invoice proof ownership
+
+Apply `1793059200000-AddInvoiceProofFiles.ts` through the settings-aware migration workflow before starting the matching
+release. It creates `invoice_proof_files` and backfills every exact nonempty stored proof-path spelling, including
+case-distinct legacy references. The ledger deliberately has no cascading invoice foreign key: cleanup evidence must
+survive Event, registration and invoice deletion. The migration does no filesystem work and preserves financial rows.
+
+New uploads acquire durable ownership before storage opens their file, then attach within the invoice transaction.
+Active request/process ownership protects slow uploads. After a crash, the next single-process startup can recover
+abandoned work. Cleanup verifies live references and durable state before claiming deletion; a failed unlink remains
+retryable. An unavailable configured proof root defers cleanup and retains ownership evidence. File deletion follows committed
+record removal, so a database rollback retains a valid invoice's proof.
+
+The down migration refuses to discard a nonempty ledger. Do not delete ownership/recovery rows merely to bypass it.
+Use the paired database, files, configuration and release rollback procedure. Backups must include ledger rows and the
+entire proof tree, including `.proof-quarantine`, until recovery and final purge are complete. This does not make
+database and filesystem operations one atomic transaction.
+
+Historical files with no surviving reference use the explicit [offline reconciliation workflow](OPERATIONS.md#invoice-proof-reconciliation).
+Ordinary startup never scans and blindly purges untracked directory contents.
 
 ## Database backup
 

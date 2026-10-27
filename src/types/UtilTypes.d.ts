@@ -32,6 +32,37 @@ export interface ImageSwapReceipt {
     previousImage: string | null | undefined;
 }
 
+/** Pure money inputs shared by materialized pool totals and allocation. */
+export interface InvoiceCostInput {
+    status: string;
+    amount: string | number;
+    correctedAmount?: string | number | null;
+}
+
+export interface InvoiceAdjustmentInput {
+    amount: string | number;
+    subtractFromPool: boolean;
+}
+
+export interface InvoiceCostTotals {
+    invoiceTotal: number;
+    openAmount: number;
+    extraAmount: number;
+    subtractiveAmount: number;
+}
+
+/** Features select eligible rows before applying shared counter arithmetic. */
+export interface ListCounterItem {
+    id: string;
+    maxAssignees?: number | null;
+    assignedCount: number;
+}
+
+export interface ListCounterAssignee {
+    profileId?: string | null;
+    name?: string;
+}
+
 export type RelationEntry<E, K extends keyof E & string> = {
     /** Name of the relation property on E (e.g., 'slot', 'plan', 'user', 'guest'). */
     key: K;
@@ -74,3 +105,6 @@ export type DualParty<L extends string, R extends string> =
 export type EntityType = "activity" | "drivers" | "packing" | "event" | "survey";
 export type EntityItemType = "activitySlot" | "driversItem" | "packingItem" | "eventRegistration" | "surveyItem";
 export type CombEntityType = EntityType | EntityItemType;
+
+/** Generic storage admission runs before disk bytes without owning persistence. */
+export type UploadFileAllocation = (request: import('express').Request, filePath: string) => Promise<void>;

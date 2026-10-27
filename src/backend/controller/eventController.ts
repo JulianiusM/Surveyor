@@ -38,7 +38,7 @@ import type {EntityManager} from 'typeorm';
 
 import {Event} from "../modules/database/entities/event/Event";
 import {EventRegistration} from "../modules/database/entities/event/EventRegistration";
-import {ALLOWED_DIETARY} from "../modules/database/entities/event/EventRegistrationDietary";
+import {eventDietaryChoices, eventDietaryGroups} from '../../common/generated/domainChoices';
 import * as invoiceService from "../modules/database/services/EventInvoiceService";
 import {invoicePresentation} from '../modules/invoice/presentation';
 import {isParticipantSubmissionPool} from '../modules/invoice/state';
@@ -313,8 +313,8 @@ async function registerAttendance(event: Event, body: any, req: {session: Sessio
         arrivalDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
         departureDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
         dietary: Joi.alternatives().try(
-            Joi.array().items(Joi.string().valid(...ALLOWED_DIETARY).uppercase()),
-            Joi.string().valid(...ALLOWED_DIETARY).uppercase() // handles single value form-post
+            Joi.array().items(Joi.string().valid(...eventDietaryChoices).uppercase()),
+            Joi.string().valid(...eventDietaryChoices).uppercase() // handles single value form-post
         ).optional(),
         allergyNotes: Joi.string().max(4000).allow(''),
         dietComment: Joi.string().max(4000).allow(''),
@@ -418,7 +418,7 @@ function checkMeals(dietary: DIETARY[], allergyNotes: string, dietComment: strin
 
     // Supplementary requirements do not substitute for a selected meal preference.
     const meals = dietary.filter(d =>
-        ['MEAT', 'FISH', 'VEGETARIAN', 'VEGAN'].includes(d)
+        eventDietaryGroups.meal.some(choice => choice === d)
     );
 
     if (dietary.length > 0 && meals.length === 0) {
@@ -1310,7 +1310,7 @@ function participantDietaryChoices(participant: ParticipantRow): Array<string> {
     // Unknown persisted labels never become a new dietary badge.
     return (participant.dietaryChoices || [])
         .map((choice) => choice.choice)
-        .filter((choice): choice is (typeof ALLOWED_DIETARY)[number] => ALLOWED_DIETARY.includes(choice as (typeof ALLOWED_DIETARY)[number]));
+        .filter((choice): choice is (typeof eventDietaryChoices)[number] => eventDietaryChoices.includes(choice as (typeof eventDietaryChoices)[number]));
 }
 
 /** Return the first saved allergy note or the shared absent-value marker. */

@@ -18,7 +18,7 @@ schemas:
     required: [audience, registrationId, pools, invoices, shares]
     properties:
       audience: {type: string, enum: [participant, organizer]}
-      registrationId: {anyOf: [{$ref: './openapi.yaml#/components/schemas/DecimalId'}, {type: 'null'}]}
+      registrationId: {anyOf: [{$ref: "./common.yaml#/schemas/DecimalId"}, {type: 'null'}]}
       participants: {type: array, items: {$ref: '#/schemas/FinanceParticipant'}}
       pools: {type: array, items: {$ref: '#/schemas/FinancePool'}}
       invoices: {type: array, items: {$ref: '#/schemas/FinanceInvoice'}}
@@ -60,7 +60,7 @@ schemas:
       canSubmit: {type: boolean}
       settings: {anyOf: [{$ref: '#/schemas/FinancePoolSettings'}, {type: 'null'}]}
       canRollback: {type: boolean}
-      registrationIds: {type: array, items: {$ref: './openapi.yaml#/components/schemas/DecimalId'}}
+      registrationIds: {type: array, items: {$ref: "./common.yaml#/schemas/DecimalId"}}
       assignments: {type: array, items: {$ref: '#/schemas/FinanceAssignment'}}
       surcharges: {type: array, items: {$ref: '#/schemas/FinanceAdjustment'}}
       coverageChoices: {type: array, items: {$ref: '#/schemas/FinanceParticipant'}}
@@ -73,14 +73,14 @@ schemas:
     additionalProperties: false
     required: [id, name]
     properties:
-      id: {$ref: './openapi.yaml#/components/schemas/DecimalId'}
+      id: {$ref: "./common.yaml#/schemas/DecimalId"}
       name: {type: string}
   FinanceCoverageGroup:
     type: object
     additionalProperties: false
     required: [payerId, payerName, beneficiaries]
     properties:
-      payerId: {$ref: './openapi.yaml#/components/schemas/DecimalId'}
+      payerId: {$ref: "./common.yaml#/schemas/DecimalId"}
       payerName: {type: string}
       beneficiaries: {type: array, items: {$ref: '#/schemas/FinanceCoveragePerson'}}
   FinanceInvoice:
@@ -88,7 +88,7 @@ schemas:
     additionalProperties: false
     required: [id, poolId, poolName, revision, status, amount, description, correctedAmount, correctedDescription, rejectionReason, createdAt, organizerRecorded, recordedByName, participantName, participantEmail, proofOriginalName, proofUrl, canRetract, canClose]
     properties:
-      id: {$ref: './openapi.yaml#/components/schemas/DecimalId'}
+      id: {$ref: "./common.yaml#/schemas/DecimalId"}
       poolId: {type: string, format: uuid}
       poolName: {type: string}
       revision: {type: integer, minimum: 0}
@@ -119,7 +119,7 @@ schemas:
     additionalProperties: false
     required: [id, poolId, poolName, payerName, notes, needsRecalculation, amount, status, statusLabel, isPaid, caption, settledShareNotice, coveredNames, coverageKnown]
     properties:
-      id: {$ref: './openapi.yaml#/components/schemas/DecimalId'}
+      id: {$ref: "./common.yaml#/schemas/DecimalId"}
       poolId: {type: string, format: uuid}
       poolName: {type: string}
       payerName: {type: string}
@@ -218,7 +218,7 @@ schemas:
     additionalProperties: false
     required: [id, name, email]
     properties:
-      id: {$ref: './openapi.yaml#/components/schemas/DecimalId'}
+      id: {$ref: "./common.yaml#/schemas/DecimalId"}
       name: {type: string}
       email: {type: [string, 'null']}
   FinancePoolSettings:
@@ -244,7 +244,7 @@ schemas:
       subtractPersonalInvoices: {type: boolean}
       sendCalculationEmails: {type: boolean}
       roundUpShares: {type: boolean}
-      registrations: {type: array, uniqueItems: true, items: {$ref: './openapi.yaml#/components/schemas/DecimalId'}}
+      registrations: {type: array, uniqueItems: true, items: {$ref: "./common.yaml#/schemas/DecimalId"}}
   FinancePoolSettingsInput:
     type: object
     additionalProperties: false
@@ -268,7 +268,7 @@ schemas:
     properties:
       amount: {$ref: '#/schemas/FinanceAmountInput'}
       description: {type: string, minLength: 1, maxLength: 4000}
-      registrationId: {$ref: './openapi.yaml#/components/schemas/DecimalId'}
+      registrationId: {$ref: "./common.yaml#/schemas/DecimalId"}
   FinanceOrganizerInvoiceForm:
     type: object
     additionalProperties: false
@@ -310,7 +310,7 @@ schemas:
     additionalProperties: false
     required: [registrationId, factor, isExempt]
     properties:
-      registrationId: {$ref: './openapi.yaml#/components/schemas/DecimalId'}
+      registrationId: {$ref: "./common.yaml#/schemas/DecimalId"}
       factor: {$ref: '#/schemas/FinanceFactor'}
       isExempt: {type: boolean}
   FinanceAdjustment:
@@ -318,8 +318,8 @@ schemas:
     additionalProperties: false
     required: [id, registrationId, amount, note, subtractFromPool]
     properties:
-      id: {$ref: './openapi.yaml#/components/schemas/DecimalId'}
-      registrationId: {$ref: './openapi.yaml#/components/schemas/DecimalId'}
+      id: {$ref: "./common.yaml#/schemas/DecimalId"}
+      registrationId: {$ref: "./common.yaml#/schemas/DecimalId"}
       amount: {$ref: '#/schemas/FinanceMoney'}
       note: {type: string}
       subtractFromPool: {type: boolean}
@@ -331,8 +331,8 @@ schemas:
       isDefault: {type: boolean}
       assignAll: {type: boolean}
       subtractPersonalInvoices: {type: boolean}
-      registrations: {type: array, uniqueItems: true, items: {$ref: './openapi.yaml#/components/schemas/DecimalId'}}
-      exemptions: {type: array, uniqueItems: true, items: {$ref: './openapi.yaml#/components/schemas/DecimalId'}}
+      registrations: {type: array, uniqueItems: true, items: {$ref: "./common.yaml#/schemas/DecimalId"}}
+      exemptions: {type: array, uniqueItems: true, items: {$ref: "./common.yaml#/schemas/DecimalId"}}
       participantFactors:
         type: object
         propertyNames: {pattern: '^[1-9][0-9]*$'}
@@ -342,7 +342,7 @@ schemas:
     additionalProperties: false
     required: [registrationId, amount, note, subtractFromPool]
     properties:
-      registrationId: {$ref: './openapi.yaml#/components/schemas/DecimalId'}
+      registrationId: {$ref: "./common.yaml#/schemas/DecimalId"}
       amount: {$ref: '#/schemas/FinanceAmountInput'}
       note: {type: string, minLength: 1, maxLength: 4000}
       subtractFromPool: {type: boolean}
@@ -351,8 +351,8 @@ schemas:
     additionalProperties: false
     required: [beneficiaries]
     properties:
-      payerId: {$ref: './openapi.yaml#/components/schemas/DecimalId'}
-      beneficiaries: {type: array, uniqueItems: true, items: {$ref: './openapi.yaml#/components/schemas/DecimalId'}}
+      payerId: {$ref: "./common.yaml#/schemas/DecimalId"}
+      beneficiaries: {type: array, uniqueItems: true, items: {$ref: "./common.yaml#/schemas/DecimalId"}}
   FinanceCalculationInput:
     type: object
     additionalProperties: false
@@ -384,7 +384,7 @@ schemas:
     additionalProperties: false
     required: [registrationId, payerName, baseShareAmount, extraAmount, invoiceCreditAmount, paymentCreditAmount, shareAmount, calculatedAmount, isPaid, notes, statusLabel]
     properties:
-      registrationId: {$ref: './openapi.yaml#/components/schemas/DecimalId'}
+      registrationId: {$ref: "./common.yaml#/schemas/DecimalId"}
       payerName: {type: string}
       baseShareAmount: {$ref: '#/schemas/FinanceMoney'}
       extraAmount: {$ref: '#/schemas/FinanceMoney'}
@@ -440,13 +440,13 @@ paths:
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Review current saved calculation inputs through the existing management grant
       parameters: &financePreviewParameters
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
         - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
       responses:
         '200': {description: Read-only reviewed allocation, content: {application/json: {schema: {$ref: '#/schemas/FinancePreview'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/close:
     post:
       operationId: closeEventFinancePool
@@ -454,15 +454,15 @@ paths:
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: Close and calculate the captured preview revision through the shared operation
       parameters: &financeCalculationParameters
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
-        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
+        - {$ref: "./common.yaml#/parameters/Csrf"}
         - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceCalculationInput'}}}}
       responses:
         '200': {description: Saved calculation committed, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/recalculate:
     post:
       operationId: recalculateEventFinancePool
@@ -473,7 +473,7 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceCalculationInput'}}}}
       responses:
         '200': {description: Saved calculation replaced, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/rollback:
     post:
       operationId: rollbackEventFinancePool
@@ -483,7 +483,7 @@ paths:
       parameters: *financeCalculationParameters
       responses:
         '200': {description: Local inputs restored, content: {application/json: {schema: {$ref: '#/schemas/FinanceRollbackResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/notify:
     post:
       operationId: notifyEventFinancePool
@@ -493,7 +493,7 @@ paths:
       parameters: *financeCalculationParameters
       responses:
         '200': {description: Delivery queued for reachable payers, content: {application/json: {schema: {$ref: '#/schemas/FinanceNotificationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/shares/{shareId}/settlement:
     post:
       operationId: settleEventFinanceShare
@@ -501,16 +501,16 @@ paths:
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: Record or reverse the signed saved payment or refund status
       parameters:
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
-        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
+        - {$ref: "./common.yaml#/parameters/Csrf"}
         - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
-        - {name: shareId, in: path, required: true, schema: {$ref: './openapi.yaml#/components/schemas/DecimalId'}}
+        - {name: shareId, in: path, required: true, schema: {$ref: "./common.yaml#/schemas/DecimalId"}}
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceSettlementInput'}}}}
       responses:
         '200': {description: Settlement marker saved, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/assignments:
     post:
       operationId: updateEventFinanceAssignments
@@ -518,15 +518,15 @@ paths:
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: Save enrollment factors and exemptions without replacing saved shares
       parameters:
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
-        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
+        - {$ref: "./common.yaml#/parameters/Csrf"}
         - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceAssignmentsInput'}}}}
       responses:
         '200': {description: Assignment inputs saved, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/adjustments:
     post:
       operationId: addEventFinanceAdjustment
@@ -534,15 +534,15 @@ paths:
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: Add a signed participant surcharge or rebate through its existing operation
       parameters: &financeInputCommandParameters
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
-        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
+        - {$ref: "./common.yaml#/parameters/Csrf"}
         - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceAdjustmentInput'}}}}
       responses:
         '200': {description: Adjustment saved, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/adjustments/{surchargeId}/remove:
     post:
       operationId: removeEventFinanceAdjustment
@@ -550,15 +550,15 @@ paths:
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: Remove an adjustment while preserving the existing saved calculation
       parameters:
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
-        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
+        - {$ref: "./common.yaml#/parameters/Csrf"}
         - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: surchargeId, in: path, required: true, schema: {type: string, pattern: '^[1-9][0-9]*$'}}
       responses:
         '200': {description: Adjustment removed, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/takeovers:
     post:
       operationId: updateEventParticipantFinanceTakeovers
@@ -568,7 +568,7 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceTakeoverInput'}}}}
       responses:
         '200': {description: Own coverage saved, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/takeovers/manage:
     post:
       operationId: updateEventOrganizerFinanceTakeovers
@@ -579,7 +579,7 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceTakeoverInput'}}}}
       responses:
         '200': {description: Organizer coverage inputs saved, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools:
     post:
       operationId: createEventFinancePool
@@ -587,14 +587,14 @@ paths:
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: Create an invoice pool through its existing organizer operation
       parameters: &financeEventCommandParameters
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
-        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
+        - {$ref: "./common.yaml#/parameters/Csrf"}
         - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinancePoolCreateInput'}}}}
       responses:
         '200': {description: Pool created, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/settings:
     post:
       operationId: updateEventFinanceSettings
@@ -602,15 +602,15 @@ paths:
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: Save invoice pool settings without recalculating saved shares
       parameters: &financePoolCommandParameters
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
-        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
+        - {$ref: "./common.yaml#/parameters/Csrf"}
         - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinancePoolSettingsInput'}}}}
       responses:
         '200': {description: Settings saved, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/submission-state:
     post:
       operationId: changeEventFinanceSubmissionState
@@ -621,7 +621,7 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceSubmissionStateInput'}}}}
       responses:
         '200': {description: Submission access saved, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/invoices/organizer:
     post:
       operationId: recordEventOrganizerInvoice
@@ -631,7 +631,7 @@ paths:
       requestBody: {required: true, content: {multipart/form-data: {schema: {$ref: '#/schemas/FinanceOrganizerInvoiceForm'}}}}
       responses:
         '200': {description: Organizer cost recorded, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/approve:
     post:
       operationId: approveEventFinanceInvoice
@@ -639,16 +639,16 @@ paths:
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: Accept an unreviewed invoice with optional corrections
       parameters: &financeInvoiceCommandParameters
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
-        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
+        - {$ref: "./common.yaml#/parameters/Csrf"}
         - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: invoiceId, in: path, required: true, schema: {type: string, pattern: '^[1-9][0-9]*$'}}
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceAcceptanceInput'}}}}
       responses:
         '200': {description: Invoice accepted, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/decline:
     post:
       operationId: declineEventFinanceInvoice
@@ -659,7 +659,7 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceDeclineInput'}}}}
       responses:
         '200': {description: Invoice declined, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/organizer-close:
     post:
       operationId: closeEventOrganizerInvoice
@@ -669,7 +669,7 @@ paths:
       parameters: *financeInvoiceCommandParameters
       responses:
         '200': {description: Invoice closed, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/revise:
     post:
       operationId: reviseEventFinanceInvoice
@@ -679,7 +679,7 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceRevisionInput'}}}}
       responses:
         '200': {description: Invoice revised, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/reject-accepted:
     post:
       operationId: rejectAcceptedEventFinanceInvoice
@@ -689,19 +689,19 @@ paths:
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceAcceptedRejectionInput'}}}}
       responses:
         '200': {description: Accepted cost rejected, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance:
     get:
       operationId: getEventFinance
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read only the current participant's invoice history and saved shares
       parameters: &eventParameters
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
         - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
       responses:
         '200': {description: Private saved participant finance, content: {application/json: {schema: {$ref: '#/schemas/FinanceView'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/organizer:
     get:
       operationId: getEventOrganizerFinance
@@ -710,53 +710,53 @@ paths:
       parameters: *eventParameters
       responses:
         '200': {description: Authorized saved organizer finance, content: {application/json: {schema: {$ref: '#/schemas/FinanceView'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/shares/{shareId}:
     get:
       operationId: getEventFinanceBreakdown
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read one authorized saved payer calculation without recalculating the pool
       parameters:
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
         - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: shareId, in: path, required: true, schema: {type: string, pattern: '^[1-9][0-9]*$'}}
         - {name: audience, in: query, required: true, schema: {type: string, enum: [participant, organizer]}}
       responses:
         '200': {description: Selected saved breakdown, content: {application/json: {schema: {$ref: '#/schemas/FinanceBreakdown'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/invoices:
     post:
       operationId: submitEventInvoice
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: Submit a participant invoice and required proof through the existing operation
       parameters:
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
-        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
+        - {$ref: "./common.yaml#/parameters/Csrf"}
         - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
       requestBody: {required: true, content: {multipart/form-data: {schema: {$ref: '#/schemas/FinanceInvoiceForm'}}}}
       responses:
         '200': {description: Existing submission completed, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/retract:
     post:
       operationId: retractEventInvoice
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: Retract an own unreviewed invoice while retaining its proof and history
       parameters: &invoiceCommandParameters
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
-        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
+        - {$ref: "./common.yaml#/parameters/Csrf"}
         - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: invoiceId, in: path, required: true, schema: {type: string, pattern: '^[1-9][0-9]*$'}}
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceRetractionInput'}}}}
       responses:
         '200': {description: Existing retraction completed, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/close:
     post:
       operationId: closeEventInvoice
@@ -765,18 +765,18 @@ paths:
       parameters: *invoiceCommandParameters
       responses:
         '200': {description: Existing participant close completed, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/proof:
     get:
       operationId: getEventInvoiceProof
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read a retained invoice proof through its existing ownership boundary
       parameters:
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
         - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: invoiceId, in: path, required: true, schema: {type: string, pattern: '^[1-9][0-9]*$'}}
       responses:
         '200': {description: Authorized retained proof bytes, content: {application/octet-stream: {schema: {$ref: '#/schemas/FinanceProof'}}}}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}

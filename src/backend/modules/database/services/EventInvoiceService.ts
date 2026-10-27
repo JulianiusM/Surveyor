@@ -16,7 +16,7 @@
 
 import {EntityManager, type DeepPartial} from "typeorm";
 import type {InvoicePoolDistribution, InvoicePoolSubmissionState, ProjectedInvoiceShare} from "../../../../types/InvoicePoolTypes";
-import {formatAmount, resolveInvoiceAmount, toAmount} from "../../lib/util";
+import {formatAmount, invoiceCostTotals, toAmount} from "../../lib/util";
 import {AppDataSource} from "../dataSource";
 import {Event} from "../entities/event/Event";
 import {EventInvoice} from "../entities/event/EventInvoice";
@@ -27,6 +27,8 @@ import {EventPoolAssignment} from "../entities/event/EventPoolAssignment";
 import {EventPoolTakeover} from "../entities/event/EventPoolTakeover";
 import {EventRegistration} from "../entities/event/EventRegistration";
 import {Profile} from "../entities/user/Profile";
+import {InvoiceProofFile} from '../entities/event/InvoiceProofFile';
+import type {InvoiceProofOperation} from '../../../../types/InvoiceProofTypes';
 
 /** Load the pool and its relation collections from one repeatable-read database snapshot. */
 async function loadPool(poolId: string) {
@@ -81,6 +83,92 @@ export async function savePool(pool: EventInvoicePool, manager: EntityManager): 
 export async function saveInvoice(values: DeepPartial<EventInvoice>, manager: EntityManager): Promise<EventInvoice> {
     const repo = manager.getRepository(EventInvoice);
     return repo.save(repo.create(values));
+}
+
+/** Reserve already selected file ownership before the uploader writes bytes.
+ * Duplicate identities retain their existing state rather than reopening deletion. */
+export async function insertProofFile(values: DeepPartial<InvoiceProofFile>, manager: EntityManager = AppDataSource.manager): Promise<void> {
+    // The feature supplies the identity/path/state; this boundary only persists the reservation.
+    await manager.getRepository(InvoiceProofFile).createQueryBuilder().insert().values(values).orIgnore().execute();
+}
+
+/** Read one ownership record, optionally retaining its write fence on a caller transaction. */
+export async function getProofFile(id: string, manager: EntityManager = AppDataSource.manager, lock = false): Promise<InvoiceProofFile | null> {
+    return manager.getRepository(InvoiceProofFile).findOne({where: {id}, ...(lock ? {lock: {mode: 'pessimistic_write' as const}} : {})});
+}
+
+/** Retain the proof row fence while the supplied named feature operation chooses its transition. */
+export async function withProofFileTransaction<Result>(id: string, operation: InvoiceProofOperation<Result>): Promise<Result> {
+    // READ COMMITTED observes invoices attached before this fence was acquired; no
+    // feature callback can accidentally query through an earlier repeatable snapshot.
+    async function runLocked(manager: EntityManager): Promise<Result> {
+        return operation(manager, await getProofFile(id, manager, true));
+    }
+    return AppDataSource.transaction('READ COMMITTED', runLocked);
+}
+
+/** Persist a feature-selected transition without deciding eligibility or touching files. */
+export async function saveProofFile(row: InvoiceProofFile, manager: EntityManager): Promise<void> {
+    await manager.getRepository(InvoiceProofFile).save(row);
+}
+
+/** Remove completed ownership evidence only after the feature confirms filesystem completion. */
+export async function deleteProofFile(id: string, manager: EntityManager): Promise<void> {
+    await manager.getRepository(InvoiceProofFile).delete(id);
+}
+
+/** Page raw ownership records without hydrating invoice graphs or losing retry state. */
+export async function getProofFilesPage(afterId?: string, limit = 100,
+    manager: EntityManager = AppDataSource.manager): Promise<InvoiceProofFile[]> {
+    const query = manager.getRepository(InvoiceProofFile).createQueryBuilder('proof').orderBy('proof.id', 'ASC').take(limit);
+    if (afterId) query.where('proof.id > :afterId', {afterId});
+    return query.getMany();
+}
+
+/** Return every live stored spelling; the proof owner compares filesystem identities.
+ * DISTINCT protects legacy shared paths without choosing one invoice as the owner. */
+export async function getInvoiceProofReferences(manager: EntityManager = AppDataSource.manager): Promise<string[]> {
+    // Read only the reference column so cleanup never needs sensitive original names or invoice amounts.
+    const rows = await manager.getRepository(EventInvoice).createQueryBuilder('invoice')
+        .select('invoice.proof_path', 'path').distinct(true)
+        .where('invoice.proof_path IS NOT NULL').andWhere("invoice.proof_path <> ''").getRawMany<{path: string}>();
+    return rows.map(row => row.path);
+}
+
+/** Protect the ordinary stored spelling without scanning the installation's proof inventory. */
+export async function hasInvoiceProofReference(paths: readonly string[], manager: EntityManager = AppDataSource.manager): Promise<boolean> {
+    if (!paths.length) return false;
+    const row = await manager.getRepository(EventInvoice).createQueryBuilder('invoice').select('invoice.id', 'id')
+        .where('BINARY invoice.proof_path IN (:...paths)', {paths}).limit(1).getRawOne();
+    return !!row;
+}
+
+/** Page legacy aliases only when an exact reference did not protect a cleanup candidate. */
+export async function getInvoiceProofReferencePage(afterId: number, manager: EntityManager = AppDataSource.manager): Promise<{id: number; path: string}[]> {
+    const rows = await manager.getRepository(EventInvoice).createQueryBuilder('invoice')
+        .select('invoice.id', 'id').addSelect('invoice.proof_path', 'path')
+        .where('invoice.id > :afterId', {afterId}).andWhere('invoice.proof_path IS NOT NULL')
+        .andWhere("invoice.proof_path <> ''").orderBy('invoice.id', 'ASC').limit(1000).getRawMany<{id: number; path: string}>();
+    return rows.map(row => ({id: Number(row.id), path: row.path}));
+}
+
+/** Serialize offline maintenance commands on one held connection without moving
+ * filesystem or manifest decisions into persistence. A busy lock returns null. */
+export async function withProofMaintenanceLock<Result>(operation: () => Promise<Result>): Promise<{result: Result} | null> {
+    const runner = AppDataSource.createQueryRunner();
+    await runner.connect();
+    const name = `surveyor-proof-maintenance:${String(AppDataSource.options.database)}`.slice(0, 64);
+    let acquired = false;
+    try {
+        // MariaDB advisory locks belong to the connection, so retain this runner
+        // through the caller's filesystem work and release before returning it.
+        const [row] = await runner.query('SELECT GET_LOCK(?, 0) AS acquired', [name]);
+        acquired = Number(row.acquired) === 1;
+        return acquired ? {result: await operation()} : null;
+    } finally {
+        try { if (acquired) await runner.query('SELECT RELEASE_LOCK(?)', [name]); }
+        finally { await runner.release(); }
+    }
 }
 
 export async function saveShare(share: EventInvoiceShare, manager: EntityManager): Promise<void> {
@@ -344,17 +432,7 @@ export async function refreshPoolTotals(manager: EntityManager, poolId: string) 
     if (!pool) return;
 
     // Invoice totals retain accepted/closed costs and distinguish additional from redistributed adjustments.
-    const invoiceTotal = invoices.filter(inv => inv.status === "APPROVED" || inv.status === "CLOSED")
-        .reduce((sum, inv) => sum + resolveInvoiceAmount(inv.amount, inv.correctedAmount), 0);
-    const openAmount = invoices
-        .filter((inv) => inv.status === "APPROVED")
-        .reduce((sum, inv) => sum + resolveInvoiceAmount(inv.amount, inv.correctedAmount), 0);
-    const extraAmount = surcharges
-        .filter(s => !s.subtractFromPool)
-        .reduce((sum, s) => sum + toAmount(s.amount), 0);
-    const subtractiveAmount = surcharges
-        .filter((s) => s.subtractFromPool)
-        .reduce((sum, s) => sum + toAmount(s.amount), 0);
+    const {invoiceTotal, openAmount, extraAmount, subtractiveAmount} = invoiceCostTotals(invoices, surcharges);
     // Transfer totals include unsettled rows only. The legacy credit column stores a refund magnitude;
     // signed presentation is owned by the invoice presenter and never changes the saved share amount.
     const outstandingAmount = shares

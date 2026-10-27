@@ -787,6 +787,7 @@ function helpFixture(t, extra = '') {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'surveyor-help-check-'));
     t.after(() => fs.rmSync(root, {recursive: true, force: true}));
     write(root, 'scripts/check-help-documentation.mjs', fs.readFileSync(helpScript));
+    write(root, 'src/common/lib/helpPolicy.ts', fs.readFileSync(path.join(repository, 'src/common/lib/helpPolicy.ts')));
     write(root, 'scripts/check-documentation.mjs', fs.readFileSync(script));
     write(root, 'docs/user-guide/en/README.md', `# Help\n${metadata}\n\n![Test diagram](assets/test.png)\n${extra}\n`);
     write(root, 'docs/user-guide/en/assets/test.png', Buffer.from('89504e470d0a1a0a', 'hex'));

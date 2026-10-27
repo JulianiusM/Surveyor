@@ -457,8 +457,8 @@ paths:
       summary: Read account-only creation admission and public form context
       security: []
       parameters:
-        - $ref: './openapi.yaml#/components/parameters/Context'
-        - $ref: './openapi.yaml#/components/parameters/Locale'
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - name: returnTo
           in: query
           schema: {type: string, maxLength: 2048}
@@ -472,9 +472,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: './openapi.yaml#/components/schemas/PackingCreateEntry'
+                $ref: "./packing.yaml#/schemas/PackingCreateEntry"
         default:
-          $ref: './openapi.yaml#/components/responses/Problem'
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/{listId}/entry:
     get:
       operationId: getPackingResourceEntry
@@ -482,9 +482,9 @@ paths:
       summary: Read detail or guest-entry admission without disclosing protected list data
       security: []
       parameters:
-        - $ref: './openapi.yaml#/components/parameters/Context'
-        - $ref: './openapi.yaml#/components/parameters/Locale'
-        - $ref: './openapi.yaml#/components/parameters/ListId'
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
         - name: view
           in: query
           required: true
@@ -495,19 +495,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: './openapi.yaml#/components/schemas/PackingResourceEntry'
+                $ref: "./packing.yaml#/schemas/PackingResourceEntry"
         default:
-          $ref: './openapi.yaml#/components/responses/Problem'
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/{listId}:
     get:
       operationId: getPackingList
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read an authorized packing list
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/IfNoneMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Current authorized representation
@@ -524,39 +524,39 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingListView"
+                $ref: "./packing.yaml#/schemas/PackingListView"
         "304":
           description: Authorized representation unchanged; no response body
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
     delete:
       operationId: deletePackingList
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: delete Packing List
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/MutationResult"
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/{listId}/metadata:
     get:
       operationId: getPackingMetadata
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read only editable packing metadata
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/IfNoneMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Current authorized representation
@@ -573,27 +573,27 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingMetadata"
+                $ref: "./packing.yaml#/schemas/PackingMetadata"
         "304":
           description: Authorized representation unchanged; no response body
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
     patch:
       operationId: updatePackingMetadata
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: metadata}
       summary: Update selected packing metadata with an exact edit precondition
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
-        - $ref: "./openapi.yaml#/components/parameters/IfMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "./openapi.yaml#/components/schemas/PackingMetadataPatch"
+              $ref: "./packing.yaml#/schemas/PackingMetadataPatch"
       responses:
         "200":
           description: Current authorized representation
@@ -610,19 +610,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingMetadata"
+                $ref: "./packing.yaml#/schemas/PackingMetadata"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/{listId}/description:
     get:
       operationId: getPackingDescription
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read only the independently granted description field
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/IfNoneMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Current independently authorized field baseline
@@ -633,21 +633,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingDescriptionBaseline"
+                $ref: "./packing.yaml#/schemas/PackingDescriptionBaseline"
         "304":
           description: Authorized baseline unchanged; no response body
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
     patch:
       operationId: updatePackingDescription
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: metadata}
       summary: Update only the independently granted description field
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
-        - $ref: "./openapi.yaml#/components/parameters/IfMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Updated description field baseline
@@ -658,26 +658,26 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingDescriptionBaseline"
+                $ref: "./packing.yaml#/schemas/PackingDescriptionBaseline"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "./openapi.yaml#/components/schemas/PackingDescriptionPatch"
+              $ref: "./packing.yaml#/schemas/PackingDescriptionPatch"
   /packing-lists/{listId}/items/{itemId}/self-assignment:
     put:
       operationId: assignPackingItem
       x-surveyor-command: {retryPolicy: natural-idempotent, precondition: none}
       summary: Idempotently take a packing item as the active profile
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/ItemId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/ItemId"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Current authorized representation
@@ -691,19 +691,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingAssignmentResult"
+                $ref: "./packing.yaml#/schemas/PackingAssignmentResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
     delete:
       operationId: unassignPackingItem
       x-surveyor-command: {retryPolicy: natural-idempotent, precondition: none}
       summary: Remove the active profile's packing commitment
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/ItemId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/ItemId"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Current authorized representation
@@ -717,50 +717,50 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingAssignmentResult"
+                $ref: "./packing.yaml#/schemas/PackingAssignmentResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/create-context:
     get:
       operationId: getPackingCreateContext
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: get Packing Create Context
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingCreateContext"
+                $ref: "./packing.yaml#/schemas/PackingCreateContext"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists:
     post:
       operationId: createPackingList
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: create Packing List
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "201":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingCreated"
+                $ref: "./packing.yaml#/schemas/PackingCreated"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
-              $ref: "./openapi.yaml#/components/schemas/PackingCreateForm"
+              $ref: "./packing.yaml#/schemas/PackingCreateForm"
             encoding:
               data:
                 contentType: application/json
@@ -770,66 +770,66 @@ paths:
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: search Packing Events
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - name: q
           in: query
           required: false
           schema:
-            $ref: './openapi.yaml#/components/schemas/EventPickerQuery/properties/q'
+            $ref: "./events.yaml#/schemas/EventPickerQuery/properties/q"
         - name: from
           in: query
           required: false
           schema:
-            $ref: './openapi.yaml#/components/schemas/EventPickerQuery/properties/from'
+            $ref: "./events.yaml#/schemas/EventPickerQuery/properties/from"
         - name: to
           in: query
           required: false
           schema:
-            $ref: './openapi.yaml#/components/schemas/EventPickerQuery/properties/to'
+            $ref: "./events.yaml#/schemas/EventPickerQuery/properties/to"
         - name: period
           in: query
           required: false
           schema:
-            $ref: './openapi.yaml#/components/schemas/EventPickerQuery/properties/period'
+            $ref: "./events.yaml#/schemas/EventPickerQuery/properties/period"
         - name: archive
           in: query
           required: false
           schema:
-            $ref: './openapi.yaml#/components/schemas/EventPickerQuery/properties/archive'
+            $ref: "./events.yaml#/schemas/EventPickerQuery/properties/archive"
         - name: deadline
           in: query
           required: false
           schema:
-            $ref: './openapi.yaml#/components/schemas/EventPickerQuery/properties/deadline'
+            $ref: "./events.yaml#/schemas/EventPickerQuery/properties/deadline"
         - name: cursor
           in: query
           required: false
           schema:
-            $ref: './openapi.yaml#/components/schemas/EventPickerQuery/properties/cursor'
+            $ref: "./events.yaml#/schemas/EventPickerQuery/properties/cursor"
         - name: selectedId
           in: query
           required: false
           schema:
-            $ref: './openapi.yaml#/components/schemas/EventPickerQuery/properties/selectedId'
+            $ref: "./events.yaml#/schemas/EventPickerQuery/properties/selectedId"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/EventPickerOptions"
+                $ref: "./events.yaml#/schemas/EventPickerOptions"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/{listId}/duplicate:
     get:
       operationId: getPackingDuplicate
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: get Packing Duplicate
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
         - name: eventId
           in: query
           description: Optional destination selection, independently authorized rather than copied from the source.
@@ -840,63 +840,63 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingDuplicate"
+                $ref: "./packing.yaml#/schemas/PackingDuplicate"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/{listId}/settings:
     get:
       operationId: getPackingSettings
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: get Packing Settings
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingSettings"
+                $ref: "./packing.yaml#/schemas/PackingSettings"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/{listId}/items:
     post:
       operationId: createPackingItem
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: create Packing Item
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "201":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingCreated"
+                $ref: "./packing.yaml#/schemas/PackingCreated"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "./openapi.yaml#/components/schemas/PackingNewItem"
+              $ref: "./packing.yaml#/schemas/PackingNewItem"
   /packing-lists/{listId}/items/{itemId}/edit-baseline:
     get:
       operationId: getPackingItemEditBaseline
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read permitted item edit values independently of detail-page admission
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/ItemId"
-        - $ref: "./openapi.yaml#/components/parameters/IfNoneMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/ItemId"
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Current method-authorized item edit baseline
@@ -907,67 +907,67 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingItemEditBaseline"
+                $ref: "./packing.yaml#/schemas/PackingItemEditBaseline"
         "304":
           description: Authorized edit baseline unchanged; no response body
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/{listId}/items/{itemId}:
     patch:
       operationId: updatePackingItem
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: item}
       summary: update Packing Item
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/ItemId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
-        - $ref: "./openapi.yaml#/components/parameters/IfMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/ItemId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/MutationResult"
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "./openapi.yaml#/components/schemas/PackingItemPatch"
+              $ref: "./packing.yaml#/schemas/PackingItemPatch"
     delete:
       operationId: deletePackingItem
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: delete Packing Item
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/ItemId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/ItemId"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/MutationResult"
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/{listId}/item-order:
     get:
       operationId: getPackingItemOrderBaseline
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read permitted order values independently of detail-page admission
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/IfNoneMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Current method-authorized item order baseline
@@ -978,56 +978,56 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingOrderEditBaseline"
+                $ref: "./packing.yaml#/schemas/PackingOrderEditBaseline"
         "304":
           description: Authorized order baseline unchanged; no response body
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
     put:
       operationId: reorderPackingItems
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: order}
       summary: reorder Packing Items
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
-        - $ref: "./openapi.yaml#/components/parameters/IfMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/MutationResult"
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "./openapi.yaml#/components/schemas/PackingItemOrder"
+              $ref: "./packing.yaml#/schemas/PackingItemOrder"
   /packing-lists/{listId}/assignments/{assignmentId}:
     delete:
       operationId: deletePackingAssignment
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: delete Packing Assignment
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/AssignmentId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/AssignmentId"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/MutationResult"
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/{listId}/event:
     put:
       operationId: changePackingEvent
@@ -1035,36 +1035,36 @@ paths:
       summary: change Packing Event
       description: Current authorization is always required. An already selected event returns unchanged without writing, even with an absent or stale comparison; an actual relationship change requires the reviewed If-Match and expectedEventId.
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
-        - $ref: "./openapi.yaml#/components/parameters/EventIfMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/EventIfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingEventChanged"
+                $ref: "./common.yaml#/schemas/EntityEventChangeResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "./openapi.yaml#/components/schemas/PackingEventChange"
+              $ref: "./packing.yaml#/schemas/PackingEventChange"
   /packing-lists/{listId}/default-permissions:
     get:
       operationId: getPackingDefaultsBaseline
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read only granted audience masks for a reviewed defaults update
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/IfNoneMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Current independently authorized field baseline
@@ -1075,73 +1075,73 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingDefaultsBaseline"
+                $ref: "./packing.yaml#/schemas/PackingDefaultsBaseline"
         "304":
           description: Authorized baseline unchanged; no response body
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
     put:
       operationId: updatePackingDefaults
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
       summary: update Packing Defaults
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
-        - $ref: "./openapi.yaml#/components/parameters/IfMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/MutationResult"
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "./openapi.yaml#/components/schemas/PermissionDefaultsPatch"
+              $ref: "./common.yaml#/schemas/PermissionDefaultsPatch"
   /packing-lists/{listId}/admins:
     post:
       operationId: addPackingAdmin
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
       summary: add Packing Admin
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
-        - $ref: "./openapi.yaml#/components/parameters/IfMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/MutationResult"
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "./openapi.yaml#/components/schemas/PackingAdminInput"
+              $ref: "./packing.yaml#/schemas/PackingAdminInput"
   /packing-lists/{listId}/admins/{profileId}/edit-baseline:
     get:
       operationId: getPackingAdminBaseline
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read only one granted administrator mask or new-grant marker
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/ProfileId"
-        - $ref: "./openapi.yaml#/components/parameters/IfNoneMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/ProfileId"
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Current independently authorized field baseline
@@ -1152,87 +1152,87 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingAdminBaseline"
+                $ref: "./packing.yaml#/schemas/PackingAdminBaseline"
         "304":
           description: Authorized baseline unchanged; no response body
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/{listId}/admins/{profileId}:
     patch:
       operationId: updatePackingAdmin
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
       summary: update Packing Admin
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/ProfileId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
-        - $ref: "./openapi.yaml#/components/parameters/IfMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/ProfileId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/MutationResult"
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "./openapi.yaml#/components/schemas/PackingAdminPatch"
+              $ref: "./packing.yaml#/schemas/PackingAdminPatch"
     delete:
       operationId: deletePackingAdmin
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
       summary: delete Packing Admin
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/ProfileId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
-        - $ref: "./openapi.yaml#/components/parameters/IfMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/ProfileId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/MutationResult"
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/{listId}/profiles:
     get:
       operationId: searchPackingProfiles
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: search Packing Profiles
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/SearchQuery"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/SearchQuery"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingProfileOptions"
+                $ref: "./packing.yaml#/schemas/PackingProfileOptions"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/{listId}/header/edit-baseline:
     get:
       operationId: getPackingHeaderBaseline
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read only the granted header comparison hash
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/IfNoneMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Current independently authorized field baseline
@@ -1243,108 +1243,108 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingHeaderBaseline"
+                $ref: "./packing.yaml#/schemas/PackingHeaderBaseline"
         "304":
           description: Authorized baseline unchanged; no response body
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/{listId}/header:
     put:
       operationId: uploadPackingHeader
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
       summary: upload Packing Header
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
-        - $ref: "./openapi.yaml#/components/parameters/IfMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/MutationResult"
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
-              $ref: "./openapi.yaml#/components/schemas/PackingHeaderUpload"
+              $ref: "./packing.yaml#/schemas/PackingHeaderUpload"
     delete:
       operationId: deletePackingHeader
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
       summary: delete Packing Header
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
-        - $ref: "./openapi.yaml#/components/parameters/IfMatch"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/MutationResult"
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
     get:
       operationId: getPackingHeader
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read the authorized packing header image
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
       responses:
         "200":
           description: Stored JPEG, PNG or GIF bytes; media policy is enforced by the file endpoint
           content:
             application/octet-stream:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/PackingHeaderBinary"
+                $ref: "./packing.yaml#/schemas/PackingHeaderBinary"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/{listId}/archive:
     post:
       operationId: archivePackingList
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: archive Packing List
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/MutationResult"
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /packing-lists/{listId}/restore:
     post:
       operationId: restorePackingList
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: restore Packing List
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/ListId"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/ListId"
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/MutationResult"
+                $ref: "./common.yaml#/schemas/MutationResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"

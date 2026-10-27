@@ -693,6 +693,7 @@
           "duplicate": "Dieser Vorschlag ist bereits vorhanden.",
           "removed": "Manueller Vorgang entfernt. Speichere die Änderungen, um die Prüfung zu übernehmen.",
           "saved": "Prüfung gespeichert. Angewendet: {{applied}}; übersprungen: {{skipped}}.",
+          "refreshFailed": "Die Einteilungen wurden übernommen, aber die Vorschläge konnten nicht aktualisiert werden. Mit {{action}} können Sie die Vorschläge erneut aktualisieren.",
           "warningsFailed": "Warnungen konnten nicht geprüft werden. Prüfe die Änderungen vor dem Speichern erneut.",
           "confirmOverlap": "Überschneidungen bestätigen",
           "jobQueued": "Vorschläge werden erstellt...",

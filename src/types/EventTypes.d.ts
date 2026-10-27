@@ -15,6 +15,7 @@
  */
 
 import {EventRegistrationDietary} from "../backend/modules/database/entities/event/EventRegistrationDietary";
+import type {components} from './api/v1';
 
 export type CreateEventDTO = {
     title: string;
@@ -27,7 +28,7 @@ export type CreateEventDTO = {
     allowOverfillAfterFull?: boolean;
 };
 
-export type DIETARY = "MEAT" | "FISH" | "VEGETARIAN" | "VEGAN" | "HALAL" | "KOSHER" | "ALLERGIES" | "COMMENT";
+export type DIETARY = components['schemas']['EventDietaryChoice'];
 
 /** Direct and versioned adapters share grant choices; actor/page admission stays with its existing owner. */
 export type EventMethod = 'register' | 'admin' | 'participants' | 'manageRegistrations' | 'items'

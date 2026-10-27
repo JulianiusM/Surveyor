@@ -20,12 +20,7 @@ schemas:
       oidcEnabled: {type: boolean}
       oidcName: {type: string}
   SessionProfile:
-    type: object
-    additionalProperties: false
-    required: [id, name]
-    properties:
-      id: {$ref: './common.yaml#/schemas/Uuid'}
-      name: {type: string}
+    $ref: ./common.yaml#/schemas/PublicProfileReference
   SessionView:
     type: object
     additionalProperties: false
@@ -81,7 +76,7 @@ paths:
       summary: Read the current session without exposing credentials
       security: []
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/Locale"
       responses:
         "200":
           description: Current authorized representation
@@ -95,9 +90,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/SessionView"
+                $ref: "./session.yaml#/schemas/SessionView"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
   /locale:
     put:
       operationId: setLocale
@@ -105,15 +100,15 @@ paths:
       summary: Choose a supported browser locale
       security: []
       parameters:
-        - $ref: "./openapi.yaml#/components/parameters/Context"
-        - $ref: "./openapi.yaml#/components/parameters/Locale"
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/Csrf"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "./openapi.yaml#/components/schemas/LocaleUpdate"
+              $ref: "./common.yaml#/schemas/LocaleUpdate"
       responses:
         "200":
           description: Current authorized representation
@@ -127,6 +122,6 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/SessionView"
+                $ref: "./session.yaml#/schemas/SessionView"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"

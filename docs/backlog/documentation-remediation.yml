@@ -32,6 +32,168 @@ audit:
   archive_sha256: e5e07dd694d2af5520767d638934368c8566ed02c02f78ac2863b33db9f174b0
   extracted_source_fingerprint: 334a506602e67e869b4021567408890bb44a6ad91ede85d2e10db01b72b95cf6
   review_mode: static
+architecture_implementation_2026_10_27:
+  authority: The maintainer explicitly instructs full, careful implementation and approves every R1 through R20
+    from the implementation-plan answer immediately preceding the current decision. This is direct conversational
+    authorization, not inferred from the earlier review, this register or previous uses of these identifiers.
+  governing_amendment: docs/policies/DEVELOPMENT_POLICY.md#task-scoped-architecture-remediation-authority-2026-10-26
+  status: complete
+  completed_on: 2026-10-27
+  decisions:
+    R1: Approved retained-export captured-actor consistency under ARCH-005; broader session/flash work stays separate.
+    R2: Approved IMP-016 role-ID correction, expressly preserving complete role removal through frontend and backend.
+    R3: Approved IMP-079 final application receipts and separate generation outcome, reusing existing completion procedures.
+    R4: Approved IMP-013 durable proof lifecycle, ledger entity/migration/backfill, upload fencing and postcommit retry cleanup.
+    R5: Approved IMP-013 offline historical reconciliation tooling with explicit manifests and reversible quarantine.
+    R6: Approved IMP-177 single application quota owner and subscriber retirement while retaining SQL integrity protection.
+    R7: Approved IMP-178 item baseline adoption through existing shared administration.
+    R8: Approved IMP-179 shared header tokens, baselines and separately admitted reads.
+    R9: Approved IMP-180 shared counters with feature-selected inputs.
+    R10: Approved IMP-181 parent Event navigation resolution through existing linkage.
+    R11: Approved IMP-182 common real-calendar-day parsing with feature-specific admission.
+    R12: Approved IMP-183 dependency-free shared Help policy used by runtime and advisory tooling.
+    R13: Approved IMP-184 shared accepted-cost arithmetic preserving DBAL aggregates and rounding.
+    R14: Approved IMP-185 shared timer mechanics retaining independent job behavior.
+    R15: Approved IMP-186 directed leaf references preserving root exports and public compatibility.
+    R16: Approved IMP-187 neutral shared profile-reference body with compatible aliases.
+    R17: Approved IMP-188 reusable shared dietary checkbox rendering without duplicate implementations.
+    R18: Approved IMP-189 complete matching asynchronous preparation through the existing Activity context owner.
+    R19: Approved IMP-190 schema-owned Survey choices generated for all matching consumers.
+    R20: Approved IMP-191 schema-owned dietary inventory and grouping adopted throughout the app.
+  additional_requirements: R3 and R7 through R20 must reuse established procedures/modules wherever responsibilities
+    match; relocation alone does not establish completion. Frontend controls must be reusable and shared without copies.
+  boundaries: Preserve unrelated working changes, original decisions, pure DBAL and shared declaration ownership.
+    No production deployment or unspecified installation file deletion is authorized. R5 execution on a real installation
+    still needs its concrete maintenance target and candidate manifest. The reviewed disposal and migration rehearsals
+    use owned disposable schemas/files only. Successful checks cannot replace independent semantic/adoption review.
+  implementation:
+    retained_outputs: Existing permission/output middleware consumes captureApiActor without Session relation writes.
+      Real account/guest HTTP sessions exercise schedule and both PDF outputs, including grant revocation.
+    activity: Role replacement compares related role IDs and preserves quotas, retained mappings and assignments;
+      omitted roles preserve configuration and explicit empty selection removes every configured mapping. Existing-row
+      no-op scalar saves permit role-only changes. A single projected quota assertion replaces the ORM subscriber;
+      the SQL trigger remains. Existing asynchronous context preparation supplies both requirement engines.
+    completion: The existing transport prepares finite response variants for identity and Activity before commit.
+      Assignment/history application commits once; separate guarded generation selects its prepared outcome.
+      A failed refresh leaves applied success intact and uses the existing explicit generation action for retry.
+    proofs: The existing proof owner and EventInvoiceService own prewrite reservation, transactional attachment,
+      live-reference fences, cascade-safe evidence and bounded postcommit retry. The reviewed additive ledger entity
+      and migration preserve exact stored spellings; down refuses nonempty evidence. Offline CLI inventory and selected
+      quarantine/restore/purge reuse the lifecycle owner and existing request validation. No untracked startup purge exists.
+    shared_backend: Existing administration, linkage, civil-date and utility owners supply all matching list baselines,
+      header tokens/reads, counters, parent navigation, real-day parsing, accepted-cost sums and timer mechanics.
+      The pure common Help policy serves both runtime and advisory readers with their different parsers/diagnostics.
+    shared_contracts_frontend: Actual schema owners replace all leaf-to-root references while preserving public aliases.
+      A common strict UUID/name body supplies profile aliases. Authored feature enums and validated grouping metadata
+      generate frozen neutral Survey/dietary choices for ORM, Joi, declarations and UI. The shared ChoiceCheckboxes
+      renderer owns all three dietary groups; Event retains group layout, labels, drafts and comment text.
+  independent_source_acceptance: Activity and contracts reviewers separately accept R15/R16/R17/R19/R20 and their
+    actual caller adoption. Contracts reviewer accepts each root-owned R1/R7-R14 change and final guide/Help text;
+    Activity and contracts reviewers independently inspect proof lifecycle boundaries. Root independently inspects
+    final Activity, proof, contract/component changes and every delegated result. Passing checks do not replace this review.
+  evidence_directory: artifacts/architecture-implementation-20261027/
+  test_resource_cleanup: The label-verified task-owned MariaDB container and its two temporary credential files
+    were removed after verification. No unrelated container, database or installation upload was removed.
+  executed_verification:
+    - Full generation and npm run build pass, including server, frontend and SSR type checks and both production bundles.
+      The complete test TypeScript project also passes. Local execution uses Node 24.13.0 and MariaDB 10.11.14;
+      the documented CI Node baseline remains 24.15.0 and is not claimed as the executed version.
+    - All-source engineering inspection passes across 416 files, 12 DBAL services and 1527 nontrivial operations;
+      normal changed-source inspection and whitespace checks also pass. Human source/adoption review remains separate.
+    - The complete database-backed integration selection exercises 632 cases across 32 files. Its first invocation
+      passes 630 and times out two cases at their existing five-second limits. The two affected invoice suites then
+      pass all 65 cases with unchanged assertions and budgets; no full-invocation green result is inferred.
+    - The complete database-free selection exercises 2137 cases across 82 files. It passes 2133 and times out four
+      cases in Event foundation and generation. An otherwise idle focused rerun passes all 13 selected cases in those
+      files with original assertions/budgets, including the 120-second deterministic generation case at 61.2 seconds.
+    - Fifteen selected built-application workflows pass through the integrated backend and dedicated E2E database,
+      spanning Activity, Packing, Drivers, Event, Survey, Finance and Help. Six isolated built-browser dietary-layout
+      checks pass in English/German at 1280, 390 and 320 pixels; root visually inspects all six captured images.
+      The initial browser attempt could not launch the missing matching bundle; task-local installation and rerun
+      resolve that setup failure. No claim is made that the entire E2E or client-browser inventory was executed successfully.
+    - Real proof tests cover prewrite admission, multipart abort/rejection, active-allocation timing, exact path spelling,
+      Event and both registration cascades, shared references, retention rollback, retry/missing-root recovery,
+      migration backfill/down refusal and offline reconciliation. The actual settings-aware CLI also rehearses inventory,
+      idempotent quarantine/restore and early-purge refusal on owned disposable files; no site cleanup is performed.
+    - Contract comparison preserves all 237 operations, all 349 prior expanded schema shapes except the approved
+      generation outcome, and all 90 strict validator roles. All 37 existing ORM entity definitions remain equivalent;
+      only the approved ledger and subscriber retirement change metadata inventory.
+    - All 69 documentation-tooling tests pass. The advisory Help report has no errors/warnings; documentation has no
+      broken links, metadata errors or missing paths/scripts. Its unregistered source-fingerprint finding remains advisory.
+  verification_limits: Timing failures are reported rather than called clean full runs; their root cause is not
+    established. This is local source/build/disposable-system evidence, not production deployment, external OIDC/SMTP
+    verification, a load benchmark or a whole-session/flash certification. The original broader ARCH-005 scope stays open.
+  separate_followup: IMP-192/R21 records newly confirmed inherited Event boolean-field duplication beyond the
+    original dietary renderer. The maintainer subsequently approves R21; its dated entry records the shared-field
+    implementation and bounded verification. The original pending disposition remains historical below.
+architecture_review_2026_10_27:
+  authorization: The maintainer requests a complete application architecture, maintainability and duplication review,
+    recording reasonably shareable implementations and obtaining independent verification before presentation.
+    This request authorizes review and recording, not runtime, schema, policy or design changes.
+  package: architecture-review-2026-10-27
+  method: Three reviewers inspect domain/backend, platform and frontend/contracts/tooling responsibilities in parallel;
+    different reviewers independently recheck retained claims against actual source and callers, and the root reviews
+    their evidence and classifications. Neither textual similarity nor a passing checker establishes a finding alone.
+  context: Both policies and relevant architecture, development, testing and decision sources were read. Initial
+    worktree was clean; no optional profiles were present. Context was refreshed for canonical backlog recording;
+    the declared scope change was reconciled without changed governance identities or unresolved policy conflicts.
+  coverage:
+    - Whole-source engineering inventory covers 412 authored source files and 1490 nontrivial operations, including
+      all 12 DBAL services. All domain controllers, shared administration, platform/middleware/routes, feature modules,
+      entity/subscriber boundaries, frontend features/common controls, contracts and build/test configuration were reviewed.
+    - A separate static relative non-type import scan covers 367 executable TypeScript/Vue files and finds no runtime
+      import strongly connected component. Declaration-only, unresolved external and dynamic edges are outside that claim.
+    - Contract review parses actual YAML references and schema bodies; normalized source similarity is candidate
+      discovery only. Inventory coverage does not certify every line or prove absence of further architectural defects.
+  graph_correction_2026_10_27: The earlier blanket no-SCC result above is invalid; its JavaScript walker reused a
+    function name and skipped TypeScript import edges. A strict independent parser rerun covers 366 baseline and
+    369 current executable TypeScript/Vue files under the scanner's exclusions, with 1846 and 1855 resolved static
+    edges respectively. Generated directories and the ORM registry are excluded; tracked permissions and invoice
+    locale runtime files remain in the scan. Both contain the
+    same four ORM relation SCCs and no non-ORM SCC. This is bounded static-import evidence, not a full runtime DAG
+    claim. Parsed contract references confirm removal of all 1244 leaf-to-root occurrences; the approved
+    auth/common/events/session composition SCC remains because feature ownership and public shapes are preserved.
+  findings: IMP-177 through IMP-191 record 15 independently corroborated residuals. ARCH-005 receives the concrete
+    retained-output actor finding under its existing ID. IMP-013, IMP-016 and IMP-079 receive current source corroboration
+    here without duplicate defect entries or changing their existing implementation authorization.
+  inherited_current_evidence:
+    IMP-013: Event removal calls EventService.deleteEvent through eventController.removeEvent, then removes only its
+      header. EventInvoicePool.event and EventInvoice.pool cascade rows; deleteInvoiceProof is called only by retention.
+      Removing those rows loses retention's proof-path discovery. This establishes the Event-delete orphan risk,
+      not an existing pool-delete endpoint or failure of every versioned upload cleanup branch.
+    IMP-016: Activity updateSlot still calls ActivityService.updateActivitySlotRoles. Its removal compares submitted
+      role IDs with mapping-row IDs at line 828, while additions compare roleId before removal. A retained relationship
+      can therefore be selected for deletion without recreation. This is a live inherited identity-domain defect.
+    IMP-079: recommendations.applyRecommendations awaits its assignment/history transaction at line 479, then awaits
+      history reads and generation at lines 481-482. Later failure can reject a command whose assignments committed.
+      Source/caller tracing confirms the existing finality defect; no failure injection was run in this review.
+  credited_shared_owners: Matching administrator/default-permission reads and commands actually use entityAdminController
+    across Packing, Drivers, Event and Activity. Frontend settings/access/command flows, permission method policy,
+    stored-file resolution, UUID identity, Activity requirement arithmetic and core transport have real shared adoption.
+  classification_limits: SQL integrity constraints, generated consumers, explicit root OpenAPI export aliases, distinct
+    Survey permissions, DBAL materialized aggregates and recorded identity/transaction differences are not violations
+    merely because related text exists twice. IMP-186 and IMP-189 are lower-priority factoring/coupling opportunities,
+    not proven broken behavior or conflicts with an explicit existing technical decision.
+  change_scope: Only this canonical register is edited. Ignored context/check evidence is task evidence, not a new
+    documentation destination. Existing approvals and exclusions retain their original bounded scope.
+  independent_acceptance: Domain and platform reviewers independently accept the compiled canonical report after
+    source review of all 15 new entries and ARCH-005's concrete actor evidence; the root also reviews each claim.
+    A stale caller-held scope-review flag was reconciled, and the exact context comparison then reports no reviewRequired.
+  current_verification:
+    - The all-source development checker passes across 412 files and 1490 nontrivial operations; normal
+      npm run check:development and git diff --check also pass. These do not certify semantic completeness.
+    - YAML parsing accepts the updated register and confirms all 15 new IDs under the requested package.
+    - npm run test:quick completes with 2126 passing tests and two timeouts across 82 files. The asset delivery case
+      at tests/integration/frontend-development-runtime.spec.ts 161 times out at 5000 ms; the deterministic generation
+      case at tests/unit/frontend-generation.spec.ts 846 times out at 120000 ms. The full run is not recorded as passed.
+    - Each failed case subsequently passes unchanged in a separate focused run, with original timeout budgets retained.
+      The asset run passes one selected test with five skipped; the generation run passes one with eleven skipped.
+      This does not establish the cause of the original timeouts or a clean rerun of the complete suite.
+    - The advisory documentation report has no broken links, metadata errors or missing paths/scripts. Its existing
+      unregistered source-fingerprint finding remains visible and nonblocking.
+  verification_limits: No application build, real-database integration, built-browser/E2E, external OIDC/SMTP journey,
+    deployment, retention execution or load benchmark was run. Runtime consequences described here are source-traced
+    unless an executed check is explicitly identified; successful unrelated tests do not reproduce each finding.
 architecture_review_2026_10_26:
   authorization: The maintainer requests an in-depth review of the complete application architecture and all reasonably
     shareable duplication, with independent verification and policy-compliant recommendations. This authorizes review
@@ -434,7 +596,13 @@ implementation_defects:
       - tests cover current registrations, future registrations added through a default pool, assign-all pools, explicit
         assignment, and unassigned rejection
   - id: IMP-013
-    status: open
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R4/R5: durable prewrite ownership, transaction attachment and postcommit retry cover failures/cascades; explicit offline manifest reconciliation handles historical untracked files. No site action was executed.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
     severity: high
     owner: application maintainers
     out_of_scope_for_documentation_migration: true
@@ -510,7 +678,13 @@ implementation_defects:
       - integration tests clear the final explicit assignment and verify that stale takeovers and surcharges are removed
       - tests also preserve adjustments for registrations that remain assigned
   - id: IMP-016
-    status: open
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R2: both diff halves use role identity; retained mappings/quotas and assignment graphs survive. Frontend and backend tests clear every configured role, including role-only and repeated empty saves.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
     severity: high
     owner: application maintainers
     out_of_scope_for_documentation_migration: true
@@ -2165,7 +2339,13 @@ implementation_defects:
       corrected date fields now use the actual startDate/endDate targets. P11 retires the native label defect;
       original source and scoped execution evidence remain in Git and ignored run artifacts.
   - id: IMP-079
-    status: open
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R3: all transport variants are prepared before assignment/history commit through the existing completion owner. Separate generation failure returns committed success and an explicit retry action without replay.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
     discovered_on: 2026-10-18
     severity: high
     owner: application maintainers
@@ -4641,6 +4821,432 @@ implementation_defects:
       - A separately authorized provenance rule is shared by update, preview and application through the existing resolver.
       - Real-persistence cases cover matching, absent, alternate-case and unrelated IDs, legitimate new manual rows,
         warning confirmation, generated rejection history and existing permission/revision controls.
+  - id: IMP-177
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R6: one Activity business assertion owns projected named-role capacity; the ORM subscriber is retired and SQL integrity enforcement remains, including competing real-persistence signups.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
+    discovered_on: 2026-10-27
+    severity: medium
+    category: architecture-business-ownership
+    owner: Activity maintainers
+    package: architecture-review-2026-10-27
+    title: An ORM subscriber repeats Activity role-capacity business rejection
+    evidence:
+      - src/backend/modules/database/subscribers/activityAssignmentRole.ts 37-85 reads assignment, slot-role quota
+        and current assignment count, then rejects insertion with a generic Error when the quota is full.
+      - src/backend/controller/activityController.ts 934-948 already decides the matching named-role quota under
+        the operation's root and slot locks. The subscriber adds three implicit queries for each inserted role link.
+      - The generated subscriber registry registers this hook. Migration 1785689525000 also installs a database
+        quota trigger; that is a separate integrity boundary rather than another request/business controller.
+    impact: Business rejection has a second application owner hidden in persistence. Changes can diverge in diagnostics,
+      quota semantics and query cost even while controller and DBAL imports satisfy the engineering checker.
+    desired_outcome: One controller/feature owner decides admitted role capacity while DBAL supplies locked evidence
+      and writes. Preserve every insertion path, default-role/null/zero distinctions and concurrency/integrity guarantees.
+      Removing or changing the database trigger is a separate decision and is not implied by deduplication.
+    independent_review: Root, domain and platform reviewers independently trace the duplicate predicate and real hook.
+    disposition: Recorded without implementation or new approval; comment-only IMP-144 work did not resolve ownership.
+  - id: IMP-178
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R7: both list controllers adopt the existing shared administration item-baseline sequence with their row readers, field policy, snapshots and exact tokens.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
+    discovered_on: 2026-10-27
+    severity: medium
+    category: architecture-duplication
+    owner: Shared administration and list maintainers
+    package: architecture-review-2026-10-27
+    title: Packing and Drivers repeat item edit-baseline admission and comparison flow
+    evidence:
+      - packingController.ts readPackingItemEditBaseline 553-573 and driversController.ts
+        readDriversItemEditBaseline 450-470 both capture actor, open a read snapshot, require root/item scope,
+        evaluate item permissions, project writable fields, reject an empty projection and create its comparison token.
+      - entityAdminController.ts already owns matching list metadata/description/order baselines and injected
+        feature item projection/token mechanics for writes; both duplicated reads remain live API operations.
+    impact: The same privacy, ownership and comparison sequence must be maintained in two controllers.
+    desired_outcome: The existing shared controller owns the matching sequence with explicit feature row-reader,
+      projection and token inputs. Preserve field/method differences, read order, snapshot manager and narrow disclosure.
+    independent_review: Domain, platform and root reviewers compare both bodies and existing shared-owner callers.
+    disposition: Residual matching read gap after IMP-141/165; no claim that distinct item CRUD or fields are identical.
+  - id: IMP-179
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R8: both list controllers adopt shared header tokens/baselines and separately admitted paths; their existing write completion behavior remains.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
+    discovered_on: 2026-10-27
+    severity: low
+    category: architecture-duplication
+    owner: Shared administration and list maintainers
+    package: architecture-review-2026-10-27
+    title: Packing and Drivers repeat header baseline and admitted path reads
+    evidence:
+      - packingController.ts 1151-1178 and driversController.ts 1099-1126 repeat header token construction,
+        snapshot/root admission, method-only hash baseline and separately admitted stored-path lookup.
+      - Both features already use entityAdminController for matching list baselines and fileCommons.performImageSwap
+        for file replacement; the remaining duplicate is read/token orchestration, not the entire upload operation.
+    impact: A future privacy or comparison correction needs matching edits in both feature controllers.
+    desired_outcome: Matching read mechanics use the existing shared controller with explicit feature token domain,
+      admission and snapshot operations. Method-only writers must still receive no image bytes or protected path.
+      Preserve the distinct Packing/Drivers write completion and receipt timing.
+    independent_review: Domain, platform and root reviewers inspect both live baseline/path callers and write differences.
+    disposition: Recorded bounded read duplication; existing shared image replacement is credited.
+  - id: IMP-180
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R9: direct and versioned list projections adopt one pure counter; Packing selects eligible items and Drivers supplies passenger identities.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
+    discovered_on: 2026-10-27
+    severity: low
+    category: architecture-duplication
+    owner: Shared projection and list maintainers
+    package: architecture-review-2026-10-27
+    title: Packing and Drivers repeat list participation and capacity counters
+    evidence:
+      - packingController.ts packingCounters 185-200 and driversController.ts driversCounters 1148-1163 repeat
+        UUID/name participant keys, Set deduplication and empty/open counting with the same nullable-capacity rule.
+      - Packing additionally excludes requiredByAll rows; Drivers counts passenger assignments rather than drivers.
+        Both helpers serve their actual feature projections.
+    impact: Matching count semantics have two maintained implementations.
+    desired_outcome: One pure counter in the existing projection utility consumes feature-selected rows and assignees.
+      Preserve Everyone exclusion, passenger meaning, historical name fallback and null-capacity behavior.
+    independent_review: Domain, platform and root reviewers verify matching arithmetic and deliberate exclusions.
+    disposition: New projection duplication; IMP-150 concerns query keys and does not own this counter finding.
+  - id: IMP-181
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R10: all three child controllers adopt the existing linkage owner for loaded-parent permission and URL resolution, preserving their optional snapshot managers.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
+    discovered_on: 2026-10-27
+    severity: low
+    category: architecture-duplication
+    owner: Event linkage and child-feature maintainers
+    package: architecture-review-2026-10-27
+    title: Three child controllers repeat parent Event permission and URL resolution
+    evidence:
+      - driversController.ts 359-370, packingController.ts 463-474 and activityController.ts 1231-1235 each build
+        the parent descriptor, evaluate Event permissions and look up the result before calling getAuthorizedEventUrl.
+      - modules/event/linkage.ts 198 already owns the final navigation permission/URL policy; that predicate is shared.
+        Packing/Drivers pass their snapshot manager; Activity retains a separate nontransactional read.
+    impact: Parent-navigation orchestration remains copied around an otherwise shared linkage owner.
+    desired_outcome: The existing linkage owner resolves permissions and URL from the supplied loaded parent and
+      explicit optional manager. Preserve each read order/snapshot and the independent parent ACCESS_VIEW requirement.
+    independent_review: Platform, frontend, domain and root reviewers confirm live callers and existing URL ownership.
+    disposition: Bounded orchestration duplication, not a claim that the ACCESS_VIEW policy itself is independently copied.
+  - id: IMP-182
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R11: Event and Activity use the existing common real-day parser, retaining feature year ranges and their distinct diagnostics.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
+    discovered_on: 2026-10-27
+    severity: low
+    category: architecture-duplication
+    owner: Shared calendar and feature validation maintainers
+    package: architecture-review-2026-10-27
+    title: Civil-calendar validity parsing is repeated by Activity and Event validation
+    evidence:
+      - activityController.ts validatePropertyDate 451-457 and modules/event/linkage.ts validateCalendarDate 56-60
+        each parse a UTC day and round-trip its ISO date to reject impossible calendar dates.
+      - src/common/lib/civilDate.ts parseCivilDate 23-30 already implements matching real-day parsing for shared display.
+        The common parser deliberately accepts earlier years while admitted feature dates require year 1000 or later.
+    impact: Core calendar validity can drift across API validation and shared presentation.
+    desired_outcome: Existing common civil-date ownership supplies the reusable real-day primitive; feature adapters
+      retain their admitted year range, Joi diagnostics and own absent/malformed-input policy.
+    independent_review: Root, platform and domain reviewers verify the repeated primitive and distinct year policy.
+    disposition: No current date divergence claimed; do not replace whole validators as though their contracts match.
+  - id: IMP-183
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R12: one pure common URI/raster policy serves runtime and advisory readers; their parsers, error wording and delivery responsibilities remain separate.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
+    discovered_on: 2026-10-27
+    severity: medium
+    category: architecture-duplication
+    owner: Help runtime and documentation tooling maintainers
+    package: architecture-review-2026-10-27
+    title: Runtime and advisory Help readers independently implement matching URI policy primitives
+    evidence:
+      - helpController.ts 154-188 and scripts/check-help-documentation.mjs 105-134 repeat the same entity-reference
+        decoding, control-character detection, protocol-relative rejection and safe-scheme classification.
+      - Their scheme and raster-extension allowlists also match. Runtime throws source-specific errors while the
+        standalone advisory checker collects findings; their Markdown parsers and delivery responsibilities differ.
+    impact: A security-sensitive DEC-004 destination policy has competing maintained primitive implementations.
+    desired_outcome: One dependency-free Help policy primitive/data owner serves both callers, preserving runtime
+      token validation, standalone Node-only regex reporting, diagnostics and the advisory-only delivery policy.
+      No application bootstrap dependency or documentation gate may be introduced into the checker.
+    independent_review: Root, frontend and domain reviewers independently compare exact decoding and decision steps.
+    disposition: Confirmed policy-primitive duplication; no current admission drift or unsafe-content bypass asserted.
+  - id: IMP-184
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R13: calculation and DBAL materialization adopt the existing utility owner for accepted costs and raw sums, retaining each rounding boundary.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
+    discovered_on: 2026-10-27
+    severity: medium
+    category: architecture-duplication
+    owner: Invoice calculation and persistence maintainers
+    package: architecture-review-2026-10-27
+    title: Invoice calculation and materialized totals repeat accepted-cost arithmetic
+    evidence:
+      - EventInvoiceService.ts refreshPoolTotals 347-357 and invoice/calculation.ts calculateIndividualCosts 187-192
+        both select APPROVED/CLOSED costs, sum resolveInvoiceAmount and sum subtractFromPool adjustments.
+      - preparePoolCalculation also repeats accepted-status selection at calculation.ts 36-38. Both calculation
+        preview and materialized aggregate refresh are live; the documented DBAL aggregate responsibility is valid.
+    impact: Stored pool totals and distribution-base arithmetic can drift when accepted-cost policy changes.
+    desired_outcome: Matching pure selection/sums use the existing money utility owner alongside resolveInvoiceAmount
+      and toAmount. Keep DBAL reads, locks/materialization and feature allocation separate; preserve raw sums and each
+      caller's existing rounding point. Presentation's cent/category helper has different semantics.
+    independent_review: Domain, frontend and root reviewers verify identical arithmetic and approved DBAL materialization.
+    disposition: No numerical divergence proven and no DBAL boundary violation claimed.
+  - id: IMP-185
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R14: both maintenance jobs adopt one hourly timer mechanism while retaining independent catch-up, failures, timers and overlap policy.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
+    discovered_on: 2026-10-27
+    severity: low
+    category: architecture-duplication
+    owner: Application startup and maintenance-job maintainers
+    package: architecture-review-2026-10-27
+    title: Independent maintenance jobs repeat immediate and hourly timer mechanics
+    evidence:
+      - modules/entityArchival.ts 68-80 and modules/invoice/retention.ts 67-79 both await startup catch-up, guard an
+        existing timer, schedule hourly work, report background failures and unref the interval.
+      - Both intentionally run initial work before the existing-timer guard. Archival separately coalesces in-flight
+        sweeps and validates configuration; retention's current overlap behavior differs.
+    impact: Matching timer lifecycle mechanics are maintained twice.
+    desired_outcome: One small timer mechanism can be invoked by startup or live in an existing neutral utility,
+      retaining independent callbacks, timers and error wording. Feature modules must not import the server entry point.
+      Preserve startup failure propagation, repeated-start catch-up and each overlap policy.
+    independent_review: Platform, frontend, domain and root reviewers confirm matching mechanism and distinct job policy.
+    disposition: Low-priority reuse opportunity; no general scheduling framework or multiple-replica guarantee is proposed.
+  - id: IMP-186
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R15: every parsed leaf-to-root reference is retired in favor of actual owners, with compatible root exports. The retained feature/common composition SCC is explicitly qualified in the correction record.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
+    discovered_on: 2026-10-27
+    severity: low
+    category: architecture-coupling-opportunity
+    owner: API contract maintainers
+    package: architecture-review-2026-10-27
+    title: Feature contract leaves depend back on their aggregate OpenAPI composition
+    evidence:
+      - Parsed YAML contains 1244 actual references to ./openapi.yaml across 11 feature files; examples include
+        contracts/api/v1/drivers.yaml 427-447. Root paths and schema exports reference those feature files in return.
+      - Common schema ownership is otherwise neutral and the root public registry is explicitly retained by the
+        recorded design. Generation succeeds; this is a file-dependency cycle rather than recursive schema/runtime flow.
+    impact: Leaves depend on aggregate composition instead of only their actual feature/common owners, weakening
+      the requested single direction of composition and making independent contract maintenance harder.
+    desired_outcome: Leaf references reach actual local/common owners while the root public registry and approved
+      feature aliases remain compatible. Expanded operations, exported types and strict/additive validators require comparison.
+    independent_review: Frontend, platform, domain and root reviewers confirm the graph and narrow its classification.
+    disposition: Design/coupling improvement, not a proven violation of existing alias policy, duplicate schema body
+      or broken generator. An explicit decision is needed before changing this recorded composition responsibility.
+  - id: IMP-187
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R16: public session and Activity profile aliases reference one neutral strict UUID/name body; existing expanded shapes and validators remain compatible.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
+    discovered_on: 2026-10-27
+    severity: low
+    category: architecture-duplication
+    owner: Shared API contract maintainers
+    package: architecture-review-2026-10-27
+    title: Activity and session contracts repeat the same public profile-reference shape
+    evidence:
+      - ActivityRecommendationProfile at contracts/api/v1/activity.yaml 1783 and SessionProfile at session.yaml 22
+        independently define a strict object requiring UUID id and string name.
+      - Recommendation profiles and session active-profile/roster projections consume these same-meaning shapes.
+    impact: The same public profile reference has two authored schema bodies.
+    desired_outcome: A neutral common profile-reference body owns matching fields, with existing public/feature aliases
+      retained where required and generated wire/validator behavior compared for compatibility.
+    independent_review: Frontend, platform, domain and root reviewers compare schema bodies, meaning and actual consumers.
+    disposition: Low-priority source duplication; no current wire mismatch or permission-policy equivalence asserted.
+  - id: IMP-188
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R17: all three dietary checkbox groups adopt the reusable controlled ChoiceCheckboxes renderer. Labels, layout, drafts and comment text remain Event-owned; schema-owned group membership/order is generated.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
+    discovered_on: 2026-10-27
+    severity: low
+    category: architecture-duplication
+    owner: Event frontend maintainers
+    package: architecture-review-2026-10-27
+    title: Event registration repeats the same dietary checkbox renderer
+    evidence:
+      - EventRegistration.vue 195-202 and 212-219 repeat checkbox id/name/value, selected and disabled bindings,
+        change handling and localized label rendering for meals and dietary requirements.
+      - Group labels, icons, guidance, separators and supplied choice collections intentionally differ.
+    impact: Accessibility and interaction changes to the same local checkbox renderer need two edits.
+    desired_outcome: One small local rendering owner consumes group/choice data while preserving layout, groups,
+      exact field values, draft events and allergy/comment behavior. A universal checkbox/form framework is unnecessary.
+    independent_review: Frontend, platform, domain and root reviewers confirm identical rendering and deliberate framing.
+    disposition: Low-priority local DRY finding; this does not imply duplicate Event registration business operations.
+  - id: IMP-189
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R18: both requirement operations adopt complete matching asynchronous preparation in the existing Activity context owner, retaining initial reads and distinct arithmetic engines.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
+    discovered_on: 2026-10-27
+    severity: low
+    category: architecture-factoring-opportunity
+    owner: Activity requirement maintainers
+    package: architecture-review-2026-10-27
+    title: Requirement analysis and baseline repeat matching input preparation
+    evidence:
+      - activityController.ts getRequirements 1852-1921 and calculateBaselineRequirement 1924-1960 repeat Event
+        participant/attendance preparation and construction of overlapping calculation inputs.
+      - projectRequirementSlots and the common arithmetic engines are already shared. Attendance preparation itself
+        performs profile/role queries through autoAssignment.ts; the whole preparation is not a pure transformation.
+    impact: Matching input assembly can drift while the distinct algorithms remain correctly centralized.
+    desired_outcome: Share only suitable assembly of already prepared inputs in the existing Activity owner. Preserve
+      each initial read set/order, getRequirements' extra roles read and the distinct analysis/baseline algorithms.
+      A broader shared loader requires separate assessment of queries and lifecycle effects.
+    independent_review: Domain, platform and root reviewers confirm the narrow opportunity and reject a whole-pure-loader claim.
+    disposition: Low-priority factoring opportunity; no current wrong result, duplicate engine or new transaction proposed.
+  - id: IMP-190
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R19: Survey schemas own allowed weekday/occurrence values; the existing generator supplies frozen neutral runtime choices consumed by ORM, Joi and UI, with generated declaration unions.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
+    discovered_on: 2026-10-27
+    severity: medium
+    category: architecture-single-source-of-truth
+    owner: Survey and shared contract-generation maintainers
+    package: architecture-review-2026-10-27
+    title: Survey recurring-day options have competing manually maintained inventories
+    evidence:
+      - SurveyCombination.ts 23-24, SurveyTypes.d.ts 19-20, surveyController.ts 65-68,
+        contracts/api/v1/surveys.yaml 27-30 and CombinationFields.vue 12-13 repeat weekday/occurrence choices.
+      - Arrays typed as the union reject unknown members but do not require every allowed member to be present.
+        These declarations serve live persistence, validation and creation/add-combination controls.
+    impact: A new allowed recurring option can reach one layer while another silently omits or rejects it.
+    desired_outcome: One value inventory supplies matching runtime choices and declarations through existing common
+      or contract-generation ownership. Preserve separate server validation/ORM constraints, legacy numeric coercion,
+      localization and feature-owned drafts; browser code must not import ORM entities.
+    independent_review: Domain, frontend and root reviewers independently inspect the matching inventories and consumers.
+    disposition: No current value mismatch proven; distinct validation layers are required, duplicated option data is avoidable.
+  - id: IMP-191
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-implementation-2026-10-27
+    resolution_2026_10_27: >-
+      Approved R20: Event schema owns dietary values and group membership/order; generated neutral choices serve ORM, controller, declarations and UI without importing persistence into the browser.
+      Source/adoption review and executed checks are recorded under architecture_implementation_2026_10_27;
+      the original finding and prior authorization/disposition text below remain historical.
+    discovered_on: 2026-10-27
+    severity: medium
+    category: architecture-single-source-of-truth
+    owner: Event and shared contract-generation maintainers
+    package: architecture-review-2026-10-27
+    title: Event dietary values have competing persistence, type, contract and UI inventories
+    evidence:
+      - EventRegistrationDietary.ts ALLOWED_DIETARY 22, EventTypes.d.ts DIETARY 30, events.yaml dietary enums
+        and EventRegistration.vue 22-23 separately enumerate matching dietary values or their UI groups.
+      - COMMENT is intentionally represented through its own text control rather than the meal/requirement checkbox sets.
+        ORM normalization, server admission and UI grouping have different responsibilities.
+    impact: Dietary option changes require coordinated manual edits to maintain admission, storage and visible controls.
+    desired_outcome: One allowed-value inventory supplies matching declarations and data through existing common or
+      contract-generation owners. Keep UI grouping/COMMENT presentation and persistence normalization distinct, with
+      independent validation enforcement and no ORM import into browser code.
+    independent_review: Domain, frontend and root reviewers confirm repeated inventory and intentional grouping differences.
+    disposition: No current value mismatch or unsafe admission proven; distinct rule enforcement is not itself duplication.
+  - id: IMP-192
+    status: closed
+    closed_on: 2026-10-27
+    closed_in: architecture-checkbox-2026-10-27-R21
+    discovered_on: 2026-10-27
+    severity: low
+    category: architecture-duplication
+    owner: Event frontend and shared field maintainers
+    package: architecture-implementation-2026-10-27-followup
+    title: Event creation and property editing repeat boolean flag checkbox rendering
+    evidence:
+      - EventFields.vue property fields and creation fields each iterate the same flags and independently render
+        a checkbox with prefix-derived id, values[option.field] boolean binding, field-specific name and associated label.
+      - EventMetadataFields passes the granted subset; EventCreatePage supplies all flags and serializes distinct booleans.
+        Their wrappers, creation icons and property-specific allowDietComment wording intentionally differ.
+      - ChoiceCheckboxes now owns the approved dietary array renderer. Its group name, explicit lowercase values and
+        selected-choice array differ from Event flags' individual names, default native on value and unchecked omission.
+    impact: Matching native checkbox and accessibility mechanics remain independently maintained in two Event views.
+    desired_outcome: Extend the existing FormField owner with a distinct controlled checked channel, preserving its
+      current string model API. Both EventFields presentations and ChoiceCheckboxes adopt that checkbox primitive;
+      features retain grouping, labels, icons, boolean/array state, payloads, disabled behavior and drafts.
+    independent_review: Activity and contracts reviewers independently confirm the source duplication and concrete
+      FormField adoption approach; root inspects both renderers, callers and the existing field contract.
+    disposition: Newly identified inherited scope beyond R17's approved dietary renderer. R21 is an independently
+      reviewed separate proposal, not implementation authorization. No production change is made for this finding.
+    approved_amendment_2026_10_27: The maintainer directly approves R21 in the conversation, superseding the pending
+      disposition above. Adopt the existing FormField checkbox owner without changing native form semantics,
+      string-model consumers, layout, labels/icons, disabled policy or feature-owned boolean/array drafts.
+    implementation_2026_10_27:
+      status: complete
+      owner: Existing FormField supplies one native checkbox and one shared label/attribute implementation;
+        both EventFields presentations and ChoiceCheckboxes adopt it without forwarding owners or copied controls.
+      contract: The separate checked/update-checked boolean channel retains the current string modelValue API.
+        Native flags submit on only while checked; dietary values remain explicitly lowercase. Variant-aware label
+        classes retain checkbox spacing and the original text-field defaults. Features keep their state and disabling.
+      user_guidance: Labels, actions and observable behavior are preserved; runtime Help needs no changed procedure.
+        Development guidance records the shared owner and distinct value channels. Backend/database guides are unaffected.
+      verification:
+        - The four relevant frontend suites exercise 165 cases. Initially 164 pass and one new native fieldset
+          FormData assertion exposes Happy DOM's missing disabled-ancestor behavior. No production workaround is added.
+          The assertion moves to actual Chromium; the shared-field suite then passes all 68 cases, alongside the
+          97 already-passing Event and text/hydration regressions. Generic disabled omission remains asserted locally.
+        - Ten selected built-browser checks pass across English/German Event creation and dietary registration layouts.
+          They exercise native flag on/unchecked omission and inherited-fieldset disabling, preserve the original flag
+          state and verify controls after hydration. Root reviews all six dietary images; independent reviewer
+          reviews the four creation images. These are isolated client checks, not database-backed E2E claims.
+        - Frontend/SSR typechecks and both production bundles pass through build:frontend; the full test TypeScript
+          project passes. Engineering inspection checks 416 sources with zero findings, including 49 changed sources;
+          whitespace passes. The advisory documentation report retains only its known source-fingerprint finding.
+      independent_acceptance: A nonauthor reviewer accepts the final shared owner, direct adoption, controlled/native
+        semantics, meaningful tests and dated approval provenance. Root reviews source, reports and the delegated result.
+      evidence: artifacts/architecture-implementation-20261027/r21-frontend.json, r21-common-rerun.json, r21-browser.log,
+        r21-build.log, r21-test-types.log, r21-development.log and r21-documentation.json.
+      limits: No backend/schema change, database reset, deployment or new whole-application certification is claimed.
 architecture_renewed_implementation_2026_10_26:
   authority: The maintainer directly instructs full implementation of the renewed proposals, broadens IMP-154 beyond
     Packing names and into root OpenAPI operation ownership, approves R5 for all frontend validation, and requires
@@ -5370,6 +5976,34 @@ findings:
         including response-completion writes, explicit transitions and one-time flash behavior.
       - Reconcile current guidance and decision history without silently replacing earlier choices or using successful
         tests, agent-authored records or this backlog entry as implementation authorization.
+    architecture_review_2026_10_27:
+      finding: Retained print/PDF output permission checks consume the serialized Session rather than the hydrated actor.
+      evidence:
+        - app.ts 96 and middleware/frontendDocuments.ts 33 capture current identity through modules/api/session.ts 55-86;
+          the hydrated profile.user/profile.guest relations live only on req.apiActor, leaving req.session unchanged.
+        - permissionMiddleware.ts 65 and routes/activity.ts 32-35 still authorize with req.session. Event participant
+          and invoice-share exports use that permission middleware through routes/event.ts 62-71.
+        - permissionEngine.ts 65-69 activates authenticated/guest audiences from profile.user/profile.guest relations.
+          UserService.ts 59-74 loads local-login profiles without nested user relations; Profile.user is not eager,
+          and userController.ts 217-220 stores that selected raw profile in the Session.
+      impact: An account may have its audience grants recognized by interactive/captured-actor reads yet missed by
+        retained exports. Owners can still pass; this does not establish universal export failure or privilege escalation.
+      desired_outcome: Existing captured-actor admission supplies retained output authorization while preserving
+        Session persistence, output-specific redirects, grants, private projections and response contracts.
+      independent_review: Platform, domain and root reviewers independently trace login, relation hydration, middleware
+        and output callers. This is source-established evidence; no real-database reproduction was performed.
+      disposition: Concrete subset of the existing whole-session review, recorded once under ARCH-005. No broad session
+        redesign or changed output behavior is implemented or authorized by this evidence.
+    approved_retained_output_remedy_2026_10_27:
+      authority: The maintainer separately approves R1 of the current twenty-request plan.
+      status: complete
+      implementation: Existing retained output guards consume captureApiActor, including its hydrated audience relations,
+        without assigning those relations to Session or changing saved identity. Output-specific grants and redirects remain.
+      verification: Real Express/TypeormStore account and guest sessions admit schedule, participant PDF and invoice-share
+        PDF through their audience-only grants, reject after revocation and preserve raw stored identity/relations.
+        Normal existing flash initialization is seeded independently so it is not misreported as a hydration write.
+        Both tests pass in focused and broad integration runs; the built Event participant PDF workflow also passes.
+      limits: This closes only the concrete retained-output finding; the whole-session/flash review above remains open.
     disposition: Separate future review and approved implementation effort. Retain the native anonymous-session notice
       now; do not make broader unification or excluded backend remedies a prerequisite for parity-only migration.
     blocks_documentation_migration: false

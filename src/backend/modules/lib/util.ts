@@ -19,6 +19,7 @@ import crypto from 'node:crypto';
 import {v4 as uuidv4} from 'uuid';
 import type {DashboardEntities, Entity, EntityBase} from "../../../types/UserTypes";
 import type {EntityItemType, EntityType} from "../../../types/UtilTypes";
+import type {InvoiceCostInput, InvoiceAdjustmentInput, InvoiceCostTotals, ListCounterItem, ListCounterAssignee} from '../../../types/UtilTypes';
 import settings from "../settings";
 import {addCivilDays} from '../../../common/lib/civilDate';
 import type {EventRegistration} from '../database/entities/event/EventRegistration';
@@ -96,6 +97,69 @@ export function resolveInvoiceAmount(amount: string | number, correctedAmount?: 
     return toAmount(correctedAmount === null || correctedAmount === undefined || correctedAmount === ''
         ? amount
         : correctedAmount);
+}
+
+/** Select saved costs included in both pool materialization and allocation.
+ * Returned rows retain identity, order and all feature-owned provenance. */
+export function acceptedInvoiceCosts<Value extends InvoiceCostInput>(invoices: readonly Value[]): Value[] {
+    return invoices.filter(invoice => invoice.status === 'APPROVED' || invoice.status === 'CLOSED');
+}
+
+/** Compute matching raw pool costs without rounding or reading persistence.
+ * Callers retain their own database writes, allocation and precision boundary. */
+export function invoiceCostTotals(invoices: readonly InvoiceCostInput[],
+    adjustments: readonly InvoiceAdjustmentInput[]): InvoiceCostTotals {
+    const totals: InvoiceCostTotals = {invoiceTotal: 0, openAmount: 0, extraAmount: 0, subtractiveAmount: 0};
+    // Preserve input order and corrected-amount fallback for each accepted row.
+    for (const invoice of acceptedInvoiceCosts(invoices)) {
+        const amount = resolveInvoiceAmount(invoice.amount, invoice.correctedAmount);
+        totals.invoiceTotal += amount;
+        if (invoice.status === 'APPROVED') totals.openAmount += amount;
+    }
+    // Additional and redistributed adjustments have separate stored meanings.
+    for (const adjustment of adjustments) {
+        if (adjustment.subtractFromPool) totals.subtractiveAmount += toAmount(adjustment.amount);
+        else totals.extraAmount += toAmount(adjustment.amount);
+    }
+    return totals;
+}
+
+/** Count feature-selected list rows without deciding participation or visibility.
+ * Null capacity is not open; old assignees retain the visible-name fallback. */
+export function countListItems(items: readonly ListCounterItem[],
+    assignees: ReadonlyMap<string, readonly ListCounterAssignee[]>) {
+    const participants = new Set<string | undefined>();
+    let open = 0;
+    let empty = 0;
+    // Features exclude Everyone rows or driver-only identities before this call.
+    for (const item of items) {
+        for (const assignment of assignees.get(uuidKey(item.id)) ?? []) {
+            participants.add(assignment.profileId ? `p_${uuidKey(assignment.profileId)}` : assignment.name);
+        }
+        if (item.assignedCount === 0) empty++;
+        if (item.assignedCount < (item.maxAssignees ?? 0)) open++;
+    }
+    return {participants: participants.size, open, empty};
+}
+
+/** Bind one independent process-local immediate/hourly job.
+ * Repeated starts still await catch-up before the timer guard; overlap policy
+ * belongs to the supplied task and startup failures prevent registration. */
+export function createHourlyJob(task: () => Promise<unknown>, reportFailure: (error: unknown) => void): () => Promise<void> {
+    let timer: NodeJS.Timeout | undefined;
+    /** Timer failure is reported independently from its next scheduled run. */
+    async function runScheduled(): Promise<void> {
+        try { await task(); }
+        catch (error) { reportFailure(error); }
+    }
+    /** Catch up before registering exactly one interval for this job owner. */
+    return async function startHourlyJob(): Promise<void> {
+        await task();
+        // A second initialization retains catch-up without creating another timer.
+        if (timer) return;
+        timer = setInterval(runScheduled, 60 * 60 * 1000);
+        timer.unref();
+    };
 }
 
 // Resolve a human-friendly label for the current actor, falling back to usernames where names are missing.

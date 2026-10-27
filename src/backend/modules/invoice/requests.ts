@@ -22,6 +22,10 @@ import type {InvoiceSharesPdfOptions, InvoicePoolSubmissionState, InvoiceOrganiz
 import {normalizeToArray} from '../lib/util';
 import {APIError} from '../lib/errors';
 import {invoiceText, getInvoiceValidationMessages, invoiceRejectionCause} from './wording';
+import type {InvoiceProofReconciliationManifest} from '../../../types/InvoiceProofTypes';
+
+export const invoiceProofReconciliationActions = ['quarantine', 'restore', 'purge'] as const;
+const proofRecoveryDays = Joi.number().integer().min(1).max(100_000).required();
 
 // Creation and later state changes share the same two uncalculated pool states; neither is a prerequisite for closure.
 const invoicePoolSubmissionStates: InvoicePoolSubmissionState[] = ['OPEN', 'ORGANIZER_ONLY'];
@@ -321,4 +325,35 @@ function validateMoneyPrecision(amount: number, helpers: Joi.CustomHelpers): num
     const cents = amount * 100;
     return Math.abs(cents - Math.round(cents)) < 0.00001
         ? amount : helpers.error('number.precision', {limit: 2});
+}
+
+/** Decode an operator-selected manifest through the established validation owner.
+ * No coercion, unknown fields or submitted paths can expand its file inventory. */
+export function prepareProofReconciliationManifest(input: unknown): InvoiceProofReconciliationManifest {
+    const digest = Joi.string().pattern(/^[a-f0-9]{64}$/).required();
+    const entry = Joi.object({
+        path: Joi.string().pattern(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/).invalid('.', '..').max(255).required(),
+        size: Joi.number().integer().min(0).max(Number.MAX_SAFE_INTEGER).required(),
+        mtimeMs: Joi.number().integer().min(0).max(Number.MAX_SAFE_INTEGER).required(),
+        device: Joi.string().pattern(/^\d+$/).required(),
+        inode: Joi.string().pattern(/^\d+$/).required(),
+        sha256: digest,
+    }).unknown(false);
+    const {error, value} = Joi.object<InvoiceProofReconciliationManifest>({
+        version: Joi.number().valid(1).required(), id: digest, createdAt: Joi.string().isoDate().required(),
+        root: Joi.string().required(), database: Joi.string().required(),
+        recoveryDays: proofRecoveryDays,
+        files: Joi.array().items(entry).unique('path').required(),
+        ignored: Joi.array().items(Joi.string()).required(),
+    }).unknown(false).required().validate(input, {convert: false});
+    // Operator diagnostics identify the failed contract without publishing file contents.
+    if (error) throw new Error('Invalid proof reconciliation manifest');
+    return value;
+}
+
+/** Reuse the manifest's recovery-window rule for inventory creation. */
+export function prepareProofRecoveryDays(input: unknown): number {
+    const {error, value} = proofRecoveryDays.validate(input, {convert: false});
+    if (error) throw new Error('A positive proof recovery window is required');
+    return value;
 }

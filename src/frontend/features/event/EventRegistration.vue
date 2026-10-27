@@ -3,7 +3,8 @@ import {fieldAttributes as registrationFields} from "../../../../.generated/api/
 import {computed, reactive, ref, watch} from 'vue';
 import {useRoute} from 'vue-router';
 import type {components} from '../../../types/api/v1';
-import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import type {FrontendCheckboxChoice, FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import {eventDietaryGroups} from '../../../common/generated/domainChoices';
 import {useActionState, useFrontend} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useEventApi} from './api';
@@ -12,6 +13,7 @@ import FormField from '../../components/FormField.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import ChoiceCheckboxes from '../../components/ChoiceCheckboxes.vue';
 
 const props = defineProps<{event: components['schemas']['EventView']; refresh: () => Promise<void>}>();
 const context = useFrontend();
@@ -19,8 +21,15 @@ const {messages} = context;
 const api = useEventApi(context);
 const route = useRoute();
 type Dietary = components['schemas']['EventRegistration']['dietary'][number];
-const meals: Dietary[] = ['MEAT', 'FISH', 'VEGETARIAN', 'VEGAN'];
-const requirements: Dietary[] = ['HALAL', 'KOSHER', 'ALLERGIES'];
+const meals: readonly Dietary[] = eventDietaryGroups.meal;
+const dietaryOptions = computed(() => ({meal: checkboxChoices(eventDietaryGroups.meal),
+    requirement: checkboxChoices(eventDietaryGroups.requirement), text: checkboxChoices(eventDietaryGroups.text)}));
+
+/** The generated groups own membership/order; this feature supplies reactive
+ * localized wording and retains the existing lowercase native field spelling. */
+function checkboxChoices(choices: readonly Dietary[]): FrontendCheckboxChoice<Dietary>[] {
+    return choices.map(value => ({value, label: messages.value.t(`event.diet.${value}`), inputValue: value.toLowerCase()}));
+}
 
 // A single feature draft owns both the visible controls and submitted values.
 // Read-only saved attendance remains in the Event projection supplied by props.
@@ -82,8 +91,7 @@ function resetFields(registration: components['schemas']['EventRegistration'] | 
 
 /** Copy the meal interaction: meat and fish can coexist, while selecting
  * vegetarian or vegan clears the other meals. Non-meal requirements remain. */
-function selectDiet(choice: Dietary, event: Event): void {
-    const checked = (event.target as HTMLInputElement).checked;
+function selectDiet(choice: Dietary, checked: boolean): void {
     // Remove this choice first so unchecking releases only it. Checking then replaces
     // incompatible meals while retaining independent allergies and comment requirements.
     let selected = fields.dietary.filter(value => value !== choice);
@@ -192,34 +200,16 @@ async function cancel(): Promise<void> {
                      Their selections remain local until one deliberate save. -->
                 <div v-if="event.requireDietaryInfo" class="col-12">
                     <label class="form-label"><i class="bi bi-egg-fried me-1" aria-hidden="true"></i>{{ messages.t('event.registration.meals') }}</label>
-                    <div class="frontend-choice-grid">
-                        <div v-for="choice in meals" :key="choice">
-                            <div class="form-check">
-                                <input :id="'diet-' + choice.toLowerCase()" class="form-check-input" type="checkbox"
-                                    name="dietary" :value="choice.toLowerCase()"
-                                    :checked="fields.dietary.includes(choice)" :disabled="blocked"
-                                    @change="selectDiet(choice, $event)" />
-                                <label class="form-check-label" :for="'diet-' + choice.toLowerCase()">{{ messages.t(`event.diet.${choice}`) }}</label>
-                            </div>
-                        </div>
-                    </div>
+                    <ChoiceCheckboxes :choices="dietaryOptions.meal" :selected="fields.dietary" id-prefix="diet"
+                        name="dietary" :disabled="blocked" @change="selectDiet" />
                     <div class="form-text">{{ messages.t('event.registration.chooseMeal') }}</div>
                     <hr />
 
                     <!-- The form uses a different requirements icon before the first
                          registration; retain that visible distinction on updates. -->
                     <label class="form-label"><i class="bi me-1" :class="event.registration ? 'bi-exclamation-circle' : 'bi-egg-fried'" aria-hidden="true"></i>{{ messages.t('event.registration.requirements') }}</label>
-                    <div class="frontend-choice-grid">
-                        <div v-for="choice in requirements" :key="choice">
-                            <div class="form-check">
-                                <input :id="'diet-' + choice.toLowerCase()" class="form-check-input" type="checkbox"
-                                    name="dietary" :value="choice.toLowerCase()"
-                                    :checked="fields.dietary.includes(choice)" :disabled="blocked"
-                                    @change="selectDiet(choice, $event)" />
-                                <label class="form-check-label" :for="'diet-' + choice.toLowerCase()">{{ messages.t(`event.diet.${choice}`) }}</label>
-                            </div>
-                        </div>
-                    </div>
+                    <ChoiceCheckboxes :choices="dietaryOptions.requirement" :selected="fields.dietary" id-prefix="diet"
+                        name="dietary" :disabled="blocked" @change="selectDiet" />
                     <FormField id="allergyNotes" name="allergyNotes" v-model="fields.allergyNotes" class="mt-2"
                         :max-length="registrationFields.allergyNotes.maxLength" :disabled="blocked" label-class="" :required-marker="false"
                         :required="fields.dietary.includes('ALLERGIES')"
@@ -230,16 +220,8 @@ async function cancel(): Promise<void> {
                     <template v-if="event.allowDietComment">
                         <hr />
                         <label class="form-label"><i class="bi bi-chat-dots me-1" aria-hidden="true"></i>{{ messages.t('event.registration.comments') }}</label>
-                        <div class="frontend-choice-grid">
-                            <div>
-                                <div class="form-check">
-                                    <input id="diet-comment" class="form-check-input" type="checkbox" name="dietary"
-                                        value="comment" :checked="fields.dietary.includes('COMMENT')"
-                                        :disabled="blocked" @change="selectDiet('COMMENT', $event)" />
-                                    <label class="form-check-label" for="diet-comment">{{ messages.t('event.diet.COMMENT') }}</label>
-                                </div>
-                            </div>
-                        </div>
+                        <ChoiceCheckboxes :choices="dietaryOptions.text" :selected="fields.dietary" id-prefix="diet"
+                            name="dietary" :disabled="blocked" @change="selectDiet" />
                         <div class="form-text">{{ messages.t('event.registration.commentHint') }}</div>
                         <FormField id="dietComment" name="dietComment" v-model="fields.dietComment" class="mt-2"
                             :max-length="registrationFields.allergyNotes.maxLength" :disabled="blocked" label-class=""

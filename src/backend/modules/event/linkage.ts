@@ -15,6 +15,7 @@
  */
 
 import Joi from 'joi';
+import {parseCivilDate} from '../../../common/lib/civilDate';
 import crypto from 'node:crypto';
 import type {EntityManager} from 'typeorm';
 import type {Event} from '../database/entities/event/Event';
@@ -54,8 +55,8 @@ const eventCursorKey = crypto.randomBytes(32);
 
 /** Reject impossible calendar dates as well as malformed strings before SQL sees them. */
 export function validateCalendarDate(value: string, helpers: Joi.CustomHelpers): string | Joi.ErrorReport {
-    const date = new Date(`${value}T00:00:00Z`);
-    if (!Number.isFinite(date.getTime()) || date.getUTCFullYear() < 1000 || date.toISOString().slice(0, 10) !== value) return helpers.error('any.invalid');
+    const date = parseCivilDate(value);
+    if (!date || date.getUTCFullYear() < 1000) return helpers.error('any.invalid');
     return value;
 }
 
@@ -197,6 +198,17 @@ export async function getEventLinkOptions(query: unknown, session: SessionLike):
 /** A known parent relationship or assignment-management grant alone does not authorize navigation. */
 export function getAuthorizedEventUrl(eventId: string, permissions: PermView): string | null {
     return permissions.has('ACCESS_VIEW') ? `/event/${encodeURIComponent(eventId)}` : null;
+}
+
+/** Resolve navigation for an already loaded parent without borrowing child authority.
+ * Optional managers retain the caller's snapshot; no parent is fetched again. */
+export async function readAuthorizedEventUrl(event: Pick<Event, 'id' | 'ownerId'> | null | undefined,
+    session: SessionLike, manager?: EntityManager): Promise<string | null> {
+    if (!event) return null;
+    // Evaluate only this parent's descriptor on the supplied read connection.
+    const views = await evaluateEntities([{entityType: 'event', entityId: event.id,
+        ownerId: event.ownerId, eventId: event.id}], session, manager);
+    return getAuthorizedEventUrl(event.id, views.get(entityPermissionKey('event', event.id))!);
 }
 
 /** Share parent-field disclosure without granting navigation from a relationship.

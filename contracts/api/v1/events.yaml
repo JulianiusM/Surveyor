@@ -1,4 +1,14 @@
 schemas:
+  EventDietaryChoice:
+    type: string
+    enum: [MEAT, FISH, VEGETARIAN, VEGAN, HALAL, KOSHER, ALLERGIES, COMMENT]
+    x-surveyor-runtime-choices:
+      exportName: eventDietaryChoices
+      groupsExportName: eventDietaryGroups
+      groups:
+        meal: [MEAT, FISH, VEGETARIAN, VEGAN]
+        requirement: [HALAL, KOSHER, ALLERGIES]
+        text: [COMMENT]
   EventPickerQuery:
     description: Shared bounded event-discovery filters. Each consuming endpoint owns its authorization and selected-event visibility.
     type: object
@@ -303,16 +313,7 @@ schemas:
       dietary:
         type: array
         items:
-          type: string
-          enum:
-            - MEAT
-            - FISH
-            - VEGETARIAN
-            - VEGAN
-            - HALAL
-            - KOSHER
-            - ALLERGIES
-            - COMMENT
+          $ref: '#/schemas/EventDietaryChoice'
       allergyNotes:
         type: string
       dietComment:
@@ -333,16 +334,7 @@ schemas:
       dietary:
         type: array
         items:
-          type: string
-          enum:
-            - MEAT
-            - FISH
-            - VEGETARIAN
-            - VEGAN
-            - HALAL
-            - KOSHER
-            - ALLERGIES
-            - COMMENT
+          $ref: '#/schemas/EventDietaryChoice'
       allergyNotes:
         type: string
         maxLength: 4000
@@ -795,9 +787,9 @@ paths:
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: Create an Event through the existing creation and default initialization owners
       parameters:
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
-        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
+        - {$ref: "./common.yaml#/parameters/Csrf"}
       requestBody:
         required: true
         content:
@@ -809,16 +801,16 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/schemas/EventCreated'}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/{eventId}/things-to-do/{entityType}/{entityId}:
     delete:
       operationId: deleteEventChild
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: Delete an owned child from its admitted Event host
       parameters:
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
-        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
+        - {$ref: "./common.yaml#/parameters/Csrf"}
         - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
         - {name: entityType, in: path, required: true, schema: {type: string, enum: [packing, activity, drivers]}}
         - {name: entityId, in: path, required: true, schema: {type: string, format: uuid}}
@@ -829,7 +821,7 @@ paths:
           content:
             application/json:
               schema: {$ref: './common.yaml#/schemas/MutationResult'}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   /events/create-entry:
     get:
       operationId: getEventCreateEntry
@@ -838,8 +830,8 @@ paths:
         precondition: none
       summary: get Event Create Entry
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - name: returnTo
           in: query
           schema:
@@ -853,7 +845,7 @@ paths:
               schema:
                 $ref: "#/schemas/EventCreateEntry"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       security: []
   /events/create-context:
     get:
@@ -863,8 +855,8 @@ paths:
         precondition: none
       summary: get Event Create Context
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
       responses:
         "200":
           description: Permitted Event projection
@@ -873,7 +865,7 @@ paths:
               schema:
                 $ref: "#/schemas/EventCreateContext"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /events/{eventId}/entry:
     get:
       operationId: getEventResourceEntry
@@ -882,8 +874,8 @@ paths:
         precondition: none
       summary: get Event Resource Entry
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - &a1
           name: eventId
           in: path
@@ -913,7 +905,7 @@ paths:
               schema:
                 $ref: "#/schemas/EventResourceEntry"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       security: []
   /events/{eventId}:
     get:
@@ -923,8 +915,8 @@ paths:
         precondition: none
       summary: get Event
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
         - name: view
           in: query
@@ -941,7 +933,7 @@ paths:
               schema:
                 $ref: "#/schemas/EventView"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
     delete:
       operationId: deleteEvent
       x-surveyor-command:
@@ -949,10 +941,10 @@ paths:
         precondition: none
       summary: delete Event
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Confirmed result of the existing shared Event operation
@@ -961,7 +953,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /events/{eventId}/duplicate:
     get:
       operationId: getEventDuplicate
@@ -970,8 +962,8 @@ paths:
         precondition: none
       summary: get Event Duplicate
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
       responses:
         "200":
@@ -981,7 +973,7 @@ paths:
               schema:
                 $ref: "#/schemas/EventDuplicate"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       security: []
   /events/{eventId}/metadata:
     get:
@@ -991,10 +983,10 @@ paths:
         precondition: none
       summary: get Event Metadata
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Permitted Event projection
@@ -1009,7 +1001,7 @@ paths:
         "304":
           description: Current authorized representation unchanged; no response body
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       security: []
     patch:
       operationId: updateEventMetadata
@@ -1018,11 +1010,11 @@ paths:
         precondition: metadata
       summary: update Event Metadata
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Confirmed result of the existing shared Event operation
@@ -1035,7 +1027,7 @@ paths:
               schema:
                 type: string
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -1051,8 +1043,8 @@ paths:
         precondition: none
       summary: get Event Settings
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
       responses:
         "200":
@@ -1062,7 +1054,7 @@ paths:
               schema:
                 $ref: "#/schemas/EventSettings"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /events/{eventId}/registration:
     put:
       operationId: saveEventRegistration
@@ -1071,10 +1063,10 @@ paths:
         precondition: none
       summary: save Event Registration
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Confirmed result of the existing shared Event operation
@@ -1083,7 +1075,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -1097,10 +1089,10 @@ paths:
         precondition: none
       summary: cancel Event Registration
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Confirmed result of the existing shared Event operation
@@ -1109,7 +1101,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /events/{eventId}/participants:
     get:
       operationId: getEventParticipants
@@ -1119,8 +1111,8 @@ paths:
         precondition: none
       summary: get Event Participants
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
       responses:
         "200":
@@ -1130,7 +1122,7 @@ paths:
               schema:
                 $ref: "#/schemas/EventParticipants"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /events/{eventId}/registrations/{registrationId}:
     patch:
       operationId: updateEventRegistrationDates
@@ -1140,10 +1132,10 @@ paths:
         precondition: none
       summary: update Event Registration Dates
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
         - name: registrationId
           in: path
           required: true
@@ -1159,7 +1151,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -1174,10 +1166,10 @@ paths:
         precondition: none
       summary: remove Event Registration
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
         - name: registrationId
           in: path
           required: true
@@ -1193,7 +1185,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /events/{eventId}/links:
     get:
       operationId: listEventRegistrationLinks
@@ -1203,8 +1195,8 @@ paths:
         precondition: none
       summary: list Event Registration Links
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
       responses:
         "200":
@@ -1214,7 +1206,7 @@ paths:
               schema:
                 $ref: "#/schemas/EventRegistrationLinks"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
     post:
       operationId: createEventRegistrationLink
       x-surveyor-command:
@@ -1222,10 +1214,10 @@ paths:
         precondition: none
       summary: create Event Registration Link
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Confirmed result of the existing shared Event operation
@@ -1234,7 +1226,7 @@ paths:
               schema:
                 $ref: "#/schemas/EventCreatedRegistrationLink"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -1250,10 +1242,10 @@ paths:
         precondition: none
       summary: revoke Event Registration Link
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
         - name: linkId
           in: path
           required: true
@@ -1268,7 +1260,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /events/{eventId}/things-to-do:
     get:
       operationId: getEventThingsToDo
@@ -1277,8 +1269,8 @@ paths:
         precondition: none
       summary: get Event Things To Do
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
         - &a2
           name: view
@@ -1296,7 +1288,7 @@ paths:
               schema:
                 $ref: "#/schemas/EventThingsToDo"
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /events/{eventId}/default-permissions:
     get:
       operationId: getEventDefaultsBaseline
@@ -1305,10 +1297,10 @@ paths:
         precondition: none
       summary: get Event Defaults Baseline
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Permitted Event projection
@@ -1323,7 +1315,7 @@ paths:
         "304":
           description: Current authorized representation unchanged; no response body
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       security: []
     put:
       operationId: updateEventDefaults
@@ -1332,11 +1324,11 @@ paths:
         precondition: metadata
       summary: update Event Defaults
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Confirmed result of the existing shared Event operation
@@ -1345,7 +1337,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       security: []
       requestBody:
         required: true
@@ -1361,8 +1353,8 @@ paths:
         precondition: none
       summary: get Event Admin Baseline
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
         - name: profileId
           in: path
@@ -1370,7 +1362,7 @@ paths:
           schema:
             type: string
             format: uuid
-        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Permitted Event projection
@@ -1385,7 +1377,7 @@ paths:
         "304":
           description: Current authorized representation unchanged; no response body
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       security: []
   /events/{eventId}/admins:
     post:
@@ -1395,11 +1387,11 @@ paths:
         precondition: metadata
       summary: add Event Admin
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Confirmed result of the existing shared Event operation
@@ -1408,7 +1400,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       security: []
       requestBody:
         required: true
@@ -1424,11 +1416,11 @@ paths:
         precondition: metadata
       summary: update Event Admin
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
         - name: profileId
           in: path
           required: true
@@ -1443,7 +1435,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       security: []
       requestBody:
         required: true
@@ -1458,11 +1450,11 @@ paths:
         precondition: metadata
       summary: delete Event Admin
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
         - name: profileId
           in: path
           required: true
@@ -1477,7 +1469,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       security: []
   /events/{eventId}/profiles:
     get:
@@ -1487,8 +1479,8 @@ paths:
         precondition: none
       summary: search Event Profiles
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
         - name: q
           in: query
@@ -1505,7 +1497,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/EntityAdministratorProfileOptions
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       security: []
   /events/{eventId}/header/edit-baseline:
     get:
@@ -1515,10 +1507,10 @@ paths:
         precondition: none
       summary: get Event Header Baseline
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+        - $ref: "./common.yaml#/parameters/IfNoneMatch"
       responses:
         "200":
           description: Permitted Event projection
@@ -1533,7 +1525,7 @@ paths:
         "304":
           description: Current authorized representation unchanged; no response body
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       security: []
   /events/{eventId}/header:
     put:
@@ -1543,11 +1535,11 @@ paths:
         precondition: metadata
       summary: upload Event Header
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Confirmed result of the existing shared Event operation
@@ -1556,7 +1548,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       security: []
       requestBody:
         required: true
@@ -1571,11 +1563,11 @@ paths:
         precondition: metadata
       summary: delete Event Header
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
-        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+        - $ref: "./common.yaml#/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/IfMatch"
       responses:
         "200":
           description: Confirmed result of the existing shared Event operation
@@ -1584,7 +1576,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       security: []
     get:
       operationId: getEventHeader
@@ -1593,8 +1585,8 @@ paths:
         precondition: none
       summary: get Event Header
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
       responses:
         "200":
@@ -1604,7 +1596,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/EntityHeaderBinary
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       security: []
   /events/{eventId}/archive:
     post:
@@ -1614,10 +1606,10 @@ paths:
         precondition: none
       summary: archive Event
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Confirmed result of the existing shared Event operation
@@ -1626,7 +1618,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /events/{eventId}/restore:
     post:
       operationId: restoreEvent
@@ -1635,10 +1627,10 @@ paths:
         precondition: none
       summary: restore Event
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
         - *a1
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Csrf"
       responses:
         "200":
           description: Confirmed result of the existing shared Event operation
@@ -1647,7 +1639,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /events/{eventId}/things-to-do/{entityType}/{entityId}/archive:
     post:
       operationId: archiveEventChild
@@ -1656,9 +1648,9 @@ paths:
         precondition: none
       summary: archive Event Child
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/Csrf"
         - name: eventId
           in: path
           required: true
@@ -1689,7 +1681,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /events/{eventId}/things-to-do/{entityType}/{entityId}/restore:
     post:
       operationId: restoreEventChild
@@ -1698,9 +1690,9 @@ paths:
         precondition: none
       summary: restore Event Child
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/Csrf"
         - name: eventId
           in: path
           required: true
@@ -1731,7 +1723,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
   /events/{eventId}/things-to-do/{entityType}/{entityId}/automatic-archive:
     put:
       operationId: setEventChildAutomaticArchival
@@ -1740,9 +1732,9 @@ paths:
         precondition: none
       summary: set Event Child Automatic Archival
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/Csrf"
         - name: eventId
           in: path
           required: true
@@ -1773,7 +1765,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -1788,9 +1780,9 @@ paths:
         precondition: none
       summary: set Event Automatic Archival
       parameters:
-        - $ref: ./openapi.yaml#/components/parameters/Context
-        - $ref: ./openapi.yaml#/components/parameters/Locale
-        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: "./common.yaml#/parameters/Context"
+        - $ref: "./common.yaml#/parameters/Locale"
+        - $ref: "./common.yaml#/parameters/Csrf"
         - name: eventId
           in: path
           required: true
@@ -1805,7 +1797,7 @@ paths:
               schema:
                 $ref: ./common.yaml#/schemas/MutationResult
         default:
-          $ref: ./openapi.yaml#/components/responses/Problem
+          $ref: "./common.yaml#/responses/Problem"
       requestBody:
         required: true
         content:
@@ -1823,24 +1815,24 @@ paths:
       security: []
       parameters:
         - &a1
-          $ref: "./openapi.yaml#/components/parameters/Context"
+          $ref: "./common.yaml#/parameters/Context"
         - &a2
-          $ref: "./openapi.yaml#/components/parameters/Locale"
+          $ref: "./common.yaml#/parameters/Locale"
         - &a3
           name: eventId
           in: path
           required: true
           schema:
-            $ref: "./openapi.yaml#/components/schemas/Uuid"
+            $ref: "./common.yaml#/schemas/Uuid"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/GuestEntry"
+                $ref: "./auth.yaml#/schemas/GuestEntry"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"
     post:
       operationId: registerEventGuest
       x-surveyor-command:
@@ -1852,7 +1844,7 @@ paths:
         - *a1
         - *a2
         - *a3
-        - $ref: "./openapi.yaml#/components/parameters/Csrf"
+        - $ref: "./common.yaml#/parameters/Csrf"
         - name: regToken
           in: query
           schema:
@@ -1863,13 +1855,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "./openapi.yaml#/components/schemas/GuestRegistrationInput"
+              $ref: "./auth.yaml#/schemas/GuestRegistrationInput"
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "./openapi.yaml#/components/schemas/IdentityResult"
+                $ref: "./auth.yaml#/schemas/IdentityResult"
         default:
-          $ref: "./openapi.yaml#/components/responses/Problem"
+          $ref: "./common.yaml#/responses/Problem"

@@ -16,8 +16,8 @@
 
 import type {components} from './api/v1';
 
-export type WeekDay = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
-export type WeekInMonth = "1" | "2" | "3" | "4" | "LAST";
+export type WeekDay = components['schemas']['SurveyCombinationInput']['weekday'];
+export type WeekInMonth = components['schemas']['SurveyCombinationInput']['nthWeek'];
 export type SurveyAnswer = "yes" | "no" | "maybe" | null;
 
 export type BasePicked = {

@@ -1,5 +1,4 @@
 import {Router} from 'express';
-import fs from 'node:fs/promises';
 import invoiceController, {
     admitEventInvoiceSubmission, closeEventInvoice, readEventFinance, readEventFinanceBreakdown,
     readEventInvoiceProof, retractEventInvoice,
@@ -19,10 +18,11 @@ import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import {prepareFileUploader} from '../../../modules/lib/fileCommons';
 import {APIError} from '../../../modules/lib/errors';
 import settings from '../../../modules/settings';
+import {allocateInvoiceProofUpload, finishInvoiceProofRequest} from '../../../modules/invoice/proofs';
 import type {components} from '../../../../types/api/v1';
 
 const router = Router({mergeParams: true});
-const uploadProof = prepareFileUploader(settings.value.invoiceDir, true, true).single('proof');
+const uploadProof = prepareFileUploader(settings.value.invoiceDir, true, true, allocateInvoiceProofUpload).single('proof');
 
 router.post('/pools', asyncHandler(async function createPool(req, res) {
     const actor = await requireApiContext(req, res);
@@ -55,18 +55,17 @@ router.post('/pools/:poolId/invoices/organizer', asyncHandler(/** Admit organize
 async function recordOrganizerCost(req, res) {
     const actor = await requireApiContext(req, res, true);
     const event = await admitEventFinanceOrganizer(String(req.params.eventId), actor, true);
-    let enteredOperation = false;
     try {
         // The closed multipart schema distinguishes optional bytes from client-supplied filenames and unknown parts.
         await receiveApiUpload(req, res, uploadProof);
         validateOperationRequest(req, 'recordEventOrganizerInvoice', body => decodeApiMultipartData(body, req.file, 'proof'));
         const reply = prepareValidatedJson(req, 'recordEventOrganizerInvoice', 200, {changed: true});
-        enteredOperation = true;
         await recordEventOrganizerInvoice(event, String(req.params.poolId), req.body.data, actor, req.file);
         sendPreparedJson(req, res, reply);
     } finally {
-        // Once entered, the shared business owner controls retention; structural rejections discard this request's upload.
-        if (!enteredOperation && req.file) await fs.unlink(req.file.path).catch(() => undefined);
+        // The same owner handles partial uploads, structural/business rejection
+        // and uncertain commit. A cleanup failure cannot reject a saved invoice.
+        await finishInvoiceProofRequest(req);
     }
 }));
 
@@ -210,14 +209,12 @@ router.post('/pools/:poolId/invoices', asyncHandler(/** Admit participant submis
 async function submitEventInvoice(req, res) {
     const actor = await requireApiContext(req, res, true);
     const event = await admitEventInvoiceSubmission(String(req.params.eventId), actor);
-    let enteredOperation = false;
     try {
         // The generated multipart schema validates the data object and actual uploaded proof descriptor together.
         await receiveApiUpload(req, res, uploadProof);
         validateOperationRequest(req, 'submitEventInvoice', body => decodeApiMultipartData(body, req.file, 'proof'));
         const reply = prepareValidatedJson(req, 'submitEventInvoice', 200, {changed: true});
         // The existing business operation repeats pool state/assignment checks and owns its recorded behavior.
-        enteredOperation = true;
         try {
             await invoiceController.submitInvoice(event, String(req.params.poolId), req.body.data, actor, req.file);
         } catch (error) {
@@ -227,8 +224,9 @@ async function submitEventInvoice(req, res) {
         }
         sendPreparedJson(req, res, reply);
     } finally {
-        // Structural rejection cannot retain this request's upload. Once the shared operation starts, its outcome owns retention.
-        if (!enteredOperation && req.file) await fs.unlink(req.file.path).catch(() => undefined);
+        // Finishing a request releases ownership, never blindly unlinks bytes:
+        // the shared proof owner checks durable state and all live references.
+        await finishInvoiceProofRequest(req);
     }
 }));
 

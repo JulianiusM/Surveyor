@@ -22,7 +22,7 @@ import type {EventRegistration} from '../database/entities/event/EventRegistrati
 import type {ParticipantRow} from '../../../types/EventTypes';
 import type {InvoiceCalculationExplanation} from '../../../types/InvoicePoolTypes';
 import {APIError} from '../lib/errors';
-import {formatAmount, resolveInvoiceAmount, toAmount} from '../lib/util';
+import {formatAmount, resolveInvoiceAmount, toAmount, acceptedInvoiceCosts, invoiceCostTotals} from '../lib/util';
 import {collectSettledRegistrationIds, projectInvoiceShares} from './settlements';
 import {invoiceLabels} from './wording';
 import {invoiceCalculationLines, invoicePoolCalculation, invoicePayerCalculation, sumInvoiceAdjustments} from './presentation';
@@ -33,9 +33,7 @@ import {explainInvoiceDistribution} from './distribution';
 export function preparePoolCalculation(pool: EventInvoicePool, participants: ParticipantRow[], registrations: EventRegistration[]) {
 
     // Select only costs that contribute to this calculation; review history stays outside the arithmetic.
-    const approvedInvoices = (pool.invoices || []).filter(
-        (invoice) => invoice.status === 'APPROVED' || invoice.status === 'CLOSED',
-    );
+    const approvedInvoices = acceptedInvoiceCosts(pool.invoices || []);
 
     // Build one name lookup for contribution provenance and takeover attribution.
     const participantMap = new Map(participants.map((p) => [p.id, p]));
@@ -184,10 +182,7 @@ function invoiceAttendanceWeight(pool: EventInvoicePool, registration: EventRegi
 /** Derive the shared base and allocate it through the exact weighted rounding implementation. */
 function calculateIndividualCosts(pool: EventInvoicePool, billableRegistrations: EventRegistration[]) {
     // Separate accepted invoice costs from redistributed adjustments to derive the base amount.
-    const invoiceTotal = pool.invoices.filter((invoice) => invoice.status === 'APPROVED' || invoice.status === 'CLOSED')
-        .reduce((sum, invoice) => sum + resolveInvoiceAmount(invoice.amount, invoice.correctedAmount), 0);
-    const offset = (pool.surcharges || []).filter((adjustment) => adjustment.subtractFromPool)
-        .reduce((sum, adjustment) => sum + toAmount(adjustment.amount), 0);
+    const {invoiceTotal, subtractiveAmount: offset} = invoiceCostTotals(pool.invoices, pool.surcharges || []);
     const factors = new Map((pool.assignments || []).map((assignment) => [assignment.registrationId, assignment.factor ?? 1]));
     // Attendance units and each registration's factor form the exact distribution weight.
     const weights = billableRegistrations.map((registration) => {

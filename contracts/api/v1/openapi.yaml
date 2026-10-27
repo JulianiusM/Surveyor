@@ -393,109 +393,39 @@ components:
       name: connect.sid
   parameters:
     Context:
-      in: header
-      name: X-Surveyor-Context
-      required: false
-      description: Required when the server session has context evidence. Sessionless public requests and initial identity actions omit it; omission never selects an anonymous actor or grants permission.
-      schema:
-        type: string
-        minLength: 1
-        maxLength: 256
+      $ref: ./common.yaml#/parameters/Context
     Locale:
-      in: header
-      name: X-Surveyor-Locale
-      required: false
-      schema:
-        $ref: "#/components/schemas/LocaleTag"
+      $ref: ./common.yaml#/parameters/Locale
     Csrf:
-      in: header
-      name: X-CSRF-Token
-      required: false
-      description: Required for mutations when the server session has CSRF evidence. Sessionless actions retain server-owned origin and request protections; omission never bypasses authentication or authorization.
-      schema:
-        type: string
-        minLength: 1
-        maxLength: 256
+      $ref: ./common.yaml#/parameters/Csrf
     ListId:
-      in: path
-      name: listId
-      required: true
-      schema:
-        $ref: "#/components/schemas/Uuid"
+      $ref: ./common.yaml#/parameters/ListId
     ItemId:
-      in: path
-      name: itemId
-      required: true
-      schema:
-        $ref: "#/components/schemas/Uuid"
+      $ref: ./common.yaml#/parameters/ItemId
     IfMatch:
-      in: header
-      name: If-Match
-      required: true
-      schema:
-        $ref: "#/components/schemas/ComparisonToken"
+      $ref: ./common.yaml#/parameters/IfMatch
     EventIfMatch:
-      in: header
-      name: If-Match
-      required: false
-      description: Ignored for an authorized unchanged choice, which returns without comparing or writing. An actual relationship change requires a ComparisonToken and current-value comparison under the existing locks.
-      schema:
-        type: string
+      $ref: ./common.yaml#/parameters/EventIfMatch
     IfNoneMatch:
-      in: header
-      name: If-None-Match
-      required: false
-      schema:
-        type: string
-        maxLength: 4096
+      $ref: ./common.yaml#/parameters/IfNoneMatch
     HelpDocument:
-      in: query
-      name: doc
-      required: false
-      schema:
-        type: string
-        minLength: 1
-        maxLength: 100
-        pattern: ^[a-zA-Z0-9_-]+$
+      $ref: ./help.yaml#/parameters/HelpDocument
     HelpQuery:
-      in: query
-      name: q
-      required: false
-      schema:
-        type: string
-        maxLength: 100
+      $ref: ./help.yaml#/parameters/HelpQuery
     ProfileId:
-      in: path
-      name: profileId
-      required: true
-      schema:
-        $ref: "#/components/schemas/Uuid"
+      $ref: ./common.yaml#/parameters/ProfileId
     AssignmentId:
-      in: path
-      name: assignmentId
-      required: true
-      schema:
-        $ref: "#/components/schemas/DecimalId"
+      $ref: ./common.yaml#/parameters/AssignmentId
     SearchQuery:
-      in: query
-      name: q
-      required: false
-      schema:
-        type: string
+      $ref: ./common.yaml#/parameters/SearchQuery
     SelectedEvent:
-      in: query
-      name: selected
-      required: false
-      schema:
-        $ref: "#/components/schemas/Uuid"
+      $ref: ./common.yaml#/parameters/SelectedEvent
   responses:
     Problem:
-      description: A safe localized RFC 9457 problem; machine code controls recovery
-      content:
-        application/problem+json:
-          schema:
-            $ref: "#/components/schemas/Problem"
+      $ref: ./common.yaml#/responses/Problem
   schemas:
+    PublicProfileReference:
+      $ref: ./common.yaml#/schemas/PublicProfileReference
     # Historical generated aliases retain source compatibility at this boundary.
     currentEvent:
       $ref: ./common.yaml#/schemas/NullableEntityCurrentEvent

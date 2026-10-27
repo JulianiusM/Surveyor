@@ -294,3 +294,6 @@ src.zip
 # Generated application-test and advisory documentation reports.
 /artifacts/
 test_output.txt
+
+# Runtime choice data is generated from the authored API enums.
+/src/common/generated/domainChoices.ts

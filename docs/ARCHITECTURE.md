@@ -6,7 +6,7 @@ owner: architecture maintainers
 status: current
 last-verified: 2026-10-27
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved R6 shared UUID identity and R7 recommendation provenance boundaries reconciled; prior contract, validation and existing-owner decisions retained
+verification-scope: approved shared-owner remediation, directed contract references, generated options, final application receipts and durable proof ownership reconciled against source; no deployment claim
 source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: architecture-or-help-delivery-change
 -->
@@ -169,6 +169,12 @@ controls; each controller retains its own admitted-file policy. The existing `mo
 path resolution used by API binary delivery, header delivery and invoice proofs. Their callers retain authorization,
 existence checks, cleanup and error selection. Shared civil-date stepping lives in `src/common/lib/civilDate.ts`.
 
+Finite Survey and Event dietary options are authored once in their feature schemas. The existing API generator emits
+`src/common/generated/domainChoices.ts` for ORM, controller and browser consumers, while declarations derive from the
+generated contracts. The public boundary admits that exact safe file. Generation and the successful-batch marker also
+own its development refresh; a direct generated-file write does not independently restart the backend. Root OpenAPI
+exports remain public aliases; feature references target the actual schema owners rather than the aggregate root.
+
 ### Routes
 
 `src/backend/routes/` defines URL shape, middleware order, request validation, controller invocation, redirects, and response
@@ -230,6 +236,12 @@ feature policy and DBAL callbacks; their distinct lock, transaction and receipt 
 Pure participant/card projections live in `modules/lib/util.ts`; Event and Overview supply their own admission
 and ownership decisions. Event PDF composition belongs to its controller; `modules/lib/pdf.ts` supplies shared primitives.
 
+The same administration owner also supplies Packing/Drivers item-editor baselines, header-only comparison evidence
+and separately admitted header paths. Public method-only editors acquire no new profile requirement. Feature row/field
+policy and snapshot callbacks remain explicit, and header writers receive no protected bytes or path. Shared counters
+consume each feature's eligible rows; Packing's Everyone exclusion and Drivers' passenger meaning remain feature policy.
+The Event linkage owner resolves navigation from an already loaded parent and the caller's optional snapshot manager.
+
 That existing utility module also owns backend UUID identity keys, comparison, indexing, grouping and reference
 resolution. Controllers, permission and lifecycle owners, and Activity calculation/job boundaries consume that single
 implementation. Lookup keys identify equivalent UUID spellings; resolved rows retain their stored IDs for writes
@@ -279,6 +291,15 @@ A central feature wording catalog is the single source for every relevant UI, ac
 and export string. Distributed strings are prohibited once that catalog exists. Stable keys, complete messages,
 named parameters, and locale-aware plural forms preserve future localization without English sentence fragments.
 
+Activity application prepares its complete response variants while assignment/history writes can still roll back.
+The existing transport variant procedure also serves identity completion. Follow-up recommendation generation retains
+its separate guarded transaction; its failure produces a generation outcome alongside committed application success.
+The existing Generate action retries generation explicitly, without replaying application. Requirement analysis and
+baseline calculation share asynchronous context preparation in the existing Activity owner while retaining their
+initial reads and separate common arithmetic engines. Configured slot roles may be cleared completely; retaining a
+mapping uses its role identity rather than its mapping-row identity. Application quota checks belong to the Activity
+business owner; the SQL integrity trigger remains separate from the retired ORM business subscriber.
+
 Visual consistency is also a core acceptance criterion. Reuse the established application components, spacing,
 typography, and interaction patterns throughout a feature. Exports follow the same rule: PDF sections use the shared
 `sectionTitle` style and established document layout rather than feature-specific heading treatments.
@@ -306,6 +327,9 @@ The canonical frontend router renders ordinary page errors as request-local Vue 
 handler is a localized plain-text fallback that needs neither rendering nor a session and remains private/no-store;
 API parse errors retain their JSON boundary. Controller operations, not route visibility or components, enforce
 business policy.
+
+Retained schedule and PDF outputs consume that same captured actor, including its hydrated audience relations.
+They preserve their own redirects, grants and private projections without writing hydrated relations back to Session.
 
 ## Identity and session architecture
 
@@ -960,6 +984,15 @@ Surveyor's durable state spans more than the database:
 the configured retention cutoff and proof-file policy, while the invoice DBAL selects and deletes expired records
 and refreshes stored totals under pool locks. This in-process schedule is part of the single-process assumption.
 
+Invoice proofs have a durable ledger independent of invoice cascades. The existing proof owner registers upload
+ownership before disk writing and attaches it through invoice DBAL in the invoice transaction. Cleanup claims are
+fenced against attachment and preserve active uploads and all live references; file deletion and durable retry occur
+after business commit. Retention, Event/registration cascades and abandoned uploads use this same lifecycle owner.
+The existing hourly job drains bounded work. Shared timer mechanics retain independent retention/archival callbacks
+and overlap policies; shared raw monetary arithmetic retains DBAL materialized totals and each caller's rounding point.
+Schema and recovery details belong to [Database and Migrations](DATABASE.md#invoice-proof-ownership); historical orphan
+reconciliation is an explicit [offline maintenance workflow](OPERATIONS.md#invoice-proof-reconciliation).
+
 The fixed help source is `docs/user-guide/`, packaged with each release. It is trusted application content, not a user-uploaded documentation store. The detailed trust and future-change boundary is recorded in [DEC-004](decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md).
 
 ## Build and release architecture
@@ -1031,6 +1064,10 @@ missing corpora/articles/required figures select the complete reviewed English a
 fallback and actual content-language disclosure. Never mix translated prose with English figures; invalid existing
 source fails rather than hiding behind fallback. This trusted-content boundary is not a generic sanitization service.
 Changing the source model requires reopening DEC-004.
+
+`common/lib/helpPolicy.ts` owns matching URI decoding/classification and raster/scheme policy for the runtime reader
+and standalone advisory report. The report loads the dependency-free erasable source through Node; runtime uses its
+compiled counterpart. Marked traversal, advisory regex parsing and caller-specific diagnostics retain their own owners.
 
 ### Documentation reporting is outside application delivery
 

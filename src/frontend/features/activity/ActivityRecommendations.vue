@@ -678,6 +678,7 @@ function statusLabel(status: typeof statuses[number]): string {
                 v-if="jobTerminal"
                 :kind="jobTerminal.status === 'COMPLETE' ? 'success' : 'warning'">{{ messages.t(jobTerminal.status === 'COMPLETE' ? 'activity.recommendations.jobComplete' : jobTerminal.status === 'STALE' ? 'activity.recommendations.jobStale' : 'activity.recommendations.jobFailed') }}</StatusNotice>
             <StatusNotice v-if="result" kind="info">{{ messages.t('activity.recommendations.saved', {applied: result.applied, skipped: result.skipped}) }}</StatusNotice>
+            <StatusNotice v-if="result?.generationOutcome === 'failed'" kind="warning">{{ messages.t('activity.recommendations.refreshFailed', {action: messages.t('activity.recommendations.auto')}) }}</StatusNotice>
             <ActivityRecommendationSchedule
                 v-if="workspace"
                 :view="view"

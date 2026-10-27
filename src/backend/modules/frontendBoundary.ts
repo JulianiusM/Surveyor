@@ -11,6 +11,7 @@ export const frontendBrowserDependencies = ['vue', 'vue-router', '@tanstack/vue-
 const sharedFiles = new Set(['src/common/lib/frontendIdentity.ts', 'src/common/lib/helpNavigation.ts',
     'src/common/lib/fileMedia.ts',
     'src/common/lib/civilDate.ts', 'src/common/activity/requirements.ts',
+    'src/common/generated/domainChoices.ts',
     'src/common/localization/translator.ts', 'src/common/localization/inputValidation.ts',
     'src/common/localization/permissionLabels.ts', 'src/common/localization/generated/resources.json',
     'src/common/localization/generated/manifest.json', 'src/common/localization/generated/permissions.ts',

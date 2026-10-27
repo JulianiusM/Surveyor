@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
-import type {AssignmentCandidate} from '../../../types/ActivityTypes';
+import type {AssignmentCandidate, RecommendationApplicationSummary, RecommendationApplicationResult,
+    RecommendationGenerationOutcome} from '../../../types/ActivityTypes';
+import type {ActivityCommandPreparation} from '../../../types/ActivityV1Types';
 import {generateAndSaveRecommendations, queueAutoGenerateRecommendations, toRecommendationInput, normalizeRecommendationForPersistence, saveReviewedRecommendations, recommendationContext, applyActivityRecommendationOperations, requireRequirementConfiguration, requireRecommendationContext, buildParticipantAttendanceMap, buildLinkedPlanContext, projectActivityAssignees} from './autoAssignment';
 import type {RecommendationOperation, RecommendationStatus, ActivityRecommendationOperationInput, RecommendationWarningPreview, AssignmentWarning, AssignmentWarningPreview} from '../../../types/ActivityTypes';
 import type {EntityManager} from 'typeorm';
@@ -445,7 +447,8 @@ export async function getRecommendationWarningPreview(
  * Persist review state, validated assignments and applied history under the same event/plan
  * locks. Confirmation is checked before any write; a changed conflict leaves the draft intact.
  */
-export async function applyRecommendations(planId: string, body?: any, session?: SessionLike) {
+export async function applyRecommendations(planId: string, body?: any, session?: SessionLike,
+    prepare?: ActivityCommandPreparation<RecommendationApplicationSummary>): Promise<RecommendationApplicationResult> {
     /** Validate and apply one reviewed batch on the service-supplied locked transaction. */
     async function applyReviewed(manager: EntityManager) {
         // Lock and recheck plan context before calculating the final applicable set or persisting review state.
@@ -474,16 +477,32 @@ export async function applyRecommendations(planId: string, body?: any, session?:
             }
         }
         await recommendationService.markRecommendationsApplied(planId, appliedIds, manager);
-        return {plan, applied: operations.length, skipped: prepared.skipped,
+        const summary: RecommendationApplicationSummary = {
+            message: 'Applied ' + operations.length + ' recommendation' + (operations.length === 1 ? '' : 's'),
+            applied: operations.length, skipped: prepared.skipped,
             warnings: await presentRecommendationWarnings(planId, prepared.warnings, session, manager)};
+        // The existing command preparation callback projects every complete receipt
+        // before commit. Any validation/serialization failure rolls back the writes.
+        prepare?.(summary);
+        return {regenerate: summary.applied > 0 && shouldRegenerateRecommendationsAfterApply(plan), summary};
     }
     const result = await activityService.withActivityTransaction(applyReviewed);
-    if (result.applied > 0 && shouldRegenerateRecommendationsAfterApply(result.plan)) {
-        const history = await recommendationService.getRecommendations(planId);
-        await generateAndSaveRecommendations(planId, history);
+    let generationOutcome: RecommendationGenerationOutcome = 'not-required';
+    if (result.regenerate) {
+        try {
+            // Generation retains its own snapshots, freshness guards and transaction.
+            // It never replays the assignment operation whose commit already finished.
+            const history = await recommendationService.getRecommendations(planId);
+            await generateAndSaveRecommendations(planId, history);
+            generationOutcome = 'complete';
+        } catch (error) {
+            generationOutcome = 'failed';
+            console.error('[activity] Suggestion refresh failed after committed application:', error);
+        }
     }
-    return {message: 'Applied ' + result.applied + ' recommendation' + (result.applied === 1 ? '' : 's'),
-        applied: result.applied, skipped: result.skipped, warnings: result.warnings};
+    // Only select a finite outcome after commit; response projection/preparation
+    // has already finished and cannot turn this success into business rejection.
+    return {...result.summary, generationOutcome};
 }
 
 /** Application policy belongs to the controller; overlap detection remains a pure calculation. */

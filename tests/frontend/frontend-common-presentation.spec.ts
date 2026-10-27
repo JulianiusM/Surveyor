@@ -13,6 +13,7 @@ import CommonPage from '../../src/frontend/features/common/CommonPage.vue';
 import PageMessage from '../../src/frontend/components/PageMessage.vue';
 import EntityDescription from '../../src/frontend/components/EntityDescription.vue';
 import FormField from '../../src/frontend/components/FormField.vue';
+import ChoiceCheckboxes from '../../src/frontend/components/ChoiceCheckboxes.vue';
 import FileField from '../../src/frontend/components/FileField.vue';
 import ActionButton from '../../src/frontend/components/ActionButton.vue';
 import EntityAssignmentActions from '../../src/frontend/components/EntityAssignmentActions.vue';
@@ -768,6 +769,69 @@ describe('common frontend presentation', () => {
         expect(control.attributes()).toMatchObject({name: 'description', rows: '4', maxlength: '16000'});
         await control.setValue('  Retained draft\nWith spacing  ');
         expect(description.wrapper.emitted('update:modelValue')).toEqual([['  Retained draft\nWith spacing  ']]);
+    });
+
+    it('keeps boolean checkbox events separate from text values and preserves native flag submission', async () => {
+        const {wrapper, request} = await mounted(FormField, {id: 'event-comment', name: 'allowDietComment',
+            type: 'checkbox', label: 'Allow comments', checked: false, modelValue: 'Independent text value'});
+        const form = document.createElement('form');
+        form.append(wrapper.element);
+        document.body.append(form);
+        const field = wrapper.get<HTMLInputElement>('input');
+        expect(wrapper.classes()).toContain('form-check');
+        expect(field.classes()).toEqual(['form-check-input']);
+        expect(field.element.value).toBe('on');
+        expect(wrapper.get('label').classes()).toEqual(['form-check-label']);
+        expect(wrapper.get('label').attributes('for')).toBe('event-comment');
+        expect([...new FormData(form)]).toEqual([]);
+
+        await field.setValue(true);
+        expect(wrapper.emitted('update:checked')).toEqual([[true]]);
+        expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+        expect([...new FormData(form)]).toEqual([['allowDietComment', 'on']]);
+
+        // The feature can restore either saved state without replacing the DOM
+        // control or introducing a local value mirror in the shared field.
+        await wrapper.setProps({checked: true});
+        await wrapper.setProps({checked: false});
+        expect(wrapper.get('input').element).toBe(field.element);
+        expect(field.element.checked).toBe(false);
+        expect([...new FormData(form)]).toEqual([]);
+        await field.setValue(true);
+        expect(wrapper.emitted('update:checked')).toEqual([[true], [true]]);
+        await field.setValue(false);
+        expect(wrapper.emitted('update:checked')).toEqual([[true], [true], [false]]);
+        await wrapper.setProps({checked: true, disabled: true});
+        expect(field.element.disabled).toBe(true);
+        expect([...new FormData(form)]).toEqual([]);
+        expect(request).not.toHaveBeenCalled();
+    });
+
+    it('adapts dietary arrays through the same field while retaining lowercase values and disabled omission', async () => {
+        const {wrapper, request} = await mounted(ChoiceCheckboxes, {idPrefix: 'diet', name: 'dietary',
+            choices: [{value: 'MEAT', inputValue: 'meat', label: 'Meat'},
+                {value: 'COMMENT', inputValue: 'comment', label: 'Comment'}], selected: ['MEAT']});
+        const form = document.createElement('form');
+        form.append(wrapper.element);
+        document.body.append(form);
+        const meat = wrapper.get<HTMLInputElement>('#diet-meat');
+        const comment = wrapper.get<HTMLInputElement>('#diet-comment');
+        expect([...new FormData(form)]).toEqual([['dietary', 'meat']]);
+        await comment.setValue(true);
+        expect(wrapper.emitted('change')).toEqual([['COMMENT', true]]);
+
+        // Choice membership and recovery remain feature inputs, separate from
+        // the exact native values collected for an ordinary form submission.
+        await wrapper.setProps({selected: ['MEAT', 'COMMENT']});
+        expect([...new FormData(form)]).toEqual([['dietary', 'meat'], ['dietary', 'comment']]);
+        await wrapper.setProps({selected: []});
+        expect(meat.element.checked).toBe(false);
+        expect(comment.element.checked).toBe(false);
+        expect(wrapper.get('#diet-comment').element).toBe(comment.element);
+        await wrapper.setProps({selected: ['COMMENT'], disabled: true});
+        expect(comment.element.disabled).toBe(true);
+        expect([...new FormData(form)]).toEqual([]);
+        expect(request).not.toHaveBeenCalled();
     });
 
     it('retains lexical number spelling through change, blur and a refreshed disabled state', async () => {

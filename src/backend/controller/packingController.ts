@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import {projectEntityEventOption} from '../modules/event/linkage';
+import {projectEntityEventOption, readAuthorizedEventUrl} from '../modules/event/linkage';
 import {withListRootLock, getLockedListAssignment, insertListAssignment, withListCreationTransaction} from '../modules/database/services/ListService';
-import {readListMetadata, readListDescription, readListOrderBaseline, readListSettings, listMetadataResult, listPermissions, authorizeListRead, listItemPermissions, listHeaderProjection, mayOpenListSettings, listSettingsToken, assertListContext} from './entityAdminController';
+import {readListItemEditBaseline, readListHeaderBaseline, readListHeaderPath, listHeaderToken, readListMetadata, readListDescription, readListOrderBaseline, readListSettings, listMetadataResult, listPermissions, authorizeListRead, listItemPermissions, listHeaderProjection, mayOpenListSettings, listSettingsToken, assertListContext} from './entityAdminController';
 import {readEntityDefaultsBaseline, updateEntityDefaults, readEntityAdministratorBaseline, updateEntityAdministrator} from './entityAdminController';
 import {updateListItem, deleteListItem, reorderListItems, requireListAssignmentHandle, deleteListAssignment} from './entityAdminController';
 import type {ListItemCommandOperations} from '../../types/EntityPropertyTypes';
@@ -29,7 +29,7 @@ import {Request} from "express";
 import type {EntityManager} from 'typeorm';
 import {comparisonToken, comparisonActor, requireFieldComparison, entityTag} from '../modules/api/transport';
 import {searchEntityProfiles, completeDefaults, normalizeBasicProperties, entityCreationPermissionContext} from './entityAdminController';
-import {assertEntityPropertyContext, changeEntityEvent, getAuthorizedEventUrl, getEntityViewAdmission} from '../modules/event/linkage';
+import {assertEntityPropertyContext, changeEntityEvent, getEntityViewAdmission} from '../modules/event/linkage';
 import {classifyArchiveCommandError, archiveEntity, restoreEntity} from '../modules/entityArchival';
 import {entityPropertyPermission, entityMethodPermission} from '../modules/permissionEngine';
 
@@ -52,8 +52,8 @@ import {ApiProblem} from '../modules/api/problem';
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {performImageSwap} from "../modules/lib/fileCommons";
 import {checkNewImage, removeImage} from '../modules/lib/fileCommons';
-import {ENTITIES, generateUniqueId, sameUuid, uuidKey, groupByUuid} from '../modules/lib/util';
-import {saveDefaultPermsFromBody, evaluateEntities, evaluateSubject, isOwner, entityPermissionKey} from "../modules/permissionEngine";
+import {ENTITIES, generateUniqueId, sameUuid, uuidKey, groupByUuid, countListItems} from '../modules/lib/util';
+import {saveDefaultPermsFromBody, evaluateSubject, isOwner} from "../modules/permissionEngine";
 import {SessionLike} from "../../types/PermissionTypes";
 import type {EntityBase} from "../../types/UserTypes";
 import type {PackingMethod} from '../../types/PackingTypes';
@@ -173,29 +173,8 @@ async function fetchForView(list: PackingList, req: Request) {
         items,
         assignments,
         assigneeLists,
-        counters: packingCounters(items, new Map(Object.entries(assigneeLists)))
+        counters: countListItems(items.filter(item => !item.requiredByAll), new Map(Object.entries(assigneeLists)))
     };
-}
-
-/**
- * Direct and versioned projections use one counter policy: Everyone rows do not contribute
- * participants/open/empty, nullable capacity is not an open slot, and historical
- * assignees without a profile use their visible-name identity fallback.
- */
-function packingCounters(items: readonly (Pick<PackingItem, 'id' | 'requiredByAll' | 'maxAssignees'> & {assignedCount: number})[],
-    assignees: ReadonlyMap<string, readonly {profileId?: string | null; name?: string}[]>) {
-    const participants = new Set<string | undefined>();
-    let open = 0;
-    let empty = 0;
-    for (const item of items) {
-        if (item.requiredByAll) continue;
-        for (const assignment of assignees.get(uuidKey(item.id)) ?? []) {
-            participants.add(assignment.profileId ? `p_${uuidKey(assignment.profileId)}` : assignment.name);
-        }
-        if (item.assignedCount === 0) empty++;
-        if (item.assignedCount < (item.maxAssignees ?? 0)) open++;
-    }
-    return {participants: participants.size, open, empty};
 }
 
 /** Duplication copies item content through the existing form hook;
@@ -460,16 +439,7 @@ export async function readPackingList(id: string, session: SessionLike) {
 
         // Child admission never implies permission to open its parent. Reuse the authorized Event URL
         // policy, but evaluate the captured parent inside this projection's existing snapshot.
-        let currentEventUrl: string | null = null;
-        if (list.event) {
-            const parentViews = await evaluateEntities([{
-                entityType: 'event', entityId: list.event.id, ownerId: list.event.ownerId, eventId: list.event.id,
-            }], session, manager);
-            const eventUrl = getAuthorizedEventUrl(list.event.id, parentViews.get(entityPermissionKey('event', list.event.id))!);
-            // Preserve the shared owner's admission and selected admin/detail path;
-            // this versioned projection supplies the corresponding Vue destination.
-            currentEventUrl = eventUrl?.replace(/^\/event(?=\/|$)/u, '/event') ?? null;
-        }
+        const currentEventUrl = await readAuthorizedEventUrl(list.event, session, manager);
 
         // Group persisted assignments once before building rows and shared counters.
         const {items, assignments} = await packingService.getPackingSnapshotRows(manager, id);
@@ -520,7 +490,7 @@ export async function readPackingList(id: string, session: SessionLike) {
                 manageSettings: mayOpenListSettings('packing', list, permissions, session)
             },
             orderToken: orderEditToken(list, items, session),
-            counters: packingCounters(itemRows, assignmentsByItem),
+            counters: countListItems(itemRows.filter(item => !item.requiredByAll), assignmentsByItem),
             items: itemRows,
         };
         return {data, etag: entityTag('packing-view', {data, profileId})};
@@ -552,21 +522,7 @@ export async function readPackingMetadata(id: string, session: SessionLike) {
  */
 export async function readPackingItemEditBaseline(id: string, itemId: string, session: SessionLike):
     Promise<components['schemas']['PackingItemEditBaseline']> {
-    comparisonActor(session);
-
-    /** Resolve the actual child/root scope before projecting its currently
-     * writable values. This snapshot does not query private assignment evidence. */
-    async function readSnapshot(manager: EntityManager, row: PackingList | null): Promise<components['schemas']['PackingItemEditBaseline']> {
-        const list = requireList(row);
-        const item = await packingService.getPackingItemById(itemId, manager);
-        if (!item || !sameUuid(item.entityId, list.id)) throw new ApiProblem('NOT_FOUND');
-        const permissions = await listItemPermissions('packing', manager, list, item, session);
-        const projection = itemEditProjection(item, permissions);
-        if (!projection.editableFields.length) throw new ApiProblem('FORBIDDEN');
-
-        return {id: item.id, ...projection, editToken: itemEditToken(list, item, session, projection.values)};
-    }
-    return packingService.withPackingReadSnapshot(id, readSnapshot);
+    return readListItemEditBaseline(id, itemId, session, packingListReadOperations, listItemCommandOperations);
 }
 
 /** A reorder grant discloses only the compared order. Use the existing method
@@ -847,7 +803,7 @@ async function withPackingManagement<T>(id: string, session: SessionLike,
 // Only existing Packing policy/projection/persistence choices vary inside the shared item workflows.
 const listItemCommandOperations: ListItemCommandOperations<'packing', components['schemas']['PackingItemPatch'],
     components['schemas']['PackingItemEditBaseline']['values']> = {
-    type: 'packing', mayEditField: mayEditItemField, projectItem: itemEditProjection, itemToken: itemEditToken,
+    type: 'packing', item: (manager, id) => packingService.getPackingItemById(id, manager), mayEditField: mayEditItemField, projectItem: itemEditProjection, itemToken: itemEditToken,
     applyPatch: applyPackingItemPatch, capabilities: itemCapabilities, deleteItem,
     mayPerform: mayPerformPackingMethod, items: packingService.getPackingSnapshotItems, orderToken: orderEditToken,
     reorder: reorderItems, assignment: packingService.getPackingAssignmentById, deleteAssignment,
@@ -1131,7 +1087,7 @@ export async function setPackingHeader(
             // A valid upload still needs current method authority and the
             // captured actor-bound comparison before its reference is persisted.
             if (!mayPerformPackingMethod(permissions, 'editHeader')) throw new ApiProblem('FORBIDDEN');
-            requireFieldComparison(token, headerEditToken(list, session), ['header']);
+            requireFieldComparison(token, listHeaderToken('packing', list, session), ['header']);
 
             await packingService.updateHeaderImage(listId, path, manager);
 
@@ -1146,32 +1102,16 @@ export async function setPackingHeader(
     return {changed: result.changed};
 }
 
-/** A header writer compares the stored reference hash without receiving its path,
- * bytes or the list/parent projection. Existing profile settings tokens still match. */
-function headerEditToken(list: PackingList, session: SessionLike): string {
-    return comparisonToken('packing-settings', uuidKey(list.id), session, {header: list.headerImg ?? null});
-}
-
 /** A header writer receives only its reviewed field token after a current
  * method check. Upload preflight uses this operation without protected byte reads. */
 export async function readPackingHeaderBaseline(id: string, session: SessionLike): Promise<components['schemas']['EntityHeaderBaseline']> {
-    async function readHeaderVersion(manager: EntityManager, row: PackingList | null) {
-        const list = requireList(row);
-        if (!mayPerformPackingMethod(await listPermissions('packing', manager, list, session), 'editHeader')) throw new ApiProblem('FORBIDDEN');
-        return {editToken: headerEditToken(list, session)};
-    }
-    return packingService.withPackingReadSnapshot(id, readHeaderVersion);
+    return readListHeaderBaseline('packing', id, session, packingListReadOperations);
 }
 
 /** Resolve the stored image only for an actor admitted to the full detail read.
  * Method-only header writers must use their hash baseline rather than this path. */
 export async function readPackingHeaderPath(id: string, session: SessionLike): Promise<string> {
-    return packingService.withPackingReadSnapshot(id, async function headerPath(manager, row) {
-        const list = requireList(row);
-        await authorizeListRead('packing', manager, list, session);
-        if (!list.headerImg) throw new ApiProblem('NOT_FOUND');
-        return list.headerImg;
-    });
+    return readListHeaderPath('packing', id, session, packingListReadOperations);
 }
 
 /** Hard deletion stays the simple feature repository operation, separate from archival coordination. */

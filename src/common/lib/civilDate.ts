@@ -20,7 +20,7 @@ function civilDateKey(date: Date): string {
 
 /** Parse a real stored calendar day, without interpreting it in a local zone.
  * The ISO parser also preserves years below 100, unlike Date.UTC's numeric overload. */
-function parseCivilDate(value: string): Date | null {
+export function parseCivilDate(value: string): Date | null {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
     const date = new Date(value + 'T00:00:00.000Z');
     // JavaScript normalizes impossible month days. A round trip rejects those

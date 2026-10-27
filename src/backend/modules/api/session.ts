@@ -5,7 +5,7 @@ import type {ApiActor} from '../../../types/ApiTypes';
 import type {components} from '../../../types/api/v1';
 import type {RegistrationEmailDelivery} from '../../../types/IdentityTypes';
 import type {PreparedApiJsonResponse} from '../../../types/ApiTransportTypes';
-import {prepareValidatedJson} from './transport';
+import {prepareValidatedJson, prepareValidatedJsonVariants} from './transport';
 import * as userService from '../database/services/UserService';
 import {readFrontendSessionMetadata, sameFrontendSessionIdentity} from '../lib/frontendSession';
 import {readStoredSession} from '../lib/session';
@@ -233,11 +233,11 @@ export function prepareGuestIdentityReplies(req: Request, staged: Request['sessi
     const result: components['schemas']['IdentityResult'] = {session, personalLink, redirect: null};
 
     // Validate/serialize all alternatives now; delivery only chooses their key.
-    return Object.freeze({
-        'not-requested': prepareValidatedJson(req, operation, 200, {...result, emailDelivery: 'not-requested'}, session.context),
-        sent: prepareValidatedJson(req, operation, 200, {...result, emailDelivery: 'sent'}, session.context),
-        failed: prepareValidatedJson(req, operation, 200, {...result, emailDelivery: 'failed'}, session.context),
-    });
+    return prepareValidatedJsonVariants(req, operation, 200, {
+        'not-requested': {...result, emailDelivery: 'not-requested'},
+        sent: {...result, emailDelivery: 'sent'},
+        failed: {...result, emailDelivery: 'failed'},
+    }, session.context);
 }
 
 /** Prepare signup delivery variants without exposing an activation token/link or changing the actor. */
@@ -247,9 +247,9 @@ export function prepareAccountRegistrationReplies(req: Request):
     // is unchanged, including a read-only derived legacy generation. Raw partial
     // stored metadata is not this actor's scope. Activation material stays private.
     const result: components['schemas']['RegistrationResult'] = {changed: true};
-    return Object.freeze({
-        'not-requested': prepareValidatedJson(req, 'registerAccount', 200, result),
-        sent: prepareValidatedJson(req, 'registerAccount', 200, {...result, emailDelivery: 'sent'}),
-        failed: prepareValidatedJson(req, 'registerAccount', 200, {...result, emailDelivery: 'failed'}),
+    return prepareValidatedJsonVariants(req, 'registerAccount', 200, {
+        'not-requested': result,
+        sent: {...result, emailDelivery: 'sent'},
+        failed: {...result, emailDelivery: 'failed'},
     });
 }

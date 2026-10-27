@@ -18,15 +18,14 @@ import {BeforeInsert, BeforeUpdate, Column, Entity, Index, JoinColumn, ManyToOne
 import type {DIETARY} from "../../../../../types/EventTypes";
 import {NumericBase} from "../abstract/TrackedBase";
 import {EventRegistration} from "./EventRegistration";
-
-export const ALLOWED_DIETARY: DIETARY[] = ["MEAT", "FISH", "VEGETARIAN", "VEGAN", "HALAL", "KOSHER", "ALLERGIES", "COMMENT"];
+import {eventDietaryChoices} from '../../../../../common/generated/domainChoices';
 
 @Entity("event_registration_dietary", {schema: "surveyor"})
 @Index("uk_registration_choice", ["registration", "choice"], {unique: true})
 export class EventRegistrationDietary extends NumericBase {
     @Column("simple-enum", {
         name: "choice",
-        enum: ALLOWED_DIETARY
+        enum: eventDietaryChoices
     })
     choice!: DIETARY;
 
@@ -49,7 +48,7 @@ export class EventRegistrationDietary extends NumericBase {
         const v = this.choice;
         if (v != null) {
             const up = String(v).toUpperCase() as DIETARY;
-            if (!ALLOWED_DIETARY.includes(up)) {
+            if (!eventDietaryChoices.includes(up)) {
                 throw new Error(`Invalid dietary choice: ${v}`);
             }
             this.choice = up;

@@ -64,8 +64,8 @@ paths:
       x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read one bounded mixed overview region for the admitted profile
       parameters:
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
         - {name: collection, in: query, required: true, schema: {type: string, enum: [participant, owner]}}
         - {name: region, in: query, required: true, schema: {type: string, enum: [main, hidden]}}
         - {name: q, in: query, required: false, schema: {type: string, maxLength: 200}}
@@ -79,7 +79,7 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/schemas/OverviewRegion'}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
   visibility:
     put:
       operationId: setOverviewVisibility
@@ -87,9 +87,9 @@ paths:
       x-surveyor-command: {retryPolicy: natural-idempotent, precondition: none}
       summary: Set only the admitted profile's overview visibility preference
       parameters:
-        - {$ref: './openapi.yaml#/components/parameters/Context'}
-        - {$ref: './openapi.yaml#/components/parameters/Locale'}
-        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {$ref: "./common.yaml#/parameters/Context"}
+        - {$ref: "./common.yaml#/parameters/Locale"}
+        - {$ref: "./common.yaml#/parameters/Csrf"}
         - {name: entityType, in: path, required: true, schema: {type: string, enum: [activity, drivers, event, packing, survey]}}
         - {name: entityId, in: path, required: true, schema: {type: string, format: uuid}}
       requestBody:
@@ -103,4 +103,4 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/schemas/OverviewVisibilityResult'}
-        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+        default: {$ref: "./common.yaml#/responses/Problem"}
