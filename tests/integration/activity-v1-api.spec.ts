@@ -1,6 +1,7 @@
-import {getRecommendations} from '../../src/backend/modules/activity/recommendationOperations';
-import {getRequirements, updateRequirements} from '../../src/backend/modules/activity/requirementOperations';
-import {afterAll, beforeAll, describe, expect, it} from 'vitest';
+import {getRecommendations} from '../../src/backend/modules/activity/recommendations';
+import {invalidateEventContext, projectActivityAssignees} from '../../src/backend/modules/activity/autoAssignment';
+import {getRequirements, updateRequirements} from '../../src/backend/controller/activityController';
+import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 import {randomUUID} from 'node:crypto';
 import http from 'node:http';
 import express from 'express';
@@ -9,6 +10,7 @@ import type {Request} from 'express';
 import nativeActivity, * as activity from '../../src/backend/controller/activityController';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
 import {ActivityPlan} from '../../src/backend/modules/database/entities/activity/ActivityPlan';
+import {ActivitySlot} from '../../src/backend/modules/database/entities/activity/ActivitySlot';
 import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
 import * as activityService from '../../src/backend/modules/database/services/ActivityService';
 import * as adminService from '../../src/backend/modules/database/services/EntityAdminService';
@@ -54,6 +56,194 @@ beforeAll(async function prepareDatabase() {
 afterAll(closeIntegrationDatabase);
 
 describe('versioned Activity production operations', () => {
+    it('writes defaults from uppercase full settings while retaining stale and revoked-permission rejection', async () => {
+        const {id} = await fixture();
+        const upper = id.toUpperCase();
+        const session = actor(owner);
+        const full = await activity.readActivitySettings(upper, session);
+        expect(full.settingsToken).toBe((await activity.readActivitySettings(id, session)).settingsToken);
+        const narrow = await activity.readActivityDefaultsBaseline(id, session);
+        expect((await activity.readActivityDefaultsBaseline(upper, session)).editToken).toBe(narrow.editToken);
+        expect(narrow.defaultPermissions).toEqual(full.access!.defaults);
+
+        await activity.setActivityDefaults(upper, {guest: PERM.ACCESS_VIEW}, session, full.settingsToken);
+        expect(await adminService.getDefaultPerms('activity', id)).toMatchObject({public: PERM.ACCESS_VIEW, guest: PERM.ACCESS_VIEW});
+        await expect(activity.setActivityDefaults(id, {guest: 0}, session, full.settingsToken)).rejects.toMatchObject({status: 412});
+        const latest = await activity.readActivitySettings(upper, session);
+        await expect(activity.setActivityDefaults(upper, {guest: 0}, session, latest.settingsToken.toUpperCase())).rejects.toMatchObject({status: 412});
+        await expect(activity.setActivityDefaults(upper, {guest: 0}, actor(other), latest.settingsToken)).rejects.toMatchObject({status: 403});
+
+        await adminService.addAdmin('activity', id, other.id, PERM.MANAGE_PERMISSIONS);
+        const delegated = await activity.readActivitySettings(upper, actor(other));
+        await adminService.updateAdminPerms('activity', id, other.id, 0);
+        await expect(activity.setActivityDefaults(id, {guest: 0}, actor(other), delegated.settingsToken)).rejects.toMatchObject({status: 403});
+        expect((await adminService.getDefaultPerms('activity', id)).guest).toBe(PERM.ACCESS_VIEW);
+    });
+
+    it('uses uppercase full-settings new-admin and row tokens across UUID aliases without weakening grant revisions', async () => {
+        const {id} = await fixture();
+        const upper = id.toUpperCase();
+        const target = await persistIntegrationProfile({name: 'Activity full-settings administrator target'});
+        const session = actor(owner);
+        const full = await activity.readActivitySettings(upper, session);
+        const absent = await activity.readActivityAdminBaseline(id, target.id, session);
+        expect(absent.mask).toBeNull();
+        expect((await activity.readActivityAdminBaseline(upper, target.id.toUpperCase(), session)).editToken).toBe(absent.editToken);
+
+        await activity.setActivityAdmin(upper, target.id.toUpperCase(), PERM.ACCESS_VIEW, session, full.settingsToken);
+        expect((await adminService.getAdminGrant('activity', id, target.id))?.perms).toBe(PERM.ACCESS_VIEW);
+        await expect(activity.setActivityAdmin(id, target.id, 0, session, full.settingsToken)).rejects.toMatchObject({status: 412});
+        const granted = await activity.readActivitySettings(upper, session);
+        const row = granted.access!.admins.find(candidate => candidate.profileId === target.id)!;
+        const narrow = await activity.readActivityAdminBaseline(id, target.id.toUpperCase(), session);
+        expect(row.editToken).toBe(narrow.editToken);
+        await activity.setActivityAdmin(id, target.id.toUpperCase(), PERM.EDIT_DESC, session, row.editToken);
+        await expect(activity.setActivityAdmin(upper, target.id, 0, session, row.editToken)).rejects.toMatchObject({status: 412});
+        const current = await activity.readActivitySettings(id, session);
+        const currentRow = current.access!.admins.find(candidate => candidate.profileId === target.id)!;
+        await expect(activity.setActivityAdmin(upper, target.id, 0, actor(other), currentRow.editToken)).rejects.toMatchObject({status: 403});
+        await activity.setActivityAdmin(upper, target.id.toUpperCase(), 0, session, currentRow.editToken);
+        expect((await activity.readActivityAdminBaseline(id, target.id, session)).mask).toBe(0);
+
+        await adminService.addAdmin('activity', id, other.id, PERM.MANAGE_PERMISSIONS);
+        const delegated = await activity.readActivitySettings(upper, actor(other));
+        const delegatedRow = delegated.access!.admins.find(candidate => candidate.profileId === target.id)!;
+        await adminService.updateAdminPerms('activity', id, other.id, 0);
+        await expect(activity.setActivityAdmin(id, target.id.toUpperCase(), PERM.ACCESS_VIEW, actor(other), delegatedRow.editToken)).rejects.toMatchObject({status: 403});
+        expect((await adminService.getAdminGrant('activity', id, target.id))?.perms).toBe(0);
+    });
+
+    it('keeps UUID aliases coherent with canonical storage for roles, self membership, baselines and organizer removal', async () => {
+        const {id, slot} = await fixture();
+        const member = await persistIntegrationProfile({name: 'Mixed identity participant'});
+        await AppDataSource.getRepository(ActivityPlan).update(id, {id: id.toUpperCase()});
+        await AppDataSource.getRepository(ActivitySlot).update(slot.id, {id: slot.id.toUpperCase()});
+        await AppDataSource.getRepository(Profile).update(member.id, {id: member.id.toUpperCase()});
+        // Native UUID columns may normalize persisted spellings. Actual returned
+        // references must agree exactly, while commands still use uppercase aliases.
+        const storedMember = await AppDataSource.getRepository(Profile).findOneByOrFail({id: member.id});
+        await activity.createActivityRole(id, {name: 'Mixed identity coordinator'}, actor(owner));
+        const role = (await activityService.getAllRoles(id)).find(candidate => candidate.title === 'Mixed identity coordinator')!;
+        await nativeActivity.addSlotRole(slot.id, {roles: [role.id]});
+        const baseline = await activity.readActivitySlotBaseline(id, slot.id, actor(owner));
+        const alias = await activity.readActivitySlotBaseline(id.toUpperCase(), slot.id.toUpperCase(), actor(owner));
+        expect(alias.values.roles).toEqual([String(role.id)]);
+        expect(alias.editToken).toBe(baseline.editToken);
+        await activity.patchActivitySlot(id.toUpperCase(), slot.id, {description: 'Shared identity edit'}, actor(owner), baseline.editToken);
+        await expect(activity.patchActivitySlot(id, slot.id.toUpperCase(), {description: 'Stale edit'}, actor(owner), baseline.editToken)).rejects.toMatchObject({status: 412});
+        await activity.setActivityAssignment(id, slot.id.toUpperCase(), {assigned: true, role: role.title}, actor(member));
+        const roleMap = await activityService.getParticipantRolesForPlan(id);
+        expect(roleMap).toContainEqual({participantKey: 'profile:' + member.id, roleIds: [role.id]});
+        const view = (await activity.readActivityPlan(id.toUpperCase(), actor(member))).data;
+        expect(view.slots[0]).toMatchObject({selfAssigned: true, roles: [expect.objectContaining({id: String(role.id), self: true})]});
+        await recommendationService.saveRecommendations(id, [{itemId: slot.id.toUpperCase(), profileId: member.id.toUpperCase(),
+            status: 'PENDING', operation: 'ASSIGN', manual: false}]);
+        const review = await activity.readActivityRecommendations(id.toUpperCase(), actor(owner));
+        const option = review.participantOptions.find(candidate => candidate.profileId === storedMember.id)!;
+        const committed = review.existingAssignments.find(candidate => candidate.profile.id === storedMember.id)!;
+        expect(option.profileId).toBe(committed.profile.id);
+        expect(review.recommendations[0].profile.id).toBe(option.profileId);
+        expect(review.recommendations[0].item.id).toBe(committed.item.id);
+        await activity.setActivityAssignment(id.toUpperCase(), slot.id, {assigned: false, role: role.title}, actor(member));
+        expect(await activityService.getActivitySlotAssignments(id, member.id)).toEqual([]);
+        await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(member));
+        await activity.setActivityAssignment(id, slot.id.toUpperCase(), {assigned: false}, actor(member));
+        expect(await activityService.getActivitySlotAssignments(id, member.id)).toEqual([]);
+        await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(member));
+        const assignment = (await activityService.getActivitySlotAssigneeRows(id))[0];
+        await activity.removeActivityAssignment(id.toUpperCase(), String(assignment.id), actor(owner));
+        expect(await activityService.getActivitySlotAssignments(id, member.id)).toEqual([]);
+        const foreign = await fixture();
+        await expect(activity.readActivitySlotBaseline(foreign.id.toUpperCase(), slot.id, actor(owner))).rejects.toMatchObject({status: 404});
+        await adminService.addAdmin('activity', id, other.id, PERM.ITEM_EDIT_DESC);
+        const delegated = await activity.readActivitySlotBaseline(id.toUpperCase(), slot.id, actor(other));
+        await adminService.updateAdminPerms('activity', id, other.id, 0);
+        await expect(activity.patchActivitySlot(id, slot.id.toUpperCase(), {description: 'Revoked'}, actor(other), delegated.editToken)).rejects.toMatchObject({status: 403});
+    });
+
+    it('resolves UUID aliases in partial Activity orders while retaining duplicate positions and foreign rejection', async () => {
+        const {id, slot} = await fixture();
+        await activity.createActivitySlot(id, {day: '2027-06-03', title: 'Second duty', description: '',
+            startTime: null, endTime: null, maxAssignees: 2, roles: []}, actor(owner));
+        const second = (await activityService.getActivitySlotsFlat(id)).find(candidate => candidate.id !== slot.id)!;
+        const baseline = await activity.readActivityOrderBaseline(id, actor(owner));
+        expect((await activity.readActivityOrderBaseline(id.toUpperCase(), actor(owner))).editToken).toBe(baseline.editToken);
+        await activity.setActivityOrder(id.toUpperCase(), {order: [{slotId: slot.id.toUpperCase(), position: 7}]}, actor(owner), baseline.editToken);
+        expect((await activityService.getActivitySlotById(second.id))?.pos).toBe(second.pos);
+        for (const refs of [[slot.id, slot.id], [slot.id.toUpperCase(), slot.id]]) {
+            const current = await activity.readActivityOrderBaseline(id, actor(owner));
+            await activity.setActivityOrder(id.toUpperCase(), {order: refs.map(slotId => ({slotId, position: 9}))}, actor(owner), current.editToken);
+            expect((await activityService.getActivitySlotById(slot.id))?.pos).toBe(9);
+        }
+        const foreign = await fixture();
+        const current = await activity.readActivityOrderBaseline(id, actor(owner));
+        await expect(activity.setActivityOrder(id.toUpperCase(), {order: [{slotId: foreign.slot.id.toUpperCase(), position: 0}]}, actor(owner), current.editToken)).rejects.toMatchObject({status: 404});
+        expect((await activityService.getActivitySlotById(foreign.slot.id))?.pos).toBe(0);
+        await expect(activity.setActivityOrder(id, {order: [{slotId: slot.id, position: 10}]}, actor(owner), baseline.editToken)).rejects.toMatchObject({status: 412});
+    });
+
+    it('uses stored UUID text scope with the original comparison token and preserves foreign-field denial', async () => {
+        const {id} = await fixture();
+        await activity.createActivityTextField(id, {title: 'Mixed text identity', text: 'Before'}, actor(owner));
+        const field = (await activity.readActivityPlan(id, actor(owner))).data.textFields[0];
+        const foreign = await fixture();
+        await expect(activity.patchActivityTextField(foreign.id.toUpperCase(), field.id.toUpperCase(), {text: 'Foreign'}, actor(owner), field.editToken)).rejects.toMatchObject({status: 404});
+        await activity.patchActivityTextField(id.toUpperCase(), field.id.toUpperCase(), {text: 'After'}, actor(owner), field.editToken);
+        expect((await activityService.getActivityPlanTextFieldById(field.id))?.text).toBe('After');
+        await expect(activity.patchActivityTextField(id, field.id, {text: 'Stale'}, actor(owner), field.editToken)).rejects.toMatchObject({status: 412});
+        await activity.removeActivityTextField(id.toUpperCase(), field.id.toUpperCase(), actor(owner));
+        expect(await activityService.getActivityPlanTextFieldById(field.id)).toBeNull();
+    });
+
+    it('resolves registered UUID override aliases once and keeps numeric saved IDs and duplicate-target admission', async () => {
+        const eventId = await createIntegrationEvent(owner.id, 'Mixed identity requirements');
+        const member = await persistIntegrationProfile({name: 'Mixed requirement member'});
+        await eventService.register(eventId, '2027-06-01', '2027-06-03', member.id);
+        const {id} = await fixture(eventId);
+        await AppDataSource.getRepository(Profile).update(member.id, {id: member.id.toUpperCase()});
+        const input: components['schemas']['ActivityRequirementsInput'] = {
+            assignmentMode: 'REQUIRED', generalRequiredShifts: 2, roundingMode: 'FLOOR', bindingDeadline: null,
+            allowOverfillAfterFull: false, allowExternalAssignees: false, allowArrivalDayEvening: true,
+            allowDepartureDayMorning: true, roleRequirements: [],
+            stayRequirements: [{stayDays: 1, requiredShifts: 0}, {stayDays: 2, requiredShifts: 1}, {stayDays: 3, requiredShifts: 2}],
+            overrides: [{profileId: member.id, roleId: null, requiredShifts: 0}],
+        };
+        await activity.saveActivityRequirements(id.toUpperCase(), input, actor(owner));
+        const loaded = await activity.readActivityRequirements(id, actor(owner));
+        expect(loaded.overrides[0]).toMatchObject({id: expect.stringMatching(/^[1-9]\d*$/u), profileId: member.id, requiredShifts: 0});
+        expect(loaded.participants).toContainEqual(expect.objectContaining({participantKey: 'profile:' + member.id, requiredShifts: 0, source: 'override'}));
+        await activity.saveActivityRequirements(id, {...input, overrides: [{...input.overrides[0], id: loaded.overrides[0].id,
+            profileId: member.id.toUpperCase()}]}, actor(owner));
+        await expect(activity.saveActivityRequirements(id, {...input, overrides: [input.overrides[0],
+            {...input.overrides[0], profileId: member.id.toUpperCase()}]}, actor(owner))).rejects.toMatchObject({status: 400, cause: 'ACTIVITY_OVERRIDE_DUPLICATE'});
+        await expect(activity.saveActivityRequirements(id, {...input, overrides: [{...input.overrides[0], profileId: other.id}]}, actor(owner))).rejects.toMatchObject({status: 400, cause: 'ACTIVITY_OVERRIDE_PARTICIPANT_REQUIRED'});
+    });
+
+    it('shares one admitted job across UUID aliases and invalidates the same record after real configuration reads', async () => {
+        const eventId = await createIntegrationEvent(owner.id, 'UUID job admission Event');
+        const {id} = await fixture(eventId);
+        const foreign = await fixture();
+        await updateRequirements(id, {assignmentMode: 'REQUIRED', bindingDeadline: '2020-01-01T00:00:00Z',
+            stayRequirements: [{stayDays: 1, requiredShifts: 0}, {stayDays: 2, requiredShifts: 0}, {stayDays: 3, requiredShifts: 1}]});
+        // Admission, permission and requirements reads use the real persistence
+        // boundary. Hold only scheduled draining so invalidation is deterministic.
+        vi.useFakeTimers({toFake: ['setImmediate']});
+        try {
+            const first = await activity.generateActivityRecommendations(id, actor(owner));
+            const alias = await activity.generateActivityRecommendations(id.toUpperCase(), actor(owner));
+            expect(alias).toMatchObject({coalesced: true, job: {id: first.job.id}});
+            const observed = await activity.readActivityRecommendationJob(id.toUpperCase(), first.job.id.toUpperCase(), actor(owner));
+            expect(observed.job.id).toBe(first.job.id);
+            await expect(activity.readActivityRecommendationJob(foreign.id, first.job.id.toUpperCase(), actor(owner))).rejects.toMatchObject({status: 404});
+            invalidateEventContext(id);
+            expect(await activity.readActivityRecommendationJob(id.toUpperCase(), first.job.id, actor(owner))).toMatchObject({job: {status: 'STALE'}});
+        } finally {
+            invalidateEventContext(id);
+            await vi.runAllTimersAsync();
+            vi.useRealTimers();
+        }
+    });
+
     it('deletes an owned plan with assignments and shared text through the HTTP adapter', async () => {
         const {id, slot} = await fixture();
         await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
@@ -173,7 +363,7 @@ describe('versioned Activity production operations', () => {
         const stored = (await activityService.getActivityPlanById(id))!;
         expect(stored).toMatchObject({startDate: input.startDate, endDate: input.endDate});
         expect((await activityService.getActivitySlotsFlat(id))[0].day).toBe('2027-03-28');
-        expect((await activityService.getActivitySlotAssignees(id))[slot.id]).toHaveLength(1);
+        expect((await activityService.getActivitySlotAssigneeRows(id).then(projectActivityAssignees))[slot.id]).toHaveLength(1);
         const native = await nativeActivity.fetchForView(stored, {session: actor(owner)} as Request);
         expect(native.plan).toMatchObject({startDate: input.startDate, endDate: input.endDate});
         expect(native).not.toHaveProperty('weeks');
@@ -255,7 +445,7 @@ describe('versioned Activity production operations', () => {
         expect(nativeRecommendations.participantOptions).toContainEqual(expect.objectContaining({profileId: unnamed.id, label: 'Profile #' + unnamed.id}));
         for (const row of [...nativeView.participantList, ...nativeRecommendations.participantOptions])
             expect(row).not.toHaveProperty('nameIsFallback');
-        expect((await activityService.getActivitySlotAssignees(id))[slot.id]).toHaveLength(3);
+        expect((await activityService.getActivitySlotAssigneeRows(id).then(projectActivityAssignees))[slot.id]).toHaveLength(3);
     });
 
     it('keeps recovery snapshots read-only while explicit entry retains native recommendation maintenance', async () => {
@@ -595,7 +785,7 @@ describe('versioned Activity production operations', () => {
         const field = (await activityService.getActivityPlanTextFields(second.id))[0];
         await expect(activity.removeActivityTextField(first.id, field.id, actor(owner))).rejects.toMatchObject({status: 404});
         await activity.setActivityAssignment(second.id, second.slot.id, {assigned: true}, actor(participant));
-        const assignment = (await activityService.getActivitySlotAssignees(second.id))[second.slot.id][0];
+        const assignment = (await activityService.getActivitySlotAssigneeRows(second.id).then(projectActivityAssignees))[second.slot.id][0];
         await expect(activity.removeActivityAssignment(first.id, String(assignment.id), actor(owner))).rejects.toMatchObject({status: 404});
         const exported = await nativeActivity.getScheduleExport((await activityService.getActivityPlanById(second.id))!);
         expect(exported.weeks.flatMap(week => week.days.flatMap(day => day.slots))).toContainEqual(expect.objectContaining({id: second.slot.id}));

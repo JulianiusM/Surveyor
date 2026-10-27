@@ -17,7 +17,7 @@
 import {Request} from "express";
 import type {EntityManager} from 'typeorm';
 import * as lifecycleService from '../modules/database/services/EntityLifecycleService';
-import {requireLockedArchiveRoot} from './entityAdminController';
+import {requireLockedArchiveRoot} from '../modules/entityArchival';
 import Joi from 'joi';
 import {Guest} from "../modules/database/entities/user/Guest";
 import type {Session} from '../modules/database/entities/session/Session';
@@ -33,16 +33,15 @@ import {safeFrontendReturn} from '../../common/lib/frontendIdentity';
 import type {AccountRegistrationTransactionOptions, RegistrationEmailDelivery, RegistrationReceipt, GuestRegistrationTransactionOptions, IdentityCompletionOptions, IdentityCompletionReceipt, IdentityLinkOptions, IdentityTransitionOptions, ProfileOwnerCleanup} from '../../types/IdentityTypes';
 import type {MessageKey} from '../../types/LocalizationTypes';
 import {ApiProblem} from '../modules/api/problem';
-import {buildGuestLink, ENTITIES} from "../modules/lib/util";
+import {buildGuestLink, ENTITIES, uuidKey} from "../modules/lib/util";
 import * as oidc from "../modules/oidc";
-import {findOrCreateUserFromOidc} from "../modules/identity/oidcAccounts";
 import settings from "../modules/settings";
-import type {Entity, GuestLinkData, OverviewCollection, OverviewPageView, OverviewQuery, OverviewReadResult, OverviewRegion, OverviewRegionView, PersonalVisibilityCompletion, PersonalVisibilityResult} from "../../types/UserTypes";
+import type {Entity, GuestLinkData, OidcClaims, OverviewCollection, OverviewPageView, OverviewQuery, OverviewReadResult, OverviewRegion, OverviewRegionView, PersonalVisibilityCompletion, PersonalVisibilityResult} from "../../types/UserTypes";
 import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, LockedArchiveContext, PersonalVisibility} from "../../types/ArchiveTypes";
 import type {SessionLike} from "../../types/PermissionTypes";
 import {archiveKey, isHiddenInOverview} from "../modules/archive/policy";
-import {getArchivePresentations} from "./entityAdminController";
-import {evaluateEntities} from "../modules/permissionEngine";
+import {getArchivePresentations} from '../modules/entityArchival';
+import {evaluateEntities, entityPermissionKey} from "../modules/permissionEngine";
 import type {components, operations} from '../../types/api/v1';
 
 const CREATE_TEMPLATE = 'users/register';
@@ -324,7 +323,8 @@ function normalizeOverviewNavigation(input: unknown, fragment: boolean) {
         for (const region of OVERVIEW_REGIONS) {
             const key = overviewKey(collection, region);
             const prefix = `${key}_`;
-            const eventId = parsed.value[`${prefix}event`]?.toLowerCase();
+            const eventValue = parsed.value[`${prefix}event`];
+            const eventId = eventValue === undefined ? undefined : uuidKey(eventValue);
             state[key] = {
                 collection,
                 region,
@@ -381,7 +381,7 @@ async function decorateOverviewReads(reads: OverviewReadResult[], session: Sessi
         references.push(...read.items);
         if (read.event) references.push(read.event);
         for (const [key, value] of read.archiveSnapshot) snapshot.set(key, value);
-        for (const event of read.contextEvents) contextEvents.set(event.id, event);
+        for (const event of read.contextEvents) contextEvents.set(uuidKey(event.id), event);
     }
     const [archives, permissions] = await Promise.all([
         getArchivePresentations(references, session, snapshot),
@@ -398,8 +398,8 @@ async function decorateOverviewReads(reads: OverviewReadResult[], session: Sessi
             // their enclosing event card. Restrict both the title and the actionable link.
             for (const item of read.items) {
                 if (!item.eventId) continue;
-                const parent = contextEvents.get(item.eventId);
-                const permission = permissions.get(archiveKey({type: 'event', id: item.eventId}));
+                const parent = contextEvents.get(uuidKey(item.eventId));
+                const permission = permissions.get(entityPermissionKey('event', item.eventId));
                 if (parent && permission?.has('ACCESS_VIEW')) {
                     item.eventContext = {title: parent.title, url: parent.url};
                 }
@@ -408,6 +408,9 @@ async function decorateOverviewReads(reads: OverviewReadResult[], session: Sessi
     }
 }
 
+/** Build one region's navigation and loaded/unloaded display state while retaining
+ * other regions' search parameters. Loaded cards gain their existing expansion
+ * URLs, and parent context selects child-page rather than mixed-card pagination. */
 function makeOverviewRegionView(
     state: OverviewNavigationState,
     key: string,
@@ -422,6 +425,8 @@ function makeOverviewRegionView(
     // reset both page numbers. Their q/type inputs supply this region's new filter values.
     for (const field of ['q', 'type', 'page', 'childPage']) search.delete(`${prefix}${field}`);
     if (query.region === 'hidden') search.set(`${prefix}open`, '1');
+    // An unopened region keeps its supplied totals/navigation without inventing
+    // loaded cards or running another overview query here.
     const view: OverviewRegionView = {
         collection: query.collection, region: query.region, q: query.q, type: query.type,
         page: query.page, childPage: query.childPage, eventId: query.eventId,
@@ -440,11 +445,15 @@ function makeOverviewRegionView(
     };
     if (!read) return view;
 
+    // Add expansion destinations only for event containers on the mixed page;
+    // an already expanded parent retains its independently selected child context.
     for (const item of view.items) {
         if (item.overview && item.overview.total > 0 && !view.parent) {
             item.overview = {...item.overview, url: overviewUrl(state, key, {eventId: item.id, childPage: 1})};
         }
     }
+    // Page links change only the active surface's page key, preserving all
+    // other region filters and the selected parent through overviewUrl.
     const page = view.parent ? view.childPage : view.page;
     const total = view.parent ? (view.parent.overview?.matching ?? 0) : view.totalCards;
     if (page > 1) view.previousUrl = overviewUrl(state, key, view.parent ? {childPage: page - 1} : {page: page - 1});
@@ -534,7 +543,7 @@ export async function setPersonalVisibility<Result>(entityType: string, id: stri
 
     // UUID input is case-insensitive, while in-memory keys and stored polymorphic
     // references use the app's canonical lowercase spelling.
-    const reference: ArchiveReference = {type: target.value.type, id: target.value.id.toLowerCase()};
+    const reference: ArchiveReference = {type: target.value.type, id: uuidKey(target.value.id)};
     const visibility = preference.value.visibility;
     /** Check current membership and prepare any explicit adapter receipt on this locked transaction. */
     async function saveVisibility(manager: EntityManager, context: LockedArchiveContext) {
@@ -1397,4 +1406,120 @@ export function getDefaultProfile(profiles: Profile[]) {
     profile ??= sortedProfiles[0];
 
     return profile;
+}
+
+/** Preserve provider username normalization, sequential suffix selection and final clock-based fallback. */
+async function toUniqueUsername(base: string): Promise<string> {
+    // Normalize before any uniqueness query; all candidates share the same original policy.
+    const sanitized = base
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]/g, '')
+        .slice(0, 30) || 'user';
+    if (!(await userService.usernameExists(sanitized))) return sanitized;
+
+    // add numeric suffix
+    for (let i = 1; i < 10_000; i++) {
+        const candidate = `${sanitized}-${i}`;
+        if (!(await userService.usernameExists(candidate))) return candidate;
+    }
+    // fallback (should never happen)
+    return `${sanitized}-${Date.now()}`;
+}
+
+/**
+ * Find or create a user from OIDC claims.
+ * - Primary key: (issuer, sub)
+ * - Optional fallback: email match (link existing local account)
+ * - JIT-provisions a new user when needed.
+ */
+export async function findOrCreateUserFromOidc(
+    oidcIssuer: string,
+    claims: OidcClaims,
+    {linkByEmail = true} = {}
+) {
+    const {sub, email, preferred_username, name} = claims;
+
+    // 1) Try exact OIDC match first
+    let user = await userService.findOidcAccount(oidcIssuer, sub);
+
+    // 2) If not found: try link-by-email (optional)
+    if (!user && linkByEmail && email) {
+        user = await userService.findOidcEmailAccount(email);
+        if (user) {
+            user.oidcIssuer = oidcIssuer;
+            user.oidcSub = sub;
+            if (user.isActive !== true) user.isActive = true;
+            await userService.saveOidcAccount(user);
+        }
+    }
+
+    // 3) If still not found: create a new local user (JIT provisioning)
+    if (!user) {
+        const baseUsername =
+            preferred_username ||
+            (email ? email.split('@')[0] : `oidc_${sub.slice(0, 8)}`);
+        const uniqueUsername = await toUniqueUsername(baseUsername);
+        const displayName = name || baseUsername;
+
+        // Ensure we don't violate unique(email)
+        let emailToUse = email || `${sub}@no-email.local`;
+
+        // If linkByEmail is disabled OR the email is already taken, use a synthetic email
+        if (email) {
+            const emailTaken = await userService.accountEmailExists(email);
+            if (!linkByEmail || emailTaken) {
+                emailToUse = `${sub}@no-email.local`;
+            }
+        }
+
+        return await userService.withUserTransaction(
+        /** Prepare the existing ORM records and save profile then account on their original transaction. */
+        async function provisionAccount(manager) {
+            // Repository construction preserves relation-copy semantics; the business owner chooses every value.
+            const {user: newUsr, profile: newProfile} = userService.prepareOidcRecords(manager, {
+                username: uniqueUsername,
+                name: displayName,
+                email: emailToUse,
+                password: null,
+                isActive: true,
+                oidcIssuer,
+                oidcSub: sub,
+            }, {
+                name: displayName,
+                defaultForOwner: true,
+            });
+            // Keep the inherited write order and returned profile fallback without repairing provisioning behavior.
+            const savedProfile = await userService.saveProvisionedProfile(newProfile, manager);
+            user = await handleUserSaving(newUsr, sub, manager);
+            if (!user.profiles || user.profiles.length === 0) {
+                user.profiles = [savedProfile];
+            }
+
+            return user;
+        });
+    }
+
+    return user;
+}
+
+/** Keep the existing duplicate-constraint email fallback inside the caller's provisioning transaction. */
+async function handleUserSaving(user: User, sub: string, manager?: EntityManager) {
+    // Try the selected values first. Only the original database constraint signals permit the fallback save.
+    try {
+        user = await userService.saveOidcAccount(user, manager);
+    } catch (err: any) {
+        // Last-chance fallback for race conditions (MySQL/PG/SQLite)
+        const message = String(err?.message || '');
+        if (
+            err?.code === 'ER_DUP_ENTRY' || // MySQL/MariaDB
+            err?.code === '23505' ||        // Postgres
+            message.includes('UNIQUE')      // SQLite/others
+        ) {
+            user.email = `${sub}@no-email.local`;
+            user = await userService.saveOidcAccount(user, manager);
+        } else {
+            throw err;
+        }
+    }
+    return user;
 }

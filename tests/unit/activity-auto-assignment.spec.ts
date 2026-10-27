@@ -1,5 +1,19 @@
-import {describe, expect, it} from 'vitest';
+import {describe, expect, it, vi} from 'vitest';
 import {generateFairRecommendations} from '../../src/backend/modules/activity/fairAssignment';
+import {buildLinkedPlanContext, buildPlanRecommendationContext, mergeParticipants, normalizeRecommendationForPersistence, participantsFromAssignments, projectActivityAssignees} from '../../src/backend/modules/activity/autoAssignment';
+import {collectAssignmentWarnings, toAssignmentCandidate} from '../../src/backend/modules/activity/availability';
+import {fingerprintRecommendationContext} from '../../src/backend/modules/activity/recommendationJobs';
+import * as activityService from '../../src/backend/modules/database/services/ActivityService';
+import * as requirementService from '../../src/backend/modules/database/services/ActivityRequirementService';
+import * as recommendationService from '../../src/backend/modules/database/services/ActivityRecommendationService';
+import {ActivityPlan} from '../../src/backend/modules/database/entities/activity/ActivityPlan';
+import type {EntityManager} from 'typeorm';
+import {ActivityAssignment} from '../../src/backend/modules/database/entities/activity/ActivityAssignment';
+import {ActivityAssignmentRecommendation} from '../../src/backend/modules/database/entities/activity/ActivityAssignmentRecommendation';
+import {ActivityAssignmentRole} from '../../src/backend/modules/database/entities/activity/ActivityAssignmentRole';
+import {ActivityRole} from '../../src/backend/modules/database/entities/activity/ActivityRole';
+import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
+import {createActivitySlotEntity, createProfileEntity, createUserEntity} from '../factories/integrationEntityFactory';
 import {
     createAutoAssignmentContext,
     createAutoAssignmentParticipant,
@@ -8,6 +22,116 @@ import {
 import {createStayRequirement} from '../factories/activityRequirementFactory';
 
 describe('activity recommendation allocation', () => {
+    it('canonicalizes worker commitments and fingerprints without replacing stored warning-reference spellings', async () => {
+        const upperSlotId = 'ABCD1234-ABCD-4ABC-8ABC-ABCDEF123456';
+        const upperProfileId = 'BCDE1234-ABCD-4ABC-8ABC-ABCDEF123456';
+        const participantKey = 'profile:' + upperProfileId.toLowerCase();
+        const base = createAutoAssignmentContext();
+        const plan = Object.assign(new ActivityPlan(), base.plan, {id: 'CDEF1234-ABCD-4ABC-8ABC-ABCDEF123456'});
+        plan.eventId = 'DEF01234-ABCD-4ABC-8ABC-ABCDEF123456';
+        const slot = Object.assign(createActivitySlotEntity({id: upperSlotId, day: '2027-06-01',
+            startTime: '09:00', endTime: '10:00', maxAssignees: 2}), {assignedCount: 1});
+        const committed = {id: upperSlotId, day: slot.day, startTime: slot.startTime, endTime: slot.endTime};
+        const sourceAssignments = {[participantKey]: [committed]};
+        const sibling = Object.assign(new ActivityPlan(), base.plan, {id: 'EF011234-ABCD-4ABC-8ABC-ABCDEF123456',
+            title: 'Foreign duty', assignmentMode: 'FREE' as const});
+        const foreignSlot = createActivitySlotEntity({id: 'F0121234-ABCD-4ABC-8ABC-ABCDEF123456',
+            day: slot.day, startTime: '09:30', endTime: '10:30', title: 'Foreign commitment'});
+        const sourceSlot = createActivitySlotEntity({id: 'AB121234-ABCD-4ABC-8ABC-ABCDEF123456'});
+        const profile = createProfileEntity(createUserEntity(), {id: upperProfileId});
+        const foreignAssignment = Object.assign(new ActivityAssignment(), {id: 7, entityId: sibling.id, item: foreignSlot, profile});
+        const proposal = Object.assign(new ActivityAssignmentRecommendation(), {id: 'BC121234-ABCD-4ABC-8ABC-ABCDEF123456',
+            entityId: sibling.id, item: foreignSlot, sourceItem: sourceSlot, profile, status: 'PENDING' as const,
+            operation: 'REASSIGN' as const});
+        const spies = [
+            vi.spyOn(activityService, 'getActivityPlanById').mockResolvedValue(plan),
+            vi.spyOn(activityService, 'getActivitySlotsFlat').mockResolvedValue([slot]),
+            vi.spyOn(activityService, 'getParticipantAssignmentsWithSlots').mockResolvedValue(sourceAssignments),
+            vi.spyOn(activityService, 'getParticipantRolesForPlan').mockResolvedValue([{participantKey, roleIds: [7]}]),
+            vi.spyOn(requirementService, 'getRequirementConfiguration').mockResolvedValue({plan,
+                overrides: [], roleRequirements: base.roleRequirements, stayRequirements: base.stayRequirements}),
+            vi.spyOn(activityService, 'getLinkedActivityPlans').mockResolvedValue([sibling]),
+            vi.spyOn(activityService, 'getAssignmentsForPlans').mockResolvedValue([foreignAssignment]),
+            vi.spyOn(recommendationService, 'getRecommendationsForPlans').mockResolvedValue([proposal]),
+        ];
+        try {
+            const linked = await buildLinkedPlanContext(plan, {} as EntityManager);
+            expect(linked.plans[0].id).toBe(sibling.id);
+            const warning = collectAssignmentWarnings(toAssignmentCandidate(slot), {profileId: upperProfileId.toLowerCase()},
+                linked.commitments[participantKey]).find(warning => warning.type === 'overlap')!;
+            expect(warning.conflicts).toEqual([foreignSlot.id, foreignSlot.id]);
+            expect(warning.overlapDetails![1]).toMatchObject({id: foreignSlot.id, planId: sibling.id,
+                recommendationId: proposal.id, sourceItemId: sourceSlot.id});
+            const context = await buildPlanRecommendationContext(plan.id, [], {} as EntityManager);
+            expect(context.existingAssignments[participantKey][0].id).toBe(upperSlotId.toLowerCase());
+            expect(context.slots[0].id).toBe(upperSlotId.toLowerCase());
+            expect(context.participants[0]).toMatchObject({profileId: upperProfileId.toLowerCase(), roleIds: [7]});
+            expect(slot.id).toBe(upperSlotId);
+            expect(committed.id).toBe(upperSlotId);
+            expect(context.linkedPlans!.plans[0].id).toBe(sibling.id.toLowerCase());
+            expect(context.linkedPlans!.commitments[participantKey][1]).toMatchObject({id: foreignSlot.id.toLowerCase(),
+                planId: sibling.id.toLowerCase(), recommendationId: proposal.id.toLowerCase(), sourceItemId: sourceSlot.id.toLowerCase()});
+            const fingerprint = fingerprintRecommendationContext(context);
+            slot.id = upperSlotId.toLowerCase();
+            committed.id = upperSlotId.toLowerCase();
+            plan.eventId = plan.eventId.toLowerCase();
+            sibling.id = sibling.id.toLowerCase();
+            foreignSlot.id = foreignSlot.id.toLowerCase();
+            sourceSlot.id = sourceSlot.id.toLowerCase();
+            proposal.id = proposal.id.toLowerCase();
+            expect(fingerprintRecommendationContext(await buildPlanRecommendationContext(plan.id, [], {} as EntityManager))).toBe(fingerprint);
+            // The captured worker projection was independent of the loaded rows.
+            expect(context.existingAssignments[participantKey][0]).not.toBe(committed);
+            expect(sourceAssignments[participantKey][0]).toBe(committed);
+        } finally {
+            for (const spy of spies) spy.mockRestore();
+        }
+    });
+
+    it('merges UUID profile aliases and keys stored uppercase assignments without changing hydrated rows', () => {
+        const profileId = 'ABCD1234-ABCD-4ABC-8ABC-ABCDEF123456';
+        const slotId = 'BCDE1234-ABCD-4ABC-8ABC-ABCDEF123456';
+        const profile = createProfileEntity(createUserEntity(), {id: profileId, name: ''});
+        const item = createActivitySlotEntity({id: slotId});
+        const row = Object.assign(new ActivityAssignment(), {id: 42, item, profile, activityAssignmentRoles: []});
+        expect(projectActivityAssignees([row])).toEqual({[slotId.toLowerCase()]: [
+            {id: 42, profileId, name: '', roles: []},
+        ]});
+        expect(mergeParticipants([{profileId, name: 'First', arrivalDate: '2027-06-01'}], [
+            {profileId: profileId.toLowerCase(), name: 'Latest', departureDate: '2027-06-03'},
+        ])).toEqual([{profileId: profileId.toLowerCase(), name: 'Latest', arrivalDate: '2027-06-01', departureDate: '2027-06-03'}]);
+        expect(participantsFromAssignments({['profile:' + profileId]: []})).toEqual([{profileId: profileId.toLowerCase()}]);
+        expect(row.item.id).toBe(slotId);
+        expect(row.profile.id).toBe(profileId);
+    });
+
+    it('rejects differently spelled references to the same reassignment source before persistence', () => {
+        const itemId = 'ABCD1234-ABCD-4ABC-8ABC-ABCDEF123456';
+        expect(() => normalizeRecommendationForPersistence({itemId, sourceItemId: itemId.toLowerCase(),
+            profileId: 'BCDE1234-ABCD-4ABC-8ABC-ABCDEF123456', operation: 'REASSIGN'})).toThrowError(
+            expect.objectContaining({status: 400, cause: 'ACTIVITY_RECOMMENDATION_SOURCE_INVALID'}),
+        );
+    });
+
+    it('preserves empty names, role order and saved assignment order in the slot display map', () => {
+        const profile = createProfileEntity(createUserEntity(), {id: 'profile-first', name: ''});
+        const absentName = Object.assign(new Profile(), {id: 'profile-second'});
+        const item = createActivitySlotEntity({id: 'slot-one'});
+        const roles = ['Second role', 'First role'].map(title => Object.assign(new ActivityAssignmentRole(), {
+            role: Object.assign(new ActivityRole(), {title}),
+        }));
+        const rows = [
+            Object.assign(new ActivityAssignment(), {id: 9, item, profile, activityAssignmentRoles: roles}),
+            Object.assign(new ActivityAssignment(), {id: 2, item, profile: absentName, activityAssignmentRoles: []}),
+        ];
+        expect(projectActivityAssignees(rows)).toEqual({'slot-one': [
+            {id: 9, profileId: 'profile-first', name: '', roles: ['Second role', 'First role']},
+            {id: 2, profileId: 'profile-second', name: '—', roles: []},
+        ]});
+        expect(rows[0].profile.name).toBe('');
+        expect(rows[0].activityAssignmentRoles).toBe(roles);
+    });
+
     it('bypasses all requirement validation and allocation in free mode', () => {
         // Protects FREE mode from spending CPU or inventing recommendations without targets.
         const context = createAutoAssignmentContext({

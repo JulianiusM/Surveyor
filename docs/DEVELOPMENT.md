@@ -4,9 +4,9 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: developer-experience maintainers
 status: current
-last-verified: 2026-10-26
+last-verified: 2026-10-27
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: authorized source ownership, compiler scopes, generator/runtime paths and guarded asset delivery reconciled; prior rendering, responsiveness and domain contracts retained; no deployment or exhaustive verification claim
+verification-scope: approved shared UUID reference handling reconciled; prior neutral contracts, frontend admission, compiler and domain contracts retained; no deployment or exhaustive verification claim
 source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/check-development-policy.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: development-workflow-or-help-tooling-change
 -->
@@ -329,6 +329,17 @@ inside the module that owns them instead of exporting them merely to connect new
   writes remain inside that transaction; never weaken atomicity by moving the check before lock acquisition.
 - Preserve the distinction between account IDs, guest IDs, profile IDs, entity IDs, item IDs, and event-registration IDs.
 
+Resolve backend UUID references through `modules/lib/util.ts` rather than adding local case conversion or comparing
+raw request IDs with stored foreign keys. Its identity helpers do not validate input, trim values or reinterpret
+non-UUID strings. Use UUID keys on both sides of lookup maps and keep resolved rows for writes and their existing
+presentation values. Preserve explicit null/omitted context semantics, method grants and opaque comparison tokens.
+Partial Activity order commands preserve their existing positions and multiplicity; complete Packing/Drivers orders
+require every current item once and reject differently spelled aliases of the same item. Normalize Activity plan/job
+identity at its business boundary; the generic coordinator does not interpret resource identifiers.
+Full settings, narrow defaults/administrator/header baselines and their writes must use matching UUID identity
+components before hashing. Reuse `entityAdministratorToken` for displayed administrator rows and command baselines;
+keep absent-grant and zero-mask evidence distinct. UUID equivalence never makes submitted opaque tokens case-insensitive.
+
 Use the installed TypeORM 1.x APIs: query runners and query builders expose `dataSource`, and repository existence
 checks use `exists` or `existsBy`. When replacing older names, preserve the query's conditions, relation loading,
 selected columns and transaction manager. An API naming correction does not change DBAL ownership or authorize
@@ -412,7 +423,8 @@ retains the original toolchain choice and alternatives; executable package scrip
 
 | Input or generated artifact | Responsibility |
 |---|---|
-| `openapi.yaml`, feature YAML and `common.yaml` | Operation IDs, paths, security, statuses, media, feature shapes and genuinely shared subshapes. |
+| `openapi.yaml` | Compose feature path references, shared security and API metadata; no inline feature operations. |
+| Feature YAML and `common.yaml` | Feature operations/shapes and neutral genuinely shared subshapes respectively. |
 | `.generated/api/v1/openapi.json` and `operations.json` | Bundled local description and derived operation/schema metadata; packaged with the matching server validators. |
 | `src/types/api/v1.d.ts` and `validation-v1.d.ts` | Runtime-free wire declarations and validator signatures referring to those declarations. |
 | `.generated/api/v1/server.cjs` and `browser/` | Standalone server validators and lazy browser validators compiled from the same authored constraints. |
@@ -426,6 +438,24 @@ compiles standalone validators and their required runtime helpers. Feature chunk
 neither the browser nor server startup compiles schemas. openapi-fetch consumes the generated paths while
 `app/transport.ts` supplies headers, runtime validation, cancellation and status classification, retaining the Response.
 Types alone cannot validate received JSON. Do not introduce another schema language, validator configuration or router.
+
+Shared schemas use neutral scope-correct names and direct generic consumers. Keep domain-specific shapes and
+compatibility aliases at their feature boundary. Determine validator roles from exact authored request/response
+usage before bundling, never a schema prefix, suffix or bundler-selected canonical name. Strict request graphs
+and additive response graphs remain separate, including nested and multipart inputs.
+
+Under the maintainer-approved R5, every frontend dispatch passes through the existing shared transport's generated
+body, serialized-parameter and authored-header admission, including Finance XHR. Lazy-validator load failures are
+local failures before HTTP. Recheck the captured actor and cancellation after loading; keep the captured request
+method, destination and validated body intact through middleware. Reuse the existing scalar parameter codec rather
+than maintain a browser decoder. File bytes retain their upload owner; validation projects multipart metadata only.
+Use safe dictionary projections so unknown submitted names cannot disappear through object prototype setters.
+
+Native controls derive their existing constraints from generated metadata. Do not add a native UTF-16 length cap
+to a previously unbounded draft merely to mirror a code-point wire limit: preserve editable rejected/legacy drafts
+and admit their submission through the common generated boundary. Intentional native-password and feature input
+differences retain their own authored source. All feature API factories use `app/api.ts`'s existing per-API resolver;
+component i18n wrappers share their application API while independent SSR requests retain separate instances.
 
 For local generated-input rejection, `app/transport.ts`'s `generatedInputError` projects safe rule metadata onto
 feature-supplied visible field/row/day labels. `InvalidInputError` carries that typed diagnostic to the existing

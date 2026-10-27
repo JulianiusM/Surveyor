@@ -23,6 +23,7 @@ import {Guest} from './database/entities/user/Guest';
 import {Profile} from './database/entities/user/Profile';
 import {User} from './database/entities/user/User';
 import settings from './settings';
+import {escapeHtml} from './lib/util';
 
 let transporter: Transporter | undefined;
 const LINK_EMAIL_SUBJECT = 'Your personal editing link';
@@ -41,15 +42,6 @@ function init(): void {
         },
     };
     transporter ??= nodemailer.createTransport(transportOptions);
-}
-
-function escapeHtml(value: string): string {
-    return value
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
 }
 
 function renderMultiline(value: string): string {
@@ -102,6 +94,8 @@ function normalizeRecipient(recipient: EmailRecipient): EmailRecipient {
     return {name, address};
 }
 
+/** Preserve structured options or split a legacy string into paragraphs, then
+ * give the recipient owner one greeting instead of retaining an old salutation. */
 function normalizeContent(subject: string, rawContent: EmailContent, recipient: EmailRecipient): StructuredEmailContent {
     const content = typeof rawContent === 'string'
         ? {heading: subject, paragraphs: rawContent.split(/\r?\n\s*\r?\n/).filter(Boolean)}

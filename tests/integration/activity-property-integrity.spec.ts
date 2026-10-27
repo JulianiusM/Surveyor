@@ -1,9 +1,9 @@
-import {getRecommendations, applyRecommendations} from '../../src/backend/modules/activity/recommendationOperations';
-import {buildPlanRecommendationContext, saveGeneratedRecommendations} from '../../src/backend/modules/activity/recommendationPersistence';
-import {getRequirements, updateRequirements} from '../../src/backend/modules/activity/requirementOperations';
+import {getRecommendations, applyRecommendations} from '../../src/backend/modules/activity/recommendations';
+import {buildPlanRecommendationContext, saveGeneratedRecommendations} from '../../src/backend/modules/activity/autoAssignment';
+import {getRequirements, updateRequirements} from '../../src/backend/controller/activityController';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import activityController from '../../src/backend/controller/activityController';
-import {changeEntityEvent} from '../../src/backend/controller/entityAdminController';
+import {changeEntityEvent} from '../../src/backend/modules/event/linkage';
 import {readActivityRequirements, saveActivityRequirements} from '../../src/backend/controller/activityController';
 import {ActivityPlan} from '../../src/backend/modules/database/entities/activity/ActivityPlan';
 import {Profile} from '../../src/backend/modules/database/entities/user/Profile';

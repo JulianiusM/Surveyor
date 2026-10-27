@@ -447,6 +447,9 @@ function createConfirmedNavigation(context: FrontendContext, router: Router) {
         }
     }
 
+    /** Retain one already confirmed destination for its current actor/origin.
+     * Copy only read dependencies, announce its public notice once, then delegate
+     * first delivery and explicit retry to this existing receipt owner. */
     async function navigate(owner: unknown, destination: string, scope: FrontendRequestScope = context.capture(),
                             origin: string = router.currentRoute.value.fullPath,
                             notice: components['schemas']['EntryNotice'] | null = null, refreshSession = false,

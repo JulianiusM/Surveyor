@@ -584,7 +584,10 @@ export function calculateHypotheticalRoleCoverage(options: {
 
     /** Add a participant's unit-capacity path and attendance-compatible role matches;
      * costs favor requirement reduction with a stable rank for deterministic ties. */
-    participants.forEach(function addParticipantMatches(participant, participantIndex) {
+    participants.forEach(/** Add one participant's unit-capacity flow edges only
+     * for attendance-eligible role positions. Requirement benefit dominates the
+     * deterministic tie rank; retain before/after evidence for the selected match. */
+    function addParticipantMatches(participant, participantIndex) {
         // Calculate the current requirement once before evaluating possible role changes.
         addFlowEdge(graph, source, participantOffset + participantIndex, 1, 0);
         const before = calculateParticipantRequirement(

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {fieldAttributes as registrationFields} from "../../../../.generated/api/v1/browser/validateEventRegistrationInput.mjs";
 import {computed, reactive, ref, watch} from 'vue';
 import {useRoute} from 'vue-router';
 import type {components} from '../../../types/api/v1';
@@ -220,7 +221,7 @@ async function cancel(): Promise<void> {
                         </div>
                     </div>
                     <FormField id="allergyNotes" name="allergyNotes" v-model="fields.allergyNotes" class="mt-2"
-                        :max-length="4000" :disabled="blocked" label-class="" :required-marker="false"
+                        :max-length="registrationFields.allergyNotes.maxLength" :disabled="blocked" label-class="" :required-marker="false"
                         :required="fields.dietary.includes('ALLERGIES')"
                         :label="messages.t('event.registration.allergies')"
                         :placeholder="messages.t('event.registration.allergyPlaceholder')"
@@ -241,7 +242,7 @@ async function cancel(): Promise<void> {
                         </div>
                         <div class="form-text">{{ messages.t('event.registration.commentHint') }}</div>
                         <FormField id="dietComment" name="dietComment" v-model="fields.dietComment" class="mt-2"
-                            :max-length="4000" :disabled="blocked" label-class=""
+                            :max-length="registrationFields.allergyNotes.maxLength" :disabled="blocked" label-class=""
                             :label="messages.t('event.registration.comment')"
                             :placeholder="messages.t('event.registration.commentPlaceholder')"
                             :pending="saveAction.pending.value" />

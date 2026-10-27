@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import type {Request} from 'express';
 import {getAccountPageEntry} from '../../src/backend/controller/userController';
-import {getEntityViewAdmission} from '../../src/backend/controller/entityAdminController';
+import {getEntityViewAdmission} from '../../src/backend/modules/event/linkage';
 import {requirePackingCreation} from '../../src/backend/controller/packingController';
 import {requireDriversCreation} from '../../src/backend/controller/driversController';
 import {requireSurveyCreation} from '../../src/backend/controller/surveyController';
@@ -56,7 +56,7 @@ describe('shared server-owned page admission', () => {
         const result = await packingFlow.readCreateEntry({}, destination);
         expect(result).toEqual({entry: {kind: 'redirect', url: `/users/login?next=${encodeURIComponent(destination)}`,
             notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, context: null});
-        expect(contractValidator('PackingCreateEntry')(result)).toBe(true);
+        expect(contractValidator('EntityCreationEntry')(result)).toBe(true);
         expect(getAccountPageEntry({auth: {guest: new Guest()}, profile: new Profile()}, '/users/login', '/activity/source/duplicate').kind)
             .toBe('redirect');
         expect((await packingFlow.readCreateEntry({auth: {user: new User()}, profile: new Profile()})).entry).toEqual({kind: 'render'});
@@ -64,7 +64,7 @@ describe('shared server-owned page admission', () => {
         expect(Object.hasOwn(result, 'selectedEvent')).toBe(false);
         const contextual = await packingFlow.readCreateEntry({}, destination, 'unadmitted-context');
         expect(contextual.selectedEvent).toBeNull();
-        expect(contractValidator('PackingCreateEntry')(contextual)).toBe(true);
+        expect(contractValidator('EntityCreationEntry')(contextual)).toBe(true);
     });
 
     it('preserves standalone guest entry and attached anonymous denial before any DB-dependent checks', async () => {
@@ -86,7 +86,7 @@ describe('shared server-owned page admission', () => {
             .toEqual({entry: {kind: 'render'}, guest: null});
         const guest = await flow.readResourceEntry(resourceId, 'guest', {});
         expect(guest).toEqual({entry: {kind: 'render'}, guest: {id: resourceId, title: 'Public guest title'}});
-        expect(contractValidator('PackingResourceEntry')(guest)).toBe(true);
+        expect(contractValidator('EntityResourceEntry')(guest)).toBe(true);
         expect(await flow.readResourceEntry(resourceId, 'guest', session))
             .toEqual({entry: {kind: 'redirect', url: `/${type}/${resourceId}`, notice: null}, guest: null});
         expect(await flow.readGuestEntry(resourceId)).toEqual({id: resourceId, title: 'Public guest title'});

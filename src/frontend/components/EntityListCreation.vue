@@ -47,7 +47,7 @@ function isInitialForm(): boolean {
         && context.bootstrap.session.locale === context.locale.value;
 }
 
-function initialCreationEntry(): components['schemas']['PackingCreateEntry'] | undefined {
+function initialCreationEntry(): components['schemas']['EntityCreationEntry'] | undefined {
     if (!isInitialForm() || !props.source.initialContext || sourceId.value) return;
     return {entry: context.bootstrap.pageEntry ?? {kind: 'render'}, context: props.source.initialContext,
         selectedEvent: props.source.initialSelectedEvent ?? null};
@@ -68,7 +68,7 @@ const selectedEvent = ref<components['schemas']['EventPickerOption'] | null>(nul
 const image = ref<File | null>(null);
 const defaults = ref<components['schemas']['PermissionDefaults'] | null>(null);
 const baseline = ref<string | null>(null);
-const retainedContext = ref<components['schemas']['PackingCreateContext'] | null>(null);
+const retainedContext = ref<components['schemas']['EntityCreationContext'] | null>(null);
 // Vue reuses this route component between creation/duplicate URLs. A confirmed navigation
 // starts a new draft instead of retaining a previous list's copied values or uploaded file.
 // Watch each identity value independently. Router replaces its query object on a
@@ -97,7 +97,7 @@ const creation = usePageEntry({
     enabled: computed(() => !sourceId.value && !bootstrapError.value),
     read: readCreationEntry,
 });
-function readCreationEntry(scope: FrontendRequestScope, signal: AbortSignal): Promise<components['schemas']['PackingCreateEntry']> {
+function readCreationEntry(scope: FrontendRequestScope, signal: AbortSignal): Promise<components['schemas']['EntityCreationEntry']> {
     return props.source.createEntry(scope, signal, route.fullPath, initialEventId.value);
 }
 // A locale entry read must not unmount a focused creation draft. Retain only this
@@ -208,7 +208,7 @@ function initializeForm(): void {
     baseline.value = snapshot();
 }
 const dirty = computed(() => image.value !== null || baseline.value !== null && snapshot() !== baseline.value);
-const submission = useCreationCommand<components['schemas']['PackingCreated']>({
+const submission = useCreationCommand<components['schemas']['EntityCreationResult']>({
     dirty: () => dirty.value,
     eligible: () => !!defaults.value && !!formContext.value,
     readEntry: readSubmissionEntry,

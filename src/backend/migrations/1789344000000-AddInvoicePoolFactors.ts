@@ -12,6 +12,8 @@ import {addColumnIfNotExists, columnExists, dropColumnIfExists, tableExists} fro
 export class AddInvoicePoolFactors1789344000000 implements MigrationInterface {
     name = "AddInvoicePoolFactors1789344000000";
 
+    /** Add factor/revision metadata while preserving settled amounts. Only the
+     * first introduction of the flag marks previously closed pools for recalculation. */
     public async up(queryRunner: QueryRunner): Promise<void> {
         if (await tableExists(queryRunner, "event_invoice_assignments")) {
             await addColumnIfNotExists(queryRunner, "event_invoice_assignments", "factor", "decimal(10,4)", "NOT NULL DEFAULT 1.0000");

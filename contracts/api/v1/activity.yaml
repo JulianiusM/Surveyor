@@ -1,6 +1,6 @@
 schemas:
   ActivityCreateContext:
-    "$ref": "./common.yaml#/schemas/PackingCreateContext"
+    "$ref": "./common.yaml#/schemas/EntityCreationContext"
   ActivityCreateEntry:
     type: "object"
     additionalProperties: false
@@ -19,13 +19,13 @@ schemas:
       selectedEvent:
         anyOf:
           -
-            "$ref": "./common.yaml#/schemas/EventPickerOption"
+            "$ref": "./events.yaml#/schemas/EventPickerOption"
           -
             type: "null"
   ActivityResourceEntry:
-    "$ref": "./common.yaml#/schemas/PackingResourceEntry"
+    "$ref": "./common.yaml#/schemas/EntityResourceEntry"
   ActivityCreated:
-    "$ref": "./common.yaml#/schemas/PackingCreated"
+    "$ref": "./common.yaml#/schemas/EntityCreationResult"
   ActivitySlotInput:
     type: "object"
     additionalProperties: false
@@ -182,7 +182,7 @@ schemas:
       selectedEvent:
         anyOf:
           -
-            "$ref": "./common.yaml#/schemas/EventPickerOption"
+            "$ref": "./events.yaml#/schemas/EventPickerOption"
           -
             type: "null"
   ActivityRole:
@@ -754,7 +754,7 @@ schemas:
           manageAutomation: {type: boolean}
           export: {type: boolean}
       currentEvent:
-        "$ref": "./common.yaml#/schemas/PackingSettings/properties/currentEvent"
+        "$ref": "./common.yaml#/schemas/NullableEntityCurrentEvent"
       archive:
         type: object
         additionalProperties: false
@@ -767,7 +767,7 @@ schemas:
           eventUrl: {type: [string, "null"]}
           hasAutomaticSchedule: {type: boolean}
       access:
-        "$ref": "./common.yaml#/schemas/PackingSettings/properties/access"
+        "$ref": "./common.yaml#/schemas/NullableEntityAccess"
   ActivitySlotPatch:
     type: "object"
     additionalProperties: false
@@ -1087,23 +1087,23 @@ schemas:
                 - "string"
                 - "null"
   ActivityEventOptions:
-    "$ref": "./common.yaml#/schemas/EventPickerOptions"
+    "$ref": "./events.yaml#/schemas/EventPickerOptions"
   ActivityEventChange:
-    "$ref": "./common.yaml#/schemas/PackingEventChange"
+    "$ref": "./common.yaml#/schemas/EntityEventChangeInput"
   ActivityEventChanged:
-    "$ref": "./common.yaml#/schemas/PackingEventChanged"
+    "$ref": "./common.yaml#/schemas/EntityEventChangeResult"
   ActivityDefaultsBaseline:
-    "$ref": "./common.yaml#/schemas/PackingDefaultsBaseline"
+    "$ref": "./common.yaml#/schemas/EntityPermissionDefaultsBaseline"
   ActivityAdminBaseline:
-    "$ref": "./common.yaml#/schemas/PackingAdminBaseline"
+    "$ref": "./common.yaml#/schemas/EntityAdministratorBaseline"
   ActivityAdminInput:
-    "$ref": "./common.yaml#/schemas/PackingAdminInput"
+    "$ref": "./common.yaml#/schemas/EntityAdministratorInput"
   ActivityAdminPatch:
-    "$ref": "./common.yaml#/schemas/PackingAdminPatch"
+    "$ref": "./common.yaml#/schemas/EntityAdministratorPatch"
   ActivityProfileOptions:
-    "$ref": "./common.yaml#/schemas/PackingProfileOptions"
+    "$ref": "./common.yaml#/schemas/EntityAdministratorProfileOptions"
   ActivityHeaderBaseline:
-    "$ref": "./common.yaml#/schemas/PackingHeaderBaseline"
+    "$ref": "./common.yaml#/schemas/EntityHeaderBaseline"
   ActivityRequirementsInput:
     type: object
     additionalProperties: false
@@ -1857,7 +1857,7 @@ paths:
         content:
           application/json:
             schema:
-              "$ref": "./events.yaml#/schemas/EventAutomaticArchivalInput"
+              "$ref": "./common.yaml#/schemas/AutomaticArchivalInput"
       responses:
         "200":
           description: Authorized schedule command acknowledgement
@@ -1949,37 +1949,37 @@ paths:
           name: "q"
           in: "query"
           schema:
-            "$ref": "./common.yaml#/schemas/EventPickerQuery/properties/q"
+            "$ref": "./events.yaml#/schemas/EventPickerQuery/properties/q"
         - name: from
           in: query
           schema:
-            "$ref": "./common.yaml#/schemas/EventPickerQuery/properties/from"
+            "$ref": "./events.yaml#/schemas/EventPickerQuery/properties/from"
         - name: to
           in: query
           schema:
-            "$ref": "./common.yaml#/schemas/EventPickerQuery/properties/to"
+            "$ref": "./events.yaml#/schemas/EventPickerQuery/properties/to"
         - name: period
           in: query
           schema:
-            "$ref": "./common.yaml#/schemas/EventPickerQuery/properties/period"
+            "$ref": "./events.yaml#/schemas/EventPickerQuery/properties/period"
         - name: archive
           in: query
           schema:
-            "$ref": "./common.yaml#/schemas/EventPickerQuery/properties/archive"
+            "$ref": "./events.yaml#/schemas/EventPickerQuery/properties/archive"
         - name: deadline
           in: query
           schema:
-            "$ref": "./common.yaml#/schemas/EventPickerQuery/properties/deadline"
+            "$ref": "./events.yaml#/schemas/EventPickerQuery/properties/deadline"
         -
           name: "selectedId"
           in: "query"
           schema:
-            "$ref": "./common.yaml#/schemas/EventPickerQuery/properties/selectedId"
+            "$ref": "./events.yaml#/schemas/EventPickerQuery/properties/selectedId"
         -
           name: "cursor"
           in: "query"
           schema:
-            "$ref": "./common.yaml#/schemas/EventPickerQuery/properties/cursor"
+            "$ref": "./events.yaml#/schemas/EventPickerQuery/properties/cursor"
         -
           "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
       responses:
@@ -2733,7 +2733,7 @@ paths:
           content:
             "application/octet-stream":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/PackingHeaderBinary"
+                "$ref": "./openapi.yaml#/components/schemas/EntityHeaderBinary"
         default:
           "$ref": "./openapi.yaml#/components/responses/Problem"
     put:
@@ -2775,7 +2775,7 @@ paths:
         content:
           "multipart/form-data":
             schema:
-              "$ref": "./openapi.yaml#/components/schemas/PackingHeaderUpload"
+              "$ref": "./openapi.yaml#/components/schemas/EntityHeaderUpload"
     delete:
       operationId: "deleteActivityHeader"
       x-surveyor-command:

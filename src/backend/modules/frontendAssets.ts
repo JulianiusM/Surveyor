@@ -43,7 +43,7 @@ export function createFrontendAssets(directory: string): RequestHandler {
 
     /** Select an available accepted representation without changing request URLs,
      * or delegate to the original static owner with its existing range semantics. */
-    return function serveFrontendAsset(req, res, next): void {
+    return /** Deliver contained negotiated assets; preserve ordinary static fallthrough. */ function serveFrontendAsset(req, res, next): void {
         const pathname = req.url.split('?', 1)[0]!;
         // Encoded spellings and Range requests keep Express's original parser and
         // byte-range contract. No request path is decoded into a second file owner.
@@ -82,7 +82,10 @@ export function createFrontendAssets(directory: string): RequestHandler {
         // sendFile preserves HEAD/conditional delivery without rewriting req.url.
         // A client forbidding identity receives the full negotiated encoding;
         // its Range is ignored rather than applied to a different byte sequence.
-        res.sendFile(filename + extension, {acceptRanges: false}, function sentFrontendAsset(error) {
+        res.sendFile(filename + extension, {acceptRanges: false}, /** Recover an
+         * unstarted stream through ordinary static delivery after clearing its
+         * headers; already-started failures propagate and forbidden identity stays 406. */
+        function sentFrontendAsset(error) {
             if (!error) return;
             // A release can remove an asset between selection and streaming. Let
             // the existing static/missing-asset owner report that delivery failure.

@@ -144,6 +144,9 @@ const coerce: Partial<Record<keyof Settings, (v: string) => any>> = {
 // Apply environment variable overrides AFTER reading CSV.
 // In E2E: E2E_* vars override; otherwise plain vars override.
 // Example: E2E_DB_HOST > DB_HOST > CSV value.
+/** Overlay nonempty environment values using each setting's declared coercion.
+ * E2E values take precedence in that mode; the dedicated-database notice remains
+ * advisory and never changes the selected database or supplied credentials. */
 function applyEnvOverrides(target: Settings): void {
     const entries = Object.entries(keyMap) as [string, keyof Settings][];
 
@@ -187,6 +190,9 @@ export class SettingsStore {
         return this._settings;
     }
 
+    /** Load the selected CSV then environment overrides, or initialize from the
+     * existing defaults when absent. E2E skips default-file creation; forceCsv
+     * retains its existing file-selection and final-overlay exceptions. */
     async read(file = this._settings.file, forceCsv: boolean = false): Promise<void> {
         // If an env override for the file is present, prefer it.
         if (!forceCsv && process.env.SETTINGS_FILE) {

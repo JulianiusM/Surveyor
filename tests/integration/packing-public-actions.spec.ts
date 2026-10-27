@@ -175,7 +175,7 @@ describe('native-granted public Packing actions through versioned operations', (
         const baseline = await packing.readPackingItemEditBaseline(id, items[0].id, actor);
         const order = await packing.readPackingItemOrderBaseline(id, actor);
         expect(order).toEqual({items: items.map(item => ({id: item.id, position: item.pos})), orderToken: expect.any(String)});
-        expect(contractValidator('PackingOrderEditBaseline')(order)).toBe(true);
+        expect(contractValidator('ListOrderBaseline')(order)).toBe(true);
         await packing.updatePackingItem(id, items[0].id, {title: 'Reviewed title', maxAssignees: 1, requiredByAll: true}, baseline.editToken, actor);
         expect(await AppDataSource.getRepository(PackingAssignment).countBy({item: {id: items[0].id}})).toBe(2);
         const reversed = order.items.map(item => item.id).reverse();
@@ -212,7 +212,7 @@ describe('native-granted public Packing actions through versioned operations', (
         const baseline = await packing.readPackingDefaultsBaseline(id, actor);
         expect(Object.keys(baseline)).toEqual(['defaultPermissions', 'editToken']);
         expect(tokenFields(baseline.editToken).sort()).toEqual(['default:authenticated', 'default:guest', 'default:participant', 'default:public']);
-        expect(contractValidator('PackingDefaultsBaseline')(baseline)).toBe(true);
+        expect(contractValidator('EntityPermissionDefaultsBaseline')(baseline)).toBe(true);
         await expect(packing.updatePackingDefaults(id, {guest: PERM.ITEM_EDIT}, publicActor(), baseline.editToken)).rejects.toMatchObject({status: 412});
         await packing.updatePackingDefaults(id, {guest: PERM.ITEM_EDIT}, actor, baseline.editToken);
         await packing.updatePackingDefaults(id, {participant: PERM.ACCESS_VIEW}, actor, baseline.editToken);
@@ -229,7 +229,7 @@ describe('native-granted public Packing actions through versioned operations', (
         const empty = await packing.readPackingAdminBaseline(id, target.id, actor);
         expect(empty).toEqual({mask: null, editToken: expect.any(String)});
         expect(tokenFields(empty.editToken)).toEqual(['newAdmin']);
-        expect(contractValidator('PackingAdminBaseline')(empty)).toBe(true);
+        expect(contractValidator('EntityAdministratorBaseline')(empty)).toBe(true);
         await expect(packing.setPackingAdmin(id, randomUUID(), 0, actor)).rejects.toMatchObject({status: 404});
         await expect(packing.setPackingAdmin(id, target.id, 0, publicActor(), empty.editToken)).rejects.toMatchObject({status: 412});
         await packing.setPackingAdmin(id, target.id, 0, actor, empty.editToken);
@@ -263,7 +263,7 @@ describe('native-granted public Packing actions through versioned operations', (
         expect(baseline).toEqual({editToken: expect.any(String)});
         expect(tokenFields(baseline.editToken)).toEqual(['header']);
         expect(JSON.stringify(baseline)).not.toContain(oldPath);
-        expect(contractValidator('PackingHeaderBaseline')(baseline)).toBe(true);
+        expect(contractValidator('EntityHeaderBaseline')(baseline)).toBe(true);
 
         // Filesystem unlink is the external side effect; authorization, locking,
         // comparison and persisted replacement all use the production operation.
@@ -294,7 +294,7 @@ describe('native-granted public Packing actions through versioned operations', (
         const baseline = await packing.readPackingDescription(id, actor);
         expect(baseline).toEqual({description: 'Original root description', editToken: expect.any(String)});
         expect(tokenFields(baseline.editToken)).toEqual(['description']);
-        expect(contractValidator('PackingDescriptionBaseline')(baseline)).toBe(true);
+        expect(contractValidator('EntityDescriptionBaseline')(baseline)).toBe(true);
         await expect(packing.patchPackingDescription(id, {description: 'Borrowed'}, baseline.editToken, publicActor())).rejects.toMatchObject({status: 412});
         const updated = await packing.patchPackingDescription(id, {description: 'Reviewed public description'}, baseline.editToken, actor);
         expect(updated.description).toBe('Reviewed public description');

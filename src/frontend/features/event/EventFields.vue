@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import {fieldAttributes as eventFields} from "../../../../.generated/api/v1/browser/validateEventMetadataPatch.mjs";
 import {useFrontend} from '../../app/context';
 import type {EntityMetadataValues} from '../../../types/FrontendEntityMetadataTypes';
 import TimezonePicker from '../../components/TimezonePicker.vue';
 import FormField from '../../components/FormField.vue';
 
+// Existing shared controls retain the metadata text bounds during creation too;
+// the legacy creation wire contract remains independently permissive.
 // The same field owner serves creation and permission-filtered properties. The
 // caller retains values; absent fields never render a hidden writable mirror.
 defineProps<{values: EntityMetadataValues; fields?: readonly string[]; prefix: string; disabled?: boolean; pending?: boolean}>();
@@ -16,8 +19,8 @@ const flags = [
     {field: 'allowRegDietUpdateAfterDeadline', label: 'event.dietUpdates', icon: 'bi-egg-fried'},
 ] as const;
 const propertyInputs = [
-    {field: 'title', label: 'packing.title', type: 'text', max: 255, required: true},
-    {field: 'location', label: 'event.locationLabel', type: 'text', max: 255, required: false},
+    {field: 'title', label: 'packing.title', type: 'text', max: eventFields.title.maxLength, required: true},
+    {field: 'location', label: 'event.locationLabel', type: 'text', max: eventFields.location.maxLength, required: false},
     {field: 'startDate', label: 'event.startDateLabel', type: 'date', required: true},
     {field: 'endDate', label: 'event.endDateLabel', type: 'date', required: true},
     {field: 'bindingDeadline', label: 'event.deadlineLabel', type: 'datetime-local', required: false},
@@ -42,7 +45,7 @@ const propertyInputs = [
 
         <FormField v-if="fields.includes('description')" :id="prefix + '-description'" class="col-12" name="description"
             :model-value="String(values.description ?? '')" :label="messages.t('packing.description')" label-class=""
-            multiline :rows="4" :max-length="16000" @update:model-value="values.description = $event"
+            multiline :rows="4" :max-length="eventFields.description.maxLength" @update:model-value="values.description = $event"
             :pending="pending" />
 
         <FormField v-if="fields.includes('deadlineTz')" :id="prefix + '-timezone'" class="col-12"
@@ -68,7 +71,7 @@ const propertyInputs = [
              retained. These flags configure distinct server-enforced deadline rules. -->
         <FormField :id="prefix + '-title'" class="mb-3" name="title" :model-value="String(values.title ?? '')"
             :label="messages.t('event.title')" label-icon="bi-tag" label-class="" required :required-marker="false"
-            :max-length="255" @update:model-value="values.title = $event"
+            :max-length="eventFields.title.maxLength" @update:model-value="values.title = $event"
             :pending="pending" />
 
         <div class="row mb-3">
@@ -86,7 +89,7 @@ const propertyInputs = [
         <div class="row mb-3">
             <FormField :id="prefix + '-location'" class="col-md-8" name="location"
                 :model-value="String(values.location ?? '')" :label="messages.t('event.location')" label-icon="bi-geo-alt" label-class=""
-                :max-length="255" :placeholder="messages.t('event.locationPlaceholder')" @update:model-value="values.location = $event"
+                :max-length="eventFields.location.maxLength" :placeholder="messages.t('event.locationPlaceholder')" @update:model-value="values.location = $event"
                 :pending="pending" />
             <!-- Keep raw capacity spelling, zero and the absence of constraints.
                  Explicit lexical handling avoids Vue's number-input blur rewrite;
@@ -124,7 +127,7 @@ const propertyInputs = [
         </div>
         <FormField :id="prefix + '-description'" class="mb-3" name="description" :model-value="String(values.description ?? '')"
             :label="messages.t('event.description')" label-icon="bi-pencil-square" label-class=""
-            multiline :rows="4" :max-length="16000" @update:model-value="values.description = $event"
+            multiline :rows="4" :max-length="eventFields.description.maxLength" @update:model-value="values.description = $event"
             :pending="pending" />
     </template>
 </template>

@@ -1,3 +1,4 @@
+import {createFeatureApiResolver} from '../../app/api';
 import type {components} from '../../../types/api/v1';
 import type {FrontendContext, FrontendEventPickerQuery, FrontendEventPickerSource, FrontendRead, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {FrontendApi} from '../../app/api';
@@ -16,8 +17,8 @@ import {validateActivityTextFieldPatch} from '../../../../.generated/api/v1/brow
 import {validateActivityNewSlot} from '../../../../.generated/api/v1/browser/validateActivityNewSlot.mjs';
 import {validateActivitySlotPatch} from '../../../../.generated/api/v1/browser/validateActivitySlotPatch.mjs';
 import {validateEventPickerOptions} from '../../../../.generated/api/v1/browser/validateEventPickerOptions.mjs';
-import {validatePackingEventChanged} from '../../../../.generated/api/v1/browser/validatePackingEventChanged.mjs';
-import {validatePackingProfileOptions} from '../../../../.generated/api/v1/browser/validatePackingProfileOptions.mjs';
+import {validateEntityEventChangeResult} from '../../../../.generated/api/v1/browser/validateEntityEventChangeResult.mjs';
+import {validateEntityAdministratorProfileOptions} from '../../../../.generated/api/v1/browser/validateEntityAdministratorProfileOptions.mjs';
 import {validateGuestEntry} from '../../../../.generated/api/v1/browser/validateGuestEntry.mjs';
 import {validateActivityCreateEntry} from '../../../../.generated/api/v1/browser/validateActivityCreateEntry.mjs';
 import {validateActivityResourceEntry} from '../../../../.generated/api/v1/browser/validateActivityResourceEntry.mjs';
@@ -355,10 +356,10 @@ export class ActivityApi {
         return (await transport.readJson(`activity/events/${JSON.stringify(query)}`, scope, readEventOptions, 'searchActivityEvents', validateEventPickerOptions, signal)).data;
     }
 
-    async linkEvent(planId: string, input: components['schemas']['PackingEventChange'], token: string, scope: FrontendRequestScope) {
+    async linkEvent(planId: string, input: components['schemas']['EntityEventChangeInput'], token: string, scope: FrontendRequestScope) {
         return this.transport.read('updateActivityEvent', await this.transport.client.PUT('/activity-plans/{planId}/event', {
             params: {path: {planId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: input, cache: 'no-store',
-        }), validatePackingEventChanged, scope).data;
+        }), validateEntityEventChangeResult, scope).data;
     }
 
     async setDefaults(planId: string, defaults: components['schemas']['PermissionDefaultsPatch'], token: string, scope: FrontendRequestScope) {
@@ -377,10 +378,10 @@ export class ActivityApi {
                 params: {path: {planId}, query: {q}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
         }
-        return (await transport.readJson(`activity/${planId}/profiles/${q}`, scope, readProfileOptions, 'searchActivityProfiles', validatePackingProfileOptions, signal)).data;
+        return (await transport.readJson(`activity/${planId}/profiles/${q}`, scope, readProfileOptions, 'searchActivityProfiles', validateEntityAdministratorProfileOptions, signal)).data;
     }
 
-    async addAdmin(planId: string, input: components['schemas']['PackingAdminInput'], token: string, scope: FrontendRequestScope) {
+    async addAdmin(planId: string, input: components['schemas']['EntityAdministratorInput'], token: string, scope: FrontendRequestScope) {
         return this.transport.read('addActivityAdmin', await this.transport.client.POST('/activity-plans/{planId}/admins', {
             params: {path: {planId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: input, cache: 'no-store',
         }), validateMutationResult, scope).data;
@@ -509,19 +510,5 @@ function activityInputField(path: string, slots?: components['schemas']['Activit
     return undefined;
 }
 
-const owners = new WeakMap<FrontendApi, ActivityApi>();
-
-/** Reuse one Activity transport wrapper for this application/request's API owner.
- * Component-local translation bindings may create context wrappers, but they retain the
- * same transport. A WeakMap preserves that ownership without sharing actors across apps. */
-export function useActivityApi(context: FrontendContext): ActivityApi {
-    let owner = owners.get(context.api);
-
-    // Construct lazily for this transport identity; component remounts reuse the wrapper
-    // while disposal releases it when the application-local API is no longer referenced.
-    if (!owner) {
-        owner = new ActivityApi(context.api);
-        owners.set(context.api, owner);
-    }
-    return owner;
-}
+/** Reuse this feature adapter for its application-local transport. */
+export const useActivityApi = createFeatureApiResolver(ActivityApi);

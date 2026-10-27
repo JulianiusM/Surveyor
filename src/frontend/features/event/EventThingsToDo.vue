@@ -2,11 +2,12 @@
 import {computed, reactive, ref, shallowRef, useId, watch} from 'vue';
 import {RouterLink} from 'vue-router';
 import type {components} from '../../../types/api/v1';
-import type {FrontendOverviewCardInteraction} from '../../../types/FrontendUiTypes';
+import type {FrontendEntityCardInteraction} from '../../../types/FrontendUiTypes';
 import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import {useActionState, useFrontend} from '../../app/context';
 import {eventKeys} from '../../app/queryKeys';
 import {useCommand} from '../../composables/command';
+import {presentAction} from '../../composables/listActions';
 import {useConfirmedNavigation} from '../../composables/pageEntry';
 import {useEventApi} from './api';
 import {useEventSection} from './useEventSection';
@@ -14,7 +15,7 @@ import {usePackingApi} from '../packing/api';
 import {useDriversApi} from '../drivers/api';
 import {useActivityApi} from '../activity/api';
 import {createEntityLifecycle, useEntityRemoval} from '../../composables/entityLifecycle';
-import OverviewCard from '../overview/OverviewCard.vue';
+import EntityCard from '../../components/EntityCard.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import AppNavigationDropdown from '../../components/AppNavigationDropdown.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
@@ -22,7 +23,7 @@ import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import AppAccordionButton from '../../components/AppAccordionButton.vue';
 
-type Card = components['schemas']['OverviewCard'];
+type Card = components['schemas']['EntityCard'];
 type ChildType = 'packing' | 'activity' | 'drivers';
 const props = withDefaults(defineProps<{eventId: string; admin?: boolean; active?: boolean}>(), {active: true});
 const context = useFrontend();
@@ -104,7 +105,7 @@ function toggleGroup(type: ChildType): void {
 
 /** Shared cards retain their presentation owner. Children with client routes receive SPA
  * navigation and their own authorized image operation through explicit inputs. */
-function interaction(card: Card): FrontendOverviewCardInteraction {
+function interaction(card: Card): FrontendEntityCardInteraction {
     const menuPending = command.pending.value && pendingMenu.value?.type === card.type && pendingMenu.value.id === card.id;
     if (card.type === 'drivers') return {clientNavigation: true, lifecycle: true, menuPending, readHeader: driversApi.header.bind(driversApi)};
     if (card.type === 'activity') return {clientNavigation: true, lifecycle: true, menuPending, readHeader: activityApi.header.bind(activityApi)};
@@ -145,15 +146,7 @@ async function automate(card: Card, paused: boolean): Promise<void> {
 /** Keep one selected child's trigger visible through the existing lifecycle
  * command. The section still owns admission, confirmation, refresh and outcome. */
 async function presentMenuCommand(card: Card, operation: () => Promise<unknown>): Promise<void> {
-    const intent = {type: card.type, id: card.id};
-    pendingMenu.value = intent;
-    try {
-        await operation();
-    } finally {
-        // A changed Event or actor retires the old selection independently of
-        // its pending promise. Do not clear a newer child's presentation.
-        if (pendingMenu.value === intent) pendingMenu.value = null;
-    }
+    await presentAction(pendingMenu, {type: card.type, id: card.id}, operation);
 }
 
 /** Bind this admitted Event/child intent to the existing generated operations.
@@ -389,7 +382,7 @@ async function refresh(): Promise<void> {
 
                             <div v-if="items.length" class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
                                 <div v-for="card in filtered" :key="card.type + ':' + card.id" class="col">
-                                    <OverviewCard
+                                    <EntityCard
                                         :card="card"
                                         :interaction="interaction(card)"
                                         :personal-visibility="false"

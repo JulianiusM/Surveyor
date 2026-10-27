@@ -6,8 +6,7 @@ import type {FrontendRead, FrontendRequestScope} from '../../../types/FrontendUi
 import {useEventApi} from './api';
 import {useFrontend} from '../../app/context';
 import {eventKeys} from '../../app/queryKeys';
-import {normalizeNullableMetadataText} from '../../composables/metadataDraft';
-import {useMetadataEditorHandle} from '../../composables/metadataEditor';
+import {normalizeNullableMetadataText, useMetadataEditorHandle} from '../../composables/metadataDraft';
 import EventFields from './EventFields.vue';
 import EntityMetadataEditor from '../../components/EntityMetadataEditor.vue';
 

@@ -36,13 +36,18 @@ export async function getCombinationsBySurveyId(surveyId: string) {
     });
 }
 
+/** Persist one generated Survey root and its selected combination rows in the same transaction. */
 export async function createSurveyTx(ownerId: string, title: string, desc: string, combinations: {
     weekday: WeekDay,
     week: WeekInMonth,
 }[], headerImg?: string | null,): Promise<string> {
-    return await AppDataSource.transaction(async (manager) => {
+    return await AppDataSource.transaction(
+    /** Save the new root first, then materialize combinations without carrying response rows from another survey. */
+    async (manager) => {
         const surveyId = generateUniqueId();
 
+        // Child combinations refer to this generated identity only after the
+        // root has been saved; a later failure rolls both sets back together.
         const survey: Survey = manager.create(Survey, {
             id: surveyId,
             owner: {id: ownerId},
@@ -61,6 +66,8 @@ export async function createSurveyTx(ownerId: string, title: string, desc: strin
             nthWeek: c.week,
         }));
 
+        // Preserve input order and the ORM's empty-array behavior when there
+        // are no selected combinations; IDs remain database-generated numeric values.
         const comboEntities = manager.create(SurveyCombination, plainCombos);
 
         await manager.save(comboEntities);
@@ -134,15 +141,18 @@ export async function getResponsesByProfileId(profileId: string) {
     });
 }
 
+/** Read this Survey's response/profile/combination rows and group the existing response projection by profile ID. */
 export async function getResponsesSorted(surveyId: string): Promise<GroupedResponses> {
     const repo = AppDataSource.getRepository(SurveyResponse);
 
-    // Load all responses for the survey with both possible assignee relations
+    // Hydrate exactly the saved profile and combination relations for this Survey.
     const responses = await repo.find({
         where: {entity: {id: surveyId}},
         relations: {profile: true, item: true},
     });
 
+    // Keep each response's saved identity and answer with its loaded profile
+    // name and numeric combination ID before building profile buckets.
     const combined: Array<BasePicked> = [];
 
     for (const r of responses) {

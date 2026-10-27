@@ -1,6 +1,7 @@
 import {normalizeListMetadataPatch as normalizePackingMetadataPatch} from '../../src/backend/controller/entityAdminController';
-import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
-import {describe, expect, it} from 'vitest';
+import {apiCompatibility, operationInputs} from '../../.generated/api/v1/policy.mjs';
+import * as inputPolicy from '../../.generated/api/v1/policy.mjs';
+import {describe, expect, it, vi} from 'vitest';
 import {mkdtemp, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
@@ -9,6 +10,10 @@ import * as browser from '../../.generated/api/v1/browser.mjs';
 import type {components} from '../../src/types/api/v1';
 import {isRegistrationPasswordValid} from '../../src/common/lib/frontendIdentity';
 import type {Request, RequestHandler, Response} from 'express';
+import {FrontendApi} from '../../src/frontend/app/api';
+import {createMultipartForm, InvalidInputError, ObsoleteRequestError} from '../../src/frontend/app/transport';
+import {DriversApi} from '../../src/frontend/features/drivers/api';
+import {SurveysApi} from '../../src/frontend/features/surveys/api';
 
 import {decodeApiMultipartData, decodeApiMultipartImage, receiveApiUpload, sendStoredApiBinary, validateOperationRequest} from '../../src/backend/modules/api/transport';
 import {apiContract, operationContract} from '../../src/backend/modules/api/contracts';
@@ -38,6 +43,192 @@ function packingMetadataRequest(body: unknown): Request {
 }
 
 describe('generated v1 contract boundaries', () => {
+    it('publishes the input contract of every authored operation', () => {
+        expect(operationInputs.map(input => [input.method, input.path, input.operationId])).toEqual(
+            apiContract.operations.map(operation => [operation.method, operation.path, operation.operationId]));
+    });
+
+    it.each([...new Set(operationInputs.map(input => input.method))])('guards generic %s dispatch before external I/O', async method => {
+        let requests = 0;
+        const transport = new FrontendApi(() => true, () => {}, async () => { requests++; throw new Error('Dispatched'); });
+        // Runtime callers can bypass TypeScript. Every operation still has a
+        // generated body/parameter admission contract before external I/O.
+        const dispatch = transport.client.request as (method: string, path: string, options: unknown) => Promise<unknown>;
+        const input = operationInputs.find(input => input.method === method)!;
+        await expect(dispatch(method.toLowerCase(), input.path, {params: {query: {unrequested: 'value'}}}))
+            .rejects.toBeInstanceOf(InvalidInputError);
+        expect(requests).toBe(0);
+    });
+
+    it('validates shell input and actual serialized query/header values without changing valid dispatch', async () => {
+        const scope = {context: 'captured-context', csrfToken: 'captured-csrf', epoch: 1, locale: 'en'};
+        let requests = 0;
+        const transport = new FrontendApi(() => true, () => {}, async () => { requests++; throw new Error('Dispatched'); });
+        await expect(transport.login({username: '', password: 'password'}, scope)).rejects.toBeInstanceOf(InvalidInputError);
+        await expect(transport.setLocale('', scope)).rejects.toBeInstanceOf(InvalidInputError);
+        await expect(transport.client.GET('/help', {params: {query: {q: 'x'.repeat(501)}}})).rejects.toBeInstanceOf(InvalidInputError);
+        await expect(transport.client.GET('/help', {params: {header: {'X-Surveyor-Locale': ''}}})).rejects.toBeInstanceOf(InvalidInputError);
+        await expect(transport.client.GET('/help', {querySerializer: () => '__proto__=unrequested'})).rejects.toBeInstanceOf(InvalidInputError);
+        expect(requests).toBe(0);
+        // Header spelling is case-insensitive on the actual HTTP request.
+        await expect(transport.client.GET('/help', {headers: {'x-surveyor-locale': 'de'}, params: {query: {q: 'camp'}}}))
+            .rejects.toThrow('Dispatched');
+        await expect(transport.login({username: 'owner', password: 'password'}, scope)).rejects.toThrow('Dispatched');
+        expect(requests).toBe(2);
+    });
+
+    it('invokes the existing serializer once and validates its actual wire projection', async () => {
+        let serialized = 0;
+        const transport = new FrontendApi(() => true, () => {}, async request => {
+            expect(await (request as globalThis.Request).text()).toBe('{"locale":"de"}');
+            throw new Error('Dispatched');
+        });
+        await expect(transport.client.PUT('/locale', {body: {locale: 'en'}, bodySerializer: () => {
+            serialized++;
+            return JSON.stringify({locale: 'de'});
+        }})).rejects.toThrow('Dispatched');
+        expect(serialized).toBe(1);
+    });
+
+    it('retires canceled or superseded actors while lazy input admission is outstanding', async () => {
+        const scope = {context: 'captured-context', csrfToken: 'captured-csrf', epoch: 1, locale: 'en'};
+        let current = true;
+        let requests = 0;
+        const transport = new FrontendApi(() => current, () => {}, async () => { requests++; throw new Error('Dispatched'); });
+        const login = transport.login({username: 'owner', password: 'password'}, scope);
+        current = false;
+        await expect(login).rejects.toBeInstanceOf(ObsoleteRequestError);
+        current = true;
+        const controller = new AbortController();
+        const read = transport.client.GET('/help', {signal: controller.signal});
+        controller.abort();
+        await expect(read).rejects.toBeInstanceOf(ObsoleteRequestError);
+        expect(requests).toBe(0);
+    });
+
+    it('classifies failed validator loading as local nondelivery and preserves retirement priority', async () => {
+        const scope = {context: 'captured-context', csrfToken: 'captured-csrf', epoch: 1, locale: 'en'};
+        let current = true;
+        let requests = 0;
+        const transport = new FrontendApi(() => current, () => {}, async () => { requests++; throw new Error('Dispatched'); });
+        const loader = vi.spyOn(inputPolicy, 'loadInputValidator');
+        try {
+            loader.mockRejectedValueOnce(new TypeError('Retired validator chunk'));
+            await expect(transport.client.GET('/help')).rejects.toMatchObject({messageKey: 'state.loadFailed'});
+            let reject!: (error: Error) => void;
+            loader.mockImplementationOnce(() => new Promise((_resolve, failed) => { reject = failed; }));
+            const read = transport.client.GET('/help', {params: {header: transport.headers(scope)}});
+            current = false;
+            reject(new TypeError('Late retired chunk failure'));
+            await expect(read).rejects.toBeInstanceOf(ObsoleteRequestError);
+            expect(requests).toBe(0);
+        } finally { loader.mockRestore(); }
+    });
+
+    it('binds final middleware to the declared API destination and original serialized Request', async () => {
+        let requests = 0;
+        const transport = new FrontendApi(() => true, () => {}, async () => { requests++; throw new Error('Dispatched'); });
+        await expect(transport.client.GET('/help', {baseUrl: 'http://localhost/other'})).rejects.toBeInstanceOf(InvalidInputError);
+        await expect(transport.client.GET('/help', {baseUrl: 'https://unrelated.invalid/api/v1'})).rejects.toBeInstanceOf(InvalidInputError);
+        // A later middleware cannot replace a validated JSON body, or force the
+        // guard to clone/read multipart proof streams to inspect a replacement.
+        const replacement = {onRequest({request}: {request: globalThis.Request}) {
+            return new globalThis.Request(request, {body: JSON.stringify({locale: 'de', unexpected: true})});
+        }};
+        transport.client.use(replacement);
+        await expect(transport.client.PUT('/locale', {body: {locale: 'de'}})).rejects.toBeInstanceOf(InvalidInputError);
+        transport.client.eject(replacement);
+        await expect(transport.client.GET('/help', {middleware: [{onRequest({request}) {
+            request.headers.set('X-Surveyor-Locale', '');
+        }}]})).rejects.toBeInstanceOf(InvalidInputError);
+        expect(requests).toBe(0);
+    });
+
+    it('validates authored policy-header bounds while preserving optional relationship-change headers', async () => {
+        let requests = 0;
+        const transport = new FrontendApi(() => true, () => {}, async () => { requests++; throw new Error('Dispatched'); });
+        const dispatch = transport.client.request as (method: string, path: string, options: unknown) => Promise<unknown>;
+        for (const token of [undefined, '', 'x'.repeat(4097)]) {
+            await expect(dispatch('patch', '/packing-lists/{listId}/metadata', {body: {title: 'Valid title'},
+                params: {path: {listId}, header: token === undefined ? {} : {'If-Match': token}}})).rejects.toBeInstanceOf(InvalidInputError);
+        }
+        for (const name of ['X-Surveyor-Context', 'X-CSRF-Token']) {
+            await expect(dispatch('put', '/locale', {body: {locale: 'de'}, params: {header: {[name]: 'x'.repeat(257)}}}))
+                .rejects.toBeInstanceOf(InvalidInputError);
+        }
+        expect(requests).toBe(0);
+        // Requiredness and bounds come from the operation, so a conditional
+        // relationship no-op still reaches its established server decision.
+        for (const token of [undefined, '', 'x'.repeat(4097)]) {
+            await expect(dispatch('put', '/packing-lists/{listId}/event', {body: {eventId: null, expectedEventId: null},
+                params: {path: {listId}, header: token === undefined ? {} : {'If-Match': token}}})).rejects.toThrow('Dispatched');
+        }
+        expect(requests).toBe(3);
+    });
+
+    it('admits original multipart files once and rejects missing, forged and repeated parts before fetch or XHR', async () => {
+        const scope = {context: 'captured-context', csrfToken: 'captured-csrf', epoch: 1, locale: 'en'};
+        let requests = 0;
+        let serialized = 0;
+        const transport = new FrontendApi(() => true, () => {}, async () => { requests++; throw new Error('Dispatched'); });
+        const image = new File(['original bytes'], 'header.png', {type: 'image/png'});
+        const form = createMultipartForm(null, image);
+        const serialize = () => { serialized++; return form; };
+        await expect(transport.client.PUT('/packing-lists/{listId}/header', {params: {path: {listId}, header: {...transport.headers(scope), 'If-Match': '"edit-YQ"'}},
+            body: {image: image.name}, bodySerializer: serialize})).rejects.toThrow('Dispatched');
+        expect(serialized).toBe(1);
+        expect(form.get('image')).toBe(image);
+        const unknown = createMultipartForm(null, image);
+        unknown.append('__proto__', 'unrequested');
+        await expect(transport.client.PUT('/packing-lists/{listId}/header', {params: {path: {listId}, header: {...transport.headers(scope), 'If-Match': '"edit-YQ"'}},
+            body: {image: image.name}, bodySerializer: () => unknown})).rejects.toBeInstanceOf(InvalidInputError);
+        const forged = new FormData(); forged.append('image', 'claimed.png');
+        await expect(transport.client.PUT('/packing-lists/{listId}/header', {params: {path: {listId}, header: {...transport.headers(scope), 'If-Match': '"edit-YQ"'}},
+            body: {image: 'claimed.png'}, bodySerializer: () => forged})).rejects.toBeInstanceOf(InvalidInputError);
+        form.append('image', image);
+        await expect(transport.client.PUT('/packing-lists/{listId}/header', {params: {path: {listId}, header: {...transport.headers(scope), 'If-Match': '"edit-YQ"'}},
+            body: {image: image.name}, bodySerializer: () => form})).rejects.toBeInstanceOf(InvalidInputError);
+
+        let xhr = 0;
+        vi.stubGlobal('XMLHttpRequest', class { constructor() { xhr++; throw new Error('XHR constructed'); } });
+        try {
+            const path = `/events/${listId}/finance/pools/${itemId}/invoices`;
+            const metadata = {amount: '1.00', description: 'Retain the original proof'};
+            await expect(transport.uploadJson('submitEventInvoice', path, createMultipartForm(metadata, null, 'proof'),
+                browser.validateFinanceInvoice, scope, () => {})).rejects.toBeInstanceOf(InvalidInputError);
+            expect(xhr).toBe(0);
+            const proof = new File(['original proof'], 'proof.pdf', {type: 'application/pdf'});
+            const upload = createMultipartForm(metadata, proof, 'proof');
+            await expect(transport.uploadJson('submitEventInvoice', path, upload, browser.validateFinanceInvoice, scope, () => {}))
+                .rejects.toThrow('XHR constructed');
+            expect(upload.get('proof')).toBe(proof);
+            expect(xhr).toBe(1);
+        } finally { vi.unstubAllGlobals(); }
+        expect(requests).toBe(1);
+    });
+
+    it('rejects extra Drivers and Survey metadata fields before dispatch while retaining valid dispatch', async () => {
+        const scope = {context: 'captured-context', csrfToken: 'captured-csrf', epoch: 1, locale: 'en'};
+        for (const Adapter of [DriversApi, SurveysApi]) {
+            let requests = 0;
+            const transport = new FrontendApi(() => true, () => {}, dispatched);
+            const api = new Adapter(transport);
+            // These are ordinary typed scalar values plus an undeclared field.
+            // The generated request owner rejects locally without an HTTP side effect.
+            const malformed = {title: 'Valid title', futureField: true};
+            await expect(api.saveMetadata(listId, malformed, '"edit-YQ"', scope)).rejects.toBeInstanceOf(InvalidInputError);
+            expect(requests).toBe(0);
+            // A valid command still reaches the existing transport. The fixture
+            // stops at that external I/O boundary instead of replacing its validator.
+            await expect(api.saveMetadata(listId, {title: 'Valid title'}, '"edit-YQ"', scope)).rejects.toThrow('Request dispatched');
+            expect(requests).toBe(1);
+            async function dispatched(): Promise<never> {
+                requests++;
+                throw new Error('Request dispatched');
+            }
+        }
+    });
+
     it('retains generated multipart validation after decoding actual upload metadata', () => {
         const data = {title: 'Camp', startDate: '2027-06-01', endDate: '2027-06-03',
             defaultPermissions: {public: 0, guest: 0, authenticated: 0, participant: 0}};
@@ -55,7 +246,7 @@ describe('generated v1 contract boundaries', () => {
         req.body = {data: JSON.stringify(data), ownerId: listId};
         expect(() => validateOperationRequest(req, 'createEvent', body => decodeApiMultipartData(body, file)))
             .toThrow(expect.objectContaining({code: 'VALIDATION_FAILED'}));
-        expect(server.validatePackingHeaderUpload(decodeApiMultipartImage({unexpected: true}, file))).toBe(false);
+        expect(server.validateEntityHeaderUpload(decodeApiMultipartImage({unexpected: true}, file))).toBe(false);
     });
 
     it('waits for the selected uploader and bounds parser diagnostics', async () => {
@@ -193,8 +384,8 @@ describe('generated v1 contract boundaries', () => {
             }
         }
         for (const validators of [server, browser]) {
-            expect(validators.validatePackingMetadataPatch({title: '😀'.repeat(255)})).toBe(true);
-            expect(validators.validatePackingMetadataPatch({title: '😀'.repeat(256)})).toBe(false);
+            expect(validators.validateBasicEntityMetadataPatch({title: '😀'.repeat(255)})).toBe(true);
+            expect(validators.validateBasicEntityMetadataPatch({title: '😀'.repeat(256)})).toBe(false);
             expect(validators.validateRegistrationInput({...registration, password: 'A1😀😀x'})).toBe(false);
             expect(validators.validateRegistrationInput.errors).toEqual(expect.arrayContaining([
                 expect.objectContaining({keyword: 'x-surveyor-min-length-utf16', instancePath: '/password', params: {limit: 8}}),
@@ -222,7 +413,7 @@ describe('generated v1 contract boundaries', () => {
     });
 
     it('does not coerce values, insert defaults, or remove malformed mutation fields', () => {
-        for (const validate of [server.validatePackingMetadataPatch, browser.validatePackingMetadataPatch]) {
+        for (const validate of [server.validateBasicEntityMetadataPatch, browser.validateBasicEntityMetadataPatch]) {
             expect(validate({title: 'A new title'})).toBe(true);
             expect(validate({description: null})).toBe(true);
             expect(validate({description: ''})).toBe(true);
@@ -244,13 +435,13 @@ describe('generated v1 contract boundaries', () => {
         const longText = 'x'.repeat(20000);
         expect(server.validatePackingCreateForm({data: {...data, description: longText, items: [{...data.items[0], description: longText}]}})).toBe(true);
         expect(server.validatePackingItemPatch({description: longText})).toBe(true);
-        expect(server.validatePackingMetadataPatch({description: longText})).toBe(false);
+        expect(server.validateBasicEntityMetadataPatch({description: longText})).toBe(false);
         expect(browser.validatePackingCreateForm({data: {...data, ownerId: listId}})).toBe(false);
         expect(browser.validatePackingCreateForm({data: {...data, defaultPermissions: {...defaults, future: 1}}})).toBe(false);
         // PermissionDefaults is also a mutation body, but its read occurrence remains additive.
         const context = {defaults: {...defaults, future: 1}, permissions: [], presets: []};
-        expect(browser.validatePackingCreateContext(context)).toBe(true);
-        expect(server.validatePackingCreateContext(context)).toBe(false);
+        expect(browser.validateEntityCreationContext(context)).toBe(true);
+        expect(server.validateEntityCreationContext(context)).toBe(false);
     });
 
     it('preserves false, null and legacy read capacities while rejecting bad identifiers and missing fields', () => {
@@ -306,7 +497,7 @@ describe('generated v1 contract boundaries', () => {
             expect(validators.validatePackingNewItem(item)).toBe(false);
             expect(validators.validatePackingCreateInput({title: 'New list', description: null, eventId: null,
                 items: [item], defaultPermissions: duplicate.defaultPermissions})).toBe(false);
-            expect(validators.validatePackingMetadataPatch({title: ''})).toBe(false);
+            expect(validators.validateBasicEntityMetadataPatch({title: ''})).toBe(false);
         }
     });
 

@@ -1,7 +1,7 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import * as drivers from '../../src/backend/controller/driversController';
 import driversController from '../../src/backend/controller/driversController';
-import {archiveEntity} from '../../src/backend/controller/entityAdminController';
+import {archiveEntity} from '../../src/backend/modules/entityArchival';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
 import {DriversAssignment} from '../../src/backend/modules/database/entities/drivers/DriversAssignment';
 import {DriversList} from '../../src/backend/modules/database/entities/drivers/DriversList';

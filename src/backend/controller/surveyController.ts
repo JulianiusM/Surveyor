@@ -17,11 +17,10 @@
 import {hasAccountProfile} from './userController';
 import {Request} from "express";
 import {QueryFailedError} from 'typeorm';
-import {
-    archiveEntity, assertEntityPropertyContext, classifyArchiveCommandError, comparisonToken, entityTag,
-    getArchivePresentations, getEntityPropertyPresentation, normalizeBasicProperties,
-    requireEntityPropertyUpdate, restoreEntity,
-} from './entityAdminController';
+import {getEntityPropertyPresentation, normalizeBasicProperties, requireEntityPropertyUpdate} from './entityAdminController';
+import {assertEntityPropertyContext} from '../modules/event/linkage';
+import {archiveEntity, classifyArchiveCommandError, getArchivePresentations, restoreEntity} from '../modules/entityArchival';
+import {comparisonToken, entityTag} from '../modules/api/transport';
 import Joi from 'joi';
 import {Survey} from "../modules/database/entities/surveys/Survey";
 import {SurveyCombination} from "../modules/database/entities/surveys/SurveyCombination";
@@ -30,6 +29,7 @@ import * as surveyService from "../modules/database/services/SurveyService";
 import {ExpectedError, ValidationError} from "../modules/lib/errors";
 import {checkNewImage, performImageSwap, removeImage} from "../modules/lib/fileCommons";
 import {ApiProblem} from '../modules/api/problem';
+import {archiveKey} from '../modules/archive/policy';
 import {getHeaderImageVersion} from '../modules/lib/util';
 import {isOwner} from '../modules/permissionEngine';
 import type {SessionLike} from '../../types/PermissionTypes';
@@ -40,8 +40,11 @@ import type {EntityBase} from "../../types/UserTypes";
 
 const CREATE_TEMPLATE = 'surveyor/survey-create';
 
+/** Normalize legacy form combinations, validate the closed creation shape and
+ * project its week values into the existing persisted nthWeek representation. */
 function preprocessCreate(body: any): Partial<Survey> & { combinations: Partial<SurveyCombination>[] } {
-    // 1) normalize combinations into an array of objects
+    // The form parser can supply numeric-keyed objects. Missing input becomes
+    // an empty set so the existing minimum-choice validator owns its rejection.
     let combos = body.combinations;
     if (!combos) {
         combos = [];
@@ -50,7 +53,8 @@ function preprocessCreate(body: any): Partial<Survey> & { combinations: Partial<
         combos = Object.values(combos);
     }
 
-    // 2) declare Joi schema
+    // Retain the canonical weekday/week choices and trimmed form fields before
+    // any conversion to persisted combination properties.
     const schema = Joi.object({
         title: Joi.string().trim().required(),
         description: Joi.string().trim().allow('').required(),
@@ -69,7 +73,8 @@ function preprocessCreate(body: any): Partial<Survey> & { combinations: Partial<
             .required()
     });
 
-    // 3) validate & throw on error
+    // Validate the explicit creation projection; diagnostics retain the original
+    // submitted body for the existing form error/redraw path.
     const {error, value} = schema.validate(
         {
             title: body.title?.trim(),
@@ -86,8 +91,8 @@ function preprocessCreate(body: any): Partial<Survey> & { combinations: Partial<
         throw new ValidationError(CREATE_TEMPLATE, msg, {body});
     }
 
-    // 3) Normalize to entity types:
-    //    week (number | 'LAST') -> nthWeek: WeekInMonth ('1' | '2' | '3' | '4' | 'LAST')
+    // Stored nthWeek uses the declared string union. Convert numeric choices
+    // once while preserving LAST and the validated combination order.
     const normalized: Partial<SurveyCombination>[] = value.combinations.map(
         (c: { weekday: WeekDay; week: number | 'LAST' }) => ({
             weekday: c.weekday,
@@ -339,7 +344,8 @@ export async function readSurveySettings(id: string, session: SessionLike): Prom
     const survey = await requireSurvey(id);
     requireSurveyOwner(survey, session);
     const properties = await getEntityPropertyPresentation('survey', survey, session);
-    const archive = (await getArchivePresentations([{type: 'survey', id}], session)).get(`survey:${id}`)!;
+    const reference = {type: 'survey' as const, id};
+    const archive = (await getArchivePresentations([reference], session)).get(archiveKey(reference))!;
 
     // Settings tokens describe the rendered image only. Header writes deliberately
     // retain their existing last-write behavior instead of adding a concurrency rule.

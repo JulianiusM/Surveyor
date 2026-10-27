@@ -5,12 +5,33 @@ import type {EntityAutomationMessages, EntityLifecycleOperations} from './Fronte
 import type {FrontendEventPickerSource, FrontendPlainMessageKey, FrontendRequestScope} from './FrontendUiTypes';
 
 /** Shared root settings presentation; standalone roots have no parent selector. */
-export type EntitySettingsProjection = Omit<components['schemas']['PackingSettings'], 'currentEvent' | 'capabilities' | 'editableFields' | 'archive'> & {
+export interface EntitySettingsProjection {
+    id: string;
+    title: string;
+    headerUrl: string | null;
+    headerVersion: string | null;
+    settingsToken: string;
     editableFields: string[];
-    currentEvent?: components['schemas']['PackingSettings']['currentEvent'];
-    capabilities: Omit<components['schemas']['PackingSettings']['capabilities'], 'linkEvent'> & {linkEvent?: boolean; manageAutomation?: boolean; export?: boolean};
-    archive: components['schemas']['PackingSettings']['archive'] & {hasAutomaticSchedule?: boolean};
-};
+    currentEvent?: components['schemas']['NullableEntityCurrentEvent'];
+    access: components['schemas']['NullableEntityAccess'];
+    archive: components['schemas']['EntityArchive'] & {hasAutomaticSchedule?: boolean};
+    capabilities: EntitySettingsCapabilities;
+}
+
+/** Matching root controls receive explicit admitted actions, independent of any
+ * feature's complete settings response or additional feature-specific actions. */
+export interface EntitySettingsCapabilities {
+    editHeader: boolean;
+    managePermissions: boolean;
+    duplicate: boolean;
+    remove: boolean;
+    archive: boolean;
+    restore: boolean;
+    manageArchive: boolean;
+    linkEvent?: boolean;
+    manageAutomation?: boolean;
+    export?: boolean;
+}
 
 /** Existing feature adapters retain generated operation and endpoint selection. */
 export interface EntitySettingsOperations extends Partial<EntityAccessOperations>, EntityLifecycleOperations {
@@ -19,8 +40,8 @@ export interface EntitySettingsOperations extends Partial<EntityAccessOperations
     removeHeader(id: string, token: string, scope: FrontendRequestScope): Promise<unknown>;
     deleteResource(id: string, scope: FrontendRequestScope): Promise<unknown>;
     eventPicker?: FrontendEventPickerSource;
-    linkEvent?: (id: string, input: components['schemas']['PackingEventChange'], token: string,
-        scope: FrontendRequestScope) => Promise<components['schemas']['PackingEventChanged']>;
+    linkEvent?: (id: string, input: components['schemas']['EntityEventChangeInput'], token: string,
+        scope: FrontendRequestScope) => Promise<components['schemas']['EntityEventChangeResult']>;
 }
 
 /** Feature-owned catalog wording for an admitted automatic archival schedule. */

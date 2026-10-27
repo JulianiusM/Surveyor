@@ -4,9 +4,9 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: test maintainers
 status: current
-last-verified: 2026-10-26
+last-verified: 2026-10-27
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Vitest 5 mock-history compatibility and existing fork worker contract reconciled; prior P11 routing, Vue rendering, native browser retirement and inherited domain and database safety retained; no deployment or exhaustive verification claim
+verification-scope: installed SSR native Node loading in Vitest reconciled; prior mock-history, fork worker, P11, browser and guarded database boundaries retained; no deployment or exhaustive verification claim
 source-anchors: package.json; src/backend/app.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: test-layout-command-or-help-validation-change
 -->
@@ -420,6 +420,9 @@ to prepare the installed renderer and only their own declared built graphs, reje
 This evaluates code without a setup request, render, actor or query-cache priming. Real backend HTTP/bootstrap
 assertions and hook/assertion deadlines remain unchanged; this does not measure cold module initialization as
 application latency. Keep earlier failed runs visible when recording the focused rerun.
+Vitest externalizes only the installed `dist/frontend-server/` graph to Node, matching production loading rather
+than transforming an already compiled release again. Authored TypeScript/Vue sources retain normal transformation
+and isolation; the installed graph intentionally uses Node's module cache rather than source mocks or HMR.
 
 Source HMR, serialized contract/catalog regeneration, coherent production SSR dependencies and release/chunk recovery
 cross different boundaries. Exercise the relevant owner when changed; a build or hydration marker alone does not

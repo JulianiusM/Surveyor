@@ -71,6 +71,11 @@ describe('effective archival and personal placement', () => {
         // describe a polymorphic entity reference, even when production uses random UUIDs.
         expect(archiveKey({type: 'event', id: 'same'})).not.toBe(archiveKey({type: 'activity', id: 'same'}));
     });
+
+    it('joins equivalent UUID spellings to the same lifecycle identity', () => {
+        const id = '81a4d76b-f872-4a33-b555-dcf98e2a5561';
+        expect(archiveKey({type: 'packing', id: id.toUpperCase()})).toBe(archiveKey({type: 'packing', id}));
+    });
 });
 
 describe('automatic archival runner', () => {

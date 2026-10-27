@@ -95,8 +95,13 @@ export interface FrontendListCreationValues {
 
 /** The root copy protocol deliberately excludes rides, assignments and authors.
  * Packing extends this projection with its own copyable collection rows. */
-export type FrontendListCreationCopy = Pick<components['schemas']['PackingDuplicate'],
-    'title' | 'description' | 'defaultPermissions' | 'formContext' | 'selectedEvent'>;
+export interface FrontendListCreationCopy {
+    title: string;
+    description: string | null;
+    defaultPermissions: components['schemas']['PermissionDefaults'];
+    formContext: components['schemas']['EntityCreationContext'];
+    selectedEvent?: components['schemas']['EventPickerOption'] | null;
+}
 
 /** One feature supplies generated operations, scoped keys and its item
  * collector. The shared form has no endpoint construction or business checks. */
@@ -104,16 +109,16 @@ export interface FrontendListCreationSource<TCopy extends FrontendListCreationCo
     creationKey(context: string | null | undefined, eventId?: string): readonly unknown[];
     duplicateKey(context: string | null | undefined, id: string | null, eventId?: string): readonly unknown[];
     eventPicker: FrontendEventPickerSource;
-    initialContext?: components['schemas']['PackingCreateContext'];
+    initialContext?: components['schemas']['EntityCreationContext'];
     initialSelectedEvent?: components['schemas']['EventPickerOption'] | null;
     initialDuplicate?: TCopy;
     initialError?: FrontendPlainMessageKey;
-    createEntry(scope: FrontendRequestScope, signal?: AbortSignal, returnTo?: string, eventId?: string): Promise<components['schemas']['PackingCreateEntry']>;
+    createEntry(scope: FrontendRequestScope, signal?: AbortSignal, returnTo?: string, eventId?: string): Promise<components['schemas']['EntityCreationEntry']>;
     duplicate(id: string, scope: FrontendRequestScope, signal?: AbortSignal, eventId?: string): Promise<TCopy>;
     initialize?(copy?: TCopy): void;
     reset?(): void;
     draft?(): unknown;
-    destination(result: components['schemas']['PackingCreated']): string;
+    destination(result: components['schemas']['EntityCreationResult']): string;
     prepare(values: FrontendListCreationValues, image: File | null):
-        {error: FrontendPlainMessageKey} | {operation(scope: FrontendRequestScope): Promise<components['schemas']['PackingCreated']>};
+        {error: FrontendPlainMessageKey} | {operation(scope: FrontendRequestScope): Promise<components['schemas']['EntityCreationResult']>};
 }

@@ -49,7 +49,10 @@ router.post('/pools/:poolId/submission-state', asyncHandler(async function saveS
 }));
 
 /** Admit the organizer before accepting optional bytes, and retain the existing cost owner's cleanup policy. */
-router.post('/pools/:poolId/invoices/organizer', asyncHandler(async function recordOrganizerCost(req, res) {
+router.post('/pools/:poolId/invoices/organizer', asyncHandler(/** Admit organizer
+ * authority before upload processing, validate the complete multipart input,
+ * and hand proof retention to the business owner only when its operation starts. */
+async function recordOrganizerCost(req, res) {
     const actor = await requireApiContext(req, res, true);
     const event = await admitEventFinanceOrganizer(String(req.params.eventId), actor, true);
     let enteredOperation = false;
@@ -201,7 +204,10 @@ router.get('/pools/:poolId/shares/:shareId', asyncHandler(async function getEven
 }));
 
 /** Accept proof bytes only after authenticated participant admission, then invoke the unchanged submission owner once. */
-router.post('/pools/:poolId/invoices', asyncHandler(async function submitEventInvoice(req, res) {
+router.post('/pools/:poolId/invoices', asyncHandler(/** Admit participant submission,
+ * prepare the declared receipt and preserve locked conflict diagnostics. Structural
+ * rejection cleans this upload; entered business work owns its proof lifetime. */
+async function submitEventInvoice(req, res) {
     const actor = await requireApiContext(req, res, true);
     const event = await admitEventInvoiceSubmission(String(req.params.eventId), actor);
     let enteredOperation = false;

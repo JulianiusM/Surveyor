@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
-import {flushPromises, mount} from '@vue/test-utils';
+import {mount} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import {computed, createSSRApp, defineComponent, h, inject, onMounted, ref} from 'vue';
 import type {Component} from 'vue';
 import {renderToString} from 'vue/server-renderer';

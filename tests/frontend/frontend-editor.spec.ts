@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {flushPromises, mount} from '@vue/test-utils';
+import {mount} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import {defineComponent, nextTick, ref} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
@@ -9,7 +10,7 @@ import I18NextVue from 'i18next-vue';
 import PackingPage from '../../src/frontend/features/packing/PackingPage.vue';
 import PackingCreatePage from '../../src/frontend/features/packing/PackingCreatePage.vue';
 import PackingSettings from '../../src/frontend/features/packing/PackingSettings.vue';
-import MetadataFields from '../../src/frontend/features/packing/MetadataFields.vue';
+import MetadataFields from '../../src/frontend/components/BasicEntityMetadataFields.vue';
 import OverviewRegion from '../../src/frontend/features/overview/OverviewRegion.vue';
 import AppDialog from '../../src/frontend/components/AppDialog.vue';
 import InlineCell from '../../src/frontend/components/InlineCell.vue';
@@ -38,7 +39,7 @@ const list: components['schemas']['PackingListView'] = {entityType: 'packing', i
 const metadata: components['schemas']['PackingMetadata'] = {entityType: 'packing', id: listId,
     values: {title: list.title, description: list.description}, editableFields: ['title', 'description'],
     currentEventId: null, archived: false, inheritedArchived: false};
-const settings: components['schemas']['PackingSettings'] = {id: listId, title: list.title,
+const settings: components['schemas']['ListSettings'] = {id: listId, title: list.title,
     headerUrl: null, headerVersion: null, settingsToken: '"edit-settings"', editableFields: ['title', 'description'],
     currentEvent: null, access: null,
     archive: {direct: false, inherited: false, archivedAt: null, autoArchivePaused: false, eventUrl: null},
@@ -519,6 +520,7 @@ describe('mounted Packing header upload selection', () => {
                 const upload = editor.findAll('button').find(button => button.text() === 'Upload')!;
                 upload.element.focus();
                 await upload.trigger('click');
+                await flushPromises();
                 await vi.waitFor(() => expect(writes).toBe(1));
                 // The same upload command owns disabled state and visible
                 // progress until its confirmed write and following read settle.

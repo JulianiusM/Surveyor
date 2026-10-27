@@ -10,84 +10,6 @@ schemas:
       - $ref: '#/schemas/ComparisonToken'
       - type: string
         pattern: '^"edit-[A-Za-z0-9_-]+"$'
-  EventPickerQuery:
-    description: Shared bounded event-discovery filters. Each consuming endpoint owns its authorization and selected-event visibility.
-    type: object
-    additionalProperties: false
-    properties:
-      q:
-        type: string
-        maxLength: 200
-      from:
-        type: string
-        format: date
-      to:
-        type: string
-        format: date
-      period:
-        type: string
-        enum: [all, upcoming, ongoing, ended]
-      archive:
-        type: string
-        enum: [all, active, archived]
-      deadline:
-        type: string
-        enum: [all, open, passed]
-      cursor:
-        type: string
-        maxLength: 2048
-      selectedId:
-        type: string
-        format: uuid
-  EventPickerOption:
-    description: Authorized event choice shared by selectors; feature endpoints decide which records may be projected.
-    type: object
-    additionalProperties: false
-    required:
-      - id
-      - title
-      - startDate
-      - endDate
-      - archived
-      - description
-      - deadlinePassed
-    properties:
-      id:
-        $ref: '#/schemas/Uuid'
-      title:
-        type: string
-      startDate:
-        type: string
-      endDate:
-        type: string
-      archived:
-        type: boolean
-      description:
-        type:
-          - string
-          - 'null'
-      deadlinePassed:
-        type: boolean
-  EventPickerOptions:
-    type: object
-    additionalProperties: false
-    required:
-      - items
-      - selected
-      - nextCursor
-    properties:
-      items:
-        type: array
-        items:
-          $ref: '#/schemas/EventPickerOption'
-      selected:
-        anyOf:
-          - $ref: '#/schemas/EventPickerOption'
-          - type: 'null'
-      nextCursor:
-        type:
-          - string
-          - 'null'
   EntryNotice:
     description: One plain localized page notice. Message keys require no interpolation parameters.
     type: object
@@ -1395,7 +1317,7 @@ schemas:
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
 
-  PackingCreateEntry:
+  EntityCreationEntry:
     type: object
     additionalProperties: false
     required: [entry, context]
@@ -1404,15 +1326,15 @@ schemas:
         $ref: '#/schemas/PageEntryOutcome'
       context:
         anyOf:
-          - $ref: '#/schemas/PackingCreateContext'
+          - $ref: '#/schemas/EntityCreationContext'
           - type: 'null'
       selectedEvent:
         description: Present only when eventId context was requested. Authorized initial URL selection; a missing or rejected selection is omitted from the creation draft.
         anyOf:
-          - $ref: '#/schemas/EventPickerOption'
+          - $ref: './events.yaml#/schemas/EventPickerOption'
           - type: 'null'
 
-  PackingResourceEntry:
+  EntityResourceEntry:
     type: object
     additionalProperties: false
     required: [entry, guest]
@@ -1424,7 +1346,7 @@ schemas:
           - $ref: ./auth.yaml#/schemas/GuestEntry
           - type: 'null'
 
-  PackingAssignee:
+  ListAssignee:
     type: object
     additionalProperties: false
     required:
@@ -1438,11 +1360,11 @@ schemas:
           - $ref: '#/schemas/DecimalId'
           - type: "null"
 
-  PackingDescriptionValue:
+  EntityDescriptionValue:
     type: [string, 'null']
     maxLength: 16000
 
-  PackingMetadataPatch:
+  BasicEntityMetadataPatch:
     type: object
     additionalProperties: false
     minProperties: 1
@@ -1453,18 +1375,18 @@ schemas:
         maxLength: 255
         pattern: \S
       description:
-        $ref: '#/schemas/PackingDescriptionValue'
+        $ref: '#/schemas/EntityDescriptionValue'
 
-  PackingDescriptionPatch:
+  EntityDescriptionPatch:
     description: Bounded adapter for the independently grantable description method; root properties remain profile-only.
     type: object
     additionalProperties: false
     required: [description]
     properties:
       description:
-        $ref: '#/schemas/PackingDescriptionValue'
+        $ref: '#/schemas/EntityDescriptionValue'
 
-  PackingDescriptionBaseline:
+  EntityDescriptionBaseline:
     description: Only the method-authorized description and its actor/resource-bound field precondition; no root title, event or archival context.
     type: object
     additionalProperties: false
@@ -1475,7 +1397,7 @@ schemas:
       editToken:
         $ref: '#/schemas/FieldComparisonToken'
 
-  PackingDefaultsBaseline:
+  EntityPermissionDefaultsBaseline:
     description: Audience masks independently authorized by MANAGE_PERMISSIONS; excludes roster, header, parent and root metadata.
     type: object
     additionalProperties: false
@@ -1486,7 +1408,7 @@ schemas:
       editToken:
         $ref: '#/schemas/FieldComparisonToken'
 
-  PackingAdminBaseline:
+  EntityAdministratorBaseline:
     description: One selected administrator mask, or null for the new-administrator comparison marker; no roster or profile presentation.
     type: object
     additionalProperties: false
@@ -1499,7 +1421,7 @@ schemas:
       editToken:
         $ref: '#/schemas/FieldComparisonToken'
 
-  PackingHeaderBaseline:
+  EntityHeaderBaseline:
     description: Method-authorized header field hash only; contains no stored path, image bytes, root title or parent context.
     type: object
     additionalProperties: false
@@ -1508,7 +1430,7 @@ schemas:
       editToken:
         $ref: '#/schemas/FieldComparisonToken'
 
-  PackingAssignmentResult:
+  ListAssignmentResult:
     type: object
     additionalProperties: false
     required:
@@ -1607,7 +1529,7 @@ schemas:
         type: integer
         minimum: 0
 
-  PackingCreateContext:
+  EntityCreationContext:
     type: object
     additionalProperties: false
     required:
@@ -1626,7 +1548,7 @@ schemas:
         items:
           $ref: "#/schemas/PermissionPreset"
 
-  PackingCreated:
+  EntityCreationResult:
     type: object
     additionalProperties: false
     required:
@@ -1644,7 +1566,7 @@ schemas:
       changed:
         type: boolean
 
-  PackingOrderEditBaseline:
+  ListOrderBaseline:
     description: Method-authorized reorder baseline containing only ordered item identifiers, positions and the existing actor-bound order token.
     type: object
     additionalProperties: false
@@ -1664,7 +1586,7 @@ schemas:
       orderToken:
         $ref: '#/schemas/orderToken'
 
-  PackingItemOrder:
+  ListItemOrderInput:
     type: object
     additionalProperties: false
     required:
@@ -1676,7 +1598,7 @@ schemas:
           $ref: '#/schemas/Uuid'
         uniqueItems: true
 
-  PackingEventChange:
+  EntityEventChangeInput:
     type: object
     additionalProperties: false
     required:
@@ -1688,7 +1610,7 @@ schemas:
       expectedEventId:
         $ref: '#/schemas/NullableUuid'
 
-  PackingEventChanged:
+  EntityEventChangeResult:
     type: object
     additionalProperties: false
     required:
@@ -1700,7 +1622,7 @@ schemas:
       canView:
         type: boolean
 
-  PackingProfileOption:
+  EntityAdministratorProfileOption:
     type: object
     additionalProperties: false
     required:
@@ -1718,12 +1640,12 @@ schemas:
       username:
         type: string
 
-  PackingProfileOptions:
+  EntityAdministratorProfileOptions:
     type: array
     items:
-      $ref: "#/schemas/PackingProfileOption"
+      $ref: "#/schemas/EntityAdministratorProfileOption"
 
-  PackingAdmin:
+  EntityAdministrator:
     type: object
     additionalProperties: false
     required:
@@ -1745,7 +1667,7 @@ schemas:
       editToken:
         $ref: '#/schemas/FieldComparisonToken'
 
-  PackingAdminInput:
+  EntityAdministratorInput:
     type: object
     additionalProperties: false
     required:
@@ -1759,7 +1681,7 @@ schemas:
         minimum: 0
         maximum: 2147483647
 
-  PackingAdminPatch:
+  EntityAdministratorPatch:
     type: object
     additionalProperties: false
     required:
@@ -1770,7 +1692,7 @@ schemas:
         minimum: 0
         maximum: 2147483647
 
-  PackingCurrentEvent:
+  EntityCurrentEvent:
     type: object
     additionalProperties: false
     required:
@@ -1799,7 +1721,7 @@ schemas:
           - string
           - "null"
 
-  PackingArchive:
+  EntityArchive:
     type: object
     additionalProperties: false
     required:
@@ -1824,7 +1746,7 @@ schemas:
           - string
           - "null"
 
-  PackingAccess:
+  EntityAccess:
     type: object
     additionalProperties: false
     required:
@@ -1838,7 +1760,7 @@ schemas:
       admins:
         type: array
         items:
-          $ref: "#/schemas/PackingAdmin"
+          $ref: "#/schemas/EntityAdministrator"
       permissions:
         type: array
         items:
@@ -1848,7 +1770,7 @@ schemas:
         items:
           $ref: "#/schemas/PermissionPreset"
 
-  PackingSettings:
+  ListSettings:
     type: object
     additionalProperties: false
     required:
@@ -1909,15 +1831,11 @@ schemas:
           manageArchive:
             type: boolean
       currentEvent:
-        anyOf:
-          - $ref: "#/schemas/PackingCurrentEvent"
-          - type: "null"
+        $ref: '#/schemas/NullableEntityCurrentEvent'
       archive:
-        $ref: "#/schemas/PackingArchive"
+        $ref: "#/schemas/EntityArchive"
       access:
-        anyOf:
-          - $ref: "#/schemas/PackingAccess"
-          - type: "null"
+        $ref: '#/schemas/NullableEntityAccess'
       headerVersion:
         type:
           - string
@@ -1926,7 +1844,7 @@ schemas:
       settingsToken:
         $ref: '#/schemas/FieldComparisonToken'
 
-  PackingHeaderUpload:
+  EntityHeaderUpload:
     type: object
     additionalProperties: false
     required:
@@ -1936,7 +1854,7 @@ schemas:
         type: string
         format: binary
 
-  PackingHeaderBinary:
+  EntityHeaderBinary:
     type: string
     format: binary
 
@@ -1945,3 +1863,76 @@ schemas:
     type: integer
   orderToken:
     type: string
+
+  NullableEntityCurrentEvent:
+    anyOf:
+      - $ref: '#/schemas/EntityCurrentEvent'
+      - type: 'null'
+
+  NullableEntityAccess:
+    anyOf:
+      - $ref: '#/schemas/EntityAccess'
+      - type: 'null'
+
+  AutomaticArchivalInput:
+    type: object
+    additionalProperties: false
+    required:
+      - paused
+    properties:
+      paused:
+        type: boolean
+
+
+  EntityCard:
+    type: object
+    additionalProperties: false
+    required: [id, type, title, description, url, headerUrl, headerVersion, eventContext, visibility, overviewHidden, archived, inheritedArchived, capabilities, children]
+    properties:
+      id: {type: string, format: uuid}
+      type: {type: string, enum: [activity, drivers, event, packing, survey]}
+      title: {type: string}
+      description: {type: [string, 'null']}
+      url: {type: string}
+      headerUrl: {type: [string, 'null']}
+      headerVersion: {type: [string, 'null']}
+      eventContext:
+        anyOf:
+          - type: object
+            additionalProperties: false
+            required: [title, url]
+            properties:
+              title: {type: string}
+              url: {type: string}
+          - type: 'null'
+      visibility: {type: string, enum: [default, hidden, shown]}
+      overviewHidden: {type: boolean}
+      archived: {type: boolean}
+      inheritedArchived: {type: boolean}
+      automation:
+        description: Optional schedule context for Event Things to do, or schedule-management controls admitted on personal Overview cards.
+        type: object
+        additionalProperties: false
+        required: [paused, canManage]
+        properties:
+          paused: {type: boolean}
+          canManage: {type: boolean}
+      capabilities:
+        type: object
+        additionalProperties: false
+        required: [archive, restore, duplicate, remove]
+        properties:
+          archive: {type: boolean}
+          restore: {type: boolean}
+          duplicate: {type: boolean}
+          remove: {type: boolean}
+      children:
+        description: Eligible children in this collection/region; matching applies the selected type and search.
+        anyOf:
+          - type: object
+            additionalProperties: false
+            required: [total, matching]
+            properties:
+              total: {type: integer, minimum: 0}
+              matching: {type: integer, minimum: 0}
+          - type: 'null'

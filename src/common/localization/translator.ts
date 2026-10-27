@@ -105,6 +105,8 @@ export function createTranslator(requestedLocale?: string | null, translation?: 
 
     /** Both text and node messages retain the same scalar/option-injection guard. */
     function checkedParameters(key: MessageKey, parameters: Record<string, unknown>): Record<string, string | number | boolean> {
+        // Reject unknown keys/names and missing required values before looking
+        // up individual scalar contracts or passing anything to interpolation.
         if (!Object.hasOwn(manifest.messages, key)) throw new Error(`Unknown translation key: ${key}`);
         const contract = manifest.messages[key];
         const values: Record<string, string | number | boolean> = {};
@@ -114,6 +116,8 @@ export function createTranslator(requestedLocale?: string | null, translation?: 
         for (const name of contract.required) {
             if (!Object.hasOwn(parameters, name)) throw new Error(`Missing translation parameter: ${name}`);
         }
+        // Copy only admitted primitive values; numeric parameters must be finite,
+        // and integer placeholders do not silently accept fractional numbers.
         for (const [name, type] of Object.entries(contract.parameters)) {
             if (!Object.hasOwn(parameters, name)) continue;
             const value = parameters[name];

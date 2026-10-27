@@ -21,16 +21,18 @@ import {NumericProfileBase, UuidProfileBase} from "./Base";
 import type {BaseEntity} from './BaseEntity';
 import type {BaseEntityItem} from "./BaseEntityItem";
 
-export abstract class DefaultNumericEntityItemAssignment extends NumericProfileBase implements DefaultItemAssignmentRelationEntity {
+export abstract class DefaultNumericEntityItemAssignment<ItemId extends string | number = string>
+    extends NumericProfileBase implements DefaultItemAssignmentRelationEntity<ItemId> {
     abstract entity: BaseEntity;
     abstract entityId: string;
     abstract item: BaseEntityItem;
-    abstract itemId: string;
+    abstract itemId: ItemId;
 }
 
-export abstract class DefaultUuidEntityItemAssignment extends UuidProfileBase implements DefaultItemAssignmentRelationEntity {
+export abstract class DefaultUuidEntityItemAssignment<ItemId extends string | number = string>
+    extends UuidProfileBase implements DefaultItemAssignmentRelationEntity<ItemId> {
     abstract entity: BaseEntity;
     abstract entityId: string;
     abstract item: BaseEntityItem;
-    abstract itemId: string;
+    abstract itemId: ItemId;
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {parameterFieldAttributes} from '../../../../.generated/api/v1/policy.mjs';
 import {computed, inject, onBeforeUnmount, ref, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
@@ -176,7 +177,7 @@ function retainReadingSpace(): void {
                                 <input type="hidden" name="locale" :value="locale" />
                                 <div class="input-group">
                                     <input id="frontend-help-search" v-model="search" class="form-control text-bg-dark" type="search" name="q"
-                                           maxlength="100" required :placeholder="messages.t('help.searchPlaceholder')" />
+                                           :maxlength="parameterFieldAttributes.getHelpPage.query.q.maxLength" required :placeholder="messages.t('help.searchPlaceholder')" />
                                     <button class="btn btn-primary" type="submit" :aria-label="messages.t('help.searchTitle')"><i class="bi bi-search" aria-hidden="true"></i></button>
                                 </div>
                             </form>

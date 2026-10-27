@@ -21,7 +21,7 @@ export function isPublicFile(directory: string, filename: string): boolean {
 export function createPublicAssets(directory: string): RequestHandler {
     const root = path.resolve(directory);
     const original = express.static(root);
-    return function servePublicAsset(req, res, next): void {
+    return /** Constrain actual files and implicit indexes before static delivery. */ function servePublicAsset(req, res, next): void {
         // Express remains responsible for malformed URI/method diagnostics. Decode
         // only its pathname once so encoded separators receive the same root check.
         let pathname: string;

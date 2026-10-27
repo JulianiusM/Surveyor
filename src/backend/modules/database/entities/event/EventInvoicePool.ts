@@ -29,7 +29,7 @@ export const InvoicePoolDistributions = ['EQUAL', 'TIME_BASED', 'NIGHTS'];
 
 @Entity("event_invoice_pools", {schema: "surveyor"})
 export class EventInvoicePool extends UuidBase {
-    @ManyToOne(() => Event, (event) => event.eventRegBypassLinks, {onDelete: "CASCADE", onUpdate: "CASCADE"})
+    @ManyToOne(() => Event, {onDelete: "CASCADE", onUpdate: "CASCADE"})
     @JoinColumn([{name: "event_id", referencedColumnName: "id"}])
     event!: Event;
 

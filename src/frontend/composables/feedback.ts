@@ -1,13 +1,13 @@
-import {computed, onBeforeUnmount, onMounted, ref, shallowRef, watch} from 'vue';
+import {computed, onBeforeUnmount, onMounted, onUpdated, ref, shallowReactive, shallowRef, toRaw, watch} from 'vue';
 import type {ComputedRef, InjectionKey, Ref} from 'vue';
 import {useFrontend, canRetryRead} from '../app/context';
 import {ApiFailure, InvalidInputError} from '../app/transport';
 import type {LocalizationContext, MessageKey} from '../../types/LocalizationTypes';
 import type {components} from '../../types/api/v1';
-import type {FrontendPlainMessageKey, FrontendProblemPresentation} from '../../types/FrontendUiTypes';
+import type {FrontendContext, FrontendPlainMessageKey, FrontendProblemPresentation} from '../../types/FrontendUiTypes';
 import {validateProblem} from '../../../.generated/api/v1/browser/validateProblem.mjs';
 import {formatFieldDiagnostic, formatInputDiagnostic} from '../../common/localization/inputValidation';
-import type {FrontendReadFailureDescriptor} from '../../types/FrontendFeedbackTypes';
+import type {FrontendNoticePresentationSource, FrontendReadFailureDescriptor} from '../../types/FrontendFeedbackTypes';
 
 // One shared lifetime governs transient receipts in the shell and its dialogs.
 const transientNoticeLifetimeMs = 10_000;
@@ -278,4 +278,66 @@ export function useFeedbackError(presentation?: FrontendProblemPresentation) {
 function inputFailureMessage(messages: LocalizationContext, error: InvalidInputError): string {
     if (!error.diagnostic) return messages.t(error.messageKey ?? 'api:errors.VALIDATION_FAILED');
     return formatInputDiagnostic(messages, error.diagnostic);
+}
+
+// Each application/request has its own presentation readers. Mounted components
+// remain the owners of their props; this set copies no request or query state.
+const presentations = new WeakMap<FrontendContext, Set<FrontendNoticePresentationSource>>();
+
+/** Present one causal read failure through its live common notification. Ordinary
+ * query notices keep their component/prop readers while their duplicate DOM is
+ * hidden, so the common owner can display the query's actual freshness/deadline.
+ * Different Error instances, missing errors and retired notices remain independent. */
+export function useNoticePresentation(context: FrontendContext | null, source: FrontendNoticePresentationSource) {
+    let entries = context ? presentations.get(context) : undefined;
+    if (context && !entries) {
+        entries = shallowReactive(new Set<FrontendNoticePresentationSource>());
+        presentations.set(context, entries);
+    }
+    const readers = entries;
+    const visible = ref(false);
+    let observer: MutationObserver | undefined;
+    let mounted = false;
+    const presentation: FrontendNoticePresentationSource = {...source, presented: () => visible.value};
+    /** Observe geometry/disclosure only; no visibility event initiates a read. */
+    function refreshVisibility(): void {
+        visible.value = source.common() && source.readError() instanceof Error && source.presented();
+    }
+    function stopObservation(): void {
+        observer?.disconnect();
+        observer = undefined;
+        if (typeof window !== 'undefined') window.removeEventListener('resize', refreshVisibility);
+    }
+    /** Hidden ancestors and closed disclosures can change outside Vue props. */
+    function observeVisibility(): void {
+        stopObservation();
+        refreshVisibility();
+        if (!mounted || !source.common() || !(source.readError() instanceof Error)) return;
+        // Scope this bounded observer to this mounted common presentation. It
+        // retains only DOM visibility, and retires with the notice component.
+        observer = new MutationObserver(refreshVisibility);
+        observer.observe(document.documentElement, {attributes: true, childList: true, subtree: true,
+            attributeFilter: ['class', 'style', 'hidden', 'aria-hidden', 'open']});
+        window.addEventListener('resize', refreshVisibility);
+    }
+    // SSR does not publish mounted UI readers or cross a request boundary. The
+    // initial common node reserves its own space before hydration registers it.
+    onMounted(() => { mounted = true; readers?.add(presentation); observeVisibility(); });
+    onUpdated(refreshVisibility);
+    watch([source.common, source.readError], observeVisibility, {flush: 'post'});
+    onBeforeUnmount(() => { mounted = false; stopObservation(); readers?.delete(presentation); });
+
+    /** Only actual Error identity joins two presentations of the same failed GET. */
+    function sameFailure(candidate: FrontendNoticePresentationSource): boolean {
+        const failure = source.readError();
+        return failure instanceof Error && toRaw(candidate.readError()) === toRaw(failure);
+    }
+
+    const duplicate = computed(() => !source.common() && !!readers
+        && [...readers].some(candidate => candidate !== presentation && candidate.common()
+            && candidate.presented() && sameFailure(candidate)));
+    const readPresentation = computed(() => source.common() && readers
+        ? [...readers].find(candidate => candidate !== presentation && !candidate.common() && sameFailure(candidate))
+        : undefined);
+    return {duplicate, readPresentation};
 }

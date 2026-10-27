@@ -1,6 +1,6 @@
 schema_version: 1
 maintenance:
-  reviewed_on: 2026-10-26
+  reviewed_on: 2026-10-27
   authority: Explicit P11 implementation request authorizes cutover and retirement; existing open backend remedies retain
     their separately authorized scope.
   shared_maintenance_authority: The direct 2026-10-26 request requires a historical audit, unified shared implementations,
@@ -65,15 +65,21 @@ architecture_remediation_2026_10_26:
   provenance: The maintainer's final Decisions reply explicitly approves both R3 and R4 after the preceding partial
     reply left R4 unanswered. The final reply supplies the authority; neither the partial reply nor silence did so.
   status: complete
-  completed_on: 2026-10-26
-  result: All 21 remaining new findings and IMP-070 are resolved through actual shared owner adoption. R1/IMP-136
+  completed_on: 2026-10-27
+  prior_agent_completion_on: 2026-10-26
+  prior_agent_completion_claim: All 21 remaining new findings and IMP-070 are resolved through actual shared owner adoption. R1/IMP-136
     and R2/IMP-147 remain completed under their earlier individual approvals. ARCH-005 records only its approved
     unused-validator retirement; its broader session/flash review and OPSV-004 remain separately scoped and open.
-  independent_acceptance: Root and independent nonauthor source reviews verify each resolution, actual production
+  prior_independent_acceptance: Root and independent nonauthor source reviews verify each resolution, actual production
     adoption, declaration/DBAL boundaries, directed dependencies, meaningful comments and the recorded feature
     exceptions. A second nonauthor independently confirms the root helper, error-mapping and comments-only work.
     The final static relative-import graph has no non-ORM cycles; this is not a claim about dynamic loading or deployment.
-  verification:
+  maintainer_rejection_2026_10_26: The maintainer rejects the completion claim and requires a further structured review
+    for similar architectural problems. Shared contracts retaining Packing-specific names and foreign feature imports
+    are explicitly unacceptable; moving their source file did not complete neutral ownership. Passing tests and the
+    preceding independent acceptance do not establish architectural completeness. IMP-154, residual IMP-141
+    duplication and residual IMP-144 readability debt are reopened; further findings retain their own evidence and scope.
+  prior_verification:
     - Full application build and final server, frontend/SSR and test typechecking pass. The server output was rebuilt
       after the canonical-comparison correction before the built-app system run.
     - The final database-free sweep passes all 2093 tests across 82 files; the guarded MariaDB 10.11.14 integration
@@ -97,6 +103,55 @@ architecture_remediation_2026_10_26:
     artifacts/architecture-review-20261026/ rather than creating another documentation destination.
   history: Original review findings, rejected implementation claims, rollback evidence and exclusions remain below.
     No closure or broad runtime-verification claim is inferred from this authorization.
+architecture_renewed_review_2026_10_26:
+  trigger: The maintainer rejects superficial remediation and explicitly requires another structured review for
+    similar problems, particularly common contracts and generic consumers retaining Packing-specific ownership.
+  baseline: 96aec790885b267a4fc7804566daaac528bd7885; the working tree was clean before this renewed review.
+  authorization: Review and recording cover the complete application. Original incomplete behavior-preserving R3/R4
+    remedies retain their bounded authority; newly discovered behavior, persistence or approved ownership changes do
+    not inherit approval. The explicit neutral-ownership correction is requested; changed browser validation behavior
+    is isolated in a detached candidate pending a separate maintainer decision.
+  method: Fresh backend and frontend reviewers inventoried source/imports, declarations, contracts, callers and tests.
+    A fresh independent nonauthor reviewer rechecked retained architectural and duplication claims against production
+    adoption and deliberate feature differences; the root reviews their evidence and exact proposed changes.
+  coverage:
+    - Backend inventory covers 192 authored TypeScript files and 1721 function/method declarations. A database-free
+      TypeORM metadata build covers 37 entities without initializing the datasource or connecting to a database.
+    - Frontend/common/declaration/contract/tooling inventory covers 269 relevant files. Structural similarity review
+      examines 242 TypeScript, Vue and declaration sources and classifies 15 function groups against their callers.
+    - These are inventory and targeted semantic-review boundaries, not proof that every line or possible architectural
+      defect has been independently certified. Generated repetition and deliberate feature/transaction differences
+      are not reported as reusable business duplication solely because text matches.
+  findings: IMP-141, IMP-144 and IMP-154 reopen rejected incomplete closures. IMP-159 through IMP-174 record 16 further
+    scoped findings and their limits. IMP-139 receives a bounded method-policy ownership correction; its former
+    runtime cycle remains removed. Existing IMP-016, ARCH-005 and OPSV-004 retain their separate scope and evidence.
+  preservation: Finance aggregate reads retain their documented DBAL aggregate-persistence responsibility. Shared list DBAL inner operations,
+    transport reads and pagination are credited as actual adoption; distinct assignment-lock wrappers, item privacy,
+    Survey grants, feature draft ownership and Packing/Drivers completion timing are retained as deliberate boundaries.
+  current_source_work: The main tree contains the equivalent Event method-policy extraction, five confirmed
+    comments-only corrections and complete matching IMP-141 read workflows through the existing approved shared owner.
+    Neutral contract/type ownership and authored validation-role corrections remain detached, rather than being
+    represented as applied or approved behavior changes.
+  current_checks: The Event/comment patch passes server typechecking and 49 database-free tests across three suites.
+    The final shared-read patch passes server typechecking and 56 database-free tests across four suites.
+    Six existing real-persistence suites pass all 107 tests on a freshly owned MariaDB 10.11.14 schema, covering
+    Packing/Drivers reads, private settings, method grants, root properties and administration. Explicit bounded
+    feature/config/projector inlining compares all eight shared read workflows with their preedit executable AST;
+    this is not raw whole-module AST identity. Independent/root semantic review verifies the same admission/query/token
+    sequence. The complete changed-source development check and whitespace check pass; advisory documentation retains
+    one source-fingerprint finding and clean Help authoring.
+  identity_probe: Additional production-controller probes on the same disposable schema reproduce uppercase-root
+    full-settings TypeErrors for Packing, Drivers, Activity and Survey; canonical reads pass and Event accepts both
+    spellings. Packing/Drivers narrow administrator baselines resolve uppercase IDs and canonical full-settings
+    tokens complete their writes. This proves IMP-174's earlier archive lookup failure, not actual issuance/rejection
+    of the latent alternate-root full-settings token in IMP-173. The owned container, schema, fixtures and temporary
+    credentials were removed after verification; no existing database or credentials were changed.
+  limits: No application build, built-browser, E2E, external-provider, deployment or load check has been executed in
+    this renewed review. The earlier remediation verification is historical. ORM metadata inspection alone does not
+    establish live loading/cascade behavior; focused list persistence tests do not certify unrelated ORM findings.
+  evidence: Ignored artifacts/architecture-review-20261026/renewed-* inventories, metadata, similarity classifications,
+    comparison probes, readability review queue, context receipts and detached candidate retain detailed review evidence.
+    This canonical register is the maintained finding destination; no parallel documentation owner is introduced.
 severity_definitions:
   critical: Likely to make a core task fail, create an incorrect access/security decision, or block safe operation.
   high: Materially misleading or missing for a common task, contributor workflow, or production responsibility.
@@ -3431,6 +3486,9 @@ implementation_defects:
     disposition: modules/identity/oidcAccounts.ts owns the existing linking, activation, naming and provisioning
       decisions. UserService supplies raw queries, ORM record construction and persistence; the actual provider
       completion uses this business owner with the original transaction and save sequence.
+    renewed_implementation_2026_10_26: The further existing-owner instruction retires this unnecessary extraction into
+      userController, its existing local account-policy owner. UserService remains pure DBAL; provider evidence and
+      protocol remain in oidc. The original transaction and session/token sequence are preserved.
     closes_when:
       - Separately approved policy/persistence separation adopts the actual OIDC caller without changing identity rules.
       - Focused persistence/provider-boundary coverage protects linking, existing accounts and provisioning outcomes.
@@ -3476,9 +3534,20 @@ implementation_defects:
     original_review_disposition: A cohesive Event linkage business owner could hold authorization, selection and search while existing
       controllers retain child deletion and request orchestration. This ownership decision needs separate approval;
       a forwarding-only module or bypass of child authorization would not resolve it.
-    disposition: modules/event/linkage.ts owns the actual Event selection, permission, cursor and linkage operations.
+    disposition: modules/event/linkage.ts owns actual Event selection, cursor and linkage authorization operations.
       Children and flow adapters import it directly; the Event controller retains child deletion through each feature
-      controller.
+      controller. General Event method grants belong to modules/event/methodPolicy.ts, which is consumed directly by
+      routes, the Event controller and linkage rather than being owned by or forwarded through linkage.
+    renewed_correction_2026_10_26: Fresh review confirmed that the runtime cycle was removed, but the full general
+      Event method-grant table had been placed in the narrower linkage owner. This bounded R3 correction moves the
+      unchanged private table and interpretation to the actual method-policy owner. A candidate-bit accessor preserves
+      linkage SQL filtering while complete grant checks remain authoritative. Independent and root source review,
+      AST comparisons, server typechecking and 49 database-free tests across three suites verify the correction;
+      no new database or browser execution is claimed.
+    renewed_implementation_2026_10_26: >-
+      Existing permissionEngine now owns the private general Event method table and shared method/field selection.
+      Event linkage remains the necessary child dependency; every consumer imports its actual owner directly, with
+      no controller back-edge or methodPolicy facade.
     closes_when:
       - An approved change removes the runtime cycle with actual caller adoption and preserves linkage/deletion behavior.
   - id: IMP-140
@@ -3504,12 +3573,17 @@ implementation_defects:
     disposition: OIDC protocol exchange returns validated evidence to the user controller. Local and provider login
       share synchronous account/default-profile assignment while retaining their original token, transient-clear and
       session-save sequence. The unused validator retirement is recorded under ARCH-005.
+    renewed_implementation_2026_10_26: >-
+      The unnecessary oidcAccounts extraction is retired into the existing user controller. Provider protocol
+      returns evidence; local account linking/provisioning and shared account/profile assignment remain together,
+      preserving session/token order and the removed runtime cycle.
     closes_when:
       - An approved change removes the cycle and makes both applicable journeys adopt the shared identity operation.
       - Provider and local identity/session boundaries have focused coverage at their existing layers.
   - id: IMP-141
     status: closed
     closed_on: 2026-10-26
+    rejected_closure_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: medium
     owner: Packing and Drivers maintainers
@@ -3531,6 +3605,19 @@ implementation_defects:
     disposition: Packing and Drivers directly adopt matching root metadata, context, permission-subject, header,
       settings and Event-search mechanics in the shared administration and Event-linkage business owners. Feature CRUD, privacy, admission
       and result/commit timing remain with their original owners.
+    renewed_review_2026_10_26: Fresh root/backend/independent source review finds that sharing subhelpers left the
+      complete matching readSettings orchestration duplicated across Packing and Drivers, including parent privacy,
+      archive/access projection, tokens and capabilities. Matching metadata/description/order baseline orchestration
+      also remains. The preceding implementation disposition describes partial work and does not close this finding.
+    renewed_correction_2026_10_26: Under the existing R3 authority, all eight Packing/Drivers metadata, description,
+      item-order baseline and full-settings entry points now adopt four complete shared controller read workflows.
+      Explicit existing snapshot/root/profile/method/query/token callbacks preserve feature ownership without
+      repeating orchestration. Shared projections infer actual neutral internal shapes rather than introducing
+      Packing/Drivers schema unions. Profile admission, manager/read order, private parent and ACL disclosure,
+      response shape and existing raw/canonical comparison scopes remain unchanged. Independent/root source review,
+      bounded emitted-AST comparisons after explicit inlining, server typechecking and 107 real-persistence tests
+      across six suites verify the correction. IMP-160 separately owns the broader approved-controller cohesion
+      proposal; IMP-165 item commands and IMP-173 inherited token inconsistency are not silently included.
     closes_when:
       - Actual matching consumers adopt approved shared owners without conflating distinct CRUD or commit behavior.
       - Privacy, admission, sparse comparison and existing receipt/transaction behavior remain covered.
@@ -3581,11 +3668,18 @@ implementation_defects:
       persistence, generation/jobs, review/application and pure print presentation. Controllers retain request
       admission and feature adapters; dependencies point to the actual lower owners, with one coordinator and no
       controller back-import.
+    renewed_implementation_2026_10_26: >-
+      The further direct existing-owner instruction supersedes the seven-module extraction: requirement commands
+      and schedule presentation stay in activityController, generation/context/guarded writes in existing
+      autoAssignment, and review/application/warnings in existing recommendations. Shared pure
+      normalization/warnings remain in availability below both; all six business extraction modules and
+      schedulePresentation are retired with actual direct callers and preserved queue/algorithm behavior.
     closes_when:
       - Separately approved cohesive business responsibilities leave a readable controller with directed dependencies.
   - id: IMP-144
     status: closed
-    closed_on: 2026-10-26
+    closed_on: 2026-10-27
+    rejected_closure_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: medium
     owner: application maintainers
@@ -3608,6 +3702,23 @@ implementation_defects:
       controllers, algorithms, DBAL, helpers, Help, email/PDF and historical migrations. Independent semantic review
       supplements the all-source checker; AST/emission comparisons establish the bounded comments-only changes
       without claiming every type relocation emits identical code.
+    renewed_review_2026_10_26: The preceding disposition describes partial work and does not establish completeness.
+      The canonical heuristic can report zero while complex methods lack either a method contract or internal phase
+      explanations. Fresh source review confirmed ActivityService.getActivitySlotRoles/updateActivitySlotRoles and
+      ActivityAssignmentRolesSubscriber.beforeInsert; this turn adds meaningful comments only, independently verified
+      with identical executable AST/emission. Two further confirmed Activity examples, the locked saveSlot callback
+      and activityMetadataProjection, now also receive accurate contract/phase explanations with identical source
+      and emitted executable syntax trees. The broader classification/review queue remains open. The known role-removal behavior is IMP-016 and
+      remains unchanged, rather than being silently corrected under readability authority.
+    renewed_review_queue: Ignored artifacts/architecture-review-20261026/renewed-readability-presence.json records
+      465 unique presence signals across 151 files from the same 425-source, 1496-operation heuristic inventory,
+      requiring both a leading method JSDoc and internal-comment presence. These are unclassified candidates, not 465
+      confirmed defects; short selectors/adapters and other false positives require semantic classification.
+    renewed_implementation_2026_10_26: >-
+      All 465 original signals are individually classified: 109 confirmed signal records and 356 false positives,
+      including repeated records for shared operations. Corrections follow actual current owners. Independent
+      semantic reconciliation and bounded source/emitted equivalence cover contracts and phases, including
+      immutable migration behavior and return topology; a clean heuristic alone is not closure evidence.
     closes_when:
       - Reviewed affected operations meet the existing readability contract, with false positives distinguished explicitly.
   - id: IMP-145
@@ -3833,7 +3944,8 @@ implementation_defects:
       - Matching callers derive media sets from one owner without reducing server admission or widening file policy.
   - id: IMP-154
     status: closed
-    closed_on: 2026-10-26
+    closed_on: 2026-10-27
+    rejected_closure_on: 2026-10-26
     discovered_on: 2026-10-26
     severity: low
     owner: API contract maintainers
@@ -3852,6 +3964,41 @@ implementation_defects:
       schema identifiers are retained where generator canonicalization affects compatibility; independent baseline
       comparison preserves all 317 exported shapes, 237 operations and the existing strict/additive browser alias
       behavior.
+    maintainer_rejection_2026_10_26: The maintainer explicitly rejects feature-specific Packing names in the purported
+      common owner and Activity/other features depending on those names. The preceding disposition and compatibility
+      evidence do not establish neutral ownership. Common contracts, shared declarations and actual generic consumers
+      must use scope-correct neutral owners; feature-local aliases cannot supply contracts to unrelated features.
+    renewed_review_2026_10_26: Fresh independent source review confirms 28 Packing-prefixed common definitions and
+      structural references into PackingSettings properties, plus Packing-based shared frontend declarations and
+      components. The generator also lets bundled canonical alias names determine direct browser-validator roles;
+      retaining the names avoided validation drift while leaving that root cause unresolved. Changing malformed-input
+      dispatch remains a separate compatibility decision rather than an inferred approval from the naming correction.
+    detached_candidate_2026_10_26: A complete candidate gives all 28 common definitions scope-correct neutral names,
+      directly adopts them in generic backend/frontend declarations and components, and gives Activity neutral
+      nullable Event/access projections. Feature aliases remain at their own boundary; shared copy/settings
+      component inputs are actual neutral contracts rather than Pick/Omit wrappers over Packing responses.
+      The generator follows exact authored input/output reference identities, including alias/property/parameter
+      and automatically emitted nested-input roles, without symbol-name heuristics. The rebased guarded patch is
+      prepared against the current main-tree corrections and has not been applied.
+    candidate_verification: Real generation and check mode pass. All 317 original schema exports and all 237 expanded
+      operation contracts remain semantically equivalent; the candidate contains 347 schema exports. Four compiler
+      scopes pass and 453 tests across 11 contract/generation/frontend suites pass, including actual Drivers/Survey
+      pre-dispatch checks and renamed/reordered/recursive/parameter/multipart alias fixtures. Thirteen old direct
+      aliases become strict, comprising eleven object inputs and two scalar aliases whose accepted values are unchanged.
+      No old strict alias becomes additive and no active response-validator role changes. Only Drivers and Survey
+      metadata adapters currently invoke affected object aliases before dispatch. These candidate-only results do
+      not establish main-tree adoption or approve the separate malformed-input handling change in IMP-159.
+    candidate_final_review: Independent nonauthor and root semantic reviews accept the exact neutral-owner/reference
+      algorithm, actual generic consumer adoption, scoped validation consequences and final R5 explanation. All 46
+      guarded patch inputs match current source. A separate combined current-main plus neutral-candidate tree passes
+      server typechecking, the full development check and whitespace checking, preserving the completed IMP-139/141
+      corrections and final comments. The candidate remains detached pending the explicit malformed-input decision.
+    renewed_implementation_2026_10_26: >-
+      Applied under the direct broadened instruction: all generic wire/declaration/component consumers use neutral
+      common contracts; domain-specific picker shapes and aliases live at their existing feature boundary. All
+      thirty inline root paths move to existing feature YAML; openapi.yaml composes references. EntityCard is
+      neutral and its single component is relocated. Original exported schema and expanded operation wire shapes
+      remain equivalent; no Packing-based Pick/Omit facade supplies generic contracts.
     closes_when:
       - Shared shapes have a neutral canonical owner with compatible generated consumers and no unnecessary feature chain.
   - id: IMP-155
@@ -3916,6 +4063,10 @@ implementation_defects:
     disposition: API binary delivery, header delivery and invoice proofs use lib/storedFiles.resolveStoredFile for
       the matching lexical resolution. Each caller retains authorization, statuses, I/O and cleanup; OPSV-004 remains
       outside this refactor.
+    renewed_implementation_2026_10_26: >-
+      The unnecessary storedFiles module is retired into existing lib/fileCommons. All binary/header/proof
+      consumers directly adopt the same lexical resolver; caller authorization, I/O, cleanup and the excluded
+      OPSV-004 alias/symlink remedy remain distinct.
     closes_when:
       - Applicable file consumers adopt one predicate with their existing delivery and lifecycle behavior intact.
   - id: IMP-158
@@ -3942,6 +4093,679 @@ implementation_defects:
       lookups stay strict and identity mappings remain separate.
     closes_when:
       - One reviewed Event mapping mechanism preserves the accepted error-class/status behavior and declared wire outcomes.
+  - id: IMP-159
+    status: closed
+    closed_on: 2026-10-27
+    severity: medium
+    owner: API generator maintainers
+    package: architecture-authored-validation-roles
+    title: Browser validator roles depend on bundled canonical schema aliases
+    evidence:
+      - scripts/generate-api.mjs requestSchemas records bundled request names and includeRequestReferences
+        follows canonical references; direct browser exports select their strict/additive graph from that name
+        set.
+      - Authored request aliases ActivityAdminInput/Patch/EventChange,
+        DriversAdminInput/Patch/DescriptionPatch/EventChange/HeaderUpload/ItemOrder/MetadataPatch and
+        SurveyMetadataPatch are assigned additive direct browser validators.
+      - DriversApi.saveMetadata and SurveyApi.saveMetadata actively validate with the affected metadata aliases
+        before dispatch; source/browser probes accept an unexpected property that the corresponding strict
+        schema rejects.
+    impact: A schema rename or alias-resolution change can alter client admission despite identical wire shapes.
+      Unknown Drivers/Survey metadata fields can reach the existing server rejection instead of being rejected
+      locally; no server admission bypass is asserted.
+    disposition: Trace actual authored request-body, parameter and response reference identities before bundling.
+      The first used identity along an export's actual alias chain decides its direct role, with request use winning
+      when that identity serves both roles. Strict request graphs and additive response graphs remain distinct;
+      response-only aliases do not inherit an input role solely from a deeper shared shape. Neither symbol spelling
+      nor bundler-selected names define the role. The neutral-contract candidate is detached; tightening malformed-input
+      dispatch needs its own explicit decision.
+    renewed_implementation_2026_10_26: >-
+      R5 explicitly authorizes all frontend validation. Exact authored reference identities select roles before
+      bundling; the shared transport validates every actual body, serialized parameter and authored header before
+      fetch/XHR. Lazy load failures stay local, unsafe dictionary names remain visible for rejection, and
+      actor/abort/captured method/destination checks guard final dispatch. Existing native bounds derive generated
+      metadata throughout; intentionally unbounded Unicode/draft controls still use the same strict submission
+      boundary.
+    closes_when:
+      - A renamed/reordered alias fixture preserves roles from authored operation usage, including shared
+        request/response shapes, multipart/nested inputs and response-only aliases.
+      - All actual generic consumers use neutral contracts, retained feature aliases stay at their own
+        boundaries, and accepted compatibility changes are independently verified.
+  - id: IMP-160
+    status: closed
+    closed_on: 2026-10-27
+    severity: medium
+    owner: backend architecture maintainers
+    package: architecture-entity-controller-cohesion
+    title: Shared administration controller concentrates unrelated infrastructure and feature operations
+    evidence:
+      - src/backend/controller/entityAdminController.ts combines entityTag/comparisonToken infrastructure, list
+        metadata/settings helpers, ACL/default/administrator commands, Event reassociation, Activity
+        recommendation invalidation and archival scheduling.
+      - The general Event method-policy owner also consumes this controller solely for shared method selection;
+        many feature controllers depend on its unrelated exports.
+    impact: The file is shared but its responsibilities remain coupled; unrelated security, lifecycle and
+      presentation changes require reviewing the same broad owner.
+    disposition: Propose cohesive actual owners for comparison evidence, root presentation, permission
+      administration and lifecycle/association operations, with direct caller adoption. Canonical Architecture
+      and R4 currently explicitly assign several duties to this controller; moving them requires an individual
+      ownership decision, not an inferred cleanup approval.
+    renewed_implementation_2026_10_26: >-
+      Direct existing-owner consolidation places comparison evidence in api/transport, method/field policy in
+      permissionEngine, lifecycle in existing entityArchival and association/admission in existing Event linkage.
+      R4 permission/default/admin orchestration and matching property/list workflows stay in entityAdminController.
+      Ten redundant backend extractions are retired without forwarding modules; only ListService and Event linkage
+      lack an eligible existing neutral owner.
+    closes_when:
+      - Approved responsibility boundaries replace the concentration without forwarding-only facades or a second
+        permission/lifecycle implementation.
+      - Feature admission, lock/transaction ownership, private projections and completion order remain explicit.
+  - id: IMP-161
+    status: closed
+    closed_on: 2026-10-27
+    severity: medium
+    owner: Event persistence maintainers
+    package: architecture-invoice-pool-relation-owner
+    title: Invoice pool Event relation names the registration-bypass inverse collection
+    evidence:
+      - src/backend/modules/database/entities/event/EventInvoicePool.ts event ManyToOne inverse selects
+        event.eventRegBypassLinks.
+      - src/backend/modules/database/entities/event/Event.ts declares eventRegBypassLinks as
+        EventRegBypassLink[], not invoice pools.
+      - A database-free TypeORM metadata build confirms the mismatched inverse target, with the datasource never
+        initialized; the global inverse scan finds this one mismatch.
+    impact: The relation metadata describes the wrong bidirectional ownership. No concrete user-visible loading or
+      cascade failure was reproduced by this review.
+    disposition: Choose an appropriate pool inverse or an intentionally unidirectional relation in separately
+      authorized persistence work. Preserve the current Event foreign key and file/financial lifecycles; do not
+      alter relationship behavior under contract naming cleanup.
+    renewed_implementation_2026_10_26: >-
+      The pool Event relation is intentionally unidirectional with the same foreign key. Real metadata comparison
+      preserves physical schema; real-persistence inverse-isolation/loading/cascade coverage resides in
+      entity-properties.spec.ts.
+    closes_when:
+      - ORM metadata represents the intended inverse relationship and focused real-persistence loading/cascade
+        checks cover it.
+      - Any actual persistent schema difference receives its reviewed migration; no schema change is assumed
+        merely from changing a decorator callback.
+  - id: IMP-162
+    status: closed
+    closed_on: 2026-10-27
+    severity: medium
+    owner: shared persistence contract maintainers
+    package: architecture-relation-identifier-types
+    title: Shared relation declarations impose strings on numeric item and role identifiers
+    evidence:
+      - src/backend/modules/database/entities/activity/ActivityPlanRequirement.ts roleId is declared string,
+        while ActivityRole.id is numeric.
+      - src/backend/modules/database/entities/surveys/SurveyResponse.ts itemId is declared string, while
+        SurveyCombination.id is numeric.
+      - src/types/EntityRelationTypes.d.ts ParentItemRelation and abstract/ProfileEntityItemAssignment.ts impose
+        string item IDs across both families; metadata/declaration comparison confirms the two own-field
+        mismatches.
+    impact: Compiler contracts misdescribe loaded ORM values and encourage casts or duplicated normalization
+      rather than exposing the actual identifier type.
+    disposition: Parameterize or infer relation identifier types from their actual targets and correct the two
+      declarations. Preserve deliberate decimal-string API conversion and existing database columns; a type
+      correction is not authority to change wire identifiers.
+    renewed_implementation_2026_10_26: >-
+      Shared relation contracts infer or parameterize target ID types; Activity requirement roleId and Survey
+      response itemId are numeric internally. Actual numeric loading is tested; columns and decimal-string API
+      conversion remain unchanged.
+    closes_when:
+      - Compiler contracts reflect UUID and numeric relationships without unsafe widening or duplicate type
+        owners.
+      - Loaded relation-ID cases and compiler checks cover both families, while public wire spellings remain
+        unchanged.
+  - id: IMP-163
+    status: closed
+    closed_on: 2026-10-27
+    severity: low
+    owner: Packing persistence maintainers
+    package: architecture-packing-relation-aliases
+    title: Packing registers two unused aliases for each canonical child relationship
+    evidence:
+      - src/backend/modules/database/entities/packing/PackingList.ts registers both packingItems/items against
+        PackingItem.entity and packingAssignments/assignments against PackingAssignment.entity.
+      - Authored source/test/script/contract searches find no consumer of the feature-prefixed property aliases;
+        the ORM metadata scan confirms both duplicate pairs.
+    impact: One relationship has multiple metadata identities and declarations without an actual consumer
+      requiring the aliases.
+    disposition: Remove unnecessary aliases only in an explicit metadata maintenance scope after checking
+      compatibility and canonical loading/cascade behavior. Removing decorators is a runtime metadata change,
+      not merely declaration cleanup.
+    renewed_implementation_2026_10_26: >-
+      Unused Packing packingItems/packingAssignments metadata aliases are removed; items/assignments remain
+      canonical. Real-persistence canonical loading/removal coverage and exact physical-schema comparison protect
+      the retained relations.
+    closes_when:
+      - Only required relationship properties remain and actual canonical consumers/cascades retain their
+        behavior.
+  - id: IMP-164
+    status: closed
+    closed_on: 2026-10-27
+    severity: low
+    owner: Activity maintainers
+    package: architecture-dormant-generation-admission
+    title: Test-only synchronous generation facade repeats live queue admission policy
+    evidence:
+      - src/backend/modules/activity/recommendationExecution.ts autoGenerateRecommendations is called only by
+        integration tests and repeats plan existence, assignment mode and stay-table admission from
+        queueAutoGenerateRecommendations.
+      - The Activity controller and recommendation maintenance use the queue; generateAndSaveRecommendations
+        separately retains live post-application callers.
+    impact: Two admission implementations must be maintained, while tests of the dormant facade can overstate
+      coverage of the production entry point.
+    disposition: Classify the synchronous compatibility surface explicitly, then retire it or share the actual
+      admission owner if retention is required. Retain the live generation/persistence engine and existing queue
+      coverage. The separate test-only UserService.findUserByNameOrEmail helper is dormant cleanup, not evidence
+      of a live auth policy violation.
+    renewed_implementation_2026_10_26: >-
+      The unused synchronous autoGenerateRecommendations facade is retired. Integration keywords invoke the actual
+      Activity controller queue and observe job completion; the live generation/persistence engine and
+      post-application refresh remain in existing autoAssignment.
+    closes_when:
+      - Every retained generation entry uses one admitted policy owner and tests exercise the actual production
+        journey.
+      - No live allocator, post-application refresh or deliberate synchronous compatibility contract is silently
+        removed.
+  - id: IMP-165
+    status: closed
+    closed_on: 2026-10-27
+    severity: medium
+    owner: Packing and Drivers maintainers
+    package: architecture-list-item-command-reuse
+    title: Matching list item commands repeat locked admission and comparison mechanics
+    evidence:
+      - src/backend/controller/packingController.ts update/delete/reorder/assignment-removal commands and
+        corresponding Drivers operations repeat scoped locked-item lookup, field review/comparison,
+        complete-order validation and assignment-handle removal.
+      - Independent inner-body/caller review confirms matching mechanics while complete commands differ in
+        fields, privacy, persistence hooks and receipt preparation.
+    impact: Common item-command corrections still require parallel implementation despite shared root and inner
+      DBAL helpers.
+    disposition: Separately scope the matching inner mechanics with explicit feature policy and persistence
+      callbacks. The original IMP-141 excluded distinct CRUD, so broader sharing does not inherit approval from
+      that finding. Preserve Drivers precommit preparation, Packing result-first completion and distinct
+      capacity/title policy.
+    renewed_implementation_2026_10_26: >-
+      All eight matching Packing/Drivers item update/delete/reorder/assignment-removal callers adopt existing
+      entityAdminController workflows through explicit policy/projector/token/DBAL callbacks. Exact expanded-body
+      comparison and source review preserve Drivers precommit preparation, Packing result-first completion and all
+      outer lock/transaction order.
+    closes_when:
+      - Actual matching inner callers use one implementation with their original transaction and commit order.
+      - Field/privacy, sparse comparison, reorder and assignment-removal cases cover both features without
+        generalizing their complete command APIs.
+  - id: IMP-166
+    status: closed
+    closed_on: 2026-10-27
+    severity: medium
+    owner: card presentation maintainers
+    package: architecture-card-projection-owner
+    title: Event imports an Overview API adapter to obtain shared pure card projection
+    evidence:
+      - src/backend/controller/eventController.ts imports projectOverviewCard from
+        src/backend/modules/overview/api.ts for Event Things to do.
+      - That API module also imports userController and implements Overview navigation and personal visibility
+        commands, while projectOverviewCard itself projects shared card presentation.
+    impact: Shared presentation couples Event to unrelated Overview API orchestration and its controller dependencies.
+    disposition: Give the actual pure card projection a cohesive lower presentation owner consumed directly by
+      both adapters. Retain Overview and Event membership/admission, destinations, lifecycle controls and
+      personal visibility semantics.
+    renewed_implementation_2026_10_26: >-
+      Event and Overview directly adopt pure projectEntityCard in existing lib/util, passing ownership from their
+      permission owner. EntityCard is a neutral common wire contract and one relocated shared component;
+      membership, navigation, personal visibility and admission remain feature-owned.
+    closes_when:
+      - Event and Overview directly use one pure projection owner without API/controller back-imports or
+        forwarding-only modules.
+      - Representative card projections retain exact optional/private fields and supported actions.
+  - id: IMP-167
+    status: closed
+    closed_on: 2026-10-27
+    severity: low
+    owner: document export maintainers
+    package: architecture-pdf-primitive-ownership
+    title: Finance depends on Event PDF composition for shared document primitives
+    evidence:
+      - src/backend/modules/lib/pdf.ts combines fonts/styles/date/key-value helpers with Event participant,
+        dietary and event-info composition.
+      - src/backend/modules/invoice/exports.ts imports generic primitives from that module; Event routes consume
+        its Event composer.
+    impact: Changing shared document styling loads and couples Finance to Event-specific export code and its
+      runtime dietary definitions.
+    disposition: Separate shared PDF primitives from cohesive Event document composition with actual direct
+      consumers. Preserve output bytes/layout semantics; canonical development guidance requires regenerated
+      representative multi-page visual inspection for PDF-affecting work.
+    renewed_implementation_2026_10_26: >-
+      Event composition moves to its existing controller and routes directly adopt it; generic lib/pdf contains
+      only primitives. Real PDF definitions/footer outputs and all four rasterized pages match; root visually
+      inspected the empty and three-page populated exports for wrapping, pagination, headers and footers.
+    closes_when:
+      - Generic document consumers depend only on the true shared primitives and Event composition retains its
+        own owner.
+      - Appropriate definition/runtime checks and required rendered visual inspection confirm unchanged document
+        behavior.
+  - id: IMP-168
+    status: closed
+    closed_on: 2026-10-27
+    severity: medium
+    owner: Event and shared participant maintainers
+    package: architecture-participant-projection-dbal
+    title: Event participant presentation fallback remains in the database abstraction layer
+    evidence:
+      - src/backend/modules/database/services/EventService.ts getEventParticipants queries relations then
+        selects/trims profile/account/guest names, chooses email fallbacks, inserts visible em-dash placeholders
+        and normalizes dietary collections.
+      - Live consumers span Event roster/export, Finance reads/notifications/calculation and Activity
+        requirements/recommendations.
+      - No canonical DBAL exception assigns these presentation choices to persistence; mail-name guidance
+        specifies an outcome, not DBAL ownership.
+    impact: One DBAL query owns shared presentation/identity fallback policy, coupling feature changes to persistence.
+    disposition: Keep the raw query/manager/relation order in DBAL and put the exact shared projection in a
+      cohesive Event business/presentation owner, with all callers importing it directly. Do not move it into
+      Event controller or recreate Activity/Event cycles. The email resolver is not interchangeable because it
+      collapses whitespace differently.
+    renewed_implementation_2026_10_26: >-
+      EventService returns identical raw participant rows; every Event/Finance/Activity consumer directly adopts
+      exact projectEventParticipants in existing lib/util. The analogous Activity query now returns raw assignee
+      rows and all consumers use existing autoAssignment projection, preserving nullish versus empty-name fallback,
+      order, role grouping, manager and query count.
+    closes_when:
+      - Actual Event/Finance/Activity consumers adopt one business projection over the same query result without
+        extra reads.
+      - Account/guest/blank-name/contact cases preserve exact trimming, placeholder, order, privacy and manager
+        behavior.
+  - id: IMP-169
+    status: closed
+    closed_on: 2026-10-27
+    severity: medium
+    owner: Finance frontend maintainers
+    package: architecture-finance-explicit-review-reuse
+    title: Finance repeats the inspect and explicit acknowledgement protocol across command owners
+    evidence:
+      - FinanceSubmission, FinanceOrganizerInvoice, FinancePoolEditor, FinanceCalculationReview,
+        FinancePoolOutputs, FinanceSettlement and invoiceReview.ts repeat fresh inspection, inspected-state
+        tracking, guarded acknowledgement and release.
+      - src/frontend/composables/command.ts reconcileSafely already owns actual freshness/actor/current-command
+        safety; repeated uncertain-feedback controls consume that state.
+    impact: The same uncertain-outcome recovery protocol must be maintained in multiple forms and dialogs.
+    disposition: Compose one opt-in review primitive with the existing command owner and explicit feature
+      refresh/reset/close/history callbacks. Keep exact File/lexical drafts, attribution, pool selection,
+      progress and revisions feature-owned. FinanceAdjustments deliberately coordinates two commands and may
+      share only the matching primitive; no replay or automatic acknowledgement.
+    renewed_implementation_2026_10_26: >-
+      All eight actual Finance recovery consumers use explicit inspection/acknowledgement through existing
+      command.ts, including the dual Adjustments commands. Feature drafts/files, progress, pool revisions and
+      current refresh callbacks retain their original owner; no automatic acknowledgement or replay is introduced.
+    closes_when:
+      - Matching consumers adopt one inspected/acknowledgement lifetime without another command, DTO/draft copy
+        or authority owner.
+      - Existing unknown-submission and organizer-review regressions preserve pending guards, exact fields and
+        explicit human review.
+  - id: IMP-170
+    status: closed
+    closed_on: 2026-10-27
+    severity: low
+    owner: frontend API composition maintainers
+    package: architecture-api-adapter-lifetime-reuse
+    title: Eight feature API factories copy the same lazy WeakMap ownership algorithm
+    evidence:
+      - Packing, Drivers, Activity, Event, Surveys, Help, Overview and Finance useApi factories each
+        get/construct/store one adapter keyed by the same application-local context.api transport.
+      - Actual feature consumers reuse these factories; identity administration has no equivalent weak-cache
+        implementation and is not part of the duplication.
+    impact: One adapter lifetime rule has eight implementations.
+    disposition: Use one typed resolver factory in the existing application transport/API composition, creating a
+      separate private weak cache per feature constructor. Preserve lazy route loading, one wrapper per
+      transport-and-feature and request-local SSR isolation; do not add an eager central feature registry.
+    renewed_implementation_2026_10_26: >-
+      All eight feature factories adopt createFeatureApiResolver in existing app/api, each with its own private
+      weak cache. Actual SSR/component identity tests verify one adapter per API/feature, lazy construction and
+      isolation across requests.
+    closes_when:
+      - All eight actual factories adopt the shared ownership implementation with identity-stability and
+        application-isolation checks.
+  - id: IMP-171
+    status: closed
+    closed_on: 2026-10-27
+    severity: low
+    owner: shared card interaction maintainers
+    package: architecture-card-menu-intent-reuse
+    title: Overview and Event repeat initiating-card menu presentation lifetime
+    evidence:
+      - src/frontend/features/overview/OverviewRegion.vue presentMenuCommand and
+        src/frontend/features/event/EventThingsToDo.vue presentMenuCommand both set an intent object, await the
+        supplied operation, and clear only that same reference in finally.
+      - Their per-card pending selection is consumed by actual archive/automation menu actions.
+    impact: The same stale-completion and initiating-trigger presentation rule has two implementations.
+    disposition: Share the small selection lifetime beside existing command composition; callers retain
+      source/actor retirement and their different operations. Keep Overview personal placement/deletion and
+      Event parent-scoped child actions separate.
+    renewed_implementation_2026_10_26: >-
+      Overview and Event adopt presentAction in existing listActions for initiating-reference selection and guarded
+      finally cleanup. The existing list action and matching Overview removal presentation also adopt it; distinct
+      Event deletion cleanup and feature command/grant policy remain unchanged. Normal/shallow ref race and
+      rejection cases protect actual consumers.
+    closes_when:
+      - Both matching callers adopt one reference-guarded presentation lifetime without moving command, grant or
+        deletion policy.
+  - id: IMP-172
+    status: closed
+    closed_on: 2026-10-27
+    severity: low
+    owner: shared backend rendering maintainers
+    package: architecture-html-escaping-reuse
+    title: SSR and email independently implement identical HTML entity escaping
+    evidence:
+      - src/backend/modules/frontendRenderer.ts escapeHtml maps ampersand, angle brackets and both quotes to the
+        same five entity strings as src/backend/modules/email.ts escapeHtml's ordered replacements.
+      - Actual consumers include SSR title/shell metadata and mail paragraphs/details/links/formula labels.
+    impact: Matching plain-text HTML escaping maintenance requires two implementations.
+    disposition: Use one neutral backend HTML-escaping implementation directly from both delivery owners. Preserve
+      exact entity bytes and safeHttpUrl admission. Bootstrap JSON script-element escaping is a distinct
+      encoding and must remain separate.
+    renewed_implementation_2026_10_26: >-
+      SSR and email directly import the one existing lib/util HTML encoder. Exact five-entity bytes, quotes and
+      already encoded input are protected; safe URL admission and bootstrap script JSON escaping remain separate.
+    closes_when:
+      - Actual SSR/mail consumers use one equivalent HTML encoder with representative dangerous characters,
+        quotes and already escaped text protected.
+  - id: IMP-173
+    status: closed
+    closed_on: 2026-10-27
+    severity: medium
+    owner: shared administration maintainers
+    package: architecture-admin-settings-token-identity
+    title: Full list settings and administrator commands use inconsistent root spelling in comparison tokens
+    evidence:
+      - Packing/Drivers readSettings projects administrator editTokens with the requested root id; their narrow
+        baseline/write compares the loaded canonical list.id.
+      - Source e6f0e85 already had this difference before R3. Pure production comparison probes reproduce
+        PRECONDITION_FAILED412 between uppercase-root and canonical-root tokens; generated Uuid validation
+        accepts that uppercase spelling.
+      - Normal Packing/Drivers browser pages lowercase route IDs, so ordinary UI failure was not established.
+        A subsequent owned MariaDB 10.11.14 probe verifies alternate-case narrow lookup and canonical-token writes,
+        but uppercase full settings fail earlier on the independent archive-key defect IMP-174, before issuing a token.
+    impact: Full settings and administrator writes have incompatible comparison identity calculations for an
+      alternate-case root. This latent mismatch would remain after fixing the earlier IMP-174 archive failure;
+      an actual issued full-settings token rejection has not been reproduced. This is inherited compatibility
+      debt, not an R3 regression or demonstrated security bypass.
+    disposition: Separately decide canonical token identity across full settings and matching administrator
+      commands while preserving requested persistence IDs and target-profile semantics. Preserve and report the
+      difference during IMP-141 extraction; do not silently normalize it as refactoring.
+    renewed_implementation_2026_10_26: >-
+      Full Packing/Drivers settings now derive administrator comparison identity from loaded canonical list.id,
+      matching narrow baselines and writes. Actual alternate-case root read/token/write and stale-token persistence
+      cases protect this explicitly approved correction; target-profile/requested persistence rules remain scoped.
+    closes_when:
+      - A focused real-persistence direct-API case verifies the supported alternate-case lookup and coherent
+        full-settings/baseline/write tokens.
+      - Any intentional token behavior change is explicitly approved; ordinary lowercase UI and stale/foreign
+        actor rejection remain protected.
+  - id: IMP-174
+    status: closed
+    closed_on: 2026-10-27
+    severity: medium
+    owner: shared lifecycle and entity maintainers
+    package: architecture-archive-reference-identity
+    title: Archive snapshots and their consumers disagree about requested versus stored root identity
+    evidence:
+      - EntityLifecycleService.getArchiveSnapshot keys loaded roots by their stored root.id. archiveKey preserves
+        exact spelling; getArchivePresentations looks up the caller's requested reference and skips a missing key.
+      - Packing/Drivers full settings, Activity readActivitySettings and Survey readSurveySettings pass raw request
+        IDs and dereference the absent archive presentation. Event settings uses loaded event.id and is unaffected;
+        Overview read cards use stored IDs and its navigation/visibility inputs explicitly normalize casing.
+      - Production-controller probes on a freshly owned MariaDB 10.11.14 schema with utf8mb4_unicode_ci reproduce
+        TypeError reading canManage for uppercase-root full settings in all four affected features. Canonical reads
+        pass; Event accepts both spellings. Narrow Packing/Drivers administrator reads/writes also resolve uppercase
+        roots. No response token is issued by the failing full-settings read.
+      - Source tracing additionally finds raw references in shared non-Survey archive-management permission lookup,
+        which can deny an otherwise admitted alternate-case operation before writing. That command outcome is
+        source-derived rather than separately executed here. The key/reference behavior predates R3 and is preserved
+        by IMP-141's equivalent extraction; ordinary frontend pages lowercase route IDs.
+      - Independently confirmed Event-child archival source paths also compare an alternate-case child directly
+        with stored card.id, or a loaded child.eventId with the raw requested parent ID. Those paths can reject
+        before commit; no Event-child HTTP/command reproduction is claimed. Event settings success does not certify
+        all of its lifecycle commands.
+    impact: Valid alternate-case UUIDs may resolve to a stored entity but fail its full settings read because one
+      lifecycle identity has two lookup spellings. No ordinary lowercase browser failure or unauthorized write is
+      established. This is a separate observable failure from IMP-173's latent token mismatch.
+    independent_review: Fresh backend and independent source reviewers confirm the cross-feature chain and inherited
+      baseline; the independent reviewer verifies the root-owned actual-database probe and unaffected controls.
+    disposition: Establish one explicit reference-to-stored-identity mapping in the shared lifecycle boundary and
+      directly adopt it throughout affected presentation and permission lookups. Do not conceal missing presentations
+      with per-controller defaults or change token/profile identity rules incidentally. This changes observable
+      alternate-case handling and needs separately authorized correction; no production repair is included here.
+    renewed_implementation_2026_10_26: >-
+      One shared lifecycle UUID key joins snapshots/presentation, while permission targets and descriptor lookups
+      use loaded stored identity. All five settings/lifecycle families and Event-child archive/restore/deletion
+      paths directly adopt it. Real persistence distinguishes alternate spellings, delegated grant revocation,
+      outsider denial, foreign parents and unavailable independent schedules; no per-controller fallback masks
+      missing projections.
+    closes_when:
+      - One shared identity rule gives equivalent admitted archive/settings behavior for supported UUID spellings
+        across all five features, with exact private-parent and ownership/grant checks retained.
+      - Real-persistence read/command cases distinguish missing rows, alternate spelling, unauthorized actors and
+        actual archive state. IMP-173 receives its own explicit comparison-token decision rather than inferred approval.
+  - id: IMP-175
+    status: closed
+    closed_on: 2026-10-27
+    discovered_on: 2026-10-27
+    severity: medium
+    owner: backend identity and Activity maintainers
+    package: architecture-uuid-reference-consistency
+    title: Accepted UUID spellings diverge in remaining scope checks, lookup maps and job identity
+    evidence:
+      - A further read-only inventory covers 184 backend TypeScript files, all nine controllers, 599 equality/collection
+        candidates and 48 computed-index candidates. These are review signals, not defect counts or line certification.
+      - Existing Packing/Drivers item-baseline, shared item update/delete/assignment removal and self-assignment
+        paths compare loaded foreign keys with raw root IDs. Activity text, slot, assignment and role paths also
+        compare raw plan IDs with loaded scope. Successful database lookup alone cannot make those strings equal.
+      - Activity role projections and individual permission maps use stored slot keys but some consumers index raw
+        slot IDs. Exact production-body probes show missing configured roles, named-role rejection, and an ordinary
+        unassignment acknowledgement without a deletion when canonical assignment evidence is injected.
+      - Complete-order membership compares submitted UUIDs exactly. With valid grant/token evidence, uppercase body
+        IDs reach RESOURCE_CONFLICT409 for Packing/Drivers and NOT_FOUND404 for Activity in pure production-body probes.
+      - Activity requirement/recommendation, attendance and assignment maps also use submitted profile/slot references
+        without a consistent reference-to-stored identity mapping. Outcomes depend on the operation and linked context.
+      - Activity passes raw plan IDs into its generic recommendation coordinator. An actual coordinator probe with
+        non-database callbacks creates separate jobs for canonical/uppercase aliases; canonical invalidation leaves
+        the alternate job queued. Plan/job observation uses exact keys too.
+    impact: Direct API clients using admitted alternate UUID spellings can encounter false missing/conflict outcomes,
+      omitted role/permission evidence, acknowledged no-ops or divergent process-local jobs. Ordinary browser pages
+      lowercase root routes and use returned child IDs; no ordinary browser failure is established by this review.
+    independent_review: Independent source tracing, real generated validator checks and exact production-body/coordinator
+      probes confirm the bounded branches. Material clauses predate this remediation. No ORM initialization, database
+      lookup, HTTP reproduction, persisted outcome or unauthorized-actor bypass is claimed for this additional finding.
+    negative_controls: Finance uses loaded Event scope; Overview normalizes external targets; same-spelling Event/Activity
+      ACL tokens remain coherent. Decimal handles and opaque security/context/cursor/comparison tokens are separate.
+    disposition: Newly discovered inherited compatibility work outside the approved IMP-173/174 lifecycle/settings
+      correction and IMP-165 equivalent sharing. It is recorded without repair or inferred authorization. Unknown
+      recommendation-ID provenance is separately recorded as IMP-176; case normalization cannot close that issue.
+    approved_amendment_2026_10_27: >-
+      The maintainer explicitly approves R6 with one shared implementation across the confirmed scope, lookup,
+      ordering, submitted-reference and Activity job families. This supersedes the initial pending disposition
+      above; grants, foreign/missing controls, transaction/lock order, numeric handles and opaque evidence remain.
+    implementation_2026_10_27: >-
+      Existing lib/util.ts owns UUID keys, comparison, indexing, grouping and loaded-reference resolution.
+      Controller, permission/lifecycle, list/Overview read and Activity business owners directly adopt it.
+      Complete Packing/Drivers orders retain completeness/uniqueness; Activity partial orders retain submitted
+      positions and multiplicity. Warning/recommendation values retain their existing presentation references;
+      fresh worker/fingerprint copies use canonical UUID components. Full settings, narrow defaults/admin/header
+      baselines and their write consumers also share typed root/profile UUID keys; administrator row tokens directly
+      reuse the existing shared token owner and Event reuses its audience-field mapper. Submitted opaque evidence,
+      captured actor/context, zero versus absent grants and feature-specific review order remain exact.
+      The generic job coordinator is unchanged.
+    closes_when:
+      - An explicit identity decision covers all confirmed scope, lookup, order, submitted-reference and job paths
+        through existing owners while preserving grants, locks, foreign/missing controls and opaque-token semantics.
+      - Real persistence and controller/job cases cover aliases, mixed-case duplicates, role maps, actual unassignment,
+        denied actors, foreign roots and canonical controls; no general UUID-equivalence claim rests on source probes.
+  - id: IMP-176
+    status: closed
+    closed_on: 2026-10-27
+    discovered_on: 2026-10-27
+    severity: medium
+    owner: Activity recommendation maintainers
+    package: architecture-recommendation-provenance-resolution
+    title: An unmatched supplied recommendation ID skips the existing semantic provenance lookup
+    evidence:
+      - activity/recommendations.ts reconcileSubmittedRecommendations uses only byId when a submitted ID is truthy;
+        its existing byKey lookup is used only when no ID is supplied.
+      - Exact production-body probes compare one saved generated operation with otherwise identical submissions.
+        Its matching saved ID preserves manual=false; both uppercase saved ID and an unrelated valid UUID allow
+        the submitted manual=true value to win. The unrelated-ID control establishes this is not only UUID casing.
+      - Actual update, preview and application owners share this resolver. Later manual-state branches affect overlap
+        confirmation and generated rejection history, but their full persistence effects were not reproduced here.
+    impact: The resolver can treat the same assignment operation differently depending on an unrecognized submitted
+      ID, weakening its stated saved-provenance guarantee. MANAGE_ASSIGNMENTS admission remains; no unauthorized actor
+      bypass or committed generated-to-manual conversion is established.
+    independent_review: Independent and backend reviewers traced all three live callers, the ID-absent fallback and
+      arbitrary unmatched-ID control. The behavior is inherited. Corrected method comments now describe the actual
+      matching behavior instead of asserting a universal guarantee that the implementation does not provide.
+    disposition: Unimplemented separate behavior/contract finding. An explicit unknown-ID decision must distinguish
+      matching saved operations from legitimate new manual proposals. IMP-175 normalization alone is insufficient;
+      passing pure-body probes do not establish persistence or authorize changing the resolver.
+    approved_amendment_2026_10_27: >-
+      The maintainer separately approves R7: an unrecognized supplied row ID falls back to the existing
+      assignment-detail match. This supersedes the initial pending disposition above without granting authority
+      over another plan's saved row.
+    implementation_2026_10_27: >-
+      Update, preview and application use the existing current-plan resolver. Known owned IDs retain priority;
+      otherwise one availability.ts operation key finds saved provenance. Unmatched client IDs are omitted before
+      server allocation of new row IDs. Generated/manual origin, rejection history and legitimate new manual
+      proposals retain their distinct rules. No new module, query, persistence owner or coordinator is introduced.
+    closes_when:
+      - A separately authorized provenance rule is shared by update, preview and application through the existing resolver.
+      - Real-persistence cases cover matching, absent, alternate-case and unrelated IDs, legitimate new manual rows,
+        warning confirmation, generated rejection history and existing permission/revision controls.
+architecture_renewed_implementation_2026_10_26:
+  authority: The maintainer directly instructs full implementation of the renewed proposals, broadens IMP-154 beyond
+    Packing names and into root OpenAPI operation ownership, approves R5 for all frontend validation, and requires
+    consolidation into existing owners wherever the same or similar responsibility already exists.
+  governing_amendment: docs/policies/DEVELOPMENT_POLICY.md#task-scoped-architecture-remediation-authority-2026-10-26
+  provenance: This direct instruction supersedes the detached-candidate and pending-decision state recorded above;
+    earlier review evidence, rejected completion claims and decisions remain historical. It does not retrospectively
+    authorize rejected implementations or broaden excluded session, provider-logout or stored-file remedies.
+  status: complete
+  completed_on: 2026-10-27
+  contracts: IMP-154/159 use neutral common shapes and direct generic declarations/components. Event picker contracts
+    belong to events.yaml; AutomaticArchivalInput and EntityCard have neutral shared owners. Existing feature YAML
+    owns all thirty formerly inline root paths; openapi.yaml composes references only. Exact authored request/response
+    identities determine strict/additive validator roles before bundling. All 317 original schema exports and 237
+    expanded operations retain their wire shapes; the expanded output contains 349 schemas.
+  frontend_validation: All 210 actual dispatch sites across ten API files use the shared body, parameter and authored
+    header guard, including both Finance XHR paths. All 237 generated operations have parameter/header metadata and
+    all 311 unique actual lazy validators load. Five header graphs derive authored optional/required differences;
+    no copied bounds or schema-name allowlist exists. Multipart validation projects metadata without copying file bytes.
+    Null-prototype dictionaries preserve unknown submitted names for rejection. Loader failure is local; actor,
+    abort, method, destination and captured-request checks remain authoritative immediately before HTTP.
+  native_controls: Existing native bounds derive generated metadata throughout the frontend. Previously unbounded
+    drafts remain editable; adding UTF-16 maxlength would reject valid code-point-limited Unicode and truncate retained
+    invalid/legacy input. These controls still submit through the same generated guard. Authored password and feature
+    input exceptions remain explicit rather than being silently narrowed to match another form.
+  existing_owners: Ten unnecessary backend extractions are retired without forwarding modules. Comparison evidence
+    lives in api/transport, shared method/field policy in permissionEngine, lifecycle in entityArchival, Event association
+    in event/linkage, OIDC local account policy in userController, stored paths in lib/fileCommons, schedule presentation
+    and requirement commands in activityController, generation/context/persistence in activity/autoAssignment, and
+    review/application/warnings in activity/recommendations. Pure warning/normalization rules stay in activity/availability.
+    Only ListService and Event linkage remain necessary new owners after reviewing all twelve backend extractions.
+    Frontend notice presentation and metadata editing reuse feedback/metadataDraft, and the sole Packing metadata
+    forwarding component is removed. One shared EntityCard component is relocated rather than copied.
+  backend_adoption: All eight IMP-165 item workflows use existing entityAdminController inner mechanics with explicit
+    feature policy/DBAL callbacks. Drivers precommit preparation, Packing result-first completion and each lock order
+    remain intact. Event/Overview directly use pure lib/util card projection. Event PDF composition lives in its
+    controller above generic PDF primitives. Event and Activity DBAL queries return raw rows; all consumers use the
+    exact existing-business projection without additional queries or changed name/email/order/manager semantics.
+    Final source review also consolidated the remaining Event/Activity ACL read/projection and all four creation
+    permission contexts into existing entityAdminController; nullable parent settings use existing Event linkage.
+    Query order, optional managers, grant gates and each feature's comparison identity remain unchanged.
+  orm_identity: IMP-161 makes the existing invoice-pool Event foreign key intentionally unidirectional. IMP-162 gives
+    numeric item/role relations their actual types while retaining decimal-string wire identifiers. IMP-163 retires
+    unused Packing relation aliases. Real TypeORM metadata comparison preserves physical columns, indexes, uniques
+    and foreign keys across all 37 entities, so no migration is required. IMP-173 uses loaded canonical list identity
+    for settings ACL tokens. IMP-174 shares lifecycle UUID keys and resolves permission descriptors from loaded roots;
+    missing/foreign roots and private-parent/grant checks retain their distinct outcomes.
+  frontend_reuse: Finance's eight actual recovery consumers share explicit inspection/acknowledgement through the
+    existing command owner, preserving feature-owned files/drafts and no replay. Eight API factories share the
+    existing app/api resolver with private per-feature weak caches and SSR request isolation. Overview/Event use
+    listActions for reference-guarded menu intent. SSR and mail use one lib/util HTML encoder; URL admission and
+    bootstrap script encoding retain their separate contracts.
+  readability: All 465 original heuristic signals are individually classified in the ignored ledger, comprising 109 confirmed
+    signal records and 356 false positives, not 465 defects or 109 distinct defects. Corrections follow actual
+    current owners; comments-only source/emission comparisons protect existing algorithms, migrations and callbacks.
+    Independent final review also classifies every signal from the fresh 412-source scan, with no unclassified
+    signals; its 379 warnings are 357 false positives and 22 already documented workflow/parser matches.
+  verification:
+    - All 2116 unique database-free cases across 82 files are covered by the full run and focused correction runs.
+      The frozen full run passes 2113 and exposes three fixture-readiness failures; all 244 cases in those three
+      corrected suites then pass. This is not a claim that one full invocation passed all 2116. Final test-only
+      fixes await real lazy imports/debounce and preserve existing deadlines, held HTTP gates and substantive assertions.
+    - The complete guarded integration project passes all 580 cases across 30 files. After the final seven-file
+      equivalent ACL/context/parent consolidation, all 110 affected cases across five suites pass again.
+    - The full built-application system run passes 261 cases and skips one configuration-dependent authentication
+      case; that case separately passes with local login disabled. All eight selected four-feature creation/settings
+      workflows pass again against the rebuilt final server. The separate client-browser runner passes all 151 cases.
+    - Final server, client and SSR builds and server/client/SSR/test compiler scopes pass. Generated API content remains
+      610ff4ddd7a4 after the last server build. Engineering review checks 412 sources and all 127 changed readability
+      files with zero findings; all 26 policy-tool regressions and whitespace checking pass.
+    - The final shared-settings proof compares 2880 exact-source ACL cases, 64 helper-argument cases, 22 parent
+      projections and 24 creation contexts. Values, formal manager/read/map/token traces and failure stops match.
+      Activity forwards an explicit undefined optional manager instead of omitting it; raw call arity differs but
+      actual DBAL defaults and behavior are equal. This is bounded substitution evidence, not database execution.
+    - Independent nonauthor and root reviews accept final source adoption, provenance, comments and the stated limits.
+      The final 368-file runtime import graph has no non-ORM cycles or unresolved relative imports; four SCCs are ORM
+      metadata only. PDF definitions/footer results and all four rasterized representative pages match; all were visually inspected.
+  cleanup: The owned disposable MariaDB container, both schemas and temporary credential directory are removed after
+    the integration/system runs. Container identity/label, actual target/users/grants and resolved cleanup path were
+    checked. Existing local database services and credentials were untouched.
+  evidence_location: Ignored artifacts/architecture-review-20261026/ holds caller context, inventories, source/body
+    transfer proofs, schema equality, comment baselines, generated-role/header oracles, runtime logs and independent
+    review evidence. These artifacts are neither another maintained documentation destination nor implementation authority.
+  preserved_limits: R1 profile-UUID SQL aggregation and R2 request-local Finance graph processing retain their approved
+    performance/memory boundaries. ARCH-005's broader session work and OPSV-004 remain excluded. Newly discovered
+    IMP-175 and IMP-176 were excluded at this original completion checkpoint; the later direct R6/R7 decisions
+    authorize their bounded corrections as recorded in the findings' dated amendments. No global UUID-equivalence, complete provenance
+    guarantee, production deployment, external-provider journey or load benchmark is claimed.
+architecture_identity_remediation_2026_10_27:
+  status: complete
+  authority: Direct maintainer R6 approval requires one shared UUID implementation; separate R7 approval authorizes
+    unknown recommendation-ID fallback through the existing resolver. The dated amendments on IMP-175/176 supersede
+    their initial pending dispositions without expanding unrelated exclusions.
+  closed_defects: [IMP-175, IMP-176]
+  ownership: Existing lib/util.ts supplies UUID identity and batch reference/grouping helpers. Actual controller,
+    permission, lifecycle, overview and Activity owners adopt it. Existing availability.ts owns the complete
+    recommendation operation key; recommendations.ts owns current-plan reconciliation. Shared administration owns
+    audience/admin token logic; Event and full administrator projections directly reuse its existing implementations.
+    No new production module, query, persistence owner, request-state mirror or generic coordinator behavior is added.
+  verification:
+    - Final settings correction passes 183 real-MariaDB cases across eight affected files, including all four full
+      settings-to-default/header/admin command families, stale/opaque evidence, absent/zero grants, revoked/denied
+      permissions and existing transaction/receipt behavior. The earlier final identity/recommendation selection
+      passes 157 cases across six files; these overlapping selections are not added as unique coverage.
+    - Pure reference/calculation/job and mounted recommendation coverage passes 135 cases across seven files.
+      The actual compiled worker returns the expected correlated proposal and its owned test thread terminates.
+      Built generation, deadline observation, warning/application and list journeys pass; six rebuilt settings
+      journeys also pass after the final token correction.
+    - Broader checkpoints report 2127 database-free passes with one source-SSR timeout and 607 database passes
+      with two Invoice timeouts. The complete affected files then pass independently, six and fifty cases respectively,
+      without code or deadline changes; the original full runs are not reported as wholly passing.
+    - Current server emission and complete test type-check pass. The global development check reports zero findings;
+      whitespace validation passes. Advisory documentation retains one unregistered source-fingerprint finding;
+      Help authoring is clean. No baseline is replaced merely to clear that report.
+    - Independent nonauthor and root source reviews confirm actual shared adoption, semantic boundaries, duplicate
+      removal and approval provenance. Controlled mixed-loaded-reference tests complement native MariaDB UUID
+      canonical storage; they are not described as uppercase physical-storage persistence tests.
+  cleanup: Each owned disposable MariaDB container and temporary credential directory is removed after its runs;
+    identity, grants and resolved paths are verified before use/removal, then physical absence is checked.
+    Existing local database services and credentials are untouched.
+  evidence_location: Ignored artifacts/architecture-review-20261026/r6-r7-* retains current context, exact-source
+    probes, failed and successful run receipts, compiled-worker evidence and independent review. It supplies no
+    additional implementation authority and is not another maintained documentation destination.
+  limits: No global architecture/UUID certification, external-provider journey, deployment or load benchmark is
+    claimed. Earlier R1/R2 performance and memory boundaries, broader session exclusions and OPSV-004 remain.
 findings:
   - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
     status: closed

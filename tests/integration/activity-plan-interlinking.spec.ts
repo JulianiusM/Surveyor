@@ -1,12 +1,12 @@
-import {getAssignmentWarningPreview} from '../../src/backend/modules/activity/warningOperations';
-import {applyRecommendations, getRecommendationWarningPreview} from '../../src/backend/modules/activity/recommendationOperations';
-import {buildPlanRecommendationContext, saveGeneratedRecommendations} from '../../src/backend/modules/activity/recommendationPersistence';
-import {updateRequirements} from '../../src/backend/modules/activity/requirementOperations';
+import {getAssignmentWarningPreview} from '../../src/backend/modules/activity/recommendations';
+import {applyRecommendations, getRecommendationWarningPreview} from '../../src/backend/modules/activity/recommendations';
+import {buildPlanRecommendationContext, saveGeneratedRecommendations} from '../../src/backend/modules/activity/autoAssignment';
+import {updateRequirements} from '../../src/backend/controller/activityController';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {Request} from 'express';
 import {randomUUID} from 'node:crypto';
 import activityController from '../../src/backend/controller/activityController';
-import {changeEntityEvent} from '../../src/backend/controller/entityAdminController';
+import {changeEntityEvent} from '../../src/backend/modules/event/linkage';
 import {generateFairRecommendations} from '../../src/backend/modules/activity/fairAssignment';
 import {fingerprintRecommendationContext} from '../../src/backend/modules/activity/recommendationJobs';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';

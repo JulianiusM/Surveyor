@@ -137,17 +137,148 @@ function parameterSchema(parameters) {
     return {type: 'object', additionalProperties: false, required: ['path', 'query', 'header'], properties};
 }
 
+/** Follow authored request schema identities before bundling can coalesce aliases.
+ * Named response aliases retain their own direct-validator role, while each
+ * request and its nested references still use the existing strict graph. */
+function authoredRequestSchemas(documents, entryFile) {
+    const requested = new Set();
+    const responded = new Set();
+    const requestVisits = new Set();
+    const responseVisits = new Set();
+    const entry = documents.get(entryFile);
+
+    /** Resolve one local/external pointer with the source document it actually owns. */
+    function reference(value, sourceFile, aliases = new Set()) {
+        const [relative, fragment = ''] = value.split('#');
+        let filename = path.resolve(path.dirname(sourceFile), relative || path.basename(sourceFile));
+        const pointer = decodeURIComponent(fragment);
+        if (pointer && !pointer.startsWith('/')) throw new Error('Unsupported authored contract fragment');
+        const members = pointer ? pointer.slice(1).split('/').map(member => member.replace(/~1/g, '/').replace(/~0/g, '~')) : [];
+        let target = documents.get(filename);
+        let resolvedMembers = [];
+        for (const member of members) {
+            // Authored parameters may select a property through an exported
+            // alias. Resolve that intermediate owner without marking its whole
+            // enclosing response/request declaration as a selected schema.
+            while (typeof target?.$ref === 'string') {
+                const alias = filename + '#' + resolvedMembers.join('/');
+                if (aliases.has(alias)) throw new Error('Recursive authored pointer alias');
+                aliases.add(alias);
+                const next = reference(target.$ref, filename, aliases);
+                target = next.value;
+                filename = next.filename;
+                resolvedMembers = next.members;
+            }
+            target = target?.[member];
+            resolvedMembers = [...resolvedMembers, member];
+        }
+        if (target === undefined) throw new Error('Missing authored contract reference: ' + value);
+        const resolvedPointer = resolvedMembers.map(member => member.replace(/~/g, '~0').replace(/\//g, '~1')).join('/');
+        return {value: target, filename, members: resolvedMembers, identity: filename + '#/' + resolvedPointer};
+    }
+
+    /** Wrapper references select the actual path, parameter or body declaration;
+     * they do not themselves turn a response schema into a request schema. */
+    function declaration(value, sourceFile) {
+        const chain = new Set();
+        while (value?.$ref) {
+            const next = reference(value.$ref, sourceFile);
+            if (chain.has(next.identity)) throw new Error('Recursive authored transport declaration');
+            chain.add(next.identity);
+            value = next.value;
+            sourceFile = next.filename;
+        }
+        return {value, filename: sourceFile};
+    }
+
+    /** Mark the exact referenced node before descending. A property reference
+     * never marks its enclosing response, and recursive graphs terminate here. */
+    function include(value, sourceFile, identities, visited) {
+        if (!value || typeof value !== 'object') return;
+        if (typeof value.$ref === 'string') {
+            const next = reference(value.$ref, sourceFile);
+            identities.add(next.identity);
+            if (!visited.has(next.identity)) {
+                visited.add(next.identity);
+                include(next.value, next.filename, identities, visited);
+            }
+        }
+        for (const [name, nested] of Object.entries(value)) if (name !== '$ref') include(nested, sourceFile, identities, visited);
+    }
+
+    // Follow path-item and operation wrappers using their own file coordinates.
+    // Request and response usage remain separate. A response-only alias must
+    // retain its own role even when its concrete target is used by a command.
+    for (const unresolved of Object.values(entry.paths)) {
+        const pathItem = declaration(unresolved, entryFile);
+        for (const [method, unresolvedOperation] of Object.entries(pathItem.value)) {
+            if (!methods.has(method)) continue;
+            const operation = declaration(unresolvedOperation, pathItem.filename);
+            for (const [parameter, owner] of [
+                ...(pathItem.value.parameters ?? []).map(value => [value, pathItem.filename]),
+                ...(operation.value.parameters ?? []).map(value => [value, operation.filename]),
+            ]) {
+                const resolved = declaration(parameter, owner);
+                include(resolved.value.schema, resolved.filename, requested, requestVisits);
+            }
+            if (operation.value.requestBody) {
+                const body = declaration(operation.value.requestBody, operation.filename);
+                for (const media of Object.values(body.value.content)) include(media.schema, body.filename, requested, requestVisits);
+            }
+            for (const unresolved of Object.values(operation.value.responses)) {
+                const response = declaration(unresolved, operation.filename);
+                for (const media of Object.values(response.value.content ?? {})) {
+                    include(media.schema, response.filename, responded, responseVisits);
+                }
+            }
+        }
+    }
+
+    // The first actually used identity decides each export's role. Request
+    // usage wins for a mixed identity. Unused aliases inherit the first used
+    // target in their explicit chain, independent of every symbol's spelling.
+    const names = new Set();
+    for (const [name, schema] of Object.entries(entry.components.schemas)) {
+        const own = entryFile + '#/components/schemas/' + name.replace(/~/g, '~0').replace(/\//g, '~1');
+        if (requested.has(own) || responded.has(own)) {
+            if (requested.has(own)) names.add(name);
+            continue;
+        }
+        const chain = new Set();
+        let value = schema;
+        let owner = entryFile;
+        while (typeof value?.$ref === 'string') {
+            const next = reference(value.$ref, owner);
+            if (chain.has(next.identity)) break;
+            chain.add(next.identity);
+            if (requested.has(next.identity) || responded.has(next.identity)) {
+                if (requested.has(next.identity)) names.add(name);
+                break;
+            }
+            value = next.value;
+            owner = next.filename;
+        }
+    }
+    return {names};
+}
+
 // Stable authored ordering makes clean-tree generation reproducible. Parse every
 // YAML input before bundling so duplicate keys or external references fail visibly.
 const files = (await fs.readdir(sourceDirectory)).filter(file => file.endsWith('.yaml')).sort();
 const sourceHash = createHash('sha256');
+const authoredDocuments = new Map();
 for (const file of files) {
     const source = await fs.readFile(path.join(sourceDirectory, file), 'utf8');
     sourceHash.update(file).update('\0').update(source).update('\0');
     const parsed = YAML.parseDocument(source, {uniqueKeys: true});
     if (parsed.errors.length) throw new Error(parsed.errors.map(error => error.message).join('\n'));
-    inspectReferences(parsed.toJSON(), path.join(sourceDirectory, file));
+    const document = parsed.toJSON();
+    const sourceFile = path.join(sourceDirectory, file);
+    inspectReferences(document, sourceFile);
+    authoredDocuments.set(sourceFile, document);
 }
+
+const authoredRequests = authoredRequestSchemas(authoredDocuments, path.join(sourceDirectory, 'openapi.yaml'));
 
 const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-contract-'));
 let document;
@@ -180,7 +311,8 @@ if (document.openapi !== '3.1.1' || document.jsonSchemaDialect !== 'https://json
 
 const schemas = document.components.schemas;
 const derivedSchemas = {};
-const requestSchemas = new Set();
+const requestSchemas = new Set(authoredRequests.names);
+const authoredExports = authoredDocuments.get(path.join(sourceDirectory, 'openapi.yaml')).components.schemas;
 const operations = [];
 const operationIds = new Set();
 for (const [route, unresolvedPathItem] of Object.entries(document.paths)) {
@@ -211,9 +343,7 @@ for (const [route, unresolvedPathItem] of Object.entries(document.paths)) {
             const body = resolve(document, operation.requestBody);
             requestMediaType = Object.keys(body.content).join();
             if (!['application/json', 'multipart/form-data'].includes(requestMediaType)) throw new Error('Unsupported API request media type');
-            requestSchema = schemaName(body.content[requestMediaType].schema);
-            requestSchemas.add(requestSchema);
-        }
+            requestSchema = schemaName(body.content[requestMediaType].schema);        }
         const responseSchemas = {};
         const responseMediaTypes = {};
         for (const [status, unresolved] of Object.entries(operation.responses)) {
@@ -274,7 +404,83 @@ const apiCompatibility = document['x-surveyor-api-compatibility'];
 if (typeof apiCompatibility !== 'string' || !/^[a-zA-Z0-9-]{1,128}$/u.test(apiCompatibility)) throw new Error('Missing API compatibility family');
 const manifest = {sourceHash: sourceHash.digest('hex'), apiCompatibility, schemas: Object.keys(schemas), operations, problems};
 const allSchemas = {...schemas, ...derivedSchemas};
+/** Add only automatic bundled names reached by actual request graphs.
+ * Explicit exports keep their authored alias role above. Following through a
+ * response-only explicit alias cannot turn that alias's direct validator strict. */
+function includeAutomaticRequestSchemas(name, visited = new Set()) {
+    if (!name || visited.has(name)) return;
+    visited.add(name);
+    if (!Object.hasOwn(authoredExports, name)) requestSchemas.add(name);
+    include(allSchemas[name]);
+
+    /** Only an exact named reference selects the whole declaration. A property
+     * reference visits its selected leaf without marking the enclosing shape. */
+    function include(value) {
+        if (!value || typeof value !== 'object') return;
+        if (typeof value.$ref === 'string') {
+            const prefix = '#/components/schemas/';
+            if (!value.$ref.startsWith(prefix)) throw new Error('Unsupported bundled request reference');
+            const members = value.$ref.slice(prefix.length).split('/').map(member => member.replace(/~1/g, '/').replace(/~0/g, '~'));
+            const [target, ...properties] = members;
+            if (!properties.length) includeAutomaticRequestSchemas(target, visited);
+            else {
+                let selected = allSchemas[target];
+                for (const property of properties) {
+                    // Follow an intermediate alias before selecting its leaf;
+                    // this does not assign the enclosing alias a request role.
+                    selected = resolve(document, selected)?.[property];
+                }
+                include(selected);
+            }
+        }
+        for (const [key, nested] of Object.entries(value)) if (key !== '$ref') include(nested);
+    }
+}
+// Automatic names exist only after bundling. Their actual request reachability
+// augments the authored export roles without inferring roles from feature names.
+for (const operation of operations) {
+    includeAutomaticRequestSchemas(operation.requestSchema);
+    includeAutomaticRequestSchemas(operation.parametersValidator.slice('validate'.length));
+}
+
 const output = new Map();
+const headerValidatorNames = new Map();
+// Every dispatch uses the strict request graph, even when the bundler selected
+// an explicitly response-only alias as the body's canonical exported name.
+const operationInputs = operations.map(operation => {
+    // Policy admission remains server-owned. The frontend still checks the
+    // authored structural header shape, including conditional requiredness.
+    const headers = operation.parameters.filter(parameter => parameter.in === 'header' && policyHeaders.has(parameter.name.toLowerCase()))
+        .sort((left, right) => left.name.localeCompare(right.name));
+    const headerSchema = {type: 'object', additionalProperties: false,
+        properties: Object.fromEntries(headers.map(parameter => [parameter.name, parameter.schema])),
+        required: headers.filter(parameter => parameter.required).map(parameter => parameter.name)};
+    const identity = JSON.stringify(headerSchema);
+    let headersValidator = headerValidatorNames.get(identity);
+    if (!headersValidator) {
+        const name = `OperationHeaders${headerValidatorNames.size + 1}`;
+        if (Object.hasOwn(allSchemas, name)) throw new Error(`Duplicate operation header validator: ${name}`);
+        allSchemas[name] = headerSchema;
+        requestSchemas.add(name);
+        headersValidator = `validate${name}`;
+        headerValidatorNames.set(identity, headersValidator);
+    }
+    let bodyValidator = operation.requestSchema ? `validate${operation.requestSchema}` : null;
+    if (operation.requestSchema && !requestSchemas.has(operation.requestSchema)) {
+        const name = `${upperFirst(operation.operationId)}Request`;
+        if (Object.hasOwn(allSchemas, name)) throw new Error(`Duplicate operation request validator: ${name}`);
+        allSchemas[name] = {$ref: `#/components/schemas/${operation.requestSchema}`};
+        requestSchemas.add(name);
+        bodyValidator = `validate${name}`;
+    }
+    return {operationId: operation.operationId, method: operation.method, path: operation.path,
+        mediaType: operation.requestMediaType, bodyValidator, parametersValidator: operation.parametersValidator,
+        headersValidator, policyHeaders: headers.map(parameter => parameter.name),
+        binaryParts: operation.requestMediaType === 'multipart/form-data'
+            ? Object.entries(resolve(document, schemas[operation.requestSchema]).properties ?? {}).filter(([, schema]) => resolve(document, schema).format === 'binary').map(([name]) => name) : [],
+        parameters: operation.parameters.filter(parameter => parameter.in !== 'header' || !policyHeaders.has(parameter.name.toLowerCase()))
+            .map(parameter => ({in: parameter.in, name: parameter.name, type: parameter.schema.type}))};
+});
 output.set(`${artifactDirectory}/openapi.json`, `${JSON.stringify(document, null, 2)}\n`);
 output.set(`${artifactDirectory}/operations.json`, `${JSON.stringify(manifest, null, 2)}\n`);
 output.set('src/types/api/v1.d.ts', banner + astToString(await openapiTS(document)));
@@ -285,6 +491,28 @@ output.set(`${artifactDirectory}/policy.d.mts`, banner + "import type {operation
     + `export const apiCompatibility: ${JSON.stringify(apiCompatibility)};\n`
     + "export const operationPolicies: Record<keyof operations, {successStatuses: readonly number[]; retryPolicy: 'read' | 'natural-idempotent' | 'reconcile-only'; precondition: 'none' | 'metadata' | 'item' | 'order' | 'settings'}>;\n");
 
+// Literal imports keep each validator lazy and visible to the frontend bundler.
+// This is generated operation metadata, not a second authored request registry.
+const inputValidatorNames = [...new Set(operationInputs.flatMap(input => [input.parametersValidator, input.bodyValidator, input.headersValidator].filter(Boolean)))];
+const parameterFieldAttributes = Object.fromEntries(operations.flatMap(operation => {
+    const groups = {};
+    for (const parameter of operation.parameters) {
+        if (parameter.schema.maxLength === undefined) continue;
+        (groups[parameter.in] ??= {})[parameter.name] = {maxLength: parameter.schema.maxLength};
+    }
+    return Object.keys(groups).length ? [[operation.operationId, groups]] : [];
+}));
+output.set(`${artifactDirectory}/policy.mjs`, output.get(`${artifactDirectory}/policy.mjs`)
+    + `export const parameterFieldAttributes = ${JSON.stringify(parameterFieldAttributes)};\n`
+    + `export const operationInputs = ${JSON.stringify(operationInputs)};\n`
+    + `const inputValidators = {${inputValidatorNames.map(name => `${JSON.stringify(name)}: () => import('./browser/${name}.mjs').then(module => module.${name})`).join(',')}};\n`
+    + 'export function loadInputValidator(name) { return inputValidators[name](); }\n');
+output.set(`${artifactDirectory}/policy.d.mts`, output.get(`${artifactDirectory}/policy.d.mts`)
+    + `export const parameterFieldAttributes: ${JSON.stringify(parameterFieldAttributes)};\n`
+    + "import type {GeneratedValidator} from '../../../src/types/api/validation-v1.js';\n"
+    + "export const operationInputs: readonly {operationId: keyof operations; method: string; path: string; mediaType: string | null; bodyValidator: string | null; parametersValidator: string; headersValidator: string; policyHeaders: readonly string[]; binaryParts: readonly string[]; parameters: readonly {in: 'path' | 'query' | 'header'; name: string; type?: string}[]}[];\n"
+    + 'export function loadInputValidator(name: string): Promise<GeneratedValidator<unknown>>;\n');
+
 let declarations = `${banner}import type {components, operations} from './v1';\nimport type {ErrorObject} from 'ajv';\n\n`;
 declarations += 'export interface GeneratedValidator<T> { (data: unknown): data is T; errors?: ErrorObject[] | null; }\n';
 declarations += 'type Present<T> = [NonNullable<T>] extends [never] ? Record<string, never> : NonNullable<T>;\n';
@@ -292,28 +520,16 @@ declarations += "type Parameters<K extends keyof operations> = { path: Present<o
 declarations += 'export interface ValidationSchemas {\n';
 for (const name of Object.keys(schemas)) declarations += `    ${name}: components['schemas']['${name}'];\n`;
 for (const operation of operations) declarations += `    ${upperFirst(operation.operationId)}Parameters: Parameters<'${operation.operationId}'>;\n`;
+for (const input of operationInputs) if (input.bodyValidator && !Object.hasOwn(schemas, input.bodyValidator.slice('validate'.length))) {
+    declarations += `    ${input.bodyValidator.slice('validate'.length)}: unknown;\n`;
+}
+for (const name of headerValidatorNames.values()) declarations += `    ${name.slice('validate'.length)}: unknown;\n`;
 declarations += '}\nexport type ValidatorSet = { [K in keyof ValidationSchemas as `validate${K}`]: GeneratedValidator<ValidationSchemas[K]>; };\n';
 output.set('src/types/api/validation-v1.d.ts', declarations);
 
-// A request may reach shared shapes through multipart metadata or another named object.
-// Follow those references for direct validator exports, while keeping response traversal
-// separate: the same authored shape can be strict in a request and additive in a response.
-/** Include transitive request schemas without weakening their response counterparts. */
-function includeRequestReferences(value) {
-    if (!value || typeof value !== 'object') return;
-
-    // Mark before traversing so recursive schema graphs terminate and each named
-    // request shape receives the strict browser validation graph.
-    if (typeof value.$ref === 'string' && value.$ref.startsWith('#/components/schemas/')) {
-        const name = value.$ref.slice('#/components/schemas/'.length);
-        if (!requestSchemas.has(name)) {
-            requestSchemas.add(name);
-            includeRequestReferences(allSchemas[name]);
-        }
-    }
-    for (const nested of Object.values(value)) includeRequestReferences(nested);
-}
-for (const name of [...requestSchemas]) includeRequestReferences(allSchemas[name]);
+// Direct browser export roles come from the authored graph above. Both compiled
+// graphs still contain every definition: nested request references stay strict,
+// and a response-only alias stays additive even when bundling reuses its target.
 
 /** Bundle one lazy browser validator using the same compiled schema graph.
  * These independent builds may run concurrently; all results are collected before
@@ -331,7 +547,7 @@ async function bundleBrowserValidator(exportName, reference, ajv, output) {
     const attributeCode = attributeEntries.length ? `\nexport const fieldAttributes = Object.freeze({${attributeEntries.map(
         ([field, value]) => `${JSON.stringify(field)}: Object.freeze(${JSON.stringify(value)})`).join(',')}});\n` : '';
     const attributeTypes = attributeEntries.length ? `export const fieldAttributes: {${attributeEntries.map(
-        ([field, value]) => `readonly ${JSON.stringify(field)}: {readonly maxLength: ${value.maxLength}}`).join(';')}};\n` : '';
+        ([field, value]) => `readonly ${JSON.stringify(field)}: {${Object.entries(value).map(([key, bound]) => `readonly ${key}: ${bound}`).join(';')}}`).join(';')}};\n` : '';
     output.set(`${artifactDirectory}/browser/${exportName}.mjs`, banner + result.outputFiles[0].text + attributeCode);
     output.set(`${artifactDirectory}/browser/${exportName}.d.mts`, banner
         + `import type {ValidatorSet} from '../../../../src/types/api/validation-v1.js';\n`
@@ -351,7 +567,10 @@ function nativeFieldAttributes(name) {
     // database sizes or automatic field rendering enter the generated contract.
     for (const [field, unresolved] of Object.entries(schema.properties ?? {})) {
         const value = resolve(document, unresolved);
-        if (value.maxLength !== undefined) attributes[field] = {maxLength: value.maxLength};
+        const bounds = {};
+        if (value.maxLength !== undefined) bounds.maxLength = value.maxLength;
+        if (value['x-surveyor-min-length-utf16'] !== undefined) bounds.minLength = value['x-surveyor-min-length-utf16'];
+        if (Object.keys(bounds).length) attributes[field] = bounds;
     }
     return attributes;
 }

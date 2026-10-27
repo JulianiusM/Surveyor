@@ -4,12 +4,12 @@ import type {ApiResponseBody, ApiSuccessStatus} from '../../src/types/ApiTranspo
 import {validatePackingListView} from '../../.generated/api/v1/browser.mjs';
 import {createTranslator} from '../../src/common/localization/translator.js';
 
-const patch: components['schemas']['PackingMetadataPatch'] = {description: null};
+const patch: components['schemas']['BasicEntityMetadataPatch'] = {description: null};
 void patch;
 // @ts-expect-error Boolean coercion is not part of the wire contract.
-const invalidPatch: components['schemas']['PackingMetadataPatch'] = {title: false};
+const invalidPatch: components['schemas']['BasicEntityMetadataPatch'] = {title: false};
 // @ts-expect-error Fields outside the metadata shape must not enter a generated request.
-const broadPatch: components['schemas']['PackingMetadataPatch'] = {title: 'Title', archived: true};
+const broadPatch: components['schemas']['BasicEntityMetadataPatch'] = {title: 'Title', archived: true};
 void invalidPatch;
 void broadPatch;
 

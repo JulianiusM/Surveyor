@@ -21,7 +21,7 @@ const guestRoute = computed(() => resourceRouteIntent(route) === 'guest');
 // Initial admission belongs to one URL and identity. Reusing this wrapper for another
 // list, locale or explicit guest route gets its own query through the shared entry owner.
 const initialDocument = context.initialDocumentFor(route.fullPath);
-const initialEntry: components['schemas']['PackingResourceEntry'] | undefined = initialDocument
+const initialEntry: components['schemas']['EntityResourceEntry'] | undefined = initialDocument
     ? {entry: initialDocument.pageEntry ?? (initialDocument.packingError
         ? {kind: 'denied', status: 404, messageKey: initialDocument.packingError} : {kind: 'render'}),
         guest: initialDocument.guestEntry ?? null}
@@ -39,7 +39,7 @@ function deniedQueries(entry: {readonly status: number}, scope: FrontendRequestS
 
 /** The server owns the distinction between detail admission and the explicit public guest
  * entry exception. The feature supplies only its route intent and resource identifier. */
-function readEntry(scope: FrontendRequestScope, signal: AbortSignal): Promise<components['schemas']['PackingResourceEntry']> {
+function readEntry(scope: FrontendRequestScope, signal: AbortSignal): Promise<components['schemas']['EntityResourceEntry']> {
     return api.resourceEntry(listId.value, guestRoute.value ? 'guest' : 'detail', scope, signal);
 }
 

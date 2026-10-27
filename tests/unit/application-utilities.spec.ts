@@ -4,21 +4,83 @@ import {
     convertToSingleList,
     formatAmount,
     maskEmail,
+    projectEventParticipants,
     resolveActorLabel,
     resolveInvoiceAmount,
     sanitizeForEmail,
     toAmount,
+    uuidKey, sameUuid, indexByUuid, groupByUuid, resolveUuidReferences, resolveCompleteUuidOrder,
 } from '../../src/backend/modules/lib/util';
 import {DEFAULT_PERM, getInitialPerms, getPermMeta, getPresetMask, hasPerm, PERM, toMask, toMaskFromBodyValue} from '../../src/backend/modules/lib/permissions';
 import type {DashboardEntities} from '../../src/types/UserTypes';
 import {createEntityBase, createExpectedEntity} from '../factories/entitiesFactory';
 import {createDateTotalsCase} from '../factories/dateTotalsFactory';
+import {createProfileEntity, createUserEntity} from '../factories/integrationEntityFactory';
+import {EventRegistration} from '../../src/backend/modules/database/entities/event/EventRegistration';
+import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
 
 const survey = createEntityBase({id: 'survey-1', title: 'Camp Survey', headerImg: 'survey.png'});
 const activity = createEntityBase({id: 'activity-1', title: 'Morning Activities', eventId: 'event-1'});
 const event = createEntityBase({id: 'event-1', title: 'Summer Camp'});
 
 describe('backend application behavior suite', () => {
+    describe('shared UUID reference identity', () => {
+        const first = 'a103fc16-052d-4269-8abc-432853059a6c';
+        const second = 'b204fc16-052d-4269-8abc-432853059a6d';
+
+        it('accepts UUID spelling aliases without reinterpreting opaque, numeric or padded values', () => {
+            expect(uuidKey(first.toUpperCase())).toBe(first);
+            expect(sameUuid(first, first.toUpperCase())).toBe(true);
+            expect(sameUuid(first, second)).toBe(false);
+            for (const value of ['OpaqueTokenABC', '001', ` ${first}`, `urn:uuid:${first.toUpperCase()}`]) {
+                expect(uuidKey(value)).toBe(value);
+            }
+            expect(sameUuid(null, null)).toBe(false);
+            expect(sameUuid(undefined, undefined)).toBe(false);
+            expect(sameUuid('', '')).toBe(false);
+        });
+
+        it('resolves aliases to the actual loaded rows and preserves partial ordering and multiplicity', () => {
+            const rows = [{id: first.toUpperCase(), label: 'Stored uppercase'}, {id: second, label: 'Second'}];
+            expect(indexByUuid(rows, row => row.id).get(first)).toBe(rows[0]);
+            const partial = resolveUuidReferences([second.toUpperCase(), first, second], rows, row => row.id)!;
+            expect(partial).toEqual([rows[1], rows[0], rows[1]]);
+            expect(partial[1]).toBe(rows[0]);
+            expect(rows[0]!.id).toBe(first.toUpperCase());
+            expect(resolveUuidReferences(['c304fc16-052d-4269-8abc-432853059a6e'], rows, row => row.id)).toBeUndefined();
+            const aliasRow = {id: first, label: 'Another row for the same resource'};
+            const groups = groupByUuid([...rows, aliasRow], row => row.id);
+            expect(groups.size).toBe(2);
+            expect(groups.get(first)).toEqual([rows[0], aliasRow]);
+            expect(groups.get(first)![0]).toBe(rows[0]);
+        });
+
+        it('requires one occurrence of every actual row only for complete-order workflows', () => {
+            const rows = [{id: first.toUpperCase()}, {id: second}];
+            expect(resolveCompleteUuidOrder([second.toUpperCase(), first], rows)).toEqual([rows[1], rows[0]]);
+            expect(resolveCompleteUuidOrder([first, first.toUpperCase()], rows)).toBeUndefined();
+            expect(resolveCompleteUuidOrder([first], rows)).toBeUndefined();
+            expect(resolveCompleteUuidOrder([], [])).toEqual([]);
+        });
+    });
+
+    it('retains Event name/contact fallbacks, row order and dietary absence after raw-row projection', () => {
+        const user = createUserEntity({name: '  Account   Name  ', username: 'account-login', email: 'account@example.test'});
+        const profile = createProfileEntity(user, {name: '   '});
+        const guest = Object.assign(new Profile(), {id: 'guest-profile', name: '', guest: {username: 'guest-login', email: 'guest@example.test'}});
+        const absent = Object.assign(new Profile(), {id: 'absent-profile', name: ''});
+        const rows = [profile, guest, absent].map((row, index) => Object.assign(new EventRegistration(), {
+            id: 10 - index, profile: row, arrivalDate: '2027-06-01', departureDate: '2027-06-03',
+        }));
+        const projected = projectEventParticipants(rows);
+        expect(projected.map(row => row.id)).toEqual([10, 9, 8]);
+        expect(projected.map(row => [row.name, row.email, row.dietaryChoices])).toEqual([
+            ['Account   Name', 'account@example.test', null], ['guest-login', 'guest@example.test', null], ['—', '—', null],
+        ]);
+        expect(profile.name).toBe('   ');
+        expect(user.name).toBe('  Account   Name  ');
+    });
+
     describe('money and invoice amount transformations', () => {
         // Canary: protects a high-value production behavior while avoiding private implementation details.
         it('normalizes persisted numeric strings before invoice math', () => {

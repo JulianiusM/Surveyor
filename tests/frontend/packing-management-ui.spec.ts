@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {flushPromises, mount} from '@vue/test-utils';
+import {mount} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import {defineComponent, nextTick, provide, reactive, ref, type Component} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
@@ -15,10 +16,10 @@ import EntityHeaderEditor from '../../src/frontend/components/EntityHeaderEditor
 import PackingPage from '../../src/frontend/features/packing/PackingPage.vue';
 import PackingEntry from '../../src/frontend/features/packing/PackingEntry.vue';
 import PackingSettings from '../../src/frontend/features/packing/PackingSettings.vue';
-import MetadataFields from '../../src/frontend/features/packing/MetadataFields.vue';
+import MetadataFields from '../../src/frontend/components/BasicEntityMetadataFields.vue';
 import PackingCreatePage from '../../src/frontend/features/packing/PackingCreatePage.vue';
 import EventPicker from '../../src/frontend/components/EventPicker.vue';
-import OverviewCard from '../../src/frontend/features/overview/OverviewCard.vue';
+import OverviewCard from '../../src/frontend/components/EntityCard.vue';
 import OverviewRegion from '../../src/frontend/features/overview/OverviewRegion.vue';
 import type {components} from '../../src/types/api/v1';
 import type {FrontendContext, FrontendEventPickerSource} from '../../src/types/FrontendUiTypes';
@@ -36,7 +37,7 @@ const session: components['schemas']['SessionView'] & {context: string; csrfToke
     shell: {version: 'test', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'SSO'},
 };
 const defaults = {participant: 0, guest: 0, authenticated: 0, public: 0};
-const settings: components['schemas']['PackingSettings'] = {
+const settings: components['schemas']['ListSettings'] = {
     id, title: 'Equipment', headerUrl: null, headerVersion: null, settingsToken: '"edit-settings-original"',
     editableFields: [], currentEvent: null, access: null,
     archive: {direct: false, inherited: false, archivedAt: null, autoArchivePaused: false, eventUrl: null},
@@ -74,11 +75,21 @@ async function mounted(component: Component, props: Record<string, unknown> | ((
     const context = createFrontendContext({...initial, session: initialSession}, true, request);
     context.hydrated.value = true;
     const componentProps = reactive(typeof props === 'function' ? props(context) : {...props});
+    const api = usePackingApi(context);
+    // Standalone editor cases now exercise the actual common field owner. The
+    // Settings journey below supplies these same feature API/key bindings itself.
+    function currentProps() {
+        if (component !== MetadataFields) return componentProps;
+        const resource = String(componentProps.listId);
+        return {...componentProps, prefix: 'packing', resourceId: resource, resourceTitle: componentProps.listTitle,
+            queryKey: packingKeys.metadata(context.session.value?.context, resource),
+            read: api.metadata.bind(api), save: api.saveMetadata.bind(api)};
+    }
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {name: 'packing-test-overview', path: '/users/dashboard', component, props: () => componentProps},
-        {path: '/packing/create', component, props: () => componentProps},
-        {path: '/packing/:listId/duplicate', component, props: () => componentProps},
-        {path: '/packing/:listId', component, props: () => componentProps},
+        {name: 'packing-test-overview', path: '/users/dashboard', component, props: currentProps},
+        {path: '/packing/create', component, props: currentProps},
+        {path: '/packing/:listId/duplicate', component, props: currentProps},
+        {path: '/packing/:listId', component, props: currentProps},
         {path: '/users/login', component: defineComponent({template: '<p>Login destination</p>'})},
         {path: '/help', component: defineComponent({template: '<p>Help destination</p>'})},
         {path: '/away', component: defineComponent({template: '<p>Away</p>'})},
@@ -461,9 +472,9 @@ describe('progressive packing loading', () => {
     const metadata: components['schemas']['PackingMetadata'] = {entityType: 'packing', id,
         values: {title: 'Original'}, editableFields: ['title'], currentEventId: null,
         archived: false, inheritedArchived: false};
-    const projection: components['schemas']['PackingSettings'] = {...settings, title: 'Original',
+    const projection: components['schemas']['ListSettings'] = {...settings, title: 'Original',
         editableFields: ['title'], capabilities: {...settings.capabilities, editHeader: true}};
-    const formContext: components['schemas']['PackingCreateContext'] = {defaults, permissions: [], presets: []};
+    const formContext: components['schemas']['EntityCreationContext'] = {defaults, permissions: [], presets: []};
 
     it('replaces the missing table once and preserves a quick-add draft while its locale read is pending', async () => {
         const first = deferredResponse();
@@ -666,6 +677,41 @@ describe('progressive packing loading', () => {
         await flushPromises();
         expect(request).toHaveBeenCalledTimes(2);
         for (const [value] of request.mock.calls) expect((value as Request).headers.get('X-Surveyor-Context')).toBe(session.context);
+    });
+
+    it('retains unbounded creation drafts while generated code-point validation stops an invalid write', async () => {
+        const writes: components['schemas']['PackingCreateInput'][] = [];
+        const {wrapper} = await mounted(PackingCreatePage, {}, async request => {
+            if (request.method === 'POST') {
+                const form = await request.formData();
+                writes.push(JSON.parse(String(form.get('data'))));
+                throw new TypeError('Fixture stops at the external write boundary');
+            }
+            if (new URL(request.url).pathname.endsWith('/events')) return json({items: [], nextCursor: null, selected: null});
+            return json({entry: {kind: 'render'}, context: formContext});
+        }, '/packing/create');
+        const title = wrapper.get<HTMLInputElement>('#create-title');
+        const description = wrapper.get<HTMLTextAreaElement>('#create-description');
+        expect(title.attributes('maxlength')).toBeUndefined();
+        expect(description.attributes('maxlength')).toBeUndefined();
+        await wrapper.get('#packing-row-0-title').setValue('Tent');
+        await title.setValue('x'.repeat(256));
+        await description.setValue('Retained description '.repeat(1000));
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(writes).toEqual([]);
+        expect(title.element.value).toBe('x'.repeat(256));
+        expect(description.element.value).toBe('Retained description '.repeat(1000));
+        expect(wrapper.get('.alert-danger').text()).toContain('255');
+
+        // This is 255 code points but 510 UTF-16 code units. A new native cap
+        // would incorrectly block its unchanged valid request representation.
+        await title.setValue('😀'.repeat(255));
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(writes).toHaveLength(1);
+        expect(writes[0]!.title).toBe('😀'.repeat(255));
+        expect(writes[0]!.description).toBe('Retained description '.repeat(1000));
     });
 
     it.each([false, true])('uses the admitted form skeleton without inventing copied rows (duplicate: %s)', async duplicate => {
@@ -1286,7 +1332,7 @@ describe('metadata conflict acknowledgement', () => {
             if (request.method === 'PATCH') {
                 writes++;
                 tokens.push(request.headers.get('If-Match'));
-                current = {...current, values: {...current.values, ...await request.json() as components['schemas']['PackingMetadataPatch']}};
+                current = {...current, values: {...current.values, ...await request.json() as components['schemas']['BasicEntityMetadataPatch']}};
                 return json(current);
             }
             if (++reads === 2) { signal = request.signal; return canceled.response; }
@@ -1363,7 +1409,7 @@ describe('metadata conflict acknowledgement', () => {
             if (request.method === 'PATCH') {
                 writes++;
                 tokens.push(request.headers.get('If-Match'));
-                const patch = await request.json() as components['schemas']['PackingMetadataPatch'];
+                const patch = await request.json() as components['schemas']['BasicEntityMetadataPatch'];
                 current = {...current, values: {...current.values, ...patch}};
                 return json(current);
             }
@@ -1997,7 +2043,7 @@ describe('packing command forms', () => {
     });
 
     it('retains overlapping audience input, adopts untouched masks and saves only the deliberately reviewed audience', async () => {
-        let projection: components['schemas']['PackingSettings'] = {...settings,
+        let projection: components['schemas']['ListSettings'] = {...settings,
             capabilities: {...settings.capabilities, managePermissions: true},
             access: {defaults, admins: [], permissions: [{key: 'EDIT_TITLE', bit: 1}, {key: 'EDIT_DESCRIPTION', bit: 2}], presets: []}};
         const writes: {patch: components['schemas']['PermissionDefaultsPatch']; token: string | null}[] = [];
@@ -2051,7 +2097,7 @@ describe('packing command forms', () => {
 
     it.each(['image', 'administrator-add'] as const)('shows %s missing-selection feedback in the common dialog host without moving focus or writing', async section => {
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleFeedbackRects);
-        const projection: components['schemas']['PackingSettings'] = {...settings,
+        const projection: components['schemas']['ListSettings'] = {...settings,
             capabilities: {...settings.capabilities, editHeader: true, managePermissions: true},
             access: {defaults, admins: [], permissions: [], presets: []}};
         const {wrapper, request} = await mounted(PackingSettings, {listId: id}, async () => json(projection));
@@ -2078,7 +2124,7 @@ describe('packing command forms', () => {
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleFeedbackRects);
         const confirm = vi.fn(() => false);
         vi.stubGlobal('confirm', confirm);
-        const projection: components['schemas']['PackingSettings'] = {...settings, editableFields: ['title'],
+        const projection: components['schemas']['ListSettings'] = {...settings, editableFields: ['title'],
             capabilities: {...settings.capabilities, linkEvent: true}};
         const metadata: components['schemas']['PackingMetadata'] = {entityType: 'packing', id,
             values: {title: 'Original'}, editableFields: ['title'], currentEventId: null, archived: false, inheritedArchived: false};
@@ -2103,7 +2149,7 @@ describe('packing command forms', () => {
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleFeedbackRects);
         vi.stubGlobal('confirm', () => true);
         let removed = false;
-        const projection: components['schemas']['PackingSettings'] = {...settings,
+        const projection: components['schemas']['ListSettings'] = {...settings,
             capabilities: {...settings.capabilities, managePermissions: true},
             access: {defaults, admins: [{profileId: otherId, name: 'Delegate', isGuest: false,
                 mask: 0, editToken: '"edit-remove-admin-original"'}], permissions: [], presets: []}};
@@ -2130,7 +2176,7 @@ describe('packing command forms', () => {
     it.each(['defaults', 'event', 'admin'] as const)('retains confirmed %s values without adopting stale authority after a failed read', async editor => {
         const choice = {id: itemId, title: 'Chosen camp', startDate: '2026-10-07', endDate: '2026-10-08',
             archived: false, description: null, deadlinePassed: false};
-        let projection: components['schemas']['PackingSettings'] = {...settings,
+        let projection: components['schemas']['ListSettings'] = {...settings,
             capabilities: {...settings.capabilities, managePermissions: true, linkEvent: true},
             access: {defaults, admins: [{profileId: otherId, name: 'Delegate', isGuest: false,
                 mask: 0, editToken: '"edit-admin-original"'}], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
@@ -2214,7 +2260,7 @@ describe('packing command forms', () => {
 
     it('recovers an unknown audience save from an identical-token read without replaying or clearing its input', async () => {
         let loseResponse = true;
-        let projection: components['schemas']['PackingSettings'] = {...settings,
+        let projection: components['schemas']['ListSettings'] = {...settings,
             capabilities: {...settings.capabilities, managePermissions: true},
             access: {defaults, admins: [], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
         const writes: {patch: components['schemas']['PermissionDefaultsPatch']; token: string | null}[] = [];
@@ -2875,7 +2921,7 @@ describe('packing command forms', () => {
     it('locks both Settings tab groups through a metadata write and its dependent read', async () => {
         const heldWrite = deferredResponse();
         const heldSettings = deferredResponse();
-        const projection: components['schemas']['PackingSettings'] = {...settings, editableFields: ['title'],
+        const projection: components['schemas']['ListSettings'] = {...settings, editableFields: ['title'],
             capabilities: {...settings.capabilities, linkEvent: true, managePermissions: true},
             access: {defaults, admins: [{profileId: session.activeProfile!.id, name: 'Named administrator', isGuest: false,
                 mask: 1, editToken: '"edit-tab-admin"'}], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
@@ -2940,7 +2986,7 @@ describe('packing command forms', () => {
 
     it('keeps Settings uncertainty recovery reachable and locks tabs only while its read is pending', async () => {
         const heldRecovery = deferredResponse();
-        const projection: components['schemas']['PackingSettings'] = {...settings, editableFields: ['title'],
+        const projection: components['schemas']['ListSettings'] = {...settings, editableFields: ['title'],
             capabilities: {...settings.capabilities, linkEvent: true, managePermissions: true},
             access: {defaults, admins: [], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
         const metadata: components['schemas']['PackingMetadata'] = {entityType: 'packing', id,
@@ -2986,7 +3032,7 @@ describe('packing command forms', () => {
     });
 
     it('renders every owner panel and refreshes its settings token after a metadata save', async () => {
-        let projection: components['schemas']['PackingSettings'] = {...settings, editableFields: ['title'],
+        let projection: components['schemas']['ListSettings'] = {...settings, editableFields: ['title'],
             capabilities: {...settings.capabilities, editHeader: true, linkEvent: true, managePermissions: true, duplicate: true},
             access: {defaults, admins: [], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
         let title = 'Existing';
@@ -3217,7 +3263,7 @@ describe('packing command forms', () => {
         vi.stubGlobal('confirm', vi.fn(() => true));
         const choice = {id: itemId, title: 'Chosen camp', startDate: '2026-10-07', endDate: '2026-10-08',
             archived: false, description: null, deadlinePassed: false};
-        let projection: components['schemas']['PackingSettings'] = {...settings, capabilities: {...settings.capabilities, linkEvent: true}};
+        let projection: components['schemas']['ListSettings'] = {...settings, capabilities: {...settings.capabilities, linkEvent: true}};
         let saved: unknown;
         const {wrapper, context} = await mounted(PackingSettings, {listId: id}, async request => {
             if (new URL(request.url).pathname.endsWith('/events')) return json({items: [choice], selected: null, nextCursor: null});
@@ -3355,7 +3401,7 @@ describe('packing command forms', () => {
     });
 
     it('retains a custom administrator mask through polling and sends it only after conflict review', async () => {
-        let projection: components['schemas']['PackingSettings'] = {...settings,
+        let projection: components['schemas']['ListSettings'] = {...settings,
             capabilities: {...settings.capabilities, managePermissions: true},
             access: {defaults, admins: [{profileId: otherId, name: 'Delegate', isGuest: false, mask: 0, editToken: '"edit-admin-original"'}],
                 permissions: [{key: 'EDIT_TITLE', bit: 1}, {key: 'EDIT_DESC', bit: 2}], presets: []}};
@@ -3378,6 +3424,7 @@ describe('packing command forms', () => {
     });
 
     it('uses one datalist search field and only submits an exact returned administrator choice', async () => {
+        vi.useFakeTimers();
         const projection = {...settings, capabilities: {...settings.capabilities, managePermissions: true},
             access: {defaults, admins: [], permissions: [], presets: []}};
         const sent: unknown[] = [];
@@ -3392,6 +3439,10 @@ describe('packing command forms', () => {
         await button(wrapper, 'Add').trigger('click');
         const form = wrapper.findAll('form').find(candidate => candidate.find('#profile-search').exists())!;
         await form.get('#profile-search').setValue('Guest');
+        // Begin the actual existing debounce before draining its lazy input
+        // admission. The original option and payload assertions keep their limits.
+        await vi.advanceTimersByTimeAsync(200);
+        await flushPromises();
         await vi.waitFor(() => expect(form.findAll('datalist option')).toHaveLength(1));
         expect(form.findAll('input')).toHaveLength(1);
         expect(form.findAll('select')).toHaveLength(1); // The existing Initial preset selector remains.
@@ -3503,7 +3554,7 @@ describe('packing command forms', () => {
     it.each([false, true])('initializes only an admitted URL event and drops rejected context before submitting (duplicate: %s)', async duplicate => {
         const choice: components['schemas']['EventPickerOption'] = {id: otherId, title: 'Permitted contextual camp',
             description: null, startDate: '2026-10-07', endDate: '2026-10-08', archived: false, deadlinePassed: false};
-        const formContext: components['schemas']['PackingCreateContext'] = {defaults, permissions: [], presets: []};
+        const formContext: components['schemas']['EntityCreationContext'] = {defaults, permissions: [], presets: []};
         let submitted: components['schemas']['PackingCreateInput'] | undefined;
         const path = duplicate ? `/packing/${id}/duplicate` : '/packing/create';
         const {wrapper, router, request} = await mounted(PackingCreatePage, {}, async function readContext(incoming) {
@@ -3712,7 +3763,7 @@ describe('packing command forms', () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date('2026-10-09T12:00:00Z'));
         let unavailable = false;
-        const entry: components['schemas']['PackingCreateEntry'] = {entry: {kind: 'render'}, selectedEvent: null,
+        const entry: components['schemas']['EntityCreationEntry'] = {entry: {kind: 'render'}, selectedEvent: null,
             context: {defaults, permissions: [], presets: []}};
         const {wrapper, context, request} = await mounted(PackingCreatePage, {}, async function readCreation(): Promise<Response> {
             return unavailable ? new Response('{}', {status: 503, headers: {'Content-Type': 'application/json',
@@ -3748,7 +3799,7 @@ describe('packing command forms', () => {
         const selectedEvent: components['schemas']['EventPickerOption'] = {id: itemId, title: 'Private associated camp',
             startDate: '2026-10-09T12:00:00Z', endDate: '2026-10-10T12:00:00Z', archived: false,
             description: null, deadlinePassed: false};
-        const entry: components['schemas']['PackingCreateEntry'] = {entry: {kind: 'render'}, selectedEvent,
+        const entry: components['schemas']['EntityCreationEntry'] = {entry: {kind: 'render'}, selectedEvent,
             context: {defaults, permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: [{key: 'EDIT_TITLE', mask: 1}]}};
         const {wrapper, context, request} = await mounted(PackingCreatePage, {}, async function readCreation(request): Promise<Response> {
             if (request.method === 'POST') {
@@ -3822,7 +3873,7 @@ describe('packing command forms', () => {
         const retryRead = deferredResponse();
         const submissionRead = deferredResponse();
         const submittedWrite = deferredResponse();
-        const entry: components['schemas']['PackingCreateEntry'] = {entry: {kind: 'render'}, selectedEvent: null,
+        const entry: components['schemas']['EntityCreationEntry'] = {entry: {kind: 'render'}, selectedEvent: null,
             context: {defaults, permissions: [], presets: []}};
         let reads = 0;
         let writes = 0;
@@ -3957,7 +4008,7 @@ describe('packing command forms', () => {
         const admission = deferredResponse();
         let reads = 0;
         let writes = 0;
-        const entry: components['schemas']['PackingCreateEntry'] = {entry: {kind: 'render'}, selectedEvent: null,
+        const entry: components['schemas']['EntityCreationEntry'] = {entry: {kind: 'render'}, selectedEvent: null,
             context: {defaults, permissions: [], presets: []}};
         const {wrapper, router} = await mounted(PackingCreatePage, {}, async request => {
             if (request.method === 'POST') {

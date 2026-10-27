@@ -1,4 +1,82 @@
 schemas:
+  EventPickerQuery:
+    description: Shared bounded event-discovery filters. Each consuming endpoint owns its authorization and selected-event visibility.
+    type: object
+    additionalProperties: false
+    properties:
+      q:
+        type: string
+        maxLength: 200
+      from:
+        type: string
+        format: date
+      to:
+        type: string
+        format: date
+      period:
+        type: string
+        enum: [all, upcoming, ongoing, ended]
+      archive:
+        type: string
+        enum: [all, active, archived]
+      deadline:
+        type: string
+        enum: [all, open, passed]
+      cursor:
+        type: string
+        maxLength: 2048
+      selectedId:
+        type: string
+        format: uuid
+  EventPickerOption:
+    description: Authorized event choice shared by selectors; feature endpoints decide which records may be projected.
+    type: object
+    additionalProperties: false
+    required:
+      - id
+      - title
+      - startDate
+      - endDate
+      - archived
+      - description
+      - deadlinePassed
+    properties:
+      id:
+        $ref: './common.yaml#/schemas/Uuid'
+      title:
+        type: string
+      startDate:
+        type: string
+      endDate:
+        type: string
+      archived:
+        type: boolean
+      description:
+        type:
+          - string
+          - 'null'
+      deadlinePassed:
+        type: boolean
+  EventPickerOptions:
+    type: object
+    additionalProperties: false
+    required:
+      - items
+      - selected
+      - nextCursor
+    properties:
+      items:
+        type: array
+        items:
+          $ref: '#/schemas/EventPickerOption'
+      selected:
+        anyOf:
+          - $ref: '#/schemas/EventPickerOption'
+          - type: 'null'
+      nextCursor:
+        type:
+          - string
+          - 'null'
   EventCreateForm:
     type: object
     additionalProperties: false
@@ -13,7 +91,7 @@ schemas:
     properties:
       id: {$ref: './common.yaml#/schemas/Uuid'}
   EventCreateContext:
-    $ref: ./common.yaml#/schemas/PackingCreateContext
+    $ref: ./common.yaml#/schemas/EntityCreationContext
   EventCreateEntry:
     type: object
     additionalProperties: false
@@ -28,7 +106,7 @@ schemas:
           - $ref: "#/schemas/EventCreateContext"
           - type: "null"
   EventResourceEntry:
-    $ref: ./common.yaml#/schemas/PackingResourceEntry
+    $ref: ./common.yaml#/schemas/EntityResourceEntry
   EventMetadataPatch:
     type: object
     additionalProperties: false
@@ -399,7 +477,7 @@ schemas:
           manageAssignments:
             type: boolean
       archive:
-        $ref: ./common.yaml#/schemas/PackingArchive
+        $ref: ./common.yaml#/schemas/EntityArchive
       hasInvoicePools:
         type: boolean
         description: Only own registered profiles receive pool existence for the finance destination; no finance
@@ -466,10 +544,10 @@ schemas:
           export:
             type: boolean
       archive:
-        $ref: ./common.yaml#/schemas/PackingArchive
+        $ref: ./common.yaml#/schemas/EntityArchive
       access:
         anyOf:
-          - $ref: ./common.yaml#/schemas/PackingAccess
+          - $ref: ./common.yaml#/schemas/EntityAccess
           - type: "null"
   EventParticipant:
     type: object
@@ -646,7 +724,7 @@ schemas:
       items:
         type: array
         items:
-          $ref: ./overview.yaml#/schemas/OverviewCard
+          $ref: ./common.yaml#/schemas/EntityCard
   EventCreatedRegistrationLink:
     type: object
     additionalProperties: false
@@ -659,13 +737,7 @@ schemas:
       token:
         type: string
   EventAutomaticArchivalInput:
-    type: object
-    additionalProperties: false
-    required:
-      - paused
-    properties:
-      paused:
-        type: boolean
+    $ref: ./common.yaml#/schemas/AutomaticArchivalInput
   EventCreationFields:
     type: object
     additionalProperties: false
@@ -1243,7 +1315,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./common.yaml#/schemas/PackingDefaultsBaseline
+                $ref: ./common.yaml#/schemas/EntityPermissionDefaultsBaseline
           headers:
             ETag:
               schema:
@@ -1305,7 +1377,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./common.yaml#/schemas/PackingAdminBaseline
+                $ref: ./common.yaml#/schemas/EntityAdministratorBaseline
           headers:
             ETag:
               schema:
@@ -1343,7 +1415,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ./common.yaml#/schemas/PackingAdminInput
+              $ref: ./common.yaml#/schemas/EntityAdministratorInput
   /events/{eventId}/admins/{profileId}:
     patch:
       operationId: updateEventAdmin
@@ -1378,7 +1450,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: ./common.yaml#/schemas/PackingAdminPatch
+              $ref: ./common.yaml#/schemas/EntityAdministratorPatch
     delete:
       operationId: deleteEventAdmin
       x-surveyor-command:
@@ -1431,7 +1503,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./common.yaml#/schemas/PackingProfileOptions
+                $ref: ./common.yaml#/schemas/EntityAdministratorProfileOptions
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
       security: []
@@ -1453,7 +1525,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: ./common.yaml#/schemas/PackingHeaderBaseline
+                $ref: ./common.yaml#/schemas/EntityHeaderBaseline
           headers:
             ETag:
               schema:
@@ -1491,7 +1563,7 @@ paths:
         content:
           multipart/form-data:
             schema:
-              $ref: ./common.yaml#/schemas/PackingHeaderUpload
+              $ref: ./common.yaml#/schemas/EntityHeaderUpload
     delete:
       operationId: deleteEventHeader
       x-surveyor-command:
@@ -1530,7 +1602,7 @@ paths:
           content:
             application/octet-stream:
               schema:
-                $ref: ./common.yaml#/schemas/PackingHeaderBinary
+                $ref: ./common.yaml#/schemas/EntityHeaderBinary
         default:
           $ref: ./openapi.yaml#/components/responses/Problem
       security: []
@@ -1740,3 +1812,64 @@ paths:
           application/json:
             schema:
               $ref: "#/schemas/EventAutomaticArchivalInput"
+
+  /events/{eventId}/guest:
+    get:
+      operationId: getEventGuestEntry
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read the public Event guest-entry title
+      security: []
+      parameters:
+        - &a1
+          $ref: "./openapi.yaml#/components/parameters/Context"
+        - &a2
+          $ref: "./openapi.yaml#/components/parameters/Locale"
+        - &a3
+          name: eventId
+          in: path
+          required: true
+          schema:
+            $ref: "./openapi.yaml#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: "./openapi.yaml#/components/schemas/GuestEntry"
+        default:
+          $ref: "./openapi.yaml#/components/responses/Problem"
+    post:
+      operationId: registerEventGuest
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: Register a guest through the existing identity completion owner
+      security: []
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - $ref: "./openapi.yaml#/components/parameters/Csrf"
+        - name: regToken
+          in: query
+          schema:
+            type: string
+            maxLength: 256
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./openapi.yaml#/components/schemas/GuestRegistrationInput"
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: "./openapi.yaml#/components/schemas/IdentityResult"
+        default:
+          $ref: "./openapi.yaml#/components/responses/Problem"

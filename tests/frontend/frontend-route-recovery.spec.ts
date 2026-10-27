@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
-import {flushPromises} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import {createFrontendApp, initializeFrontendApp} from '../../src/frontend/app/createApp';
 import {render} from '../../src/frontend/app/entry-server';
 import type {components} from '../../src/types/api/v1';

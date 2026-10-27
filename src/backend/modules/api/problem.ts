@@ -98,11 +98,15 @@ export function classifyApiError(error: unknown): ApiProblem {
 
 /** The same projection/validator protects both ordinary errors and the safe internal-error fallback. */
 export function validatedProblemBody(problem: ApiProblem, locale: string, requestId: string = randomUUID()): components['schemas']['Problem'] {
+    // Prefer the existing safe field diagnostic for structural failures; every
+    // other detail comes from the declared localized Problem contract.
     const contract = problemContract(problem.code);
     const diagnostic = problem.code === 'VALIDATION_FAILED'
         ? problem.fieldErrors?.find(error => error.diagnostic)?.diagnostic : undefined;
     const detail = diagnostic ? formatFieldDiagnostic(createTranslator(locale), diagnostic)
         : translateProblem(contract.messageKey, problem.params, locale);
+    // Form only the closed public envelope, then verify it before delivery can
+    // expose malformed parameters or an undeclared error projection.
     const body: components['schemas']['Problem'] = {
         type: `urn:surveyor:problem:${problem.code.toLowerCase().replaceAll('_', '-')}`,
         title: detail,

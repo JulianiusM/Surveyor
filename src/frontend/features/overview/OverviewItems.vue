@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import {computed} from 'vue';
 import type {components} from '../../../types/api/v1';
-import type {FrontendActionState, FrontendOverviewCardInteraction} from '../../../types/FrontendUiTypes';
+import type {FrontendActionState, FrontendEntityCardInteraction} from '../../../types/FrontendUiTypes';
 import {useFrontend} from '../../app/context';
 import {isOrdinaryNavigation} from '../../composables/pageEntry';
 import StatusNotice from '../../components/StatusNotice.vue';
-import OverviewCard from './OverviewCard.vue';
+import EntityCard from '../../components/EntityCard.vue';
 
-type Card = components['schemas']['OverviewCard'];
+type Card = components['schemas']['EntityCard'];
 const props = defineProps<{view: components['schemas']['OverviewRegion']; disabled: boolean; navigationState?: FrontendActionState; readRevision?: number; active?: boolean;
     pageHref: (page: number) => string; expandHref: (card: Card) => string;
-    cardInteraction: (card: Card) => FrontendOverviewCardInteraction}>();
+    cardInteraction: (card: Card) => FrontendEntityCardInteraction}>();
 const emit = defineEmits<{
     visibility: [card: Card, value: components['schemas']['OverviewVisibilityInput']['visibility']];
     archive: [card: Card, restore: boolean];
@@ -52,7 +52,7 @@ function followPage(event: MouseEvent, page: number, available: boolean): void {
 <template>
     <div v-if="view.items.length" class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
         <div v-for="card in view.items" :key="card.type + ':' + card.id" class="col">
-            <OverviewCard
+            <EntityCard
                 :card="card"
                 :interaction="cardInteraction(card)"
                 :disabled="disabled"

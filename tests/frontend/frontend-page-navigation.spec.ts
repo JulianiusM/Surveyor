@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import {describe, expect, it, vi} from 'vitest';
-import {flushPromises} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import {computed, defineComponent, ref} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {createPageReadiness, observePageNavigation} from '../../src/frontend/composables/pageNavigation';

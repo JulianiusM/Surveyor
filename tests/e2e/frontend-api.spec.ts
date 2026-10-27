@@ -734,7 +734,7 @@ test('preserves harmless event-link no-ops without weakening changed commands', 
         // The current adapter retains the shared unchanged branch after authorization.
         // Required context/CSRF still applies; no missing or obsolete comparison writes data.
         const initial = await request.get(`${root}/settings`, {headers});
-        const settings = await initial.json() as components['schemas']['PackingSettings'];
+        const settings = await initial.json() as components['schemas']['ListSettings'];
         const oversized = '"edit-' + 'a'.repeat(5000) + '"';
         for (const token of [undefined, '', '"obsolete"', 'W/"obsolete"', '*', oversized]) {
             const unchanged = await request.put(`${root}/event`, {
@@ -838,7 +838,7 @@ test('serves usable item and order edit baselines independently of linked detail
     await expectProblem(await request.get(listPath, {headers: orderHeaders}), 403, 'FORBIDDEN');
     const orderRead = await request.get(`${listPath}/item-order`, {headers: orderHeaders});
     expect(orderRead.status()).toBe(200);
-    const order = await orderRead.json() as components['schemas']['PackingOrderEditBaseline'];
+    const order = await orderRead.json() as components['schemas']['ListOrderBaseline'];
     expect(Object.keys(order).sort()).toEqual(['items', 'orderToken']);
     expect(order.items).toHaveLength(original.items.length);
     for (const row of order.items) expect(Object.keys(row).sort()).toEqual(['id', 'position']);
@@ -951,7 +951,7 @@ test('honors native public method grants without disclosing protected packing pr
 
         const orderRead = await first.get(`${rootPath}/item-order`, {headers: publicHeaders});
         expect(orderRead.status()).toBe(200);
-        const order = await orderRead.json() as components['schemas']['PackingOrderEditBaseline'];
+        const order = await orderRead.json() as components['schemas']['ListOrderBaseline'];
         expect(Object.keys(order).sort()).toEqual(['items', 'orderToken']);
         const itemIds = order.items.map(row => row.id).reverse();
         expect((await first.put(`${rootPath}/item-order`, {headers: {...publicHeaders, 'If-Match': order.orderToken}, data: {itemIds}})).status()).toBe(200);
@@ -959,7 +959,7 @@ test('honors native public method grants without disclosing protected packing pr
 
         const descriptionRead = await first.get(`${rootPath}/description`, {headers: publicHeaders});
         expect(descriptionRead.status()).toBe(200);
-        const description = await descriptionRead.json() as components['schemas']['PackingDescriptionBaseline'];
+        const description = await descriptionRead.json() as components['schemas']['EntityDescriptionBaseline'];
         expect(Object.keys(description).sort()).toEqual(['description', 'editToken']);
         const descriptionHeaders = {...publicHeaders, 'If-Match': description.editToken};
         await expectProblem(await first.patch(`${rootPath}/description`, {headers: descriptionHeaders, data: {}}), 400, 'VALIDATION_FAILED');
@@ -968,14 +968,14 @@ test('honors native public method grants without disclosing protected packing pr
 
         const defaultsRead = await first.get(`${rootPath}/default-permissions`, {headers: publicHeaders});
         expect(defaultsRead.status()).toBe(200);
-        const defaults = await defaultsRead.json() as components['schemas']['PackingDefaultsBaseline'];
+        const defaults = await defaultsRead.json() as components['schemas']['EntityPermissionDefaultsBaseline'];
         expect(Object.keys(defaults).sort()).toEqual(['defaultPermissions', 'editToken']);
         expect((await first.put(`${rootPath}/default-permissions`, {headers: {...publicHeaders, 'If-Match': defaults.editToken}, data: {guest: 0}})).status()).toBe(200);
         const searchQuery = createE2ELogin().username;
         const profileSearch = await first.get(`${rootPath}/profiles`, {headers: publicHeaders, params: {q: searchQuery}});
         expect(profileSearch.status()).toBe(200);
         expect(profileSearch.headers()['ratelimit-limit']).toBe('120');
-        const profiles = await profileSearch.json() as components['schemas']['PackingProfileOptions'];
+        const profiles = await profileSearch.json() as components['schemas']['EntityAdministratorProfileOptions'];
         expect(profiles.length).toBeGreaterThan(0);
         for (const profile of profiles) {
             expect(Object.keys(profile).sort()).toEqual(['isGuest', 'name', 'profileId', 'username']);
@@ -984,12 +984,12 @@ test('honors native public method grants without disclosing protected packing pr
         const adminPath = `${rootPath}/admins/${target.id}`;
         const absentRead = await first.get(`${adminPath}/edit-baseline`, {headers: publicHeaders});
         expect(absentRead.status()).toBe(200);
-        const absent = await absentRead.json() as components['schemas']['PackingAdminBaseline'];
+        const absent = await absentRead.json() as components['schemas']['EntityAdministratorBaseline'];
         expect(Object.keys(absent).sort()).toEqual(['editToken', 'mask']);
         expect(absent.mask).toBeNull();
         expect((await first.post(`${rootPath}/admins`, {headers: {...publicHeaders, 'If-Match': absent.editToken}, data: {profileId: target.id, mask: 0}})).status()).toBe(200);
         const savedAdmin = await first.get(`${adminPath}/edit-baseline`, {headers: publicHeaders});
-        const admin = await savedAdmin.json() as components['schemas']['PackingAdminBaseline'];
+        const admin = await savedAdmin.json() as components['schemas']['EntityAdministratorBaseline'];
         expect(admin.mask).toBe(0);
         expect((await first.patch(adminPath, {headers: {...publicHeaders, 'If-Match': admin.editToken}, data: {mask: 1}})).status()).toBe(200);
         const updatedAdmin = await first.get(`${adminPath}/edit-baseline`, {headers: publicHeaders});
@@ -999,7 +999,7 @@ test('honors native public method grants without disclosing protected packing pr
         // public upload does not grant the protected header-byte read.
         const headerRead = await first.get(`${rootPath}/header/edit-baseline`, {headers: publicHeaders});
         expect(headerRead.status()).toBe(200);
-        const header = await headerRead.json() as components['schemas']['PackingHeaderBaseline'];
+        const header = await headerRead.json() as components['schemas']['EntityHeaderBaseline'];
         expect(Object.keys(header)).toEqual(['editToken']);
         const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
         expect((await first.put(`${rootPath}/header`, {headers: {...publicHeaders, 'If-Match': header.editToken},
@@ -1208,7 +1208,7 @@ test('uses typed multipart, item/settings drafts and scoped binary transport for
         expect(response.status()).toBe(200);
         return response.json();
     }
-    async function settings(): Promise<components['schemas']['PackingSettings']> {
+    async function settings(): Promise<components['schemas']['ListSettings']> {
         const response = await request.get(`${root}/settings`, {headers});
         expect(response.status()).toBe(200);
         return response.json();

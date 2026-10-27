@@ -1,56 +1,6 @@
 schemas:
   OverviewCard:
-    type: object
-    additionalProperties: false
-    required: [id, type, title, description, url, headerUrl, headerVersion, eventContext, visibility, overviewHidden, archived, inheritedArchived, capabilities, children]
-    properties:
-      id: {type: string, format: uuid}
-      type: {type: string, enum: [activity, drivers, event, packing, survey]}
-      title: {type: string}
-      description: {type: [string, 'null']}
-      url: {type: string}
-      headerUrl: {type: [string, 'null']}
-      headerVersion: {type: [string, 'null']}
-      eventContext:
-        anyOf:
-          - type: object
-            additionalProperties: false
-            required: [title, url]
-            properties:
-              title: {type: string}
-              url: {type: string}
-          - type: 'null'
-      visibility: {type: string, enum: [default, hidden, shown]}
-      overviewHidden: {type: boolean}
-      archived: {type: boolean}
-      inheritedArchived: {type: boolean}
-      automation:
-        description: Optional schedule context for Event Things to do, or schedule-management controls admitted on personal Overview cards.
-        type: object
-        additionalProperties: false
-        required: [paused, canManage]
-        properties:
-          paused: {type: boolean}
-          canManage: {type: boolean}
-      capabilities:
-        type: object
-        additionalProperties: false
-        required: [archive, restore, duplicate, remove]
-        properties:
-          archive: {type: boolean}
-          restore: {type: boolean}
-          duplicate: {type: boolean}
-          remove: {type: boolean}
-      children:
-        description: Eligible children in this collection/region; matching applies the selected type and search.
-        anyOf:
-          - type: object
-            additionalProperties: false
-            required: [total, matching]
-            properties:
-              total: {type: integer, minimum: 0}
-              matching: {type: integer, minimum: 0}
-          - type: 'null'
+    $ref: ./common.yaml#/schemas/EntityCard
   OverviewRegion:
     type: object
     additionalProperties: false

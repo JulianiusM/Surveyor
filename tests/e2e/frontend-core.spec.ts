@@ -659,7 +659,7 @@ for (const intent of ['create', 'duplicate'] as const) {
             await page.locator('main form').getByRole('button', {name: 'Create list', exact: true}).click();
             const response = await created;
             expect(response.status()).toBe(201);
-            const result = await response.json() as components['schemas']['PackingCreated'];
+            const result = await response.json() as components['schemas']['EntityCreationResult'];
             const persisted = await readPacking(page.request, result.id);
             expect(persisted.title).toBe(title);
             expect(persisted.items[0]).toMatchObject({title: 'Early equipment', maxAssignees: 9, requiredByAll});
@@ -668,7 +668,7 @@ for (const intent of ['create', 'duplicate'] as const) {
             const actor = await bootstrap(page.request);
             const settingsRead = await page.request.get(`/api/v1/packing-lists/${result.id}/settings`, {headers: headers(actor)});
             expect(settingsRead.status()).toBe(200);
-            const saved = await settingsRead.json() as components['schemas']['PackingSettings'];
+            const saved = await settingsRead.json() as components['schemas']['ListSettings'];
             for (const changed of changedPermissions) {
                 const bit = saved.access!.permissions.find(permission => permission.key === changed.key)!.bit;
                 expect(Boolean(saved.access!.defaults.participant & bit)).toBe(changed.checked);
@@ -910,7 +910,7 @@ test('accepts native Unicode titles without imposing a new browser length policy
     await page.getByRole('button', {name: 'Create list', exact: true}).click();
     const created = await creation;
     expect(created.status()).toBe(201);
-    const {id} = await created.json() as components['schemas']['PackingCreated'];
+    const {id} = await created.json() as components['schemas']['EntityCreationResult'];
     await expect(page).toHaveURL(new RegExp(`/packing/${id}(?:\\?|$)`, 'u'));
     await expect(page.locator('tr[data-item-id]').first()).toBeVisible();
     const projection = await readPacking(page.request, id);
@@ -1435,7 +1435,7 @@ test('pristine properties Save sends no command and pending work freezes Setting
         const actor = await bootstrap(page.request);
         const settingsRead = await page.request.get(`/api/v1/packing-lists/${list.id}/settings`, {headers: headers(actor)});
         expect(settingsRead.status()).toBe(200);
-        const snapshot = await settingsRead.json() as components['schemas']['PackingSettings'];
+        const snapshot = await settingsRead.json() as components['schemas']['ListSettings'];
         expect(snapshot.access).not.toBeNull();
         const accessPermission = snapshot.access!.permissions.find(permission => permission.key === 'ACCESS_VIEW')!;
         const titlePermission = snapshot.access!.permissions.find(permission => permission.key === 'EDIT_TITLE')!;
@@ -2533,7 +2533,7 @@ test('rejected header MIME and oversized uploads retain the existing header and 
     const png = readFileSync('src/public/img/logo.png');
     const settings = await request.get(`${root}/settings`, {headers: headers(session)});
     expect(settings.status()).toBe(200);
-    const initial = await settings.json() as components['schemas']['PackingSettings'];
+    const initial = await settings.json() as components['schemas']['ListSettings'];
     const uploaded = await request.put(`${root}/header`, {
         headers: {...headers(session), 'If-Match': initial.settingsToken},
         multipart: {image: {name: 'existing-header.png', mimeType: 'image/png', buffer: png}},
@@ -2542,7 +2542,7 @@ test('rejected header MIME and oversized uploads retain the existing header and 
     const before = await readPacking(request, list.id);
     const currentSettings = await request.get(`${root}/settings`, {headers: headers(session)});
     expect(currentSettings.status()).toBe(200);
-    const reviewed = await currentSettings.json() as components['schemas']['PackingSettings'];
+    const reviewed = await currentSettings.json() as components['schemas']['ListSettings'];
 
     for (const rejected of [
         {name: 'wrong-type.png', mimeType: 'text/plain', buffer: Buffer.from('Rejected MIME'), status: 400, code: 'UPLOAD_INVALID'},

@@ -14,6 +14,7 @@ import {getOverviewRegion, setPersonalVisibility} from '../../controller/userCon
 import {APIError} from '../lib/errors';
 import {ApiProblem} from '../api/problem';
 import {isOwner} from '../permissionEngine';
+import {projectEntityCard} from '../lib/util';
 
 /** Project the mixed overview independently of each feature command API. */
 export async function readOverview(query: operations['getOverview']['parameters']['query'], session: SessionLike): Promise<components['schemas']['OverviewRegion']> {
@@ -26,7 +27,7 @@ export async function readOverview(query: operations['getOverview']['parameters'
     const region = await getOverviewRegion(session, navigation);
     // All supported feature families use the same bounded card owner.
     function projectCard(card: Entity): components['schemas']['OverviewCard'] {
-        return projectOverviewCard(card, session, region.collection === 'owner');
+        return projectEntityCard(card, isOwner(session, card.ownerId), region.collection === 'owner');
     }
     return {collection: region.collection, region: region.region, q: region.q, type: region.type, availableTypes: region.availableTypes,
         page: region.page, childPage: region.childPage,
@@ -34,41 +35,6 @@ export async function readOverview(query: operations['getOverview']['parameters'
         regionEntities: region.regionEntities, matchingEntities: region.matchingEntities, totalCards: region.totalCards, totalChildren: region.totalChildren,
         hasPrevious: Boolean(region.previousUrl), hasNext: Boolean(region.nextUrl), parent: region.parent ? projectCard(region.parent) : null,
         items: region.items.map(projectCard)};
-}
-
-/**
- * Project shared card presentation without widening membership or child admission.
- * Event Things to do opts into existing shared lifecycle controls; personal Overview
- * retains only actions supported by its card types. Both callers use the same destination/image mapping.
- */
-export function projectOverviewCard(card: Entity, session: SessionLike, ownerCollection = false,
-    sharedLifecycle = false): components['schemas']['OverviewCard'] {
-    // These five resource families support card actions. Output documents retain
-    // their feature-owned URLs independently of these card destinations.
-    const supportedType = card.type === 'packing' || card.type === 'event' || card.type === 'drivers'
-        || card.type === 'survey' || card.type === 'activity';
-    const ownerActions = (supportedType || sharedLifecycle) && ownerCollection && isOwner(session, card.ownerId);
-    const resource = encodeURIComponent(card.id);
-    const headerFamily = card.type === 'event' ? 'events' : card.type === 'drivers' ? 'drivers-lists'
-        : card.type === 'survey' ? 'surveys' : card.type === 'activity' ? 'activity-plans' : 'packing-lists';
-    const eventContext = card.eventContext ? {...card.eventContext,
-        url: card.eventContext.url.replace(/^\/event\//u, '/event/')} : null;
-    return {id: card.id, type: card.type, title: card.title, description: card.description ?? null,
-        url: supportedType ? `/${card.type}/${resource}` : card.url,
-        headerUrl: card.imageUrl ? supportedType ? `/api/v1/${headerFamily}/${resource}/header` : card.imageUrl : null,
-        headerVersion: card.imageVersion ?? null, eventContext,
-        visibility: card.visibility ?? 'default', overviewHidden: Boolean(card.overviewHidden),
-        archived: Boolean(card.archive?.archived), inheritedArchived: Boolean(card.archive?.inheritedFromEventId),
-        capabilities: {archive: (supportedType || sharedLifecycle) && Boolean(card.archive?.canArchive),
-            restore: (supportedType || sharedLifecycle) && Boolean(card.archive?.canRestore),
-            duplicate: ownerActions, remove: ownerActions},
-        // Event Things to do retains its existing optional schedule context.
-        // Personal Overview exposes the same controls only to an actor
-        // admitted to manage that independent schedule; other viewers receive
-        // neither its pause state nor a new management capability.
-        ...((sharedLifecycle || supportedType && card.archive?.canManageAutomation) && card.archive?.hasAutomaticSchedule ? {automation: {
-            paused: card.archive.autoArchivePaused, canManage: card.archive.canManageAutomation}} : {}),
-        children: card.overview ? {total: card.overview.total, matching: card.overview.matching} : null};
 }
 
 /** Desired personal visibility is naturally retryable and always belongs to the admitted profile. */

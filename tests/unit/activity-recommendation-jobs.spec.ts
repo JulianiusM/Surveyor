@@ -1,9 +1,13 @@
 import type {AutoAssignmentContext, RecommendationJobView} from '../../src/types/ActivityTypes';
-import {describe, expect, it} from 'vitest';
+import {describe, expect, it, vi} from 'vitest';
 
 import {RecommendationJobCoordinator, fingerprintRecommendationContext} from '../../src/backend/modules/activity/recommendationJobs';
 import {APIError} from '../../src/backend/modules/lib/errors';
 import {createAutoAssignmentContext} from '../factories/activityAutoAssignmentFactory';
+import {getAutoRecommendationJob, invalidateEventContext, queueAutoGenerateRecommendations} from '../../src/backend/modules/activity/autoAssignment';
+import * as activityService from '../../src/backend/modules/database/services/ActivityService';
+import * as requirementService from '../../src/backend/modules/database/services/ActivityRequirementService';
+import {ActivityPlan} from '../../src/backend/modules/database/entities/activity/ActivityPlan';
 
 function createJobContext(): AutoAssignmentContext {
     return createAutoAssignmentContext() as unknown as AutoAssignmentContext;
@@ -22,6 +26,34 @@ async function waitForTerminalJob(
 }
 
 describe('activity recommendation job coordination', () => {
+    it('canonicalizes plan and job references at the business boundary while the generic coordinator remains exact-keyed', async () => {
+        const id = 'ABCD1234-ABCD-4ABC-8ABC-ABCDEF123456';
+        const context = createJobContext();
+        const plan = Object.assign(new ActivityPlan(), context.plan, {id, assignmentMode: 'REQUIRED'});
+        const readPlan = vi.spyOn(activityService, 'getActivityPlanById').mockResolvedValue(plan);
+        const readConfiguration = vi.spyOn(requirementService, 'getRequirementConfiguration').mockResolvedValue({
+            plan, overrides: [], roleRequirements: [], stayRequirements: context.stayRequirements,
+        });
+        // Hold the scheduled drain so this case tests business admission, keying
+        // and invalidation without entering a persistence operation or opening a DB.
+        vi.useFakeTimers({toFake: ['setImmediate']});
+        try {
+            const first = await queueAutoGenerateRecommendations(id);
+            const alias = await queueAutoGenerateRecommendations(id.toLowerCase());
+            expect(alias).toMatchObject({coalesced: true, job: {id: first.job.id}});
+            expect((await getAutoRecommendationJob(id, first.job.id.toUpperCase())).job.id).toBe(first.job.id);
+            await expect(getAutoRecommendationJob('BCDE1234-ABCD-4ABC-8ABC-ABCDEF123456', first.job.id)).rejects.toMatchObject({status: 404});
+            invalidateEventContext(id.toLowerCase());
+            expect(await getAutoRecommendationJob(id, first.job.id)).toMatchObject({job: {status: 'STALE'}});
+        } finally {
+            invalidateEventContext(id);
+            await vi.runAllTimersAsync();
+            vi.useRealTimers();
+            readPlan.mockRestore();
+            readConfiguration.mockRestore();
+        }
+    });
+
     it('distinguishes event identity even when every scheduling input is otherwise unchanged', () => {
         const original = createJobContext();
         original.plan.eventId = 'event-a';

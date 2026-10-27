@@ -9,6 +9,7 @@ import {EntityManager, EntityTarget, Repository, type ObjectLiteral, type Select
 import type {ArchiveMetadataPatch, ArchiveReference, ArchiveSnapshotEntry, ArchiveTarget, LockedArchiveContext} from '../../../../types/ArchiveTypes';
 import type {EntityType} from '../../../../types/UtilTypes';
 import {archiveKey} from '../../archive/policy';
+import {uuidKey} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {BaseEntity} from '../entities/abstract/BaseEntity';
 import {ActivityPlan} from '../entities/activity/ActivityPlan';
@@ -118,12 +119,12 @@ export async function withLockedArchiveTarget<T>(
         // Parent discovery precedes every write lock. Re-reading the root afterward
         // exposes a concurrent relink to the controller through initialEventId.
         const [initial] = await loadArchiveTargets(manager, ref.type, [ref.id]);
-        const parentIds = new Set(additionalEventIds);
-        if (initial?.eventId) parentIds.add(initial.eventId);
+        const parentIds = new Set(additionalEventIds.map(uuidKey));
+        if (initial?.eventId) parentIds.add(uuidKey(initial.eventId));
         const parents = new Map<string, ArchiveTarget>();
         for (const id of [...parentIds].sort()) {
             const parent = await lockTarget(manager, {type: 'event', id});
-            if (parent) parents.set(id, parent);
+            if (parent) parents.set(uuidKey(parent.id), parent);
         }
         const root = await lockTarget(manager, ref);
         return action(manager, {initialEventId: initial?.eventId, root, parents});
@@ -152,6 +153,8 @@ export async function getArchiveSnapshot(refs: ArchiveReference[], manager?: Ent
         return new Map();
     }
 
+    /** Read deduplicated roots and governing parents on one manager, then pair
+     * their stored lifecycle metadata without deciding visibility or permission. */
     async function readSnapshot(manager: EntityManager): Promise<Map<string, ArchiveSnapshotEntry>> {
         // Phase 1: group and deduplicate overview references so repeated cards in
         // administration/participation require only one metadata read per root.

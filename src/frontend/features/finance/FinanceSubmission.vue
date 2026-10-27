@@ -3,7 +3,7 @@ import {proofFileAccept} from '../../../common/lib/fileMedia';
 import {computed, onBeforeUnmount, reactive, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
 import {useActionState, useFrontend} from '../../app/context';
-import {useCommand} from '../../composables/command';
+import {useCommand, useCommandReview} from '../../composables/command';
 import {useFinanceApi} from './api';
 import {financeDecimal, protectFinanceNumberFromScroll} from './numbers';
 import ActionButton from '../../components/ActionButton.vue';
@@ -25,12 +25,17 @@ const proof = ref<File | null>(null);
 const progress = ref<number | null>(null);
 const uploaded = ref(false);
 const slow = ref(false);
-const inspected = ref(false);
 let slowTimer: ReturnType<typeof setTimeout> | undefined;
 const eligible = computed(() => props.pools.filter(pool => pool.canSubmit));
 const hasDraft = computed(() => !!draft.amount || !!draft.description || !!proof.value);
 const command = useCommand(props.refresh, true, {dirty: () => !!draft.amount || !!draft.description || !!proof.value,
     unknownMessage: 'draft.leaveUnknown', recoveryEligible: () => props.active});
+
+/** History inspection is a fresh read and explicit human acknowledgement. No
+ * absence/presence heuristic can prove which row an ambiguous creation saved. */
+const {inspected, inspect: inspectHistory, acknowledge: acknowledgeHistory} = useCommandReview(command, () => props.refresh(), {
+    eligible: () => historyAction.isAvailable(), release: releaseDraft, afterInspect: () => { emit('history'); },
+});
 const submitAction = useActionState({eligible: () => props.active && eligible.value.some(pool => pool.id === draft.poolId),
     blocked: () => command.action.disabled.value});
 const historyAction = useActionState({eligible: () => props.active, blocked: () => command.recoveryAction.disabled.value,
@@ -41,6 +46,8 @@ const uploadMessage = computed(() => uploaded.value ? messages.value.t(slow.valu
 watch(eligible, selectEligiblePool, {immediate: true});
 watch([() => props.eventId, context.epoch, () => context.session.value?.context], releaseDraft);
 onBeforeUnmount(() => clearTimeout(slowTimer));
+
+
 
 /** Keep an applicable pool choice through saved reads, choosing another eligible
  * pool only when the former pool actually loses participant submission access. */
@@ -70,21 +77,6 @@ async function submit(event: Event): Promise<void> {
 function updateProgress(loaded: number, total: number | null, complete = false): void {
     progress.value = complete ? 100 : total ? Math.min(100, Math.round(loaded / total * 100)) : null;
     uploaded.value = complete || total !== null && loaded >= total;
-}
-
-/** History inspection is a fresh read and explicit human acknowledgement. No
- * absence/presence heuristic can prove which row an ambiguous creation saved. */
-async function inspectHistory(): Promise<void> {
-    if (!historyAction.isAvailable()) return;
-    if (await command.reconcileSafely(props.refresh)) {
-        inspected.value = true;
-        emit('history');
-    }
-}
-function acknowledgeHistory(): void {
-    if (!inspected.value || command.pending.value || command.recovering.value) return;
-    command.acknowledge();
-    releaseDraft();
 }
 </script>
 

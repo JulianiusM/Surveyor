@@ -16,14 +16,22 @@
 
 import {readEntityDefaultsBaseline, updateEntityDefaults, readEntityAdministratorBaseline, updateEntityAdministrator} from './entityAdminController';
 
-import {eventMethodPermission, mayPerformEventMethod, validateCalendarDate} from '../modules/event/linkage';
+import {eventMethodPermission, mayPerformEventMethod} from '../modules/permissionEngine';
+import {validateCalendarDate} from '../modules/event/linkage';
 
 
 // controllers/eventController.ts
 import {hasAccountProfile} from './userController';import {Request} from "express";
-import {searchEntityProfiles, archiveEntity, assertEditableEntityFields, classifyArchiveCommandError, comparisonToken, completeDefaults, getArchivePresentations, getArchiveView, getEntityPropertyPresentation, permissionDefinitions, requireFieldComparison, restoreEntity, setAutomaticArchival} from './entityAdminController';
+import {comparisonToken, requireFieldComparison} from '../modules/api/transport';
+import {searchEntityProfiles, completeDefaults, defaultPermissionValues, getEntityPropertyPresentation, readEntitySettingsAccess, entityCreationPermissionContext} from './entityAdminController';
+import {archiveEntity, classifyArchiveCommandError, getArchivePresentations, getArchiveView, restoreEntity, setAutomaticArchival} from '../modules/entityArchival';
+import {assertEditableEntityFields} from '../modules/permissionEngine';
 
 import path from 'node:path';
+import pdfmake, {type TCreatedPdf} from 'pdfmake';
+import type {Content, Table, TableCell, TDocumentDefinitions} from 'pdfmake/interfaces';
+import {PAGE_MARGINS, FONT_SIZE_BASE, FONT_SIZE_SMALL, FONT_SIZE_TITLE, FONT_SIZE_SECTION, formatDateTime, keyValueLine} from '../modules/lib/pdf';
+import type {ParticipantRow} from '../../types/EventTypes';
 // Business logic for the Event routes
 import Joi from 'joi';
 import type {EntityManager} from 'typeorm';
@@ -49,20 +57,21 @@ import {archiveKey} from '../modules/archive/policy';
 import {ApiProblem} from '../modules/api/problem';
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {checkNewImage, performImageSwap, removeImage} from "../modules/lib/fileCommons";
-import {getInitialPerms} from '../modules/lib/permissions';
 import {
     buildDateTotals,
+    projectEventParticipants,
     convertToSingleList,
     ENTITIES,
     getResource,
     getHeaderImageVersion,
     isWithinWindow,
     normalizeToArray,
-    rewriteISOToZone
+    rewriteISOToZone,
+    uuidKey
 } from "../modules/lib/util";
 import {can, evaluateSubject, isOwner, saveDefaultPermsFromBody} from '../modules/permissionEngine';
 import {requireSessionProfileId} from '../modules/lib/session';
-import {projectOverviewCard} from '../modules/overview/api';
+import {projectEntityCard} from '../modules/lib/util';
 import type {DIETARY, EventMethod} from '../../types/EventTypes';
 import type {PermBundle, PermView, SessionLike} from '../../types/PermissionTypes';
 import type {components} from '../../types/api/v1';
@@ -100,6 +109,8 @@ function eventPropertyRejectionCause(error: Joi.ValidationError): string | undef
     }
 }
 
+/** Validate the legacy creation form and its lexical date range, then normalize
+ * deadline wall time, checkbox values and empty fields for the existing persistence contract. */
 function preprocessCreate(body: any): WithRequired<Partial<Event>, 'title' | 'startDate' | 'endDate'> {
     // Basic date validation as strings (YYYY-MM-DD) to match existing patterns
     const datePattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -131,12 +142,18 @@ function preprocessCreate(body: any): WithRequired<Partial<Event>, 'title' | 'st
         throw new ValidationError(CREATE_TEMPLATE, msg, {body});
     }
 
+    // Compare the validated civil-date strings before converting a separately
+    // zoned deadline; the form retains its original diagnostic and submitted body.
     if (value.startDate > value.endDate) {
         throw new ValidationError(CREATE_TEMPLATE, 'Start date must be before end date', {body});
     }
 
+    // A supplied datetime-local value uses its selected zone. Omission/empty
+    // input stays absent here and becomes the existing stored null below.
     const timedDeadline = value.bindingDeadline ? rewriteISOToZone(value.bindingDeadline, value.deadlineTz || 'UTC') : undefined;
 
+    // Only the literal form checkbox value enables a switch. Empty optional
+    // scalars keep their established null representation rather than a new default.
     return {
         title: value.title,
         description: value.description || null,
@@ -239,7 +256,7 @@ async function fetchForView(event: Event, req: Request) {
         : [];
 
     // Organizers also see participants list
-    const participants = await eventService.getEventParticipants(event.id);
+    const participants = await eventService.getEventParticipantRows(event.id).then(projectEventParticipants);
     const isFull = eventCapacityReached(event.maxParticipants, participants.length);
 
     const relatedEntities = convertToSingleList({activityPlans, packingLists, driversLists: driverLists});
@@ -342,7 +359,10 @@ async function registerAttendance(event: Event, body: any, req: {session: Sessio
 
 
     const profileId = session.profile.id;
-    await eventService.withEventTransaction(async function saveRegistration(manager) {
+    await eventService.withEventTransaction(
+    /** Recheck/consume an admitted bypass link and save attendance on one manager,
+     * so a rejected registration cannot spend its token independently. */
+    async function saveRegistration(manager) {
         // The earlier eligibility read is only a preview. Recheck the token while holding
         // its row lock so simultaneous submissions cannot both spend its final use. The
         // controller owns that policy; DBAL only reads/locks and records the decided write.
@@ -479,7 +499,11 @@ async function updateEventSettings(event: Event, body: any, permData?: Pick<Perm
         catch { throw new APIError('Invalid time zone.', {}, 400, {cause: 'EVENT_TIMEZONE_INVALID'}); }
         patch.timezone = value.deadlineTz || null;
     }
+    /** Merge the sparse Event patch with its locked date/zone context before
+     * writing; omitted deadlines stay unchanged and supplied invalid deadlines reject. */
     async function updateLocked(manager: import('typeorm').EntityManager): Promise<void> {
+        // The request's earlier Event row cannot choose current omitted values
+        // after another editor has committed a date or timezone change.
         const current = await eventService.lockEvent(manager, event.id);
         if (!current) throw new APIError('Event not found', {}, 404);
         const startDate = patch.startDate ?? current.startDate;
@@ -496,6 +520,8 @@ async function updateEventSettings(event: Event, body: any, permData?: Pick<Perm
                 throw new APIError('Invalid binding deadline or time zone.', {}, 400, {cause: 'EVENT_DEADLINE_INVALID'});
             }
         }
+        // Persist only the already normalized sparse patch after every range
+        // and deadline check has completed on this transaction's context.
         await eventService.updateEventProperties(event.id, patch, manager);
     }
     // Versioned metadata supplies its existing lock/field comparison transaction.
@@ -572,7 +598,7 @@ async function revokeDeadlineBypassLink(event: Event, linkId: string) {
 }
 
 async function getParticipants(event: Event) {
-    return await eventService.getEventParticipants(event.id);
+    return await eventService.getEventParticipantRows(event.id).then(projectEventParticipants);
 }
 
 async function deleteRegistration(event: Event, registrationId: string) {
@@ -607,7 +633,7 @@ async function updateRegistrationDates(event: Event, registrationId: string, bod
 /** Aggregate registered participants, dietary details and date totals for the existing export projection. */
 async function getParticipantsExtended(event: Event) {
     // Read the current roster before counting choices and collecting unique authored notes.
-    const participants = await eventService.getEventParticipants(event.id);
+    const participants = await eventService.getEventParticipantRows(event.id).then(projectEventParticipants);
     const totals: Record<string, number> = {};
     const allergies: Set<string> = new Set();
     const comments: Set<string> = new Set();
@@ -648,10 +674,14 @@ function aggregateInfos(infoSet: Set<string>, infoString: string) {
     }
 }
 
+/** Increment the supplied dietary totals once per selected choice, keeping
+ * combined meat/fish participation exclusive from the individual meat/fish buckets. */
 function countChoices(choices: Set<DIETARY>, totals: Record<string, number>) {
     const hasMeat = choices.has('MEAT');
     const hasFish = choices.has('FISH');
 
+    // A participant selecting both contributes to the combined category only;
+    // a single selection keeps its existing individual category.
     if (hasMeat && hasFish) {
         totals['MEAT_OR_FISH'] = (totals['MEAT_OR_FISH'] || 0) + 1;
     } else {
@@ -705,7 +735,7 @@ export function requireEventCreation(session: SessionLike): void {
 
 /** Form definitions reuse the shared maintained permission/preset catalog. */
 export function eventFormContext(): components['schemas']['EventCreateContext'] {
-    return {defaults: completeDefaults(getInitialPerms('event')), ...permissionDefinitions()};
+    return entityCreationPermissionContext('event');
 }
 
 /** Account-only initial forms and public duplicate forms share the same static definitions. */
@@ -782,7 +812,10 @@ export function normalizeEventMetadataPatch(body: unknown): unknown {
 
 /** Preserve public DATA_DUPLICATE admission while copying only the Event form surface. */
 export async function readEventDuplicate(id: string, session: SessionLike): Promise<components['schemas']['EventDuplicate']> {
-    return eventService.withEventReadSnapshot(id, async function readDuplicate(manager, row) {
+    return eventService.withEventReadSnapshot(id,
+    /** Read only the granted Event form/defaults in this snapshot, retaining its
+     * empty copied deadline and excluding source attendance, files and lifecycle state. */
+    async function readDuplicate(manager, row) {
         const event = requireEvent(row);
         if (!mayPerformEventMethod(await eventPermissions(event, session, manager), 'duplicate')) throw new ApiProblem('FORBIDDEN');
         // Source attendance, invoices, images and archival state never become new-event input.
@@ -858,16 +891,20 @@ async function withEventManagement<T>(id: string, session: SessionLike,
 /** Settings hashes contain only method-permitted shared fields, never hidden participant data. */
 async function eventSettingsToken(event: Event, session: SessionLike, manager: EntityManager, access: boolean): Promise<string> {
     const defaults = access ? completeDefaults(await adminService.getDefaultPerms('event', event.id, manager)) : null;
-    return comparisonToken('event-settings', event.id, session, {header: event.headerImg ?? null,
-        ...(defaults ? Object.fromEntries(Object.entries(defaults).map(([key, value]) => [`default:${key}`, value])) : {}),
+    return comparisonToken('event-settings', uuidKey(event.id), session, {header: event.headerImg ?? null,
+        ...(defaults ? defaultPermissionValues(defaults) : {}),
         ...(access ? {newAdmin: null} : {})});
 }
 
 /** Keep permission administration separate from ordinary metadata/settings visibility. */
 export async function readEventSettings(id: string, session: SessionLike): Promise<components['schemas']['EventSettings']> {
     requireSessionProfileId(session);
-    /** Select permitted settings and their tokens from one read snapshot. */
-    return eventService.withEventReadSnapshot(id, async function readSettings(manager, row) {
+    return eventService.withEventReadSnapshot(id,
+    /** Compose admitted settings, protected access data and comparison tokens
+     * from one snapshot, retaining export-only entry without broader editor authority. */
+    async function readSettings(manager, row) {
+        // Resolve current field and lifecycle capabilities before deciding which
+        // settings surface this actor may open; no ACL matrix is read yet.
         const event = requireEvent(row);
         const properties = await getEntityPropertyPresentation('event', event, session, manager);
         const archive = await eventArchive(event, session, manager);
@@ -877,14 +914,12 @@ export async function readEventSettings(id: string, session: SessionLike): Promi
         if (!(properties.canEditProperties || properties.canEditHeader || properties.canManagePermissions
             || properties.canDuplicate || properties.canDelete || archive.canManage || properties.exportUrl)) throw new ApiProblem('FORBIDDEN');
         // Ordinary editors never receive audience/admin values or their guessable comparison hashes.
-        let access: components['schemas']['PackingAccess'] | null = null;
+        let access: components['schemas']['EntityAccess'] | null = null;
         if (properties.canManagePermissions) {
-            const administrators = await adminService.listAdmins('event', id, manager);
-            access = {defaults: completeDefaults(await adminService.getDefaultPerms('event', id, manager)), ...permissionDefinitions(),
-                admins: administrators.map(admin => ({profileId: admin.profileId, name: admin.profile.name,
-                    isGuest: Boolean(admin.profile.guestId), mask: admin.perms,
-                    editToken: comparisonToken('event-admin', `${id}:${admin.profileId}`, session, {mask: admin.perms})}))};
+            access = await readEntitySettingsAccess('event', id, session, manager);
         }
+        // Keep the existing projection/read order: permitted ACL rows/defaults
+        // precede the settings token, while header/archive output uses this snapshot.
         return {id, title: event.title, ...eventHeader(event),
             settingsToken: await eventSettingsToken(event, session, manager, properties.canManagePermissions),
             editableFields: properties.editableFields as components['schemas']['EventSettings']['editableFields'],
@@ -988,7 +1023,7 @@ export async function readEventThingsToDo(id: string, session: SessionLike, view
     ]);
     const related = convertToSingleList({activityPlans, packingLists, driversLists});
     const decorated = await getArchiveView({type: 'event', id}, related, session);
-    return {items: decorated.relatedEntities.map(card => projectOverviewCard(card, session, view === 'admin', true))};
+    return {items: decorated.relatedEntities.map(card => projectEntityCard(card, isOwner(session, card.ownerId), view === 'admin', true))};
 }
 
 /**
@@ -999,21 +1034,21 @@ export async function readEventThingsToDo(id: string, session: SessionLike, view
 export async function deleteEventChild(id: string, entityType: 'activity' | 'drivers' | 'packing', entityId: string,
     session: SessionLike, view: 'detail' | 'admin' = 'detail'): Promise<components['schemas']['MutationResult']> {
     const permitted = await readEventThingsToDo(id, session, view);
-    if (!permitted.items.some(card => card.type === entityType && card.id === entityId)) throw new ApiProblem('NOT_FOUND');
+    if (!permitted.items.some(card => archiveKey(card) === archiveKey({type: entityType, id: entityId}))) throw new ApiProblem('NOT_FOUND');
 
     // A displayed child is neither deletion authority nor an enduring parent
     // relationship. Resolve its current row and require actual profile ownership.
     const child = entityType === 'activity' ? await activityService.getActivityPlanById(entityId)
         : entityType === 'drivers' ? await driverService.getDriversListById(entityId)
             : await packingService.getPackingListById(entityId);
-    if (!child || child.eventId !== id) throw new ApiProblem('NOT_FOUND');
+    if (!child?.eventId || archiveKey({type: 'event', id: child.eventId}) !== archiveKey({type: 'event', id})) throw new ApiProblem('NOT_FOUND');
     if (!isOwner(session, child.ownerId)) throw new ApiProblem('FORBIDDEN');
 
     try {
         // Packing already owns its versioned deletion/file completion. The other
         // existing hooks use only this admitted profile and their feature row;
         // no Express lifecycle object is read or mutated by those deletion hooks.
-        if (entityType === 'packing') return await deletePackingList(entityId, session, id);
+        if (entityType === 'packing') return await deletePackingList(entityId, session, child.eventId);
         if (entityType === 'activity') await activityController.deleteEntity(child as import('../modules/database/entities/activity/ActivityPlan').ActivityPlan, session as Request['session']);
         else await driversController.deleteEntity(child as import('../modules/database/entities/drivers/DriversList').DriversList, session as Request['session']);
         if (child.headerImg) removeImage(child.headerImg);
@@ -1034,7 +1069,7 @@ export async function setEventChildArchived(id: string, entityType: 'activity' |
     const permitted = await readEventThingsToDo(id, session, view);
     // A URL cannot supply a foreign child. The shared lifecycle owner independently
     // rechecks current child ownership/grants and preserves inherited archive rules.
-    if (!permitted.items.some(card => card.type === entityType && card.id === entityId)) throw new ApiProblem('NOT_FOUND');
+    if (!permitted.items.some(card => archiveKey(card) === archiveKey({type: entityType, id: entityId}))) throw new ApiProblem('NOT_FOUND');
     /** Recheck the locked relationship and parent admission before its lifecycle write commits. */
     async function prepareArchive(manager: EntityManager, outcome: EntityMutationOutcome) {
         await requireEventChildScope(id, outcome, session, manager, view);
@@ -1051,7 +1086,7 @@ export async function setEventChildArchived(id: string, entityType: 'activity' |
 /** A preflight may become obsolete while waiting for the shared lifecycle lock. */
 async function requireEventChildScope(id: string, outcome: EntityMutationOutcome, session: SessionLike,
     manager: EntityManager, view: 'detail' | 'admin'): Promise<void> {
-    if (outcome.root.eventId !== id) throw new ApiProblem('ENTITY_CONTEXT_CHANGED');
+    if (!outcome.root.eventId || archiveKey({type: 'event', id: outcome.root.eventId}) !== archiveKey({type: 'event', id})) throw new ApiProblem('ENTITY_CONTEXT_CHANGED');
     const event = requireEvent(await eventService.getEventById(id, manager));
     const permissions = await eventPermissions(event, session, manager);
     if (!mayPerformEventMethod(permissions, view === 'admin' ? 'admin' : 'items')) throw new ApiProblem('FORBIDDEN');
@@ -1072,7 +1107,7 @@ export async function setEventAutomaticArchival(id: string, body: components['sc
 export async function setEventChildAutomaticArchival(id: string, entityType: 'activity' | 'drivers' | 'packing', entityId: string,
     body: components['schemas']['EventAutomaticArchivalInput'], session: SessionLike, view: 'detail' | 'admin' = 'detail') {
     const permitted = await readEventThingsToDo(id, session, view);
-    if (!permitted.items.some(card => card.type === entityType && card.id === entityId)) throw new ApiProblem('NOT_FOUND');
+    if (!permitted.items.some(card => archiveKey(card) === archiveKey({type: entityType, id: entityId}))) throw new ApiProblem('NOT_FOUND');
     /** Reject a relinked child inside the existing lifecycle transaction. */
     async function prepareAutomatic(manager: EntityManager, outcome: EntityMutationOutcome) {
         await requireEventChildScope(id, outcome, session, manager, view);
@@ -1082,7 +1117,7 @@ export async function setEventChildAutomaticArchival(id: string, entityType: 'ac
 }
 
 /** Publicly granted access management receives only its own current audience baselines. */
-export async function readEventDefaultsBaseline(id: string, session: SessionLike): Promise<components['schemas']['PackingDefaultsBaseline']> {
+export async function readEventDefaultsBaseline(id: string, session: SessionLike): Promise<components['schemas']['EntityPermissionDefaultsBaseline']> {
     return eventService.withEventReadSnapshot(id, /** Read an admitted Event audience baseline with its original full settings comparison scope. */
 async function readDefaults(manager, row) {
         // Check current method authority on this snapshot before reading masks or constructing comparison evidence.
@@ -1103,7 +1138,7 @@ async function saveDefaults(manager, event, permissions) {
 }
 
 /** Disclose one administrator mask only after the method grant, independently of page admission. */
-export async function readEventAdminBaseline(id: string, profileId: string, session: SessionLike): Promise<components['schemas']['PackingAdminBaseline']> {
+export async function readEventAdminBaseline(id: string, profileId: string, session: SessionLike): Promise<components['schemas']['EntityAdministratorBaseline']> {
     return eventService.withEventReadSnapshot(id, async function readAdministrator(manager, row) {
         const event = requireEvent(row);
         if (!mayPerformEventMethod(await eventPermissions(event, session, manager), 'managePermissions')) throw new ApiProblem('FORBIDDEN');
@@ -1120,15 +1155,15 @@ export async function setEventAdmin(id: string, profileId: string, mask: number 
 }
 
 /** Reuse secure account-profile search; no guest credentials or raw addresses enter options. */
-export async function searchEventProfiles(id: string, query: string, session: SessionLike): Promise<components['schemas']['PackingProfileOptions']> {
+export async function searchEventProfiles(id: string, query: string, session: SessionLike): Promise<components['schemas']['EntityAdministratorProfileOptions']> {
     await requireEventMethod(id, session, 'managePermissions');
     return searchEntityProfiles(query);
 }
 
 /** Method-only image writers receive a reference hash without protected image bytes. */
-export async function readEventHeaderBaseline(id: string, session: SessionLike): Promise<components['schemas']['PackingHeaderBaseline']> {
+export async function readEventHeaderBaseline(id: string, session: SessionLike): Promise<components['schemas']['EntityHeaderBaseline']> {
     const event = await requireEventMethod(id, session, 'editHeader');
-    return {editToken: comparisonToken('event-settings', id, session, {header: event.headerImg ?? null})};
+    return {editToken: comparisonToken('event-settings', uuidKey(event.id), session, {header: event.headerImg ?? null})};
 }
 
 /** Shared image replacement owns validation and cleanup; the adapter owns grants/comparison under its lock. */
@@ -1137,7 +1172,7 @@ export async function setEventHeader(id: string, file: Express.Multer.File | und
     async function persistHeader(eventId: string, path?: string | null) {
         return withEventManagement(eventId, session, async function saveHeader(manager, event, permissions) {
             if (!mayPerformEventMethod(permissions, 'editHeader')) throw new ApiProblem('FORBIDDEN');
-            requireFieldComparison(token, comparisonToken('event-settings', id, session, {header: event.headerImg ?? null}), ['header']);
+            requireFieldComparison(token, comparisonToken('event-settings', uuidKey(event.id), session, {header: event.headerImg ?? null}), ['header']);
             await eventService.updateHeaderImage(id, path, manager);
             return {previousImage: event.headerImg, changed: Boolean(file || event.headerImg)};
         });
@@ -1203,3 +1238,289 @@ export default {
     updateHeaderImg,
     deleteHeaderImg,
 };
+
+const FONT_SIZE_SUBSECTION = 9;
+
+const CHIP_MAX_PER_ROW = 7;
+
+function asText(value: string | number | null | undefined): string {
+    if (value === null || value === undefined) return '—';
+    const text = String(value).trim();
+    return text.length ? text : '—';
+}
+
+/** Divide admitted chip values into ordered rows without changing the source. */
+function chunk<T>(values: T[], size: number): T[][] {
+    // Each slice owns only this display row; caller order remains unchanged.
+    const chunks: T[][] = [];
+    for (let i = 0; i < values.length; i += size) chunks.push(values.slice(i, i + size));
+    return chunks;
+}
+
+/** Describe one text-only badge with the export's shared typography and padding. */
+function chip(text: string): Content {
+    // A borderless one-cell table keeps the badge together across PDF layout.
+    return {
+        table: {
+            widths: ['auto'],
+            body: [[{
+                text,
+                bold: true,
+                fontSize: FONT_SIZE_SMALL,
+                color: '#111827',
+                fillColor: '#e5e7eb',
+                margin: [0, 0, 0, 0]
+            }]],
+        },
+        layout: {
+            hLineWidth: () => 0,
+            vLineWidth: () => 0,
+            hLineColor: () => '#e5e7eb',
+            vLineColor: () => '#e5e7eb',
+            paddingLeft: () => 6,
+            paddingRight: () => 6,
+            paddingTop: () => 2,
+            paddingBottom: () => 2,
+        },
+        margin: [0, 0, 4, 4],
+    } as Content;
+}
+
+/** Render nonempty values as bounded badge rows, retaining the empty marker. */
+function chipGrid(values: Array<string | number | null | undefined>, maxPerRow = CHIP_MAX_PER_ROW): Content {
+    // Normalize before grouping so absent values consume no visual column.
+    const items = values.map(asText).filter((value) => value !== '—');
+    if (!items.length) return {text: '—', color: '#6b7280'};
+
+    return {
+        stack: chunk(items, maxPerRow).map((row) => ({
+            columns: row.map((value) => ({width: 'auto', ...(chip(String(value)) as object)})),
+            columnGap: 4,
+            margin: [0, 0, 0, 4],
+        })),
+    } as Content;
+}
+
+function participantDates(participant: ParticipantRow): string {
+    return `${participant.arrivalDate} -> ${participant.departureDate}`;
+}
+
+/** Select only supported saved dietary choices for this participant's export. */
+function participantDietaryChoices(participant: ParticipantRow): Array<string> {
+    // Unknown persisted labels never become a new dietary badge.
+    return (participant.dietaryChoices || [])
+        .map((choice) => choice.choice)
+        .filter((choice): choice is (typeof ALLOWED_DIETARY)[number] => ALLOWED_DIETARY.includes(choice as (typeof ALLOWED_DIETARY)[number]));
+}
+
+/** Return the first saved allergy note or the shared absent-value marker. */
+function participantAllergyText(participant: ParticipantRow): string {
+    // Keep the note paired with its dietary choice rather than another free text.
+    const allergyChoice = participant.dietaryChoices?.find((choice) => choice.choice === 'ALLERGIES');
+    return asText(allergyChoice?.additionalInfo);
+}
+
+/** Return the first saved participant comment or the shared absence marker. */
+function participantCommentText(participant: ParticipantRow): string {
+    // Comments remain separate from medical/dietary notes in the export.
+    const commentChoice = participant.dietaryChoices?.find((choice) => choice.choice === 'COMMENT');
+    return asText(commentChoice?.additionalInfo);
+}
+
+/** Compose this participant's accepted dietary badges in their saved order. */
+function participantDietaryContent(participant: ParticipantRow): Content {
+    // Empty dietary evidence uses one marker rather than an empty nested stack.
+    const choices = participantDietaryChoices(participant);
+    if (!choices.length) return {text: '—', color: '#6b7280'};
+
+    return {
+        stack: choices.map((choice) => chip(choice)),
+        margin: [0, 0, 0, 0],
+    };
+}
+
+/** Project one already-authorized participant into the five export columns. */
+function buildParticipantRow(participant: ParticipantRow): TableCell[] {
+    // Normalize contact/notes independently; neither note substitutes for the other.
+    const email = participant.email ?? '—';
+    const allergy = participantAllergyText(participant);
+    const comment = participantCommentText(participant);
+    const infoStack: Content[] = [];
+    if (allergy !== '—') {
+        infoStack.push({text: 'Allergies:', color: '#aa0000', fontSize: FONT_SIZE_SUBSECTION},
+            {text: allergy, fontSize: FONT_SIZE_BASE, marginBottom: 4});
+    }
+    if (comment !== '—') {
+        infoStack.push({text: 'Comment:', color: '#cc9911', fontSize: FONT_SIZE_SUBSECTION},
+            {text: comment, fontSize: FONT_SIZE_BASE});
+    }
+    if (infoStack.length === 0) {
+        infoStack.push({text: '—', fontSize: FONT_SIZE_BASE});
+    }
+
+    // Preserve column order and mail-link behavior after the optional note stack.
+    return [
+        {text: participant.name, fontSize: FONT_SIZE_BASE},
+        email === '—'
+            ? {text: '—', color: '#6b7280', fontSize: FONT_SIZE_BASE}
+            : {text: email, link: `mailto:${email}`, fontSize: FONT_SIZE_BASE},
+        {text: participantDates(participant), fontSize: FONT_SIZE_SMALL},
+        participantDietaryContent(participant),
+        {stack: infoStack}
+    ];
+}
+
+/** Build a repeatable-header participant table, including its five-column empty row. */
+export function buildParticipantsTable(participants: ParticipantRow[]): Table {
+    // Header and data share the same fixed column order and export widths.
+    const body: TableCell[][] = [
+        [
+            {text: 'Name', bold: true, fillColor: '#e5e7eb'},
+            {text: 'Email', bold: true, fillColor: '#e5e7eb'},
+            {text: 'Dates', bold: true, fillColor: '#e5e7eb'},
+            {text: 'Dietary', bold: true, fillColor: '#e5e7eb'},
+            {text: 'Information', bold: true, fillColor: '#e5e7eb'},
+        ],
+    ];
+
+    if (!participants.length) {
+        body.push([
+            {text: 'No registrations yet.', colSpan: 5, italics: true, color: '#6b7280', margin: [0, 6, 0, 6]},
+            {},
+            {},
+            {},
+            {},
+        ]);
+    } else {
+        for (const participant of participants) body.push(buildParticipantRow(participant));
+    }
+
+    return {
+        headerRows: 1,
+        widths: [70, 115, 45, 55, 200],
+        body,
+        dontBreakRows: true,
+    };
+}
+
+/** Compose available event metadata with separators only between real values. */
+function buildEventInfoInline(event: Event): Content {
+    // The local accumulator omits absent fields without leaving stray bullets.
+    const fragments: Content[] = [];
+    const push = (label: string, value?: string | null) => {
+        if (!value) return;
+        if (fragments.length) fragments.push({text: ' • ', color: '#9ca3af'});
+        fragments.push({text: [{text: `${label}: `, bold: true}, {text: value}]});
+    };
+
+    if (event.location) push('Location', asText(event.location) === '—' ? null : asText(event.location));
+    push('Dates', `${asText(event.startDate)} -> ${asText(event.endDate)}`);
+    if (event.bindingDeadline) {
+        push('Binding deadline', formatDateTime(event.bindingDeadline, event.timezone));
+        push('Timezone', asText(event.timezone));
+    }
+
+    return {
+        text: fragments,
+        fontSize: FONT_SIZE_BASE,
+        lineHeight: 1.12,
+        margin: [0, 0, 0, 4],
+    };
+}
+
+/** Display only positive totals through the existing common badge layout. */
+function buildTotalsStack(values: Record<string, number>): Content {
+    // Zero categories remain omitted; grouping never changes the supplied totals.
+    const items = Object.entries(values)
+        .filter(([, count]) => count > 0)
+        .map(([key, count]) => `${key}: ${count}`);
+
+    return chipGrid(items, 8);
+}
+
+/** Assemble the authorized participant document with existing sections, table
+ * and pagination. The caller-owned date totals receive the established Total row. */
+export function buildParticipantsPdfDefinition(
+    data: {
+        event: Event;
+        participants: ParticipantRow[];
+        totals: Record<string, number>;
+        dateTotals: Record<string, number>;
+        allergies: string[];
+        comments: string[];
+        generatedAt: string;
+    },
+): TDocumentDefinitions {
+    // Retain the existing input update before composing the summary and table.
+    data.dateTotals['Total'] = data.participants.length;
+    const content: Content[] = [
+        {text: data.event.title, style: 'title', margin: [0, 0, 0, 8]},
+        {text: 'Event info', style: 'sectionTitle', margin: [0, 0, 0, 4]},
+        buildEventInfoInline(data.event),
+        data.event.description ? keyValueLine('Description', data.event.description) : '',
+        {text: 'Participants', style: 'sectionTitle', margin: [0, 8, 0, 4]},
+        buildTotalsStack(data.dateTotals),
+        {text: 'Dietary totals', style: 'subsectionTitle', margin: [0, 4, 0, 4]},
+        buildTotalsStack(data.totals),
+        {
+            table: buildParticipantsTable(data.participants),
+            layout: {
+                hLineWidth: (i: number, node: {
+                    table?: { body?: unknown[] }
+                }) => (i === 0 || i === 1 || i === (node.table?.body?.length || 0) ? 1 : 0.5),
+                vLineWidth: () => 0.5,
+                hLineColor: () => '#d1d5db',
+                vLineColor: () => '#d1d5db',
+                paddingLeft: () => 6,
+                paddingRight: () => 6,
+                paddingTop: () => 4,
+                paddingBottom: () => 4,
+            },
+            margin: [0, 0, 0, 8],
+        },
+    ];
+
+    // Document-wide styles and footer apply after feature content is prepared.
+    return {
+        pageSize: 'A4',
+        pageOrientation: 'portrait',
+        pageMargins: PAGE_MARGINS,
+        content,
+        defaultStyle: {fontSize: FONT_SIZE_BASE},
+        styles: {
+            title: {fontSize: FONT_SIZE_TITLE, bold: true},
+            sectionTitle: {fontSize: FONT_SIZE_SECTION, bold: true},
+            subsectionTitle: {fontSize: FONT_SIZE_SUBSECTION, bold: true},
+        },
+        footer: (currentPage, pageCount) => ({
+            columns: [
+                {
+                    text: `Generated: ${formatDateTime(data.generatedAt)} UTC`,
+                    fontSize: FONT_SIZE_SMALL,
+                    color: '#6b7280'
+                },
+                {
+                    text: `Page ${currentPage} / ${pageCount}`,
+                    alignment: 'right',
+                    fontSize: FONT_SIZE_SMALL,
+                    color: '#6b7280'
+                },
+            ],
+            margin: [28, 0, 28, 16],
+        }),
+    };
+}
+
+export function createParticipantsPdf(
+    data: {
+        event: Event;
+        participants: ParticipantRow[];
+        totals: Record<string, number>;
+        dateTotals: Record<string, number>;
+        allergies: string[];
+        comments: string[];
+        generatedAt: string;
+    },
+): TCreatedPdf {
+    return pdfmake.createPdf(buildParticipantsPdfDefinition(data));
+}

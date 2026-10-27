@@ -29,19 +29,24 @@ import type {
     SessionLike,
     Subject
 } from "../../types/PermissionTypes";
-import type {CombEntityType} from "../../types/UtilTypes";
+import type {CombEntityType, EntityType} from "../../types/UtilTypes";
+import type {EntityPropertyField} from '../../types/EntityPropertyTypes';
+import type {EventMethod} from '../../types/EventTypes';
+import {APIError} from './lib/errors';
 import * as entityAdminService from './database/services/EntityAdminService';
 import {getProfilePerms, updatePerms} from './database/services/EntityAdminService';
 import {isRegisteredForEvent} from './database/services/EventService';
-import {ALL_MASK, getInitialPerms, hasPerm, PERM, toMaskFromBodyValue} from './lib/permissions';
-import {jsonReplacer, normalizeToArray} from "./lib/util";
+import {ALL_MASK, getInitialPerms, getPermMeta, getPresets, hasPerm, PERM, toMaskFromBodyValue} from './lib/permissions';
+import {jsonReplacer, normalizeToArray, sameUuid, uuidKey} from "./lib/util";
 
 function keyUser(t: CombEntityType, id: string, profileId: string) {
-    return `${t}:${id}:${profileId}`;
+    return `${t}:${uuidKey(id)}:${uuidKey(profileId)}`;
 }
 
-function keyEnt(t: CombEntityType, id: string) {
-    return `${t}:${id}`;
+/** Key permission evidence by subject type and the shared UUID identity.
+ * Numeric item IDs retain their spelling; opaque comparison tokens never enter this key. */
+export function entityPermissionKey(t: CombEntityType, id: string): string {
+    return `${t}:${uuidKey(id)}`;
 }
 
 /**
@@ -53,7 +58,7 @@ export function isOwner(
     session: SessionLike,
     ownerId?: string | null
 ): boolean {
-    return !!(session.profile && ownerId && session.profile.id === ownerId);
+    return !!(session.profile && sameUuid(session.profile.id, ownerId));
 }
 
 /** Share session-audience activation between ordinary evaluation and candidate discovery. */
@@ -98,7 +103,7 @@ async function computeMaskFor(
     // Reuse this subject's defaults within the evaluation, including an empty result.
     // An uncached lookup uses the same manager as its individual/participant reads.
     let defaults: Record<string, number> | undefined;
-    const kd = keyEnt(t, id);
+    const kd = entityPermissionKey(t, id);
     if (caches?.defaults?.has(kd)) {
         defaults = caches.defaults.get(kd)!;
     } else {
@@ -142,12 +147,13 @@ async function loadEventParticipantPerms(eventId: string | null | undefined, pro
     // A standalone subject has no event-derived participant audience. For linked
     // subjects, false is a complete cached membership result, not a cache miss.
     if (eventId) {
-        let isPart: boolean | undefined = caches?.participant?.get(eventId);
+        const key = uuidKey(eventId);
+        let isPart: boolean | undefined = caches?.participant?.get(key);
         if (isPart === undefined) {
             // Use the shared membership owner, including its event-owner rule, in
             // the same transaction as any other uncached permission inputs.
             isPart = await isRegisteredForEvent(profileId || '', eventId, manager);
-            caches?.participant?.set?.(eventId, isPart);
+            caches?.participant?.set?.(key, isPart);
         }
         // Membership alone grants no bit: the evaluated subject must define it.
         if (isPart && defaults?.participant) return defaults.participant;
@@ -233,7 +239,7 @@ export async function evaluateEntities(entities: EntityDescriptor[], session: Se
     // Deduplicate before loading permission rows so all callers share one result for that root.
     const entitiesByKey = new Map<string, EntityDescriptor>();
     for (const entity of entities) {
-        entitiesByKey.set(keyEnt(entity.entityType, entity.entityId), entity);
+        entitiesByKey.set(entityPermissionKey(entity.entityType, entity.entityId), entity);
     }
     const unique = Array.from(entitiesByKey.values());
     const profileId = session.profile?.id;
@@ -250,12 +256,12 @@ export async function evaluateEntities(entities: EntityDescriptor[], session: Se
     // absent cache entry as "not loaded" and would otherwise issue one fallback query per card.
     // Defaults use type:id, individual grants add profileId, and participation uses eventId.
     for (const entity of unique) {
-        caches.defaults.set(keyEnt(entity.entityType, entity.entityId), {});
+        caches.defaults.set(entityPermissionKey(entity.entityType, entity.entityId), {});
         if (profileId) {
             caches.userPerms.set(keyUser(entity.entityType, entity.entityId, profileId), 0);
         }
         if (entity.eventId) {
-            caches.participant.set(entity.eventId, false);
+            caches.participant.set(uuidKey(entity.eventId), false);
         }
     }
     // Overlay only returned rows on the known-empty inputs. The service queries individual
@@ -266,18 +272,18 @@ export async function evaluateEntities(entities: EntityDescriptor[], session: Se
     // One entity can have several audience rows; preserve each named audience for the normal
     // evaluator to combine according to the session rather than combining masks prematurely.
     for (const row of inputs.defaults) {
-        caches.defaults.get(keyEnt(row.entityType, row.entityId))![row.audience] = row.perms;
+        caches.defaults.get(entityPermissionKey(row.entityType, row.entityId))![row.audience] = row.perms;
     }
     // Registration rows contribute membership only. The participant grant itself still comes
     // from each evaluated entity's audience defaults, including when multiple children share an event.
     for (const row of inputs.registrations) {
-        caches.participant.set(row.event.id, true);
+        caches.participant.set(uuidKey(row.event.id), true);
     }
     // Ordinary event membership includes its owner without requiring a registration row.
     // Preserve that same rule in batches, especially when evaluating a separately owned
     // child whose participant audience is governed by this event.
     for (const event of inputs.ownedEvents) {
-        caches.participant.set(event.id, true);
+        caches.participant.set(uuidKey(event.id), true);
     }
 
     // With every input populated, the ordinary evaluator now consumes these caches without
@@ -285,17 +291,20 @@ export async function evaluateEntities(entities: EntityDescriptor[], session: Se
     const views = new Map<string, PermView>();
     for (const entity of unique) {
         const view = await evaluateSubject({kind: 'entity', entity}, session, caches);
-        views.set(keyEnt(entity.entityType, entity.entityId), view);
+        views.set(entityPermissionKey(entity.entityType, entity.entityId), view);
     }
     return views;
 }
 
-/** Build bundle for an entity and all its items (view helper) */
+/** Evaluate one root and its items with shared actor-local caches. Item masks
+ * stay separate from the parent; missing-item fallback and serialization expose
+ * the existing view contract rather than copying parent grants into each item. */
 export async function buildPermBundle(
     entity: EntityDescriptor,
     items: ItemDescriptor[],
     session: SessionLike
 ): Promise<PermBundle> {
+    // Share fetched evidence within this bundle only, never across actors or requests.
     const caches: PermEngineCaches = {
         participant: new Map(),
         userPerms: new Map(),
@@ -307,11 +316,13 @@ export async function buildPermBundle(
 
     for (const it of items) {
         const pv = await evaluateSubject({kind: 'item', item: it, parent: entity}, session, caches);
-        itemMap.set(it.entityId, pv);
+        itemMap.set(uuidKey(it.entityId), pv);
     }
 
+    // A missing item has no individual grants; allow() may still consult its
+    // explicit parent fallback, exactly like the ordinary item evaluator.
     const empty = makePermView(0, entityView.mask);
-    const getItem = (id: string) => itemMap.get(id) ?? empty;
+    const getItem = (id: string) => itemMap.get(uuidKey(id)) ?? empty;
 
     const bundle: PermBundle = {
         entity: entityView,
@@ -412,5 +423,97 @@ export async function saveDefaultPermsFromBody(
         authenticated: partial.authenticated,
         public: partial.public,
     }, opts.manager);
+}
+
+// One closed field policy drives both renderer projection and request authorization.
+// Feature controllers retain normalization and domain checks; arbitrary property bags are rejected.
+const basicPropertyPermissions: Partial<Record<EntityPropertyField, PermType>> = {
+    title: 'EDIT_TITLE', description: 'EDIT_DESC',
+};
+
+const eventPropertyPermissions: Partial<Record<EntityPropertyField, PermType>> = {
+    ...basicPropertyPermissions,
+    startDate: 'EDIT_META', endDate: 'EDIT_META', location: 'EDIT_META',
+    bindingDeadline: 'EDIT_META', deadlineTz: 'EDIT_META',
+    allowRegDateUpdatesAfterDeadline: 'EDIT_META', allowRegCancelationAfterDeadline: 'EDIT_META',
+    maxParticipants: 'EDIT_CAPACITY', requireDietaryInfo: 'MANAGE_REQUIREMENTS',
+    allowDietComment: 'MANAGE_REQUIREMENTS', allowRegDietUpdateAfterDeadline: 'MANAGE_REQUIREMENTS',
+};
+
+// These methods are already shared by feature operations. Keep their grant
+// definitions in this permission owner so a migrated capability/command cannot drift
+// from the direct adapter while retaining each method's distinct admission checks.
+const entityMethodPermissions = {
+    editHeader: 'EDIT_META',
+    changeEvent: 'EDIT_META',
+    managePermissions: 'MANAGE_PERMISSIONS',
+    duplicate: 'DATA_DUPLICATE',
+} as const;
+
+/** Return the existing shared method's grant without exposing mutable policy.
+ * Callers still own profile/page admission and the permission engine owns grant
+ * evaluation; choosing one method never grants another method's authority. */
+export function entityMethodPermission(method: keyof typeof entityMethodPermissions): PermType {
+    return entityMethodPermissions[method];
+}
+
+/** Project the maintained permission/preset definitions for all creation/settings callers. */
+export function permissionDefinitions() {
+    return {permissions: getPermMeta().map(({key, bit}) => ({key, bit})), presets: getPresets().map(({key, mask}) => ({key, mask}))};
+}
+
+function propertyPermissions(type: EntityType): Partial<Record<EntityPropertyField, PermType>> {
+    if (type === 'event') return eventPropertyPermissions;
+    if (type === 'activity') return {...basicPropertyPermissions, startDate: 'EDIT_META', endDate: 'EDIT_META'};
+    return basicPropertyPermissions;
+}
+
+/** Read one established field declaration without exposing the mutable policy to adapters. */
+export function entityPropertyPermission(type: EntityType, field: EntityPropertyField): PermType | undefined {
+    return propertyPermissions(type)[field];
+}
+
+/** Return fresh field/grant tuples for authorized presentation without exposing mutable grant tables. */
+export function entityPropertyFields(type: EntityType): readonly (readonly [EntityPropertyField, PermType])[] {
+    return Object.entries(propertyPermissions(type)) as [EntityPropertyField, PermType][];
+}
+
+/** Reject forbidden and unsupported fields before any feature persistence can run. */
+export function assertEditableEntityFields(type: EntityType, body: unknown, permissions: PermView, owner = false): void {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new APIError('Invalid property update.', {}, 400);
+    const policy = propertyPermissions(type);
+    for (const field of Object.keys(body)) {
+        if (!Object.hasOwn(policy, field)) throw new APIError('Unknown entity property.', {field}, 400);
+        const allowed = type === 'survey' ? owner : permissions.has(policy[field as EntityPropertyField]!);
+        if (!allowed) throw new APIError('Not allowed to edit this property.', {field}, 403);
+    }
+}
+
+/** One declaration selects method grants for permission middleware, v1 commands and
+ * capabilities. This preserves the existing independent bits and the participant
+ * export's combined requirement; profile/account/participant admission remains
+ * with the document route or shared operation rather than being inferred here. */
+const eventMethodPermissions: Record<EventMethod, readonly PermType[]> = {
+    register: ['ACCESS_REGISTRATION'], admin: ['ACCESS_ADMIN'], participants: ['ACCESS_PARTICIPANTS'],
+    manageRegistrations: ['MANAGE_REGISTRATIONS'], items: ['ACCESS_ITEMS'], manageAssignments: ['MANAGE_ASSIGNMENTS'],
+    exportParticipants: ['DATA_EXPORT', 'ACCESS_PARTICIPANTS'],
+    managePermissions: [entityMethodPermission('managePermissions')],
+    editHeader: [entityMethodPermission('editHeader')], duplicate: [entityMethodPermission('duplicate')],
+};
+
+/** Translate this owner's complete grant choice to the existing permission middleware bitmask. */
+export function eventMethodPermission(method: EventMethod): number {
+    return eventMethodPermissions[method].reduce((mask, key) => mask | PERM[key], 0);
+}
+
+/** The permission engine interprets grants; this owner selects every required method bit. */
+export function mayPerformEventMethod(permissions: PermView, method: EventMethod): boolean {
+    return permissions.all(...eventMethodPermissions[method]);
+}
+
+/** Return one necessary SQL candidate bit without exposing the private grant table.
+ * Candidate filtering never authorizes disclosure: callers still evaluate the complete method rule. */
+export function eventMethodCandidatePermission(method: EventMethod): PermType {
+    return eventMethodPermissions[method][0]!;
 }
 

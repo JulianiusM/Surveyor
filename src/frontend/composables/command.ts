@@ -3,7 +3,7 @@ import {useRouter} from 'vue-router';
 import type {NavigationFailure, RouteLocationNormalized} from 'vue-router';
 import {useActionState, useFrontend} from '../app/context';
 import {ApiFailure, InvalidInputError, ObsoleteRequestError} from '../app/transport';
-import type {FrontendCommandDraft, FrontendCommandFeedback, FrontendCommandOutcome, FrontendDraftState, FrontendPlainMessageKey,
+import type {FrontendCommandDraft, FrontendCommandFeedback, FrontendCommandOutcome, FrontendCommandReviewOptions, FrontendDraftState, FrontendPlainMessageKey,
     FrontendRecoveryRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
 import {useFeedbackError, useReadRetry} from './feedback';
 import {frontendDocumentUrl} from '../../common/lib/frontendIdentity';
@@ -27,6 +27,30 @@ interface RetainedCommand {
 }
 
 const draftOwnerKey = Symbol.for('surveyor.frontend.draft-owner');
+
+/** A fresh saved read enables one explicit human acknowledgement of unknown
+ * delivery. The command retains recovery/actor admission and each feature keeps
+ * its exact draft, captured revision and release or close decision. */
+export function useCommandReview(command: Pick<ReturnType<typeof useCommand>, 'pending' | 'recovering' | 'reconcileSafely' | 'acknowledge'>,
+                                 readSaved: () => Promise<unknown>, options: FrontendCommandReviewOptions) {
+    const inspected = ref(false);
+
+    /** Saved facts can explain uncertainty without proving which command saved. */
+    async function inspectWith(read: () => Promise<unknown>): Promise<void> {
+        if (!options.eligible() || !await command.reconcileSafely(read)) return;
+        inspected.value = true;
+        await options.afterInspect?.(read);
+    }
+    function inspect(): Promise<void> { return inspectWith(readSaved); }
+
+    /** Local release remains unavailable while either saved read is pending. */
+    function acknowledge(): void {
+        if (!inspected.value || command.pending.value || command.recovering.value || options.blocked?.()) return;
+        command.acknowledge();
+        options.release();
+    }
+    return {inspected, inspect, inspectWith, acknowledge};
+}
 
 /** Each visible notice is its own receipt, including a repeated identical no-op.
  * No feature intent or translated text is inferred from another command's result. */

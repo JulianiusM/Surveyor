@@ -22,6 +22,9 @@ import settings from './modules/settings';
 import {initializeFrontendDevelopment} from './modules/frontendDevelopment';
 import {initializeFrontendRenderer} from './modules/frontendRenderer';
 
+/** Await settings, persistence and maintenance readiness before constructing the
+ * HTTP application and renderer. Any startup failure follows the existing fatal
+ * exit path rather than accepting requests with partially initialized owners. */
 async function bootstrap() {
     try {
         console.log('🔧 Initializing database connection...');

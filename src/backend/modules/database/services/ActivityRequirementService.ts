@@ -128,6 +128,8 @@ export async function replaceRequirements(
 ): Promise<void> {
     // The controller supplies validated, reconciled rows under its plan lock. This callback
     // only maps those rows to persistence and participates in that same transaction.
+    /** Replace controller-validated requirement collections on this transaction.
+     * Omitted settings remain stored; empty collections intentionally clear their previous rows. */
     async function persistRequirements(manager: EntityManager): Promise<void> {
         const roleRepo = manager.getRepository(ActivityPlanRequirement);
         const overrideRepo = manager.getRepository(ActivityPlanRequirementOverride);
@@ -162,7 +164,8 @@ export async function replaceRequirements(
             planPatch.allowDepartureDayMorning = planSettings.allowDepartureDayMorning;
         }
 
-        // Delete old requirements and overrides sequentially
+        // Clear role, profile override and stay rows in their existing sequential
+        // order before saving replacements; the same manager makes this atomic.
         await roleRepo.delete({entity: {id: planId}});
         await overrideRepo.delete({entity: {id: planId}});
         await stayRepo.delete({entity: {id: planId}});
@@ -171,6 +174,8 @@ export async function replaceRequirements(
             await planRepo.update({id: planId}, planPatch);
         }
 
+        // Only nonempty validated sets allocate replacement records. Empty sets
+        // retain the deletions above rather than resurrecting previous entries.
         if (roleRequirements.length) {
             const roleRows = roleRequirements.map((req) =>
                 roleRepo.create({

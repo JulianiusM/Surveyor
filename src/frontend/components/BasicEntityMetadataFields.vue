@@ -1,10 +1,10 @@
 <script setup lang="ts">
+import {fieldAttributes as metadataFields} from "../../../.generated/api/v1/browser/validateBasicEntityMetadataPatch.mjs";
 import {ref} from 'vue';
 import type {EntityMetadataSnapshot, EntityMetadataValues} from '../../types/FrontendEntityMetadataTypes';
 import type {FrontendRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
 import {useFrontend} from '../app/context';
-import {normalizeNullableMetadataText} from '../composables/metadataDraft';
-import {useMetadataEditorHandle} from '../composables/metadataEditor';
+import {normalizeNullableMetadataText, useMetadataEditorHandle} from '../composables/metadataDraft';
 import EntityMetadataEditor from './EntityMetadataEditor.vue';
 import FormField from './FormField.vue';
 
@@ -37,11 +37,11 @@ defineExpose(useMetadataEditorHandle(editor));
                 <div class="row g-3 pt-3">
                     <FormField v-if="fields.includes('title')" :id="prefix + '-title'" class="col-md-6" name="title"
                         :model-value="String(values.title ?? '')" :label="messages.t('packing.title')" label-class=""
-                        required :required-marker="false" :max-length="255" :pending="pending"
+                        required :required-marker="false" :max-length="metadataFields.title.maxLength" :pending="pending"
                         @update:model-value="values.title = $event" />
                     <FormField v-if="fields.includes('description')" :id="prefix + '-description'" class="col-12" name="description"
                         :model-value="String(values.description ?? '')" :label="messages.t('packing.description')" label-class=""
-                        multiline :rows="4" :max-length="16000" :pending="pending"
+                        multiline :rows="4" :max-length="metadataFields.description.maxLength" :pending="pending"
                         @update:model-value="values.description = $event" />
                 </div>
             </details>

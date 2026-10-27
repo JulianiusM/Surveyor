@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {flushPromises, mount} from '@vue/test-utils';
+import {mount} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import {computed, createSSRApp, defineComponent, markRaw, ref} from 'vue';
 import type {Component} from 'vue';
 import {renderToString} from 'vue/server-renderer';
@@ -329,6 +330,7 @@ describe('common frontend presentation', () => {
         try {
             await select.setValue('de');
             releaseDisabledFocus(select.element);
+            await flushPromises();
             const dispatched = request.mock.calls[0]![0] as Request;
             expect(dispatched.method).toBe('PUT');
             expect(new URL(dispatched.url).pathname).toBe('/api/v1/locale');

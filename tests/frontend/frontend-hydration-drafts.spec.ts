@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {flushPromises} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import {createSSRApp, defineComponent, h, nextTick, onMounted, ref} from 'vue';
 import {renderToString} from 'vue/server-renderer';
 import {render} from '../../src/frontend/app/entry-server';
@@ -22,7 +22,7 @@ const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Synth
 const cleanups: (() => void)[] = [];
 const account: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {...session, kind: 'account',
     activeProfile: {id: profileId, name: 'Fixture'}, profiles: [{id: profileId, name: 'Fixture'}], logoutUrl: '/users/logout'};
-const creation: components['schemas']['PackingCreateContext'] = {
+const creation: components['schemas']['EntityCreationContext'] = {
     defaults: {participant: 0, guest: 0, authenticated: 0, public: 0},
     permissions: [{key: 'ACCESS_VIEW', bit: 1}, {key: 'ITEM_ADD', bit: 2}], presets: [],
 };

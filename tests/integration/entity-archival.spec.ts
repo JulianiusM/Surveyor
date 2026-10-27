@@ -5,11 +5,18 @@ import type {Request} from 'express';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import eventController from '../../src/backend/controller/eventController';
 import * as userController from '../../src/backend/controller/userController';
-import * as entityAdminController from '../../src/backend/controller/entityAdminController';
+import * as entityArchival from '../../src/backend/modules/entityArchival';
+import * as activityApi from '../../src/backend/controller/activityController';
+import * as driversApi from '../../src/backend/controller/driversController';
+import * as packingApi from '../../src/backend/controller/packingController';
+import * as surveyApi from '../../src/backend/controller/surveyController';
+import * as eventApi from '../../src/backend/controller/eventController';
 import {archiveKey} from '../../src/backend/modules/archive/policy';
 import {contractValidator} from '../../src/backend/modules/api/contracts';
 import {prepareValidatedJson} from '../../src/backend/modules/api/transport';
-import {projectOverviewCard, readOverview, setOverviewVisibility} from '../../src/backend/modules/overview/api';
+import {readOverview, setOverviewVisibility} from '../../src/backend/modules/overview/api';
+import {projectEntityCard} from '../../src/backend/modules/lib/util';
+import {isOwner} from '../../src/backend/modules/permissionEngine';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
 import {EntityVisibilityPreference} from '../../src/backend/modules/database/entities/archive/EntityVisibilityPreference';
 import {Event} from '../../src/backend/modules/database/entities/event/Event';
@@ -27,6 +34,7 @@ import * as surveyService from '../../src/backend/modules/database/services/Surv
 import * as userService from '../../src/backend/modules/database/services/UserService';
 import {PERM} from '../../src/backend/modules/lib/permissions';
 import type {ArchiveReference, PersonalVisibility} from '../../src/types/ArchiveTypes';
+import type {EntityType} from '../../src/types/UtilTypes';
 import type {SessionLike} from '../../src/types/PermissionTypes';
 import type {components} from '../../src/types/api/v1';
 import {createActivitySlotEntity, createPackingItemEntity, createProfileEntity} from '../factories/integrationEntityFactory';
@@ -39,15 +47,15 @@ let temporaryDirectory: string;
 
 /** Exercise controller policy with real DBAL operations and the fixture owner's identity. */
 function archiveAsOwner(reference: ArchiveReference, now?: Date) {
-    return entityAdminController.archiveEntity(reference, {}, {profile: owner, auth: {user: owner.user!}}, now);
+    return entityArchival.archiveEntity(reference, {}, {profile: owner, auth: {user: owner.user!}}, now);
 }
 
 function restoreAsOwner(reference: ArchiveReference) {
-    return entityAdminController.restoreEntity(reference, {}, {profile: owner, auth: {user: owner.user!}});
+    return entityArchival.restoreEntity(reference, {}, {profile: owner, auth: {user: owner.user!}});
 }
 
 function pauseAsOwner(reference: ArchiveReference, paused: boolean) {
-    return entityAdminController.setAutomaticArchival(reference, {paused}, {profile: owner, auth: {user: owner.user!}});
+    return entityArchival.setAutomaticArchival(reference, {paused}, {profile: owner, auth: {user: owner.user!}});
 }
 
 /** Membership/deletion rejections belong to the controller, never the persistence writer. */
@@ -71,6 +79,29 @@ async function createEvent(title: string, endDate = '2027-06-03'): Promise<Archi
     })};
 }
 
+/** Create one actual root per domain without introducing a second lifecycle owner. */
+async function createLifecycleRoot(type: EntityType): Promise<ArchiveReference> {
+    switch (type) {
+        case 'event': return createEvent('UUID identity Event');
+        case 'activity': return {type, id: await activityService.createActivityPlanTx(
+            owner.id, 'UUID identity Activity', '', '2027-06-01', '2027-06-03', [])};
+        case 'packing': return {type, id: await packingService.createPackingListTx(owner.id, 'UUID identity Packing', '', [])};
+        case 'drivers': return {type, id: await driverService.createDriversList(owner.id, 'UUID identity Drivers', '')};
+        case 'survey': return {type, id: await surveyService.createSurveyTx(owner.id, 'UUID identity Survey', '', [])};
+    }
+}
+
+/** Full settings retain each feature's actual admission and wire projection. */
+function readLifecycleSettings(reference: ArchiveReference, session: SessionLike) {
+    switch (reference.type) {
+        case 'event': return eventApi.readEventSettings(reference.id, session);
+        case 'activity': return activityApi.readActivitySettings(reference.id, session);
+        case 'packing': return packingApi.readPackingSettings(reference.id, session);
+        case 'drivers': return driversApi.readDriversSettings(reference.id, session);
+        case 'survey': return surveyApi.readSurveySettings(reference.id, session);
+    }
+}
+
 /** Observe queued primary-row reads without advancing either competing writer. */
 async function expectPrimaryLockWaiters(id: string, expectedCount: number): Promise<void> {
     async function countPrimaryLockWaiters(): Promise<number> {
@@ -86,7 +117,7 @@ async function expectPrimaryLockWaiters(id: string, expectedCount: number): Prom
 }
 
 async function state(ref: ArchiveReference) {
-    const states = await entityAdminController.getArchiveStates([ref]);
+    const states = await entityArchival.getArchiveStates([ref]);
     expect(states.has(archiveKey(ref))).toBe(true);
     return states.get(archiveKey(ref))!;
 }
@@ -94,7 +125,7 @@ async function state(ref: ArchiveReference) {
 // Inspect the actual controller projection, including membership and private placement.
 // A preference row by itself must never be enough for this helper to find a card.
 async function card(profile: Profile, ref: ArchiveReference, collection: 'owner' | 'participant' = 'owner') {
-    const states = await entityAdminController.getArchiveStates([ref]);
+    const states = await entityArchival.getArchiveStates([ref]);
     const parentId = states.get(archiveKey(ref))?.eventId;
     const auth = profile.userId ? {user: {id: profile.userId}} : {guest: {id: profile.guestId!}};
     // Follow the same paged navigation as the UI. Children may be in an event sub-view or
@@ -136,6 +167,74 @@ afterAll(async () => {
 });
 
 describe('authoritative archival and personal overview visibility', () => {
+    it.each(['event', 'activity', 'packing', 'drivers', 'survey'] as const)(
+        '%s settings and lifecycle commands preserve authority across UUID spellings', async type => {
+            const reference = await createLifecycleRoot(type);
+            const alternate = {...reference, id: reference.id.toUpperCase()};
+            const session: SessionLike = {profile: owner, auth: {user: owner.user!}};
+            const canonical = await readLifecycleSettings(reference, session);
+            const upper = await readLifecycleSettings(alternate, session);
+            expect(upper.capabilities).toEqual(canonical.capabilities);
+            expect(upper.archive).toEqual(canonical.archive);
+            expect(upper.capabilities.manageArchive).toBe(true);
+
+            // Alternate spelling changes neither the target nor its actual owner/grants.
+            const outsider: SessionLike = {profile: participant, auth: {user: participant.user!}};
+            await expect(entityArchival.archiveEntity(alternate, {}, outsider)).rejects.toMatchObject({status: 403});
+            expect((await state(reference)).directArchived).toBe(false);
+            expect(await archiveAsOwner(alternate)).toMatchObject({directArchived: true, canManage: true});
+            expect((await readLifecycleSettings(alternate, session)).archive.direct).toBe(true);
+            expect(await restoreAsOwner(alternate)).toMatchObject({directArchived: false, canManage: true});
+
+            if (type === 'event' || type === 'activity') {
+                expect(await pauseAsOwner(alternate, false)).toMatchObject({autoArchivePaused: false, canManageAutomation: true});
+            }
+        },
+    );
+
+    it.each(['event', 'activity', 'packing', 'drivers'] as const)(
+        '%s retains delegated archive grants when requested through an alternate UUID spelling', async type => {
+            const reference = await createLifecycleRoot(type);
+            await adminService.addAdmin(type, reference.id, participant.id, PERM.EDIT_META);
+            const session: SessionLike = {profile: participant, auth: {user: participant.user!}};
+            const alternate = {...reference, id: reference.id.toUpperCase()};
+            const result = await entityArchival.archiveEntity(alternate, {}, session);
+            expect(result).toMatchObject({directArchived: true, canManage: true});
+            await adminService.removeAdmin(type, reference.id, participant.id);
+            await expect(entityArchival.restoreEntity(alternate, {}, session)).rejects.toMatchObject({status: 403});
+            expect((await state(reference)).directArchived).toBe(true);
+        },
+    );
+
+    it.each(['activity', 'packing', 'drivers'] as const)(
+        'keeps %s Event-child lifecycle and deletion scoped across UUID spellings', async function preservesChildUuidIdentity(type) {
+            const parent = await createEvent('UUID identity parent');
+            const id = type === 'activity'
+                ? await activityService.createActivityPlanTx(owner.id, 'UUID child Activity', '', '2027-06-01', '2027-06-03', [], parent.id)
+                : type === 'packing'
+                    ? await packingService.createPackingListTx(owner.id, 'UUID child Packing', '', [], parent.id)
+                    : await driverService.createDriversList(owner.id, 'UUID child Drivers', '', parent.id);
+            const reference = {type, id};
+            const session: SessionLike = {profile: owner, auth: {user: owner.user!}};
+
+            await eventApi.setEventChildArchived(parent.id.toUpperCase(), type, id.toUpperCase(), true, session);
+            expect((await state(reference)).directArchived).toBe(true);
+            await eventApi.setEventChildArchived(parent.id, type, id.toUpperCase(), false, session);
+            expect((await state(reference)).directArchived).toBe(false);
+
+            // Case equivalence does not invent an independent schedule for a linked child.
+            await expect(eventApi.setEventChildAutomaticArchival(parent.id.toUpperCase(), type, id.toUpperCase(),
+                {paused: true}, session)).rejects.toMatchObject({status: 409, cause: 'ARCHIVE_SCHEDULE_UNAVAILABLE'});
+            const foreign = await createEvent('Different UUID identity parent');
+            await expect(eventApi.setEventChildArchived(foreign.id.toUpperCase(), type, id.toUpperCase(), true, session))
+                .rejects.toMatchObject({status: 404});
+            expect((await state(reference)).directArchived).toBe(false);
+
+            await eventApi.deleteEventChild(parent.id.toUpperCase(), type, id.toUpperCase(), session);
+            expect(await getRootRepository(AppDataSource.manager, type).findOneBy({id})).toBeNull();
+        },
+    );
+
     it('projects native schedule controls only for admitted personal Overview actors and independent roots', async function projectsOverviewSchedules() {
         const event = await createEvent('Projected Overview Event');
         const activity: ArchiveReference = {type: 'activity', id: await activityService.createActivityPlanTx(
@@ -175,11 +274,11 @@ describe('authoritative archival and personal overview visibility', () => {
         expect(nativeParticipant.archive).toMatchObject({hasAutomaticSchedule: true, autoArchivePaused: true, canManageAutomation: false});
         const participantView = await readOverview({collection: 'participant', region: 'main', type: 'event', q: nativeParticipant.title}, participantSession);
         expect(participantView.items.find(item => item.id === event.id)?.automation).toBeUndefined();
-        expect(projectOverviewCard(nativeParticipant, participantSession).automation).toBeUndefined();
+        expect(projectEntityCard(nativeParticipant, isOwner(participantSession, nativeParticipant.ownerId)).automation).toBeUndefined();
 
         // Event Things to do keeps its established explicit schedule context,
         // including a false management flag. Personal admission remains separate.
-        expect(projectOverviewCard(nativeParticipant, participantSession, false, true).automation)
+        expect(projectEntityCard(nativeParticipant, isOwner(participantSession, nativeParticipant.ownerId), false, true).automation)
             .toEqual({paused: true, canManage: false});
         await adminService.addAdmin('event', event.id, participant.id, PERM.EDIT_META);
         const admitted = await readOverview({collection: 'participant', region: 'main', type: 'event', q: nativeParticipant.title}, participantSession);
@@ -200,7 +299,7 @@ describe('authoritative archival and personal overview visibility', () => {
         // release inheritance for the other children while preserving that separate choice.
         await archiveAsOwner(packing);
         await archiveAsOwner(event);
-        const archived = await entityAdminController.getArchiveStates(refs);
+        const archived = await entityArchival.getArchiveStates(refs);
         for (const ref of refs) expect(archived.get(archiveKey(ref))?.archived).toBe(true);
         expect(archived.get(archiveKey(activity))).toMatchObject({directArchived: false, inheritedFromEventId: event.id});
         expect(archived.get(archiveKey(packing))).toMatchObject({directArchived: true, inheritedFromEventId: event.id});
@@ -233,9 +332,9 @@ describe('authoritative archival and personal overview visibility', () => {
 
         // Check both sides of the inclusive end-day plus complete-day delay boundary.
         // The linked plan remains governed by its later event despite its earlier dates.
-        await entityAdminController.archiveExpiredEntities(30, new Date('2027-07-03T23:59:59Z'));
+        await entityArchival.archiveExpiredEntities(30, new Date('2027-07-03T23:59:59Z'));
         for (const ref of [event, standalone, linked]) expect((await state(ref)).archived).toBe(false);
-        await entityAdminController.archiveExpiredEntities(30, new Date('2027-07-04T00:00:00Z'));
+        await entityArchival.archiveExpiredEntities(30, new Date('2027-07-04T00:00:00Z'));
         expect((await state(event)).archived).toBe(true);
         expect((await state(standalone)).archived).toBe(true);
         expect((await state(linked)).archived).toBe(false);
@@ -246,10 +345,10 @@ describe('authoritative archival and personal overview visibility', () => {
         // A manual restoration pauses the independent schedule until explicitly resumed.
         await restoreAsOwner(event);
         await restoreAsOwner(standalone);
-        await entityAdminController.archiveExpiredEntities(0, new Date('2027-08-01T12:00:00Z'));
+        await entityArchival.archiveExpiredEntities(0, new Date('2027-08-01T12:00:00Z'));
         for (const ref of [event, standalone]) expect(await state(ref)).toMatchObject({archived: false, autoArchivePaused: true});
         await pauseAsOwner(event, false);
-        await entityAdminController.archiveExpiredEntities(0, new Date('2027-08-01T12:00:00Z'));
+        await entityArchival.archiveExpiredEntities(0, new Date('2027-08-01T12:00:00Z'));
         expect((await state(event)).archived).toBe(true);
         await expect(pauseAsOwner(linked, true)).rejects.toThrow();
     });
@@ -431,7 +530,7 @@ describe('authoritative archival and personal overview visibility', () => {
         await archiveAsOwner(event);
         await restoreAsOwner(event);
         await pauseAsOwner(event, false);
-        await entityAdminController.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z'));
+        await entityArchival.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z'));
         expect((await state(event)).archived).toBe(true);
         await restoreAsOwner(event);
         await setVisibility(participant.id, event, 'hidden');
@@ -466,7 +565,7 @@ describe('authoritative archival and personal overview visibility', () => {
         await editor.connect();
         await editor.startTransaction();
         await editor.manager.getRepository(Event).findOneOrFail({where: {id: event.id}, lock: {mode: 'pessimistic_write'}});
-        const sweep = entityAdminController.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z'));
+        const sweep = entityArchival.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z'));
         // Observe the real MariaDB connection waiting on our row lock: the candidate
         // has been read, but its conditional write cannot yet see the new dates.
         try {
@@ -500,7 +599,7 @@ describe('authoritative archival and personal overview visibility', () => {
             // same primary row. Releasing it tests the real database ordering: the sweep
             // must recheck the newly committed pause instead of using stale eligibility.
             await expectPrimaryLockWaiters(reference.id, 1);
-            sweep = entityAdminController.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z'));
+            sweep = entityArchival.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z'));
             await expectPrimaryLockWaiters(reference.id, 2);
             await blocker.commitTransaction();
         } finally {
@@ -511,8 +610,8 @@ describe('authoritative archival and personal overview visibility', () => {
         expect(await state(reference)).toMatchObject({archived: false, autoArchivePaused: true});
         await pauseAsOwner(reference, false);
         const counts = await Promise.all([
-            entityAdminController.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z')),
-            entityAdminController.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z')),
+            entityArchival.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z')),
+            entityArchival.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z')),
         ]);
         expect(counts.reduce((sum, count) => sum + count, 0)).toBe(1);
         expect((await state(reference)).archived).toBe(true);
@@ -533,7 +632,7 @@ describe('authoritative archival and personal overview visibility', () => {
         expect(await card(owner, child)).toBeUndefined();
         // Stored preferences are not an entity inventory. They cannot restore a deleted
         // root, grant access to it, or make an event-cascaded child reappear as a card.
-        expect(await entityAdminController.getArchiveStates([event, child])).toEqual(new Map());
+        expect(await entityArchival.getArchiveStates([event, child])).toEqual(new Map());
         await expect(setVisibility(owner.id, child, 'shown')).rejects.toMatchObject({status: 404});
         await expect(restoreAsOwner(event)).rejects.toMatchObject({status: 404});
         await expect(eventService.deleteEvent(event.id)).resolves.toBeUndefined();
@@ -579,7 +678,7 @@ describe('authoritative archival and personal overview visibility', () => {
 
             await remove(ref.id);
             expect(await load(ref.id)).toBeNull();
-            expect(await entityAdminController.getArchiveStates([ref])).toEqual(new Map());
+            expect(await entityArchival.getArchiveStates([ref])).toEqual(new Map());
             expect(await card(owner, ref)).toBeUndefined();
             await expect(setVisibility(owner.id, ref, 'shown')).rejects.toMatchObject({status: 404});
             // Preserve the original repository.delete semantics for a missing row too.

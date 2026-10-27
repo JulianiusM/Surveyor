@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {fieldAttributes as registrationFields} from "../../../../.generated/api/v1/browser/validateRegistrationInput.mjs";
 import {computed, onMounted, reactive, ref, shallowRef, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
 import type {WatchCallback} from 'vue';
@@ -29,6 +30,8 @@ const mode = computed(
 );
 const next = computed(() => safeFrontendReturn(route.query.next));
 const initialBootstrap = context.initialDocumentFor(route.fullPath);
+// Native password controls retain the established registration minimum in every
+// mode; the Login wire schema still accepts legacy shorter saved passwords.
 // Passwords belong only to this mounted form; neither bootstrap nor persistent recovery stores them.
 const fields = reactive({
     username: '',
@@ -455,7 +458,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                             label-icon="bi-person-circle"
                             :placeholder="messages.t(mode === 'register' ? 'auth.chooseUsername' : mode === 'forgot' ? 'auth.forgotUsernamePlaceholder' : 'auth.usernamePlaceholder')"
                             required
-                            :max-length="mode === 'forgot' ? undefined : 100"
+                            :max-length="mode === 'forgot' ? undefined : registrationFields.username.maxLength"
                             autocomplete="username"
                             :disabled="blocked"
                             :pending="submittingIdentity"
@@ -469,7 +472,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                             label-icon="bi-person-circle"
                             :placeholder="messages.t('auth.chooseDisplayName')"
                             required
-                            :max-length="100"
+                            :max-length="registrationFields.displayname.maxLength"
                             autocomplete="nickname"
                             :disabled="blocked"
                             :pending="submittingIdentity"
@@ -484,7 +487,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                             :placeholder="messages.t('auth.accountEmailPlaceholder')"
                             type="email"
                             required
-                            :max-length="100"
+                            :max-length="registrationFields.email.maxLength"
                             autocomplete="email"
                             :disabled="blocked"
                             :pending="submittingIdentity"
@@ -503,7 +506,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                             @blur="showPasswordCriteria = mode === 'register' && !isRegistrationPasswordValid(fields.password)"
                             type="password"
                             required
-                            :min-length="8"
+                            :min-length="registrationFields.password.minLength"
                             :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
                             :disabled="blocked"
                             :pending="submittingIdentity"
@@ -530,7 +533,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                             :described-by="repeatState === 'invalid' ? 'password-repeat-info' : undefined"
                             type="password"
                             required
-                            :min-length="8"
+                            :min-length="registrationFields.password.minLength"
                             autocomplete="new-password"
                             :disabled="blocked"
                             :pending="submittingIdentity"

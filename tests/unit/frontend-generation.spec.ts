@@ -50,7 +50,8 @@ async function prepareWatcherTree(directory: string): Promise<void> {
     const source = path.join(directory, 'contracts/api/v1/openapi.yaml');
     const contract = YAML.parseDocument(await fs.readFile(source, 'utf8'));
     const session = contract.getIn(['paths', '/session']);
-    const sessionRead = contract.getIn(['paths', '/session', 'get']);
+    const sessionOwner = YAML.parseDocument(await fs.readFile(path.join(directory, 'contracts/api/v1/session.yaml'), 'utf8'));
+    const sessionRead = sessionOwner.getIn(['paths', '/session', 'get']);
     const locale = contract.getIn(['components', 'parameters', 'Locale']);
     const problem = contract.getIn(['components', 'schemas', 'Problem']);
     const sessionView = contract.getIn(['components', 'schemas', 'SessionView']);
@@ -232,14 +233,128 @@ process.once('SIGINT', stopGate);
 }
 
 describe('contract and catalog generation', () => {
+    it('keeps authored request roles independent of alias names, ordering and response reuse', async function preservesAuthoredAliasRoles() {
+        const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
+        try {
+            await prepareWatcherTree(temporary);
+            const entry = path.join(temporary, 'contracts/api/v1/openapi.yaml');
+            const original = await fs.readFile(entry, 'utf8');
+
+            // Reverse the alias spelling and export order across two real
+            // generation passes. Neither can decide request/response strictness.
+            for (const renamed of [false, true]) {
+                const names = renamed ? {request: 'ZCommandAlias', response: 'AViewAlias', shared: 'ChangedOwnedNode'}
+                    : {request: 'ACommandAlias', response: 'ZViewAlias', shared: 'OwnedNode'};
+                const contract = YAML.parseDocument(original);
+                const local = (name: string) => ({$ref: '#/components/schemas/' + name});
+                const shared = {$ref: './role-owner.yaml#/schemas/' + names.shared};
+                const aliases = {[names.request]: shared, [names.response]: shared};
+                await fs.writeFile(path.join(temporary, 'contracts/api/v1/role-aliases.yaml'), YAML.stringify({schemas: aliases}));
+                await fs.writeFile(path.join(temporary, 'contracts/api/v1/role-owner.yaml'), YAML.stringify({schemas: {
+                    [names.shared]: {type: 'object', additionalProperties: false, required: ['label'], properties: {
+                        label: {type: 'string'}, child: {$ref: '#/schemas/' + names.shared},
+                    }},
+                    NestedCommand: {type: 'object', additionalProperties: false, required: ['value'], properties: {value: shared}},
+                }}));
+                // A disconnected same-name declaration is genuinely used by a
+                // parameter. It must not alter the exported response alias.
+                await fs.writeFile(path.join(temporary, 'contracts/api/v1/role-shadow.yaml'), YAML.stringify({schemas: {
+                    [names.response]: shared,
+                }}));
+                const exports = {
+                    [names.response]: {$ref: './role-aliases.yaml#/schemas/' + names.response},
+                    [names.request]: {$ref: './role-aliases.yaml#/schemas/' + names.request},
+                    [names.shared]: shared,
+                    RoleResponseEnvelope: {type: 'object', additionalProperties: false, required: ['result'], properties: {result: local(names.response)}},
+                    DifferentlyNamedCommandExport: {$ref: './role-owner.yaml#/schemas/NestedCommand'},
+                    RoleMultipart: {type: 'object', additionalProperties: false, required: ['data'], properties: {
+                        data: {$ref: './role-owner.yaml#/schemas/NestedCommand'}, image: {type: 'string', format: 'binary'},
+                    }},
+                    RoleParameter: {type: 'object', additionalProperties: false, required: ['value'], properties: {value: shared}},
+                    RolePropertyResponse: {type: 'object', additionalProperties: false, properties: {selected: shared}},
+                };
+                const ordered = Object.entries(exports);
+                if (renamed) ordered.reverse();
+                for (const [name, schema] of ordered) contract.setIn(['components', 'schemas', name], schema);
+                const response = {description: 'Role fixture', content: {'application/json': {schema: local('RoleResponseEnvelope')}}};
+                contract.setIn(['paths', '/role-request'], {post: {operationId: 'roleRequest',
+                    'x-surveyor-command': {retryPolicy: 'reconcile-only', precondition: 'none'},
+                    requestBody: {required: true, content: {'application/json': {schema: local(names.request)}}}, responses: {'200': response}}});
+                contract.setIn(['paths', '/role-multipart'], {post: {operationId: 'roleMultipart',
+                    'x-surveyor-command': {retryPolicy: 'reconcile-only', precondition: 'none'},
+                    requestBody: {required: true, content: {'multipart/form-data': {schema: local('RoleMultipart')}}}, responses: {'200': response}}});
+                contract.setIn(['paths', '/role-parameters'], {get: {operationId: 'roleParameters',
+                    'x-surveyor-command': {retryPolicy: 'read', precondition: 'none'}, parameters: [
+                        {name: 'named', in: 'query', schema: local('RoleParameter')},
+                        {name: 'selected', in: 'query', schema: {$ref: '#/components/schemas/RolePropertyResponse/properties/selected'}},
+                        {name: 'shadow', in: 'query', schema: {$ref: './role-shadow.yaml#/schemas/' + names.response}},
+                    ], responses: {'200': response}}});
+                await fs.writeFile(entry, contract.toString());
+                const output = path.join(temporary, renamed ? 'renamed-output' : 'original-output');
+                generate('generate-api.mjs', ['--output-root', output], temporary);
+                const browser = await import(pathToFileURL(path.join(output, '.generated/api/v1/browser.mjs')).href);
+                const server = (await import(pathToFileURL(path.join(output, '.generated/api/v1/server.cjs')).href)).default;
+                const policy = await import(pathToFileURL(path.join(output, '.generated/api/v1/policy.mjs')).href);
+                const payload = {label: 'Existing value'};
+
+                // Runtime dispatch selects the strict operation graph even if
+                // bundling chose a response-only alias as its canonical name.
+                const input = policy.operationInputs.find((input: {operationId: string}) => input.operationId === 'roleRequest');
+                const validateRequest = await policy.loadInputValidator(input.bodyValidator);
+                expect(validateRequest(payload)).toBe(true);
+                expect(validateRequest({...payload, future: true})).toBe(false);
+                const multipart = policy.operationInputs.find((input: {operationId: string}) => input.operationId === 'roleMultipart');
+                expect(multipart.binaryParts).toEqual(['image']);
+
+                // Direct requests and their genuine shared owner are strict.
+                // Response-only aliases and nested response graphs stay additive.
+                for (const name of [names.request, names.shared]) {
+                    expect(browser['validate' + name](payload)).toBe(true);
+                    expect(browser['validate' + name]({...payload, future: true})).toBe(false);
+                }
+                expect(browser['validate' + names.response]({...payload, future: true})).toBe(true);
+                expect(browser.validateRoleResponseEnvelope({result: {...payload, future: true}, future: true})).toBe(true);
+                expect(browser.validateRolePropertyResponse({selected: {...payload, future: true}, future: true})).toBe(true);
+                expect(server['validate' + names.response]({...payload, future: true})).toBe(false);
+                expect(browser['validate' + names.request]({...payload, child: {...payload, future: true}})).toBe(false);
+
+                // Nested multipart metadata is automatically exported by the
+                // real bundler. It keeps strict direct and transitive validation.
+                expect(browser.validateNestedCommand({value: payload})).toBe(true);
+                expect(browser.validateNestedCommand({value: {...payload, future: true}})).toBe(false);
+                expect(browser.validateDifferentlyNamedCommandExport({value: payload})).toBe(true);
+                expect(browser.validateDifferentlyNamedCommandExport({value: payload, future: true})).toBe(false);
+                expect(browser.validateRoleMultipart({data: {value: payload}, image: 'proof.png'})).toBe(true);
+                expect(browser.validateRoleMultipart({data: {value: payload, future: true}})).toBe(false);
+                expect(browser.validateRoleMultipart({data: {value: {...payload, future: true}}})).toBe(false);
+                const parameters = {path: {}, header: {}, query: {named: {value: payload}, selected: payload, shadow: payload}};
+                expect(browser.validateRoleParametersParameters(parameters)).toBe(true);
+                expect(browser.validateRoleParametersParameters({...parameters,
+                    query: {...parameters.query, selected: {...payload, future: true}}})).toBe(false);
+
+                // Known error parameters are still closed inside the additive
+                // response graph; this is independent of ordinary future fields.
+                const problem = {type: 'about:blank', title: 'Denied', detail: 'Denied', status: 401,
+                    requestId: 'role-fixture', code: 'AUTH_REQUIRED', messageKey: 'api:errors.AUTH_REQUIRED', params: {}};
+                expect(browser.validateProblem({...problem, future: true})).toBe(true);
+                expect(browser.validateProblem({...problem, params: {future: true}})).toBe(false);
+            }
+        } finally {
+            await removeDependencyLink(temporary);
+            await removeTemporary(temporary);
+        }
+    }, 60_000);
+
     it('derives controller status annotations and native bounds from detached authored inputs', async function derivesAuthoredAdapterMetadata() {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
         try {
             await prepareGenerationTree(temporary);
             const commonPath = path.join(temporary, 'contracts/api/v1/common.yaml');
             const financePath = path.join(temporary, 'contracts/api/v1/finance.yaml');
+            const entryPath = path.join(temporary, 'contracts/api/v1/openapi.yaml');
             const common = YAML.parseDocument(await fs.readFile(commonPath, 'utf8'));
             const finance = YAML.parseDocument(await fs.readFile(financePath, 'utf8'));
+            const entry = YAML.parseDocument(await fs.readFile(entryPath, 'utf8'));
             const variants = common.getIn(['schemas', 'Problem', 'oneOf']);
             if (!YAML.isSeq(variants)) throw new Error('Problem fixture needs its authored variants.');
             const flagged = variants.items.find(item => YAML.isMap(item) && item.get('x-surveyor-controller-status-override') === true);
@@ -253,8 +368,10 @@ describe('contract and catalog generation', () => {
             flagged.set('x-surveyor-controller-status-override', false);
             ordinary.set('x-surveyor-controller-status-override', true);
             finance.setIn(['schemas', 'FinanceAcceptanceInput', 'properties', 'correctedDescription', 'maxLength'], 12);
+            entry.setIn(['components', 'parameters', 'HelpQuery', 'schema', 'maxLength'], 17);
             await fs.writeFile(commonPath, common.toString());
             await fs.writeFile(financePath, finance.toString());
+            await fs.writeFile(entryPath, entry.toString());
             generate('generate-api.mjs', [], temporary);
             const manifest = JSON.parse(await fs.readFile(path.join(temporary, '.generated/api/v1/operations.json'), 'utf8')) as ApiContractManifest;
             expect(manifest.problems.find(problem => problem.code === removedCode)?.controllerStatusOverride).toBeUndefined();
@@ -265,6 +382,8 @@ describe('contract and catalog generation', () => {
             // Native maxlength keeps UTF-16 semantics; projecting its numeric
             // bound must not change JSON Schema's existing code-point validation.
             expect(browser.validateFinanceAcceptanceInput({correctedDescription: '😀'.repeat(7)})).toBe(true);
+            const policy = await import(pathToFileURL(path.join(temporary, '.generated/api/v1/policy.mjs')).href);
+            expect(policy.parameterFieldAttributes.getHelpPage.query.q).toEqual({maxLength: 17});
 
             ordinary.set('x-surveyor-controller-status-override', 'yes');
             await fs.writeFile(commonPath, common.toString());
@@ -538,7 +657,9 @@ describe('contract and catalog generation', () => {
             await prepareGenerationTree(temporary);
             const source = path.join(temporary, 'contracts/api/v1/openapi.yaml');
             const futureContract = YAML.parseDocument(await fs.readFile(source, 'utf8'));
-            const parameters = futureContract.getIn(['paths', '/packing-lists/create-entry', 'get', 'parameters']);
+            const packingSource = path.join(temporary, 'contracts/api/v1/packing.yaml');
+            const packingContract = YAML.parseDocument(await fs.readFile(packingSource, 'utf8'));
+            const parameters = packingContract.getIn(['paths', '/packing-lists/create-entry', 'get', 'parameters']);
             if (!YAML.isSeq(parameters)) throw new Error('Fixture operation no longer declares its parameters.');
 
             // These declarations live only in the detached fixture. Removing an
@@ -547,7 +668,7 @@ describe('contract and catalog generation', () => {
             futureContract.setIn(['components', 'schemas', 'FutureParameterValues'],
                 {type: 'array', items: {type: 'string'}});
             parameters.add({name: 'repeated', in: 'query', style: 'form', explode: true,
-                schema: {$ref: '#/components/schemas/FutureParameterValues'}});
+                schema: {$ref: './openapi.yaml#/components/schemas/FutureParameterValues'}});
             parameters.add({name: 'structured', in: 'query', schema: {type: 'object', additionalProperties: false,
                 required: ['label'], properties: {label: {type: 'string'}}}});
             parameters.add({name: 'choice', in: 'query', schema: {oneOf: [
@@ -557,11 +678,12 @@ describe('contract and catalog generation', () => {
                     properties: {kind: {type: 'string', const: 'multiple'}, ids: {type: 'array', items: {type: 'integer'}}}},
             ]}});
             parameters.add({name: 'X-Future-Values', in: 'header',
-                schema: {$ref: '#/components/schemas/FutureParameterValues'}});
+                schema: {$ref: './openapi.yaml#/components/schemas/FutureParameterValues'}});
             futureContract.setIn(['components', 'schemas', 'PlainTextFixture'], {type: 'string'});
-            futureContract.setIn(['paths', '/packing-lists/create-entry', 'get', 'responses', '200', 'content'],
-                {'text/plain': {schema: {$ref: '#/components/schemas/PlainTextFixture'}}});
+            packingContract.setIn(['paths', '/packing-lists/create-entry', 'get', 'responses', '200', 'content'],
+                {'text/plain': {schema: {$ref: './openapi.yaml#/components/schemas/PlainTextFixture'}}});
             await fs.writeFile(source, futureContract.toString());
+            await fs.writeFile(packingSource, packingContract.toString());
 
             // Compile the complete contract and future additions together once.
             // Unchanged operations retain all their assertions below; the separate
@@ -746,8 +868,8 @@ describe('contract and catalog generation', () => {
                 const registration = await import(${JSON.stringify(registrationUrl)});
                 const problem = await import(${JSON.stringify(problemUrl)});
                 for (const validators of [browser, server]) {
-                    if (!validators.validatePackingMetadataPatch({title: '💡'.repeat(255)})) throw new Error('Unicode boundary rejected');
-                    if (validators.validatePackingMetadataPatch({title: '💡'.repeat(256)})) throw new Error('Unicode bound ignored');
+                    if (!validators.validateBasicEntityMetadataPatch({title: '💡'.repeat(255)})) throw new Error('Unicode boundary rejected');
+                    if (validators.validateBasicEntityMetadataPatch({title: '💡'.repeat(256)})) throw new Error('Unicode bound ignored');
                     const password = 'A1' + '💡'.repeat(3);
                     if (!validators.validateResetInput({token: 'Current-token', password, confirmPassword: password})) throw new Error('Native UTF-16 minimum rejected');
                     if (validators.validateResetInput({token: 'Current-token', password: 'A1💡💡x', confirmPassword: password})) throw new Error('Native UTF-16 minimum ignored');

@@ -3,7 +3,7 @@ import {fieldAttributes as creationFields} from '../../../../.generated/api/v1/b
 import {computed, reactive, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
 import {useActionState, useFrontend} from '../../app/context';
-import {useCommand} from '../../composables/command';
+import {useCommand, useCommandReview} from '../../composables/command';
 import {useFinanceApi} from './api';
 import {useFinanceDraft} from './drafts';
 import FinanceEnrollmentFields from './FinanceEnrollmentFields.vue';
@@ -29,12 +29,17 @@ const {messages} = context;
 const api = useFinanceApi(context);
 const id = useId();
 const form = ref<HTMLFormElement | null>(null);
-const inspected = ref(false);
 const draft = reactive(initialDraft());
 const baseline = ref(JSON.stringify(draft));
 const dirty = computed(() => JSON.stringify(draft) !== baseline.value);
 const command = useCommand(props.refresh, true, {dirty: () => dirty.value, unknownMessage: 'draft.leaveUnknown',
     recoveryEligible: () => props.active});
+
+/** Unknown delivery needs a deliberate fresh saved-data inspection. The review
+ * action acknowledges that ambiguity without replaying creation or settings. */
+const {inspected, inspect: inspectSaved, acknowledge} = useCommandReview(command, () => props.refresh(), {
+    eligible: () => recovery.isAvailable(), release: resetDraft,
+});
 useFinanceDraft(() => props.pool?.id, () => dirty.value || command.pending.value || command.uncertain.value);
 const action = useActionState({eligible: () => props.active && (!props.pool || !!props.pool.settings),
     blocked: () => command.action.disabled.value});
@@ -43,6 +48,8 @@ const recovery = useActionState({eligible: () => props.active, blocked: () => co
 watch(() => props.pool, updateSavedBaseline);
 watch([() => props.participants, command.pending, command.uncertain], synchronizeParticipants);
 watch([() => props.eventId, context.epoch, () => context.session.value?.context], resetDraft);
+
+
 
 /** Seed one admitted form from saved settings. The creation defaults match the
  * form, including initial participant selection and rounded shares. */
@@ -135,17 +142,6 @@ async function save(): Promise<void> {
     // Creation is complete once its write is confirmed. A failed following GET
     // must not keep a blank creation form open or invite another submission.
     if (!pool) emit('close');
-}
-
-/** Unknown delivery needs a deliberate fresh saved-data inspection. The review
- * action acknowledges that ambiguity without replaying creation or settings. */
-async function inspectSaved(): Promise<void> {
-    if (recovery.isAvailable() && await command.reconcileSafely(props.refresh)) inspected.value = true;
-}
-function acknowledge(): void {
-    if (!inspected.value || command.pending.value || command.recovering.value) return;
-    command.acknowledge();
-    resetDraft();
 }
 </script>
 

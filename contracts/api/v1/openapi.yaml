@@ -240,53 +240,9 @@ paths:
   /account:
     $ref: ./auth.yaml#/paths/~1account
   /packing-lists/create-entry:
-    get:
-      operationId: getPackingCreateEntry
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: Read account-only creation admission and public form context
-      security: []
-      parameters:
-        - $ref: '#/components/parameters/Context'
-        - $ref: '#/components/parameters/Locale'
-        - name: returnTo
-          in: query
-          schema: {type: string, maxLength: 2048}
-        - name: eventId
-          in: query
-          description: Optional contextual selection; the controller omits rejected targets.
-          schema: {type: string}
-      responses:
-        '200':
-          description: Server-owned page admission
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PackingCreateEntry'
-        default:
-          $ref: '#/components/responses/Problem'
+    $ref: ./packing.yaml#/paths/~1packing-lists~1create-entry
   /packing-lists/{listId}/entry:
-    get:
-      operationId: getPackingResourceEntry
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: Read detail or guest-entry admission without disclosing protected list data
-      security: []
-      parameters:
-        - $ref: '#/components/parameters/Context'
-        - $ref: '#/components/parameters/Locale'
-        - $ref: '#/components/parameters/ListId'
-        - name: view
-          in: query
-          required: true
-          schema: {type: string, enum: [detail, guest]}
-      responses:
-        '200':
-          description: Server-owned page admission
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PackingResourceEntry'
-        default:
-          $ref: '#/components/responses/Problem'
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1entry
   /overview:
     $ref: ./overview.yaml#/paths/overview
   /overview/{entityType}/{entityId}/visibility:
@@ -322,938 +278,59 @@ paths:
   /packing-lists/{listId}/guest:
     $ref: ./auth.yaml#/paths/~1packing-lists~1{listId}~1guest
   /session:
-    get:
-      operationId: getSession
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: Read the current session without exposing credentials
-      security: []
-      parameters:
-        - $ref: "#/components/parameters/Locale"
-      responses:
-        "200":
-          description: Current authorized representation
-          headers:
-            X-Surveyor-Context:
-              schema:
-                type: string
-            Content-Language:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SessionView"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./session.yaml#/paths/~1session
   /locale:
-    put:
-      operationId: setLocale
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
-      summary: Choose a supported browser locale
-      security: []
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/Csrf"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/LocaleUpdate"
-      responses:
-        "200":
-          description: Current authorized representation
-          headers:
-            X-Surveyor-Context:
-              schema:
-                type: string
-            Content-Language:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SessionView"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./session.yaml#/paths/~1locale
   /help:
-    get:
-      operationId: getHelpPage
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: Read fixed-source help or search its contents
-      security: []
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/HelpDocument"
-        - $ref: "#/components/parameters/HelpQuery"
-      responses:
-        "200":
-          description: Current authorized representation
-          headers:
-            X-Surveyor-Context:
-              schema:
-                type: string
-            Content-Language:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HelpPageData"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./help.yaml#/paths/~1help
   /packing-lists/{listId}:
-    get:
-      operationId: getPackingList
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: Read an authorized packing list
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/IfNoneMatch"
-      responses:
-        "200":
-          description: Current authorized representation
-          headers:
-            X-Surveyor-Context:
-              schema:
-                type: string
-            Content-Language:
-              schema:
-                type: string
-            ETag:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingListView"
-        "304":
-          description: Authorized representation unchanged; no response body
-        default:
-          $ref: "#/components/responses/Problem"
-    delete:
-      operationId: deletePackingList
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
-      summary: delete Packing List
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/Csrf"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MutationResult"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}
   /packing-lists/{listId}/metadata:
-    get:
-      operationId: getPackingMetadata
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: Read only editable packing metadata
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/IfNoneMatch"
-      responses:
-        "200":
-          description: Current authorized representation
-          headers:
-            X-Surveyor-Context:
-              schema:
-                type: string
-            Content-Language:
-              schema:
-                type: string
-            ETag:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingMetadata"
-        "304":
-          description: Authorized representation unchanged; no response body
-        default:
-          $ref: "#/components/responses/Problem"
-    patch:
-      operationId: updatePackingMetadata
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: metadata}
-      summary: Update selected packing metadata with an exact edit precondition
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/Csrf"
-        - $ref: "#/components/parameters/IfMatch"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PackingMetadataPatch"
-      responses:
-        "200":
-          description: Current authorized representation
-          headers:
-            X-Surveyor-Context:
-              schema:
-                type: string
-            Content-Language:
-              schema:
-                type: string
-            ETag:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingMetadata"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1metadata
   /packing-lists/{listId}/description:
-    get:
-      operationId: getPackingDescription
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: Read only the independently granted description field
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/IfNoneMatch"
-      responses:
-        "200":
-          description: Current independently authorized field baseline
-          headers:
-            ETag:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingDescriptionBaseline"
-        "304":
-          description: Authorized baseline unchanged; no response body
-        default:
-          $ref: "#/components/responses/Problem"
-    patch:
-      operationId: updatePackingDescription
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: metadata}
-      summary: Update only the independently granted description field
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/Csrf"
-        - $ref: "#/components/parameters/IfMatch"
-      responses:
-        "200":
-          description: Updated description field baseline
-          headers:
-            ETag:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingDescriptionBaseline"
-        default:
-          $ref: "#/components/responses/Problem"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PackingDescriptionPatch"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1description
   /packing-lists/{listId}/items/{itemId}/self-assignment:
-    put:
-      operationId: assignPackingItem
-      x-surveyor-command: {retryPolicy: natural-idempotent, precondition: none}
-      summary: Idempotently take a packing item as the active profile
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/ItemId"
-        - $ref: "#/components/parameters/Csrf"
-      responses:
-        "200":
-          description: Current authorized representation
-          headers:
-            X-Surveyor-Context:
-              schema:
-                type: string
-            Content-Language:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingAssignmentResult"
-        default:
-          $ref: "#/components/responses/Problem"
-    delete:
-      operationId: unassignPackingItem
-      x-surveyor-command: {retryPolicy: natural-idempotent, precondition: none}
-      summary: Remove the active profile's packing commitment
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/ItemId"
-        - $ref: "#/components/parameters/Csrf"
-      responses:
-        "200":
-          description: Current authorized representation
-          headers:
-            X-Surveyor-Context:
-              schema:
-                type: string
-            Content-Language:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingAssignmentResult"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1items~1{itemId}~1self-assignment
   /packing-lists/create-context:
-    get:
-      operationId: getPackingCreateContext
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: get Packing Create Context
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingCreateContext"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1create-context
   /packing-lists:
-    post:
-      operationId: createPackingList
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
-      summary: create Packing List
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/Csrf"
-      responses:
-        "201":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingCreated"
-        default:
-          $ref: "#/components/responses/Problem"
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              $ref: "#/components/schemas/PackingCreateForm"
-            encoding:
-              data:
-                contentType: application/json
+    $ref: ./packing.yaml#/paths/~1packing-lists
   /packing-lists/events:
-    get:
-      operationId: searchPackingEvents
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: search Packing Events
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - name: q
-          in: query
-          required: false
-          schema:
-            $ref: '#/components/schemas/EventPickerQuery/properties/q'
-        - name: from
-          in: query
-          required: false
-          schema:
-            $ref: '#/components/schemas/EventPickerQuery/properties/from'
-        - name: to
-          in: query
-          required: false
-          schema:
-            $ref: '#/components/schemas/EventPickerQuery/properties/to'
-        - name: period
-          in: query
-          required: false
-          schema:
-            $ref: '#/components/schemas/EventPickerQuery/properties/period'
-        - name: archive
-          in: query
-          required: false
-          schema:
-            $ref: '#/components/schemas/EventPickerQuery/properties/archive'
-        - name: deadline
-          in: query
-          required: false
-          schema:
-            $ref: '#/components/schemas/EventPickerQuery/properties/deadline'
-        - name: cursor
-          in: query
-          required: false
-          schema:
-            $ref: '#/components/schemas/EventPickerQuery/properties/cursor'
-        - name: selectedId
-          in: query
-          required: false
-          schema:
-            $ref: '#/components/schemas/EventPickerQuery/properties/selectedId'
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EventPickerOptions"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1events
   /packing-lists/{listId}/duplicate:
-    get:
-      operationId: getPackingDuplicate
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: get Packing Duplicate
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - name: eventId
-          in: query
-          description: Optional destination selection, independently authorized rather than copied from the source.
-          schema: {type: string}
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingDuplicate"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1duplicate
   /packing-lists/{listId}/settings:
-    get:
-      operationId: getPackingSettings
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: get Packing Settings
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingSettings"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1settings
   /packing-lists/{listId}/items:
-    post:
-      operationId: createPackingItem
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
-      summary: create Packing Item
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/Csrf"
-      responses:
-        "201":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingCreated"
-        default:
-          $ref: "#/components/responses/Problem"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PackingNewItem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1items
   /packing-lists/{listId}/items/{itemId}/edit-baseline:
-    get:
-      operationId: getPackingItemEditBaseline
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: Read permitted item edit values independently of detail-page admission
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/ItemId"
-        - $ref: "#/components/parameters/IfNoneMatch"
-      responses:
-        "200":
-          description: Current method-authorized item edit baseline
-          headers:
-            ETag:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingItemEditBaseline"
-        "304":
-          description: Authorized edit baseline unchanged; no response body
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1items~1{itemId}~1edit-baseline
   /packing-lists/{listId}/items/{itemId}:
-    patch:
-      operationId: updatePackingItem
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: item}
-      summary: update Packing Item
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/ItemId"
-        - $ref: "#/components/parameters/Csrf"
-        - $ref: "#/components/parameters/IfMatch"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MutationResult"
-        default:
-          $ref: "#/components/responses/Problem"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PackingItemPatch"
-    delete:
-      operationId: deletePackingItem
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
-      summary: delete Packing Item
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/ItemId"
-        - $ref: "#/components/parameters/Csrf"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MutationResult"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1items~1{itemId}
   /packing-lists/{listId}/item-order:
-    get:
-      operationId: getPackingItemOrderBaseline
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: Read permitted order values independently of detail-page admission
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/IfNoneMatch"
-      responses:
-        "200":
-          description: Current method-authorized item order baseline
-          headers:
-            ETag:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingOrderEditBaseline"
-        "304":
-          description: Authorized order baseline unchanged; no response body
-        default:
-          $ref: "#/components/responses/Problem"
-    put:
-      operationId: reorderPackingItems
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: order}
-      summary: reorder Packing Items
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/Csrf"
-        - $ref: "#/components/parameters/IfMatch"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MutationResult"
-        default:
-          $ref: "#/components/responses/Problem"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PackingItemOrder"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1item-order
   /packing-lists/{listId}/assignments/{assignmentId}:
-    delete:
-      operationId: deletePackingAssignment
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
-      summary: delete Packing Assignment
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/AssignmentId"
-        - $ref: "#/components/parameters/Csrf"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MutationResult"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1assignments~1{assignmentId}
   /packing-lists/{listId}/event:
-    put:
-      operationId: changePackingEvent
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
-      summary: change Packing Event
-      description: Current authorization is always required. An already selected event returns unchanged without writing, even with an absent or stale comparison; an actual relationship change requires the reviewed If-Match and expectedEventId.
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/Csrf"
-        - $ref: "#/components/parameters/EventIfMatch"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingEventChanged"
-        default:
-          $ref: "#/components/responses/Problem"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PackingEventChange"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1event
   /packing-lists/{listId}/default-permissions:
-    get:
-      operationId: getPackingDefaultsBaseline
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: Read only granted audience masks for a reviewed defaults update
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/IfNoneMatch"
-      responses:
-        "200":
-          description: Current independently authorized field baseline
-          headers:
-            ETag:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingDefaultsBaseline"
-        "304":
-          description: Authorized baseline unchanged; no response body
-        default:
-          $ref: "#/components/responses/Problem"
-    put:
-      operationId: updatePackingDefaults
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
-      summary: update Packing Defaults
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/Csrf"
-        - $ref: "#/components/parameters/IfMatch"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MutationResult"
-        default:
-          $ref: "#/components/responses/Problem"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PermissionDefaultsPatch"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1default-permissions
   /packing-lists/{listId}/admins:
-    post:
-      operationId: addPackingAdmin
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
-      summary: add Packing Admin
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/Csrf"
-        - $ref: "#/components/parameters/IfMatch"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MutationResult"
-        default:
-          $ref: "#/components/responses/Problem"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PackingAdminInput"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1admins
   /packing-lists/{listId}/admins/{profileId}/edit-baseline:
-    get:
-      operationId: getPackingAdminBaseline
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: Read only one granted administrator mask or new-grant marker
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/ProfileId"
-        - $ref: "#/components/parameters/IfNoneMatch"
-      responses:
-        "200":
-          description: Current independently authorized field baseline
-          headers:
-            ETag:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingAdminBaseline"
-        "304":
-          description: Authorized baseline unchanged; no response body
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1admins~1{profileId}~1edit-baseline
   /packing-lists/{listId}/admins/{profileId}:
-    patch:
-      operationId: updatePackingAdmin
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
-      summary: update Packing Admin
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/ProfileId"
-        - $ref: "#/components/parameters/Csrf"
-        - $ref: "#/components/parameters/IfMatch"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MutationResult"
-        default:
-          $ref: "#/components/responses/Problem"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PackingAdminPatch"
-    delete:
-      operationId: deletePackingAdmin
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
-      summary: delete Packing Admin
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/ProfileId"
-        - $ref: "#/components/parameters/Csrf"
-        - $ref: "#/components/parameters/IfMatch"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MutationResult"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1admins~1{profileId}
   /packing-lists/{listId}/profiles:
-    get:
-      operationId: searchPackingProfiles
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: search Packing Profiles
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/SearchQuery"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingProfileOptions"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1profiles
   /packing-lists/{listId}/header/edit-baseline:
-    get:
-      operationId: getPackingHeaderBaseline
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: Read only the granted header comparison hash
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/IfNoneMatch"
-      responses:
-        "200":
-          description: Current independently authorized field baseline
-          headers:
-            ETag:
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PackingHeaderBaseline"
-        "304":
-          description: Authorized baseline unchanged; no response body
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1header~1edit-baseline
   /packing-lists/{listId}/header:
-    put:
-      operationId: uploadPackingHeader
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
-      summary: upload Packing Header
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/Csrf"
-        - $ref: "#/components/parameters/IfMatch"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MutationResult"
-        default:
-          $ref: "#/components/responses/Problem"
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              $ref: "#/components/schemas/PackingHeaderUpload"
-    delete:
-      operationId: deletePackingHeader
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
-      summary: delete Packing Header
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/Csrf"
-        - $ref: "#/components/parameters/IfMatch"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MutationResult"
-        default:
-          $ref: "#/components/responses/Problem"
-    get:
-      operationId: getPackingHeader
-      x-surveyor-command: {retryPolicy: read, precondition: none}
-      summary: Read the authorized packing header image
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-      responses:
-        "200":
-          description: Stored JPEG, PNG or GIF bytes; media policy is enforced by the file endpoint
-          content:
-            application/octet-stream:
-              schema:
-                $ref: "#/components/schemas/PackingHeaderBinary"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1header
   /packing-lists/{listId}/archive:
-    post:
-      operationId: archivePackingList
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
-      summary: archive Packing List
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/Csrf"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MutationResult"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1archive
   /packing-lists/{listId}/restore:
-    post:
-      operationId: restorePackingList
-      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
-      summary: restore Packing List
-      parameters:
-        - $ref: "#/components/parameters/Context"
-        - $ref: "#/components/parameters/Locale"
-        - $ref: "#/components/parameters/ListId"
-        - $ref: "#/components/parameters/Csrf"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/MutationResult"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./packing.yaml#/paths/~1packing-lists~1{listId}~1restore
   /events/create-entry:
     $ref: ./events.yaml#/paths/~1events~1create-entry
   /events/create-context:
@@ -1307,65 +384,7 @@ paths:
   /events/{eventId}/automatic-archive:
     $ref: ./events.yaml#/paths/~1events~1{eventId}~1automatic-archive
   /events/{eventId}/guest:
-    get:
-      operationId: getEventGuestEntry
-      x-surveyor-command:
-        retryPolicy: read
-        precondition: none
-      summary: Read the public Event guest-entry title
-      security: []
-      parameters:
-        - &a1
-          $ref: "#/components/parameters/Context"
-        - &a2
-          $ref: "#/components/parameters/Locale"
-        - &a3
-          name: eventId
-          in: path
-          required: true
-          schema:
-            $ref: "#/components/schemas/Uuid"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GuestEntry"
-        default:
-          $ref: "#/components/responses/Problem"
-    post:
-      operationId: registerEventGuest
-      x-surveyor-command:
-        retryPolicy: reconcile-only
-        precondition: none
-      summary: Register a guest through the existing identity completion owner
-      security: []
-      parameters:
-        - *a1
-        - *a2
-        - *a3
-        - $ref: "#/components/parameters/Csrf"
-        - name: regToken
-          in: query
-          schema:
-            type: string
-            maxLength: 256
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/GuestRegistrationInput"
-      responses:
-        "200":
-          description: Authorized operation result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/IdentityResult"
-        default:
-          $ref: "#/components/responses/Problem"
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1guest
 components:
   securitySchemes:
     sessionCookie:
@@ -1477,6 +496,71 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
   schemas:
+    # Historical generated aliases retain source compatibility at this boundary.
+    currentEvent:
+      $ref: ./common.yaml#/schemas/NullableEntityCurrentEvent
+    access:
+      $ref: ./common.yaml#/schemas/NullableEntityAccess
+    EntityCreationEntry:
+      $ref: ./common.yaml#/schemas/EntityCreationEntry
+    EntityResourceEntry:
+      $ref: ./common.yaml#/schemas/EntityResourceEntry
+    ListAssignee:
+      $ref: ./common.yaml#/schemas/ListAssignee
+    EntityDescriptionValue:
+      $ref: ./common.yaml#/schemas/EntityDescriptionValue
+    BasicEntityMetadataPatch:
+      $ref: ./common.yaml#/schemas/BasicEntityMetadataPatch
+    EntityDescriptionPatch:
+      $ref: ./common.yaml#/schemas/EntityDescriptionPatch
+    EntityDescriptionBaseline:
+      $ref: ./common.yaml#/schemas/EntityDescriptionBaseline
+    EntityPermissionDefaultsBaseline:
+      $ref: ./common.yaml#/schemas/EntityPermissionDefaultsBaseline
+    EntityAdministratorBaseline:
+      $ref: ./common.yaml#/schemas/EntityAdministratorBaseline
+    EntityHeaderBaseline:
+      $ref: ./common.yaml#/schemas/EntityHeaderBaseline
+    ListAssignmentResult:
+      $ref: ./common.yaml#/schemas/ListAssignmentResult
+    EntityCreationContext:
+      $ref: ./common.yaml#/schemas/EntityCreationContext
+    EntityCreationResult:
+      $ref: ./common.yaml#/schemas/EntityCreationResult
+    ListOrderBaseline:
+      $ref: ./common.yaml#/schemas/ListOrderBaseline
+    ListItemOrderInput:
+      $ref: ./common.yaml#/schemas/ListItemOrderInput
+    EntityEventChangeInput:
+      $ref: ./common.yaml#/schemas/EntityEventChangeInput
+    EntityEventChangeResult:
+      $ref: ./common.yaml#/schemas/EntityEventChangeResult
+    EntityAdministratorProfileOption:
+      $ref: ./common.yaml#/schemas/EntityAdministratorProfileOption
+    EntityAdministratorProfileOptions:
+      $ref: ./common.yaml#/schemas/EntityAdministratorProfileOptions
+    EntityAdministrator:
+      $ref: ./common.yaml#/schemas/EntityAdministrator
+    EntityAdministratorInput:
+      $ref: ./common.yaml#/schemas/EntityAdministratorInput
+    EntityAdministratorPatch:
+      $ref: ./common.yaml#/schemas/EntityAdministratorPatch
+    EntityCurrentEvent:
+      $ref: ./common.yaml#/schemas/EntityCurrentEvent
+    EntityArchive:
+      $ref: ./common.yaml#/schemas/EntityArchive
+    EntityAccess:
+      $ref: ./common.yaml#/schemas/EntityAccess
+    ListSettings:
+      $ref: ./common.yaml#/schemas/ListSettings
+    EntityHeaderUpload:
+      $ref: ./common.yaml#/schemas/EntityHeaderUpload
+    EntityHeaderBinary:
+      $ref: ./common.yaml#/schemas/EntityHeaderBinary
+    NullableEntityCurrentEvent:
+      $ref: ./common.yaml#/schemas/NullableEntityCurrentEvent
+    NullableEntityAccess:
+      $ref: ./common.yaml#/schemas/NullableEntityAccess
     ActivityRequirementRole:
       $ref: ./activity.yaml#/schemas/ActivityRequirementRole
     ActivityRequirementStay:
@@ -1640,15 +724,15 @@ components:
     SurveySettings:
       $ref: ./surveys.yaml#/schemas/SurveySettings
     DriversEventOption:
-      $ref: ./common.yaml#/schemas/EventPickerOption
+      $ref: ./events.yaml#/schemas/EventPickerOption
     DriversEventOptions:
-      $ref: ./common.yaml#/schemas/EventPickerOptions
+      $ref: ./events.yaml#/schemas/EventPickerOptions
     DriversCreateEntry:
-      $ref: ./common.yaml#/schemas/PackingCreateEntry
+      $ref: ./drivers.yaml#/schemas/DriversCreateEntry
     DriversResourceEntry:
-      $ref: ./common.yaml#/schemas/PackingResourceEntry
+      $ref: ./drivers.yaml#/schemas/DriversResourceEntry
     DriversAssignee:
-      $ref: ./common.yaml#/schemas/PackingAssignee
+      $ref: ./drivers.yaml#/schemas/DriversAssignee
     DriversItemView:
       $ref: ./drivers.yaml#/schemas/DriversItemView
     DriversListView:
@@ -1656,63 +740,63 @@ components:
     DriversMetadata:
       $ref: ./drivers.yaml#/schemas/DriversMetadata
     DriversDescriptionValue:
-      $ref: ./common.yaml#/schemas/PackingDescriptionValue
+      $ref: ./drivers.yaml#/schemas/DriversDescriptionValue
     DriversMetadataPatch:
-      $ref: ./common.yaml#/schemas/PackingMetadataPatch
+      $ref: ./drivers.yaml#/schemas/DriversMetadataPatch
     DriversDescriptionPatch:
-      $ref: ./common.yaml#/schemas/PackingDescriptionPatch
+      $ref: ./drivers.yaml#/schemas/DriversDescriptionPatch
     DriversDescriptionBaseline:
-      $ref: ./common.yaml#/schemas/PackingDescriptionBaseline
+      $ref: ./drivers.yaml#/schemas/DriversDescriptionBaseline
     DriversDefaultsBaseline:
-      $ref: ./common.yaml#/schemas/PackingDefaultsBaseline
+      $ref: ./drivers.yaml#/schemas/DriversDefaultsBaseline
     DriversAdminBaseline:
-      $ref: ./common.yaml#/schemas/PackingAdminBaseline
+      $ref: ./drivers.yaml#/schemas/DriversAdminBaseline
     DriversHeaderBaseline:
-      $ref: ./common.yaml#/schemas/PackingHeaderBaseline
+      $ref: ./drivers.yaml#/schemas/DriversHeaderBaseline
     DriversAssignmentResult:
-      $ref: ./common.yaml#/schemas/PackingAssignmentResult
+      $ref: ./drivers.yaml#/schemas/DriversAssignmentResult
     DriversCreateContext:
-      $ref: ./common.yaml#/schemas/PackingCreateContext
+      $ref: ./drivers.yaml#/schemas/DriversCreateContext
     DriversNewItem:
       $ref: ./drivers.yaml#/schemas/DriversNewItem
     DriversCreateInput:
       $ref: ./drivers.yaml#/schemas/DriversCreateInput
     DriversCreated:
-      $ref: ./common.yaml#/schemas/PackingCreated
+      $ref: ./drivers.yaml#/schemas/DriversCreated
     DriversItemPatch:
       $ref: ./drivers.yaml#/schemas/DriversItemPatch
     DriversItemEditBaseline:
       $ref: ./drivers.yaml#/schemas/DriversItemEditBaseline
     DriversOrderEditBaseline:
-      $ref: ./common.yaml#/schemas/PackingOrderEditBaseline
+      $ref: ./drivers.yaml#/schemas/DriversOrderEditBaseline
     DriversItemOrder:
-      $ref: ./common.yaml#/schemas/PackingItemOrder
+      $ref: ./drivers.yaml#/schemas/DriversItemOrder
     DriversEventChange:
-      $ref: ./common.yaml#/schemas/PackingEventChange
+      $ref: ./drivers.yaml#/schemas/DriversEventChange
     DriversEventChanged:
-      $ref: ./common.yaml#/schemas/PackingEventChanged
+      $ref: ./common.yaml#/schemas/EntityEventChangeResult
     DriversProfileOption:
-      $ref: ./common.yaml#/schemas/PackingProfileOption
+      $ref: ./drivers.yaml#/schemas/DriversProfileOption
     DriversProfileOptions:
-      $ref: ./common.yaml#/schemas/PackingProfileOptions
+      $ref: ./drivers.yaml#/schemas/DriversProfileOptions
     DriversAdmin:
-      $ref: ./common.yaml#/schemas/PackingAdmin
+      $ref: ./drivers.yaml#/schemas/DriversAdmin
     DriversAdminInput:
-      $ref: ./common.yaml#/schemas/PackingAdminInput
+      $ref: ./drivers.yaml#/schemas/DriversAdminInput
     DriversAdminPatch:
-      $ref: ./common.yaml#/schemas/PackingAdminPatch
+      $ref: ./drivers.yaml#/schemas/DriversAdminPatch
     DriversCurrentEvent:
-      $ref: ./common.yaml#/schemas/PackingCurrentEvent
+      $ref: ./drivers.yaml#/schemas/DriversCurrentEvent
     DriversArchive:
-      $ref: ./common.yaml#/schemas/PackingArchive
+      $ref: ./drivers.yaml#/schemas/DriversArchive
     DriversAccess:
-      $ref: ./common.yaml#/schemas/PackingAccess
+      $ref: ./drivers.yaml#/schemas/DriversAccess
     DriversSettings:
-      $ref: ./common.yaml#/schemas/PackingSettings
+      $ref: ./drivers.yaml#/schemas/DriversSettings
     DriversHeaderUpload:
-      $ref: ./common.yaml#/schemas/PackingHeaderUpload
+      $ref: ./drivers.yaml#/schemas/DriversHeaderUpload
     DriversHeaderBinary:
-      $ref: ./common.yaml#/schemas/PackingHeaderBinary
+      $ref: ./drivers.yaml#/schemas/DriversHeaderBinary
     DriversCreateForm:
       $ref: ./drivers.yaml#/schemas/DriversCreateForm
     DriversDuplicate:
@@ -1782,9 +866,11 @@ components:
     PageEntryOutcome:
       $ref: ./common.yaml#/schemas/PageEntryOutcome
     PackingCreateEntry:
-      $ref: ./common.yaml#/schemas/PackingCreateEntry
+      $ref: ./packing.yaml#/schemas/PackingCreateEntry
     PackingResourceEntry:
-      $ref: ./common.yaml#/schemas/PackingResourceEntry
+      $ref: ./packing.yaml#/schemas/PackingResourceEntry
+    EntityCard:
+      $ref: ./common.yaml#/schemas/EntityCard
     OverviewCard:
       $ref: ./overview.yaml#/schemas/OverviewCard
     OverviewRegion:
@@ -1864,7 +950,7 @@ components:
     SessionView:
       $ref: ./session.yaml#/schemas/SessionView
     PackingAssignee:
-      $ref: ./common.yaml#/schemas/PackingAssignee
+      $ref: ./packing.yaml#/schemas/PackingAssignee
     PackingItemView:
       $ref: ./packing.yaml#/schemas/PackingItemView
     PackingListView:
@@ -1872,9 +958,9 @@ components:
     PackingMetadata:
       $ref: ./packing.yaml#/schemas/PackingMetadata
     PackingMetadataPatch:
-      $ref: ./common.yaml#/schemas/PackingMetadataPatch
+      $ref: ./packing.yaml#/schemas/PackingMetadataPatch
     PackingAssignmentResult:
-      $ref: ./common.yaml#/schemas/PackingAssignmentResult
+      $ref: ./packing.yaml#/schemas/PackingAssignmentResult
     HelpDocumentSummary:
       $ref: ./help.yaml#/schemas/HelpDocumentSummary
     HelpNavigationGroup:
@@ -1894,74 +980,74 @@ components:
     PermissionPreset:
       $ref: ./common.yaml#/schemas/PermissionPreset
     PackingCreateContext:
-      $ref: ./common.yaml#/schemas/PackingCreateContext
+      $ref: ./packing.yaml#/schemas/PackingCreateContext
     PackingNewItem:
       $ref: ./packing.yaml#/schemas/PackingNewItem
     PackingCreateInput:
       $ref: ./packing.yaml#/schemas/PackingCreateInput
     PackingCreated:
-      $ref: ./common.yaml#/schemas/PackingCreated
+      $ref: ./packing.yaml#/schemas/PackingCreated
     MutationResult:
       $ref: ./common.yaml#/schemas/MutationResult
     PackingItemPatch:
       $ref: ./packing.yaml#/schemas/PackingItemPatch
     PackingDescriptionValue:
-      $ref: ./common.yaml#/schemas/PackingDescriptionValue
+      $ref: ./packing.yaml#/schemas/PackingDescriptionValue
     PackingDescriptionPatch:
-      $ref: ./common.yaml#/schemas/PackingDescriptionPatch
+      $ref: ./packing.yaml#/schemas/PackingDescriptionPatch
     PackingDescriptionBaseline:
-      $ref: ./common.yaml#/schemas/PackingDescriptionBaseline
+      $ref: ./packing.yaml#/schemas/PackingDescriptionBaseline
     PackingDefaultsBaseline:
-      $ref: ./common.yaml#/schemas/PackingDefaultsBaseline
+      $ref: ./packing.yaml#/schemas/PackingDefaultsBaseline
     PackingAdminBaseline:
-      $ref: ./common.yaml#/schemas/PackingAdminBaseline
+      $ref: ./packing.yaml#/schemas/PackingAdminBaseline
     PackingHeaderBaseline:
-      $ref: ./common.yaml#/schemas/PackingHeaderBaseline
+      $ref: ./packing.yaml#/schemas/PackingHeaderBaseline
     PackingItemEditBaseline:
       $ref: ./packing.yaml#/schemas/PackingItemEditBaseline
     PackingOrderEditBaseline:
-      $ref: ./common.yaml#/schemas/PackingOrderEditBaseline
+      $ref: ./packing.yaml#/schemas/PackingOrderEditBaseline
     PackingItemOrder:
-      $ref: ./common.yaml#/schemas/PackingItemOrder
+      $ref: ./packing.yaml#/schemas/PackingItemOrder
     PackingEventChange:
-      $ref: ./common.yaml#/schemas/PackingEventChange
+      $ref: ./packing.yaml#/schemas/PackingEventChange
     PackingEventChanged:
-      $ref: ./common.yaml#/schemas/PackingEventChanged
+      $ref: ./common.yaml#/schemas/EntityEventChangeResult
     EventPickerQuery:
-      $ref: ./common.yaml#/schemas/EventPickerQuery
+      $ref: ./events.yaml#/schemas/EventPickerQuery
     EventPickerOption:
-      $ref: ./common.yaml#/schemas/EventPickerOption
+      $ref: ./events.yaml#/schemas/EventPickerOption
     EventPickerOptions:
-      $ref: ./common.yaml#/schemas/EventPickerOptions
+      $ref: ./events.yaml#/schemas/EventPickerOptions
     # Keep the existing backend declaration names during its separately reviewed
     # relocation. These aliases have no independent wire definition; selectors and
     # new feature consumers use the shared EventPicker owner above.
     PackingEventOption:
-      $ref: ./common.yaml#/schemas/EventPickerOption
+      $ref: ./events.yaml#/schemas/EventPickerOption
     PackingEventOptions:
-      $ref: ./common.yaml#/schemas/EventPickerOptions
+      $ref: ./events.yaml#/schemas/EventPickerOptions
     PackingProfileOption:
-      $ref: ./common.yaml#/schemas/PackingProfileOption
+      $ref: ./packing.yaml#/schemas/PackingProfileOption
     PackingProfileOptions:
-      $ref: ./common.yaml#/schemas/PackingProfileOptions
+      $ref: ./packing.yaml#/schemas/PackingProfileOptions
     PackingAdmin:
-      $ref: ./common.yaml#/schemas/PackingAdmin
+      $ref: ./packing.yaml#/schemas/PackingAdmin
     PackingAdminInput:
-      $ref: ./common.yaml#/schemas/PackingAdminInput
+      $ref: ./packing.yaml#/schemas/PackingAdminInput
     PackingAdminPatch:
-      $ref: ./common.yaml#/schemas/PackingAdminPatch
+      $ref: ./packing.yaml#/schemas/PackingAdminPatch
     PackingCurrentEvent:
-      $ref: ./common.yaml#/schemas/PackingCurrentEvent
+      $ref: ./packing.yaml#/schemas/PackingCurrentEvent
     PackingArchive:
-      $ref: ./common.yaml#/schemas/PackingArchive
+      $ref: ./packing.yaml#/schemas/PackingArchive
     PackingAccess:
-      $ref: ./common.yaml#/schemas/PackingAccess
+      $ref: ./packing.yaml#/schemas/PackingAccess
     PackingSettings:
-      $ref: ./common.yaml#/schemas/PackingSettings
+      $ref: ./packing.yaml#/schemas/PackingSettings
     PackingHeaderUpload:
-      $ref: ./common.yaml#/schemas/PackingHeaderUpload
+      $ref: ./packing.yaml#/schemas/PackingHeaderUpload
     PackingHeaderBinary:
-      $ref: ./common.yaml#/schemas/PackingHeaderBinary
+      $ref: ./packing.yaml#/schemas/PackingHeaderBinary
     PackingCreateForm:
       $ref: ./packing.yaml#/schemas/PackingCreateForm
     PackingDuplicate:

@@ -1,7 +1,7 @@
 
 import {readEventLinkSelection} from '../modules/event/linkage';
 import * as controller from '../controller/activityController';
-import {getEntityViewAdmission} from '../controller/entityAdminController';
+import {getEntityViewAdmission} from '../modules/event/linkage';
 
 import * as service from '../modules/database/services/ActivityService';
 import type {ActivityPlan} from '../modules/database/entities/activity/ActivityPlan';

@@ -1,7 +1,8 @@
 import {normalizeListMetadataPatch as normalizePackingMetadataPatch} from '../../src/backend/controller/entityAdminController';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import packingController from '../../src/backend/controller/packingController';
-import {archiveEntity, archiveExpiredEntities, changeEntityEvent, restoreEntity} from '../../src/backend/controller/entityAdminController';
+import {changeEntityEvent} from '../../src/backend/modules/event/linkage';
+import {archiveEntity, archiveExpiredEntities, restoreEntity} from '../../src/backend/modules/entityArchival';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
 import {PackingAssignment} from '../../src/backend/modules/database/entities/packing/PackingAssignment';
 import {PackingList} from '../../src/backend/modules/database/entities/packing/PackingList';
@@ -26,8 +27,8 @@ function sessionFor(profile: Profile): SessionLike {
 }
 
 /** Typed persistence scenarios reuse the real HTTP normalizer; malformed wire shapes belong to unit transport tests. */
-async function patchPackingMetadata(id: string, body: components['schemas']['PackingMetadataPatch'], token: string | undefined, session: SessionLike) {
-    const patch = normalizePackingMetadataPatch(body) as components['schemas']['PackingMetadataPatch'];
+async function patchPackingMetadata(id: string, body: components['schemas']['BasicEntityMetadataPatch'], token: string | undefined, session: SessionLike) {
+    const patch = normalizePackingMetadataPatch(body) as components['schemas']['BasicEntityMetadataPatch'];
     return applyPackingMetadataCommand(id, patch, token, session);
 }
 

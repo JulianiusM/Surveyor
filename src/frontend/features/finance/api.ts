@@ -1,3 +1,4 @@
+import {createFeatureApiResolver} from '../../app/api';
 import type {components} from '../../../types/api/v1';
 import type {FrontendContext, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {FrontendInputField} from '../../../types/FrontendFeedbackTypes';
@@ -278,10 +279,5 @@ function financeAcceptanceField(path: string): FrontendInputField | undefined {
     return financeInputField(path);
 }
 
-const instances = new WeakMap<FrontendContext['api'], FinanceApi>();
-/** Keep operation selection attached to the existing application transport. */
-export function useFinanceApi(context: FrontendContext): FinanceApi {
-    let api = instances.get(context.api);
-    if (!api) { api = new FinanceApi(context.api); instances.set(context.api, api); }
-    return api;
-}
+/** Reuse this feature adapter for its application-local transport. */
+export const useFinanceApi = createFeatureApiResolver(FinanceApi);

@@ -1,4 +1,5 @@
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {MetadataDraft} from '../../src/frontend/composables/metadataDraft';
 import {readPacked, writePacked} from '../../src/frontend/features/packing/packed';
@@ -396,6 +397,9 @@ describe('typed frontend transport', () => {
         const controller = new AbortController();
         const reading = canceled.metadata(listId, scope, controller.signal, previous);
         const retired = expect(reading).rejects.toBeInstanceOf(ObsoleteRequestError);
+        // Exercise cancellation of an actual dispatched conditional read. A
+        // cancellation during lazy admission has its own nondelivery coverage.
+        await flushPromises();
         controller.abort();
         held.resolve(new Response(null, {status: 304, headers: {'X-Surveyor-Context': scope.context}}));
         await retired;
@@ -474,6 +478,7 @@ describe('typed frontend transport', () => {
         const send = vi.fn(() => result.promise);
         const api = new PackingApi(new FrontendApi(() => current, vi.fn(), send));
         const pending = api.assign(listId, itemId, true, scope);
+        await flushPromises();
         current = false;
         result.resolve(response({listId, itemId, selfAssigned: true, assignedCount: 1, maxAssignees: 1}));
         await expect(pending).rejects.toBeInstanceOf(ObsoleteRequestError);
@@ -610,6 +615,7 @@ describe('identity, refresh and local state boundaries', () => {
         const first = context.changeLocale('de');
         const latest = context.changeLocale('en');
         expect(first).toBe(latest);
+        await flushPromises();
         expect(send).toHaveBeenCalledOnce();
         german.resolve(response(session(scope.context, 'de')));
         await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2));

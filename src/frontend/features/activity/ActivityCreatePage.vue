@@ -74,6 +74,8 @@ const source: FrontendListCreationSource<components['schemas']['ActivityDuplicat
     createEntry: api.createEntry.bind(api), duplicate: api.duplicate.bind(api), initialize, reset,
     draft: () => ({startDate: startDate.value, endDate: endDate.value, slots: slots.value}),
     destination: result => '/activity/' + result.id,
+    /** Capture only in-range slots in stable per-day order for this submission.
+     * Scalar/time normalization never rewrites excluded mounted draft rows. */
     prepare(values, image) {
         // Standalone creation keeps removed-range inputs in memory, submitting only
         // the current date interval. Normalization happens at this one boundary.
@@ -87,6 +89,8 @@ const source: FrontendListCreationSource<components['schemas']['ActivityDuplicat
                     startTime: slot.startTime ? slot.startTime + ':00' : null, endTime: slot.endTime ? slot.endTime + ':00' : null,
                     maxAssignees: Number.parseInt(slot.maxAssignees, 10)};
             })};
+        // The submitted snapshot and original selected image are now fixed;
+        // later input edits cannot replace this admitted creation's payload.
         return {operation: scope => api.createActivity(input, image, scope)};
     },
 };

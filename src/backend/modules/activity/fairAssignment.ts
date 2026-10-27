@@ -89,8 +89,14 @@ function normalizedAttendanceMoment(
     return Math.max(0, Math.min((assignmentMoment(assignment) - start) / (endExclusive - start), 1));
 }
 
+/** Match current normalized positions to required midpoint anchors, then choose
+ * the earliest unused anchor. Exhausted anchors retain the midpoint fallback;
+ * the caller's positions are never reordered or modified. */
 function nextTemporalAnchor(positions: number[], required: number): number {
+    // Center each required assignment's target within its equal share of the stay.
     const available = Array.from({length: required}, (_, index) => (index + 0.5) / required);
+    // Consume the closest remaining target for each existing position before
+    // choosing the next one; sorted positions keep greedy matching deterministic.
     for (const position of [...positions].sort((a, b) => a - b)) {
         if (available.length === 0) break;
         let closestIndex = 0;
@@ -355,6 +361,9 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
         );
         return !warnings.some((warning) => isBlockingWarning(warning.type));
     };
+    /** Check a local default-role source against retained review and current trial
+     * commitments without moving it. The repair caller owns capacity and rollback;
+     * this predicate applies the same attendance/overlap policy as new placements. */
     const canReassign = (
         state: ParticipantState,
         slot: FairAssignmentSlot,
@@ -369,8 +378,12 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
             && (recommendation.manual || recommendation.status === 'APPROVED')
             && (recommendation.operation === 'REASSIGN' ? recommendation.sourceItemId
                 : recommendation.operation === 'UNASSIGN' ? recommendation.itemId : null) === source.id)) return false;
+        // One source cannot back two trial operations, and remembered rejections
+        // remain binding even when an existing assignment supplies the work.
         if (pending.some((assignment) => assignment.sourceSlotId === source.id)) return false;
         if (rejected.has(`${slot.id}:${state.participant.profileId}`)) return false;
+        // Replace only this source in the projected local commitments. Reviewed
+        // targets and sibling-plan reservations still participate in conflicts.
         const projected = [...assignmentsForParticipant(state.key), ...(reviewedTargets[state.key] ?? [])]
             .filter((assignment) => assignment.id !== source.id);
         if (projected.some((assignment) => assignment.id === slot.id)) return false;
@@ -421,10 +434,15 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
         });
 
     let repairNodes = 0;
+    /** Fill a vacancy through bounded in-memory augmenting paths. Successful paths
+     * retain their trial moves; failed branches restore them. Existing saved
+     * assignments stay untouched, including immovable named/reviewed sources. */
     const repairHole = (slot: FairAssignmentSlot, depth: number, visitedSlots: Set<string>): boolean => {
+        // The node budget spans all attempted paths, including failed branches.
         if (depth > MAX_REPAIR_DEPTH || repairNodes >= MAX_REPAIR_NODES) return false;
         repairNodes += 1;
 
+        // Prefer a direct eligible deficit before displacing another proposal.
         const direct = eligibleDeficitParticipants(slot)[0];
         if (direct) {
             addPending({
@@ -435,6 +453,8 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
             return true;
         }
 
+        // Temporarily move pending work, repair its vacated slot, and undo both
+        // visited-path state and the move when that branch cannot complete.
         const movable = [...participants].sort((a, b) => candidateOrder(slot, a, b));
         for (const state of movable) {
             for (const assignment of [...pendingForParticipant(state.key)].sort((a, b) => {
@@ -635,11 +655,16 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
     // bounded repair and permitted overlap-free overfill have exhausted their opportunities.
     // Keep this phase separate so a good temporal anchor never outweighs avoiding an overlap.
     // It adds local proposals, never moves foreign assignments or changes local shift targets.
+    /** Choose a remaining required target that conflicts only with foreign FREE
+     * work after ordinary placement/repair is exhausted. Rank eligible targets
+     * deterministically; this selection never edits the foreign commitments. */
     function choosePrioritySlot(state: ParticipantState): FairAssignmentSlot | undefined {
         const linked = context.linkedPlans?.commitments[state.key] ?? [];
         const local = [...assignmentsForParticipant(state.key), ...(reviewedTargets[state.key] ?? [])];
         let selected: FairAssignmentSlot | undefined;
         let selectedScore: number[] | undefined;
+        // Keep local rejection, capacity and attendance rules before considering
+        // the narrow priority exception for sibling-plan commitments.
         for (let index = 0; index < slots.length; index++) {
             const slot = slots[index];
             if (rejected.has(`${slot.id}:${state.participant.profileId}`)) continue;
@@ -647,10 +672,14 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
             if (!context.plan.allowOverfillAfterFull && slotCount(slot.id) >= slotCapacity(slot.id)) continue;
             const warnings = collectAssignmentWarnings(toAssignmentCandidate(slot), state.participant, local, policy);
             if (warnings.some((warning) => isBlockingWarning(warning.type))) continue;
+            // A priority proposal must overlap foreign optional work, and none
+            // of those conflicts may belong to a REQUIRED plan.
             const conflicts = findOverlapConflicts(toAssignmentCandidate(slot), linked);
             if (!conflicts.length) continue;
             const overlapping = linked.filter((assignment) => conflicts.includes(assignment.id));
             if (overlapping.some((assignment) => assignment.assignmentMode !== 'FREE')) continue;
+            // Prefer fewer conflicts, then less overfill, temporal/boundary fit
+            // and finally the stable slot order used by ordinary placement.
             const score = [
                 conflicts.length,
                 Math.max(slotCount(slot.id) - slotCapacity(slot.id) + 1, 0),

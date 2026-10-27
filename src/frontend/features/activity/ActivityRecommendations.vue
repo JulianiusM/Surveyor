@@ -525,6 +525,8 @@ async function manualPreview(values: ActivityRecommendationRow[]): Promise<compo
 async function save(): Promise<void> {
     if (blocked.value || !workspace.value) return;
     pendingControl.value = 'save';
+    // Retire speculative warning reads before capturing this complete batch;
+    // only its own current actor's preview may open the confirmation gate.
     previewing.value = true;
     sequence++;
     previewAbort?.abort();
@@ -535,6 +537,8 @@ async function save(): Promise<void> {
         if (!active || !context.isCurrent(scope)) return;
         warnings.value = preview.warnings;
         previewFailed.value = false;
+        // Freeze the server's digest with these values. Later edits cannot
+        // replace the batch which the human acknowledges before application.
         frozen.value = {...body, ...(preview.overlapConfirmation ? {overlapConfirmation: preview.overlapConfirmation} : {})};
         if (preview.overlapConfirmation) confirmation.value = true;
         else {
@@ -542,6 +546,8 @@ async function save(): Promise<void> {
             await applyFrozen();
         }
     } catch (failure) {
+        // A retired response cannot clear another visit's frozen draft or
+        // publish feedback after that observer has lost its read authority.
         if (active && !revoked.value && context.isCurrent(scope)) {
             frozen.value = null;
             previewFailed.value = true;

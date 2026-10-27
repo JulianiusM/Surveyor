@@ -14,7 +14,7 @@ import settings from '../modules/settings';
  */
 export function addNextQuery(localPart: string, notStartsWith?: string): RequestHandler {
     /** Redirect to the same entry with bounded navigation before its existing work. */
-    return function preserveInternalReferrer(req, res, next): void {
+    return /** Fill only an absent, safe same-application return choice. */ function preserveInternalReferrer(req, res, next): void {
         // Explicit values, including malformed values, belong to the existing
         // entry sanitizer. A referrer must never replace that caller's choice.
         if (req.query.next !== undefined && req.query.next !== '') return next();

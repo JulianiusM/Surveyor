@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import activityController from '../../src/backend/controller/activityController';
-import {classifyArchiveCommandError} from '../../src/backend/controller/entityAdminController';
+import {classifyArchiveCommandError} from '../../src/backend/modules/entityArchival';
 import type {ActivityPlan} from '../../src/backend/modules/database/entities/activity/ActivityPlan';
 import {APIError, ExpectedError} from '../../src/backend/modules/lib/errors';
 import {ApiProblem, classifyApiError, declaredApiProblem, validatedProblemBody} from '../../src/backend/modules/api/problem';

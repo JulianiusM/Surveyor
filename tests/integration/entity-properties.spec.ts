@@ -5,10 +5,16 @@ import {randomUUID} from 'node:crypto';
 import eventController from '../../src/backend/controller/eventController';
 import packingController from '../../src/backend/controller/packingController';
 import surveyController from '../../src/backend/controller/surveyController';
-import {archiveEntity, canAccessEntityView, changeEntityEvent, getEntityPropertyPresentation, requireEntityPropertyUpdate} from '../../src/backend/controller/entityAdminController';
+import {getEntityPropertyPresentation, requireEntityPropertyUpdate} from '../../src/backend/controller/entityAdminController';
+import {canAccessEntityView, changeEntityEvent} from '../../src/backend/modules/event/linkage';
+import {archiveEntity} from '../../src/backend/modules/entityArchival';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
 import {Event} from '../../src/backend/modules/database/entities/event/Event';
 import {EventRegistration} from '../../src/backend/modules/database/entities/event/EventRegistration';
+import {EventInvoicePool} from '../../src/backend/modules/database/entities/event/EventInvoicePool';
+import {PackingList} from '../../src/backend/modules/database/entities/packing/PackingList';
+import {ActivityPlanRequirement} from '../../src/backend/modules/database/entities/activity/ActivityPlanRequirement';
+import {SurveyResponse} from '../../src/backend/modules/database/entities/surveys/SurveyResponse';
 import {EntityAdminAssignment} from '../../src/backend/modules/database/entities/permissions/EntityAdminAssignment';
 import {EntityPermissions} from '../../src/backend/modules/database/entities/permissions/EntityPermissions';
 import type {Profile} from '../../src/backend/modules/database/entities/user/Profile';
@@ -16,10 +22,13 @@ import * as adminService from '../../src/backend/modules/database/services/Entit
 import * as eventService from '../../src/backend/modules/database/services/EventService';
 import * as packingService from '../../src/backend/modules/database/services/PackingService';
 import * as surveyService from '../../src/backend/modules/database/services/SurveyService';
+import * as activityService from '../../src/backend/modules/database/services/ActivityService';
+import * as requirementService from '../../src/backend/modules/database/services/ActivityRequirementService';
+import * as invoiceService from '../../src/backend/modules/database/services/EventInvoiceService';
 import {PERM} from '../../src/backend/modules/lib/permissions';
 import {buildPermBundle} from '../../src/backend/modules/permissionEngine';
 import type {SessionLike} from '../../src/types/PermissionTypes';
-import {createIntegrationEvent, createPackingListWithItem, createSurveyWithCombinations, persistIntegrationProfile} from '../keywords/coreDomainKeywords';
+import {assignPackingItem, createActivityPlanWithSlot, createIntegrationEvent, createPackingListWithItem, createSurveyWithCombinations, persistIntegrationProfile} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 
 let owner: Profile;
@@ -44,6 +53,46 @@ beforeAll(async () => {
 afterAll(closeIntegrationDatabase);
 
 describe('entity property permissions and atomic persistence', () => {
+    it('loads an invoice pool through its actual Event parent and retains cascade deletion', async () => {
+        const eventId = await createIntegrationEvent(owner.id, 'Invoice parent relation');
+        const poolId = await invoiceService.createPool(eventId, 'Relation metadata pool', undefined, 'EQUAL', false, true, true);
+        const pool = await invoiceService.getPoolWithInvoices(poolId);
+        expect(pool?.event.id).toBe(eventId);
+        const relation = AppDataSource.getMetadata(EventInvoicePool).findRelationWithPropertyPath('event')!;
+        expect(relation.inverseEntityMetadata.target).toBe(Event);
+        expect(relation.inverseRelation).toBeUndefined();
+        await eventService.deleteEvent(eventId);
+        expect(await AppDataSource.getRepository(EventInvoicePool).findOneBy({id: poolId})).toBeNull();
+    });
+
+    it('loads Packing item and assignment collections through their single canonical relations', async () => {
+        const [id, item] = await createPackingListWithItem(owner.id);
+        await assignPackingItem(item.id, editor.id);
+        const list = await AppDataSource.getRepository(PackingList).findOne({where: {id}, relations: {items: true, assignments: true}});
+        expect(list?.items.map(row => row.id)).toEqual([item.id]);
+        expect(list?.assignments).toHaveLength(1);
+        expect(list?.assignments[0]).toMatchObject({itemId: item.id, profileId: editor.id});
+        expect(AppDataSource.getMetadata(PackingList).relations.map(row => row.propertyPath))
+            .toEqual(expect.arrayContaining(['items', 'assignments']));
+        expect(AppDataSource.getMetadata(PackingList).relations.map(row => row.propertyPath)).not.toContain('packingItems');
+        expect(AppDataSource.getMetadata(PackingList).relations.map(row => row.propertyPath)).not.toContain('packingAssignments');
+    });
+
+    it('loads numeric Activity role and Survey item relation IDs without changing their targets', async () => {
+        const planId = await createActivityPlanWithSlot(owner.id);
+        const [role] = await activityService.ensureRoleId(planId, 'Numeric role');
+        await requirementService.replaceRoleRequirements(planId, [{roleId: role!.id, requiredShifts: 2}]);
+        const requirement = await AppDataSource.getRepository(ActivityPlanRequirement).findOneByOrFail({entity: {id: planId}});
+        expect(requirement.roleId).toBe(role!.id);
+        expect(typeof requirement.roleId).toBe('number');
+
+        const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
+        await surveyService.saveResponse(surveyId, editor.id, combinations[0]!.id, 'yes');
+        const response = await AppDataSource.getRepository(SurveyResponse).findOneByOrFail({entity: {id: surveyId}, profile: {id: editor.id}});
+        expect(response.itemId).toBe(combinations[0]!.id);
+        expect(typeof response.itemId).toBe('number');
+    });
+
     it('projects only title data for a title-only editor and rejects forged metadata', async () => {
         const [id] = await createPackingListWithItem(owner.id);
         await adminService.addAdmin('packing', id, editor.id, PERM.EDIT_TITLE);

@@ -18,6 +18,7 @@ import {Profile} from '../../src/backend/modules/database/entities/user/Profile'
 import * as invoiceService from '../../src/backend/modules/database/services/EventInvoiceService';
 import * as eventService from '../../src/backend/modules/database/services/EventService';
 import mailer from '../../src/backend/modules/email';
+import {projectEventParticipants} from '../../src/backend/modules/lib/util';
 import {createInvoiceSubmissionCase, type InvoiceSubmissionCase} from '../factories/invoiceFactory';
 import {
     createIntegrationEvent,
@@ -388,7 +389,7 @@ describe('staged takeover notifications', () => {
 
         // Old payer, new payer, and beneficiary each receive one coherent message, even for reassignment.
         expect(sendEmail).toHaveBeenCalledTimes(3);
-        const recipients = await eventService.getEventParticipants(event.id);
+        const recipients = await eventService.getEventParticipantRows(event.id).then(projectEventParticipants);
         const beneficiary = recipients.find(row => Number(row.id) === secondId)!;
         expect(sendEmail.mock.calls.map(call => call[0].address).sort())
             .toEqual([participant.user!.email, third.user!.email, beneficiary.email].sort());

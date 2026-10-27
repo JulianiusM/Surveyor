@@ -2,7 +2,8 @@
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {defineComponent, nextTick, ref} from 'vue';
-import {flushPromises, mount} from '@vue/test-utils';
+import {mount} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import I18NextVue from 'i18next-vue';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import {createFrontendApp, initializeFrontendApp} from '../../src/frontend/app/createApp';
@@ -11,6 +12,7 @@ import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
 import {frontendContextKey} from '../../src/frontend/app/context';
 import {useDraftProtection} from '../../src/frontend/composables/command';
 import ProfileWorkflowPage from '../../src/frontend/features/identity/ProfileWorkflowPage.vue';
+import {IdentityAdministrationApi} from '../../src/frontend/features/identity/administrationApi';
 import type {components} from '../../src/types/api/v1';
 import type {FrontendBootstrap, FrontendProfileWorkflow} from '../../src/types/FrontendTypes';
 
@@ -375,6 +377,7 @@ describe('SPA profile workflows', () => {
         expect(button.getAttribute('aria-busy')).toBe('false');
         expect(input.disabled).toBe(false);
         expect(submit(form).defaultPrevented).toBe(true);
+        await flushPromises();
         expect(request).toHaveBeenCalledOnce();
         expect(new FormData(form).get(candidate.field)).toBe(token);
 
@@ -547,6 +550,8 @@ describe('SPA profile workflows', () => {
         expect(refresh.disabled).toBe(false);
         expect(request).toHaveBeenCalledTimes(2);
         failAdmission = false;
+        const admissionReads = vi.spyOn(IdentityAdministrationApi.prototype, 'workflowEntry');
+        admissionReads.mockClear();
         retry.click();
         await flushPromises();
         expect(host.querySelector('#forgotForm')).toBe(form);
@@ -556,11 +561,22 @@ describe('SPA profile workflows', () => {
         expect(document.activeElement).toBe(input);
         expect([input.selectionStart, input.selectionEnd]).toEqual([2, 8]);
         expect(host.querySelector('[data-read-retry-at]')).toBeNull();
-        // Session recovery can resume one automatic GET. The shared admission
-        // owner replaces it with its own fresh read before certifying recovery.
+        // Session recovery resumes an automatic read, then the fresh admission
+        // owner replaces it. Lazy preflight retires that first attempt before
+        // HTTP; both real API attempts still carry the same current scope.
+        expect(admissionReads).toHaveBeenCalledTimes(2);
+        const [automatic, fresh] = admissionReads.mock.calls;
+        expect(automatic!.slice(0, 2)).toEqual(fresh!.slice(0, 2));
+        expect(automatic![2]).toEqual(fresh![2]);
+        const admittedSession = context.session.value;
+        if (!admittedSession) throw new Error('The recovered workflow must retain its admitted actor.');
+        expect(fresh![2].context).toBe(admittedSession.context);
+        expect(fresh![2].epoch).toBe(context.epoch.value);
+        expect(automatic![3]!.aborted).toBe(true);
+        expect(fresh![3]!.aborted).toBe(false);
         expect(request.mock.calls.map(([received]) => new URL((received as Request).url).pathname))
             .toEqual(['/api/v1/session', '/api/v1/profiles/workflow-entry', '/api/v1/session',
-                '/api/v1/profiles/workflow-entry', '/api/v1/profiles/workflow-entry']);
+                '/api/v1/profiles/workflow-entry']);
         expect(request.mock.calls.every(([received]) => (received as Request).method === 'GET')).toBe(true);
         expectPrivateCache(context);
     });

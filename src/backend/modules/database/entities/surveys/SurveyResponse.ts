@@ -23,7 +23,7 @@ import {SurveyCombination} from "./SurveyCombination";
 export const SURVEY_ANSWERS: SurveyAnswer[] = ["yes", "no", "maybe"];
 
 @Entity("survey_responses", {schema: "surveyor"})
-export class SurveyResponse extends DefaultNumericEntityItemAssignment {
+export class SurveyResponse extends DefaultNumericEntityItemAssignment<number> {
     @Column("simple-enum", {
         name: "answer",
         enum: SURVEY_ANSWERS,
@@ -32,7 +32,7 @@ export class SurveyResponse extends DefaultNumericEntityItemAssignment {
     answer!: SurveyAnswer;
 
     @RelationId((a: SurveyResponse) => a.item)
-    itemId!: string;
+    itemId!: number;
 
     @ManyToOne(
         () => SurveyCombination,

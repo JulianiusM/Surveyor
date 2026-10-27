@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {flushPromises, mount} from '@vue/test-utils';
+import {mount} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import {defineComponent} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
@@ -26,7 +27,7 @@ afterEach(() => { vi.restoreAllMocks(); document.body.innerHTML = ''; });
 
 /** The HTTP fixture changes the shared grant while the production query observer owns the form. */
 async function mountSettings() {
-    let settings: components['schemas']['PackingSettings'] = {
+    let settings: components['schemas']['ListSettings'] = {
         id: listId, title: 'Shared equipment', settingsToken: '"edit-settingsOriginal"', headerUrl: null,
         headerVersion: null, editableFields: [], currentEvent: null,
         archive: {direct: false, inherited: false, archivedAt: null, autoArchivePaused: false, eventUrl: null},

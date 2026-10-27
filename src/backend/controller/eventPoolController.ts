@@ -23,7 +23,7 @@ import * as invoiceService from '../modules/database/services/EventInvoiceServic
 import * as eventService from '../modules/database/services/EventService';
 
 import {APIError} from '../modules/lib/errors';
-import {resolveActorLabel} from '../modules/lib/util';
+import {resolveActorLabel, projectEventParticipants} from '../modules/lib/util';
 import * as poolOperations from '../modules/invoice/poolOperations';
 import * as invoiceOperations from '../modules/invoice/invoiceOperations';
 import {savePoolTakeovers} from '../modules/invoice/takeovers';
@@ -225,7 +225,7 @@ export async function readEventFinance(eventId: string, session: SessionLike,
     const {registration} = await admitFinance(eventId, session, audience);
     const text = financeFormatter(locale);
     const [pools, participants] = await Promise.all([
-        invoiceService.listPools(eventId), eventService.getEventParticipants(eventId),
+        invoiceService.listPools(eventId), eventService.getEventParticipantRows(eventId).then(projectEventParticipants),
     ]);
     // Eligibility and displayed pool values use this request's same hydrated
     // snapshot. Keep only eligible IDs, without copying or loading another graph.
@@ -260,7 +260,7 @@ export async function readEventFinanceBreakdown(eventId: string, poolId: string,
     if (audience === 'participant' && share.registrationId !== registration!.id) throw new ApiProblem('FORBIDDEN');
 
     // The existing pure presentation owner selects only this payer's frozen contributions and coverage.
-    const participants = await eventService.getEventParticipants(eventId);
+    const participants = await eventService.getEventParticipantRows(eventId).then(projectEventParticipants);
     const payerName = participants.find(row => row.id === share.registrationId)?.name;
     const snapshot = pool.calculationSnapshot;
     const values = financeShareValues(share);
@@ -573,7 +573,7 @@ async function updateTakeovers(event: Event, poolId: string, body: any, session:
     if (!changes.applied || (!changes.added.length && !changes.removed.length)) return;
     // Notify only applied changes after commit; mail failures cannot undo their persisted inputs.
     try {
-        const participants = await eventService.getEventParticipants(event.id);
+        const participants = await eventService.getEventParticipantRows(event.id).then(projectEventParticipants);
         await notifyTakeoverChanges(event, pool, changes, resolveActorLabel(session), participants);
     } catch (error) {
         console.error(invoiceText('takeoverNotificationFailed'), error);
@@ -756,7 +756,7 @@ async function retractInvoice(event: Event, poolId: string, invoiceId: string, b
 async function loadPoolPreview(event: Event, poolId: string) {
     // Hydrate one authorized pool and its event participants, then return the domain's read-only DTO.
     const pool = await ensurePool(event, poolId);
-    const participants = await eventService.getEventParticipants(event.id);
+    const participants = await eventService.getEventParticipantRows(event.id).then(projectEventParticipants);
     const registrations = await eventService.getRegistrationsForEvent(event.id);
     return {pool, preview: buildPoolCalculationPreview(pool, participants, registrations)};
 }
@@ -771,7 +771,7 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
     const options = prepareCalculationOptions(body);
     // Fetch authorized source data once, then let the calculation module build allocations and provenance.
     const pool = await ensurePool(event, poolId);
-    const participants = await eventService.getEventParticipants(event.id);
+    const participants = await eventService.getEventParticipantRows(event.id).then(projectEventParticipants);
     const registrations = await eventService.getRegistrationsForEvent(event.id);
     const {sharePayloads, approvedInvoiceIds, explanation} = calculatePoolInputs(pool, participants, registrations);
     // A preview must still match its input revision; the commit repeats the comparison under its lock.
@@ -826,7 +826,7 @@ async function notifyPoolShares(event: Event, poolId: string, body: any = {}, se
     reason: 'closed' | 'recalculated' | 'requested' = 'requested', excludedRegistrationIds: readonly number[] = []) {
     const options = prepareCalculationOptions(body);
     // Notifications describe the saved calculation; load contact data without recalculating any shares.
-    const participants = new Map((await eventService.getEventParticipants(event.id)).map((participant) => [Number(participant.id), participant]));
+    const participants = new Map((await eventService.getEventParticipantRows(event.id).then(projectEventParticipants)).map((participant) => [Number(participant.id), participant]));
     const pool = await ensurePool(event, poolId);
     if (pool.status !== 'CLOSED') throw new APIError(invoiceText('closeThePoolBeforeSendingSettlementEmails'), {}, 400, {cause: invoiceRejectionCause('closeThePoolBeforeSendingSettlementEmails')});
     if (options.expectedRevision !== undefined && options.expectedRevision !== pool.calculationRevision) {
@@ -867,7 +867,7 @@ async function getInvoiceSharesPdfData(event: Event, poolId: string, query: unkn
     const pool = await invoiceService.getPoolWithInvoices(poolId);
     assertInvoiceSharesExportable(pool, event.id);
     // Current names decorate saved rows only; every amount and calculation input stays frozen.
-    const participants = await eventService.getEventParticipants(event.id);
+    const participants = await eventService.getEventParticipantRows(event.id).then(projectEventParticipants);
     const names = new Map(participants.map(participant => [participant.id, participant.name]));
     const shares = pool.shares.map(share => ({
         ...share, name: names.get(share.registrationId) ?? invoiceText('participant', {id: share.registrationId}),

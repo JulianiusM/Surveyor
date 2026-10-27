@@ -215,7 +215,7 @@ async function retryProfiles(): Promise<void> {
     await profiles.refetch({cancelRefetch: false});
 }
 
-function profileOptionValue(profile: components['schemas']['PackingProfileOption']): string {
+function profileOptionValue(profile: components['schemas']['EntityAdministratorProfileOption']): string {
     return profile.username || profile.profileId;
 }
 

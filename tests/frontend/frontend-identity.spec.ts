@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {flushPromises, mount} from '@vue/test-utils';
+import {mount} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import {defineComponent, h} from 'vue';
 import {createMemoryHistory, createRouter, useRoute} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
@@ -128,6 +129,7 @@ describe('identity forms and packing overview navigation', () => {
             // identity command and generated HTTP decoder, holding only delivery.
             await wrapper.findAll('form')[0].trigger('submit');
             expect(password.element.disabled).toBe(true);
+            await flushPromises();
             expect(request).toHaveBeenCalledOnce();
             // Happy DOM does not release native focus on disabling like Chromium.
             document.body.tabIndex = -1;

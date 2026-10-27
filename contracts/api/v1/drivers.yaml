@@ -1,10 +1,10 @@
 schemas:
   DriversCreateEntry:
-    $ref: ./common.yaml#/schemas/PackingCreateEntry
+    $ref: ./common.yaml#/schemas/EntityCreationEntry
   DriversResourceEntry:
-    $ref: ./common.yaml#/schemas/PackingResourceEntry
+    $ref: ./common.yaml#/schemas/EntityResourceEntry
   DriversAssignee:
-    $ref: ./common.yaml#/schemas/PackingAssignee
+    $ref: ./common.yaml#/schemas/ListAssignee
   DriversItemView:
     type: object
     additionalProperties: false
@@ -207,21 +207,21 @@ schemas:
       inheritedArchived:
         type: boolean
   DriversDescriptionValue:
-    $ref: ./common.yaml#/schemas/PackingDescriptionValue
+    $ref: ./common.yaml#/schemas/EntityDescriptionValue
   DriversMetadataPatch:
-    $ref: ./common.yaml#/schemas/PackingMetadataPatch
+    $ref: ./common.yaml#/schemas/BasicEntityMetadataPatch
   DriversDescriptionPatch:
-    $ref: ./common.yaml#/schemas/PackingDescriptionPatch
+    $ref: ./common.yaml#/schemas/EntityDescriptionPatch
   DriversDescriptionBaseline:
-    $ref: ./common.yaml#/schemas/PackingDescriptionBaseline
+    $ref: ./common.yaml#/schemas/EntityDescriptionBaseline
   DriversDefaultsBaseline:
-    $ref: ./common.yaml#/schemas/PackingDefaultsBaseline
+    $ref: ./common.yaml#/schemas/EntityPermissionDefaultsBaseline
   DriversAdminBaseline:
-    $ref: ./common.yaml#/schemas/PackingAdminBaseline
+    $ref: ./common.yaml#/schemas/EntityAdministratorBaseline
   DriversHeaderBaseline:
-    $ref: ./common.yaml#/schemas/PackingHeaderBaseline
+    $ref: ./common.yaml#/schemas/EntityHeaderBaseline
   DriversAssignmentResult:
-    $ref: ./common.yaml#/schemas/PackingAssignmentResult
+    $ref: ./common.yaml#/schemas/ListAssignmentResult
   PermissionDefaults:
     $ref: ./common.yaml#/schemas/PermissionDefaults
   PermissionDefaultsPatch:
@@ -231,7 +231,7 @@ schemas:
   PermissionPreset:
     $ref: ./common.yaml#/schemas/PermissionPreset
   DriversCreateContext:
-    $ref: ./common.yaml#/schemas/PackingCreateContext
+    $ref: ./common.yaml#/schemas/EntityCreationContext
   DriversNewItem:
     type: object
     additionalProperties: false
@@ -276,7 +276,7 @@ schemas:
       defaultPermissions:
         $ref: "#/schemas/PermissionDefaults"
   DriversCreated:
-    $ref: ./common.yaml#/schemas/PackingCreated
+    $ref: ./common.yaml#/schemas/EntityCreationResult
   MutationResult:
     $ref: ./common.yaml#/schemas/MutationResult
   DriversItemPatch:
@@ -338,35 +338,35 @@ schemas:
       editToken:
         $ref: "#/schemas/DriversItemView/properties/editToken"
   DriversOrderEditBaseline:
-    $ref: ./common.yaml#/schemas/PackingOrderEditBaseline
+    $ref: ./common.yaml#/schemas/ListOrderBaseline
   DriversItemOrder:
-    $ref: ./common.yaml#/schemas/PackingItemOrder
+    $ref: ./common.yaml#/schemas/ListItemOrderInput
   DriversEventChange:
-    $ref: ./common.yaml#/schemas/PackingEventChange
+    $ref: ./common.yaml#/schemas/EntityEventChangeInput
   DriversEventChanged:
-    $ref: ./common.yaml#/schemas/PackingEventChanged
+    $ref: ./common.yaml#/schemas/EntityEventChangeResult
   DriversProfileOption:
-    $ref: ./common.yaml#/schemas/PackingProfileOption
+    $ref: ./common.yaml#/schemas/EntityAdministratorProfileOption
   DriversProfileOptions:
-    $ref: ./common.yaml#/schemas/PackingProfileOptions
+    $ref: ./common.yaml#/schemas/EntityAdministratorProfileOptions
   DriversAdmin:
-    $ref: ./common.yaml#/schemas/PackingAdmin
+    $ref: ./common.yaml#/schemas/EntityAdministrator
   DriversAdminInput:
-    $ref: ./common.yaml#/schemas/PackingAdminInput
+    $ref: ./common.yaml#/schemas/EntityAdministratorInput
   DriversAdminPatch:
-    $ref: ./common.yaml#/schemas/PackingAdminPatch
+    $ref: ./common.yaml#/schemas/EntityAdministratorPatch
   DriversCurrentEvent:
-    $ref: ./common.yaml#/schemas/PackingCurrentEvent
+    $ref: ./common.yaml#/schemas/EntityCurrentEvent
   DriversArchive:
-    $ref: ./common.yaml#/schemas/PackingArchive
+    $ref: ./common.yaml#/schemas/EntityArchive
   DriversAccess:
-    $ref: ./common.yaml#/schemas/PackingAccess
+    $ref: ./common.yaml#/schemas/EntityAccess
   DriversSettings:
-    $ref: ./common.yaml#/schemas/PackingSettings
+    $ref: ./common.yaml#/schemas/ListSettings
   DriversHeaderUpload:
-    $ref: ./common.yaml#/schemas/PackingHeaderUpload
+    $ref: ./common.yaml#/schemas/EntityHeaderUpload
   DriversHeaderBinary:
-    $ref: ./common.yaml#/schemas/PackingHeaderBinary
+    $ref: ./common.yaml#/schemas/EntityHeaderBinary
   DriversCreateForm:
     type: object
     additionalProperties: false
@@ -406,14 +406,14 @@ schemas:
         description: Present only when eventId context was requested. Authorized initial URL selection, independently of the duplicated source's
           parent event.
         anyOf:
-          - $ref: ./common.yaml#/schemas/EventPickerOption
+          - $ref: ./events.yaml#/schemas/EventPickerOption
           - type: "null"
     description: Drivers duplication copies root metadata and audience defaults, without offered rides, assignments, image,
       administrators, archive state or source event membership.
   DriversEventOption:
-    $ref: ./common.yaml#/schemas/EventPickerOption
+    $ref: ./events.yaml#/schemas/EventPickerOption
   DriversEventOptions:
-    $ref: ./common.yaml#/schemas/EventPickerOptions
+    $ref: ./events.yaml#/schemas/EventPickerOptions
 paths:
   /drivers-lists/create-entry:
     get:

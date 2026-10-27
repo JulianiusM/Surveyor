@@ -402,8 +402,13 @@ export function createFrontendContext(bootstrap: FrontendBootstrap, browser: boo
         const finishUpdateCommand = updates.commandStarted();
         // Serialize cookie-writing commands, coalescing clicks to the latest desired preference.
         // A response guard alone cannot prevent an older HTTP response overwriting the newer cookie.
+        /** Serialize cookie writes and consume only the latest queued choice.
+         * Actor retirement stops further writes; confirmation alone replaces
+         * translated reads while mounted editors retain their existing drafts. */
         async function updateLocalePreference(): Promise<void> {
             while (desiredLocale !== null) {
+                // Consume this choice before awaiting so later clicks coalesce
+                // into the next iteration rather than race this cookie response.
                 const requested = desiredLocale;
                 desiredLocale = null;
                 if (requested === locale.value) continue;

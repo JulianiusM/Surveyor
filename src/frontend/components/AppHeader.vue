@@ -82,6 +82,9 @@ function finishNavigation(_to: RouteLocationNormalized): void {
     if (localeUrlNeedsSync) queueMicrotask(synchronizeHelpLocale);
 }
 
+/** Synchronize only a settled Help URL after confirmed locale selection.
+ * Concurrent navigation retains the dirty marker for its later completion;
+ * article/query/fragment survive and failed delivery stays local to the header. */
 function synchronizeHelpLocale(): void {
     if (!active || !localeUrlNeedsSync || changingLocale.value || navigation.pending()) return;
     localeUrlNeedsSync = false;

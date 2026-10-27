@@ -1,3 +1,4 @@
+import {createFeatureApiResolver} from '../../app/api';
 import {validateGuestEntry} from '../../../../.generated/api/v1/browser/validateGuestEntry.mjs';
 import {validateEventCreatedRegistrationLink} from '../../../../.generated/api/v1/browser/validateEventCreatedRegistrationLink.mjs';
 import {validateEventRegistrationLinkInput} from '../../../../.generated/api/v1/browser/validateEventRegistrationLinkInput.mjs';
@@ -17,7 +18,7 @@ import {validateEventMetadataPatch} from '../../../../.generated/api/v1/browser/
 import {validateEventResourceEntry} from '../../../../.generated/api/v1/browser/validateEventResourceEntry.mjs';
 import {validateEventSettings} from '../../../../.generated/api/v1/browser/validateEventSettings.mjs';
 import {validateMutationResult} from '../../../../.generated/api/v1/browser/validateMutationResult.mjs';
-import {validatePackingProfileOptions} from '../../../../.generated/api/v1/browser/validatePackingProfileOptions.mjs';
+import {validateEntityAdministratorProfileOptions} from '../../../../.generated/api/v1/browser/validateEntityAdministratorProfileOptions.mjs';
 import {validateEventView} from '../../../../.generated/api/v1/browser/validateEventView.mjs';
 import {validateEventParticipants} from '../../../../.generated/api/v1/browser/validateEventParticipants.mjs';
 import {validateEventRegistrationLinks} from '../../../../.generated/api/v1/browser/validateEventRegistrationLinks.mjs';
@@ -143,10 +144,10 @@ export class EventApi {
                 params: {path: {eventId}, query: {q}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
         }
-        return (await transport.readJson(`event/${eventId}/profiles/${q}`, scope, readProfileOptions, 'searchEventProfiles', validatePackingProfileOptions, signal)).data;
+        return (await transport.readJson(`event/${eventId}/profiles/${q}`, scope, readProfileOptions, 'searchEventProfiles', validateEntityAdministratorProfileOptions, signal)).data;
     }
 
-    async addAdmin(eventId: string, input: components['schemas']['PackingAdminInput'], token: string, scope: FrontendRequestScope) {
+    async addAdmin(eventId: string, input: components['schemas']['EntityAdministratorInput'], token: string, scope: FrontendRequestScope) {
         return this.transport.read('addEventAdmin', await this.transport.client.POST('/events/{eventId}/admins', {
             params: {path: {eventId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: input, cache: 'no-store',
         }), validateMutationResult, scope).data;
@@ -387,14 +388,5 @@ function eventInputField(path: string): FrontendInputField | undefined {
     return undefined;
 }
 
-const owners = new WeakMap<FrontendApi, EventApi>();
-
-/** Keep one feature adapter per application-local transport, without sharing actors. */
-export function useEventApi(context: FrontendContext): EventApi {
-    let owner = owners.get(context.api);
-    if (!owner) {
-        owner = new EventApi(context.api);
-        owners.set(context.api, owner);
-    }
-    return owner;
-}
+/** Reuse this feature adapter for its application-local transport. */
+export const useEventApi = createFeatureApiResolver(EventApi);

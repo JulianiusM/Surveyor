@@ -4,7 +4,7 @@ import {computed, nextTick, reactive, ref, shallowRef, useId} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {FinanceAdjustmentRemovalReview} from '../../../types/FrontendFinanceReviewTypes';
 import {useActionState, useFrontend} from '../../app/context';
-import {useCommand} from '../../composables/command';
+import {useCommand, useCommandReview} from '../../composables/command';
 import {useFinanceApi} from './api';
 import {useFinanceDraft} from './drafts';
 import {financeDecimal, protectFinanceNumberFromScroll} from './numbers';
@@ -30,7 +30,6 @@ const {messages, locale} = context;
 const api = useFinanceApi(context);
 const id = useId();
 const draft = reactive({registrationId: '', amount: '', note: '', subtractFromPool: true});
-const inspected = ref(false);
 // The same dialog temporarily reviews one saved-row command. Its additive form
 // stays mounted, and the independent removal owner retains delivery/receipts.
 const removalReview = shallowRef<FinanceAdjustmentRemovalReview | null>(null);
@@ -38,6 +37,13 @@ let removalOpener: HTMLElement | null = null;
 const dirty = computed(() => !!draft.registrationId || !!draft.amount || !!draft.note || !draft.subtractFromPool);
 const command = useCommand(props.refresh, true, {dirty: () => dirty.value, unknownMessage: 'draft.leaveUnknown', recoveryEligible: () => props.active});
 const removal = useCommand(props.refresh, false, {dirty: () => false, unknownMessage: 'draft.leaveUnknown', recoveryEligible: () => props.active});
+// Both receipts consume the same saved read; neither can infer which ambiguous
+// creation persisted. Acknowledgement releases only the additive lexical draft.
+const {inspected, inspectWith, acknowledge} = useCommandReview(command, () => props.refresh(), {
+    eligible: () => props.active && command.recoveryAction.isAvailable() && removal.recoveryAction.isAvailable(),
+    blocked: () => command.recoveryAction.disabled.value || removal.recoveryAction.disabled.value,
+    afterInspect: read => removal.reconcileSafely(read), release: reset,
+});
 useFinanceDraft(() => props.pool.id, () => dirty.value || command.pending.value || command.uncertain.value || removal.pending.value || removal.uncertain.value);
 const action = useActionState({eligible: () => props.active,
     blocked: () => command.action.disabled.value || removal.action.disabled.value || !!removalReview.value});
@@ -142,16 +148,7 @@ async function refresh(): Promise<void> {
         return;
     }
 
-    if (await command.reconcileSafely(readSaved)) {
-        inspected.value = true;
-        await removal.reconcileSafely(readSaved);
-    }
-}
-/** Explicit saved-list review releases this uncertain additive input once. */
-function acknowledge(): void {
-    if (!inspected.value || command.recoveryAction.disabled.value || removal.recoveryAction.disabled.value) return;
-    // No inferred row matching can prove which ambiguous creation persisted.
-    command.acknowledge(); reset();
+    await inspectWith(readSaved);
 }
 /** Pending work blocks dismissal; accepted departure releases only this draft. */
 function close(): void {

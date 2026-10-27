@@ -436,7 +436,7 @@ test('binds Event settings to shared image, metadata, archive, automation and de
     const storedImage = await request.get(`/api/v1/events/${event.id}/header`, {headers: proof});
     expect(storedImage.status()).toBe(200);
     expect(await storedImage.body()).toEqual(image);
-    const baseline = await (await request.get(`/api/v1/events/${event.id}/header/edit-baseline`, {headers: proof})).json() as components['schemas']['PackingHeaderBaseline'];
+    const baseline = await (await request.get(`/api/v1/events/${event.id}/header/edit-baseline`, {headers: proof})).json() as components['schemas']['EntityHeaderBaseline'];
     expect((await request.delete(`/api/v1/events/${event.id}/header`, {headers: {...proof, 'If-Match': baseline.editToken}})).status()).toBe(200);
     expect((await request.get(`/event/${event.id}/header`)).status()).toBe(404);
 

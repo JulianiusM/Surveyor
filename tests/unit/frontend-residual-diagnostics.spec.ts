@@ -105,7 +105,7 @@ describe('Remaining reachable controller rejection diagnostics', () => {
     ])('explains shared root-property rejection $code before persistence', async ({body, code}) => {
         // Packing, Drivers and Survey use this one shared validator. Their wire
         // schemas allow this code-point length; native UTF16 limits still reject.
-        for (const schema of ['PackingMetadataPatch', 'DriversMetadataPatch', 'SurveyMetadataPatch'])
+        for (const schema of ['BasicEntityMetadataPatch', 'DriversMetadataPatch', 'SurveyMetadataPatch'])
             expect(contractValidator(schema)(body)).toBe(true);
         const original = structuredClone(body);
         const error = await rejection(async () => normalizeBasicProperties(body));

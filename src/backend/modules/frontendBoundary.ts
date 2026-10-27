@@ -85,7 +85,10 @@ export function frontendBoundary(projectRoot: string): Plugin {
         configureServer(server) {
             // This also protects direct Vite launches; Express adds its own base
             // admission and preserves ordinary application-route fallthrough.
-            server.middlewares.use(function guardFrontendSource(req, res, next) {
+            server.middlewares.use(/** Preserve missing ordinary-route fallthrough
+             * while source files and aliases require the reviewed public inventory;
+             * denied source requests receive an uncached 404. */
+            function guardFrontendSource(req, res, next) {
                 // Nonexistent extensionless paths retain Vite's ordinary route
                 // fallthrough. Existing files and all source/alias namespaces
                 // still require the inventory even without an extension.
@@ -104,6 +107,9 @@ export function frontendBoundary(projectRoot: string): Plugin {
                 next();
             });
         },
+        /** Enforce reviewed package-entry resolution for public client importers.
+         * Other environments retain their normal resolution and no private file
+         * becomes public merely through a relative dependency path. */
         async resolveId(source, importer) {
             if (this.environment.name !== 'client' || !importer || importer.startsWith('\0')) return null;
             const owner = relativeFile(root, importer.split('?', 1)[0]!);

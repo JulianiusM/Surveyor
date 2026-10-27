@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; developers; AI agents
 owner: architecture maintainers
 status: current
-last-verified: 2026-10-26
+last-verified: 2026-10-27
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved R3/R4 directed identity/linkage and shared orchestration boundaries reconciled; profile-UUID Activity count and request-local Finance selection retained; no deployment or exhaustive verification claim
+verification-scope: approved R6 shared UUID identity and R7 recommendation provenance boundaries reconciled; prior contract, validation and existing-owner decisions retained
 source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: architecture-or-help-delivery-change
 -->
@@ -162,9 +162,10 @@ Browser-safe implementations used by both belong under `src/common/`, including 
 requirements engine. Shared declaration-only contracts retain their policy-owned `src/types/` directory; browser
 identity declarations are separate from server transaction contracts. `src/public/` contains only public static assets.
 
-`contracts/api/v1/common.yaml` owns matching wire shapes, with existing domain schema names retained as compatible
-references. `src/common/lib/fileMedia.ts` supplies shared image/proof media descriptors to the uploader and browser
-controls; each controller retains its own admitted-file policy. `modules/lib/storedFiles.ts` owns the matching stored
+The maintainer's 2026-10-26 ownership clarification requires shared wire shapes in `contracts/api/v1/common.yaml`
+to use neutral names matching their actual scope. Feature-specific aliases belong to their own feature boundary;
+generic consumers use the shared declarations directly. `src/common/lib/fileMedia.ts` supplies shared image/proof media descriptors to the uploader and browser
+controls; each controller retains its own admitted-file policy. The existing `modules/lib/fileCommons.ts` owns matching stored
 path resolution used by API binary delivery, header delivery and invoice proofs. Their callers retain authorization,
 existence checks, cleanup and error selection. Shared civil-date stepping lives in `src/common/lib/civilDate.ts`.
 
@@ -185,7 +186,7 @@ registers the common image mutation pipeline; `assignFlowFactory` registers list
 combined self-membership/role command. These middleware owners preserve each feature's response-preparation and
 upload-cleanup timing rather than imposing another transaction. Standalone images and exports retain authorized
 document output adapters. Surveys keep their distinct participation/ownership model without joining the general
-permission system. `entityAdminController` retains its administration, property, permission and archival duties;
+permission system. `entityAdminController` retains its administration, property, permission and matching list duties;
 ordinary guest and creation workflow composition does not belong there.
 
 Shared HTTP language negotiation lives in `src/backend/modules/lib/http.ts`, independently of API wire contracts. The final
@@ -216,8 +217,31 @@ profile-search projection. Packing, Drivers, Event and Activity retain their fea
 and response preparation. Feature DBAL services retain the original snapshots, locks and commit boundaries;
 Activity's direct administration path retains its separate operation order. Matching Packing/Drivers metadata,
 context, settings and permission-subject mechanics also use this existing shared controller owner.
+All four features also adopt its single admitted ACL read/projection and static creation-permission context;
+feature gates, optional snapshot managers and query order remain explicit. Matching full settings, narrow baselines
+and writes key typed root/profile UUID components through the shared utility; captured actor/context and opaque
+comparison evidence retain their exact semantics.
+
+The maintainer's further 2026-10-26 instruction consolidates the earlier extractions into existing owners.
+`modules/api/transport.ts` owns comparison evidence, `permissionEngine.ts` owns shared method/field selection,
+and the existing `modules/entityArchival.ts` owns lifecycle presentation, commands and automatic archival.
+Matching Packing/Drivers item admission and comparison workflows use `entityAdminController` with explicit
+feature policy and DBAL callbacks; their distinct lock, transaction and receipt timing stays in the feature adapters.
+Pure participant/card projections live in `modules/lib/util.ts`; Event and Overview supply their own admission
+and ownership decisions. Event PDF composition belongs to its controller; `modules/lib/pdf.ts` supplies shared primitives.
+
+That existing utility module also owns backend UUID identity keys, comparison, indexing, grouping and reference
+resolution. Controllers, permission and lifecycle owners, and Activity calculation/job boundaries consume that single
+implementation. Lookup keys identify equivalent UUID spellings; resolved rows retain their stored IDs for writes
+and presentation. Numeric identifiers and opaque security evidence keep their existing semantics. Feature owners
+retain ordering rules, authorization and persistence decisions rather than hiding them in identity helpers.
 
 `modules/event/linkage.ts` owns Event selection, linkage authorization and search for child creation and settings.
+It also owns Event parent projection, reassociation and child admission. The existing permission engine owns the
+general Event method-grant declaration used by routes, the Event controller and linkage. Shared settings normalize
+only already admitted parent fields through linkage, without another permission decision or database read.
+Search candidate filtering
+obtains a necessary bit there, then retains its complete permission check.
 The Event controller coordinates child deletion through each child's controller. Children and their flow adapters
 import the linkage owner directly, so those dependencies no longer point back to the Event controller.
 
@@ -301,7 +325,7 @@ OIDC protocol exchange lives in `src/backend/modules/oidc.ts`; the user controll
 6. Persist the normal Surveyor session identity and tokens needed for provider logout.
 
 Both local and OIDC users therefore enter the same local account/profile model after authentication.
-`modules/identity/oidcAccounts.ts` selects existing linking, activation, name/address fallback and provisioning policy;
+The existing user controller selects linking, activation, name/address fallback and provisioning policy;
 `UserService` supplies queries, ORM construction and persistence. The user controller applies account/default-profile
 selection through one synchronous operation for local and provider login, while each journey retains its own save
 and token order. Provider protocol code has no dependency on that controller.
@@ -487,13 +511,14 @@ prior credits, and signed transfers recorded in this calculation without inferri
 
 Activity plans contain dated slots, optional roles, assignments, shared fields, participant requirements, availability, recommendations, and review operations. The user guide owns the basic and advanced organizer workflows. [Activity Requirements and Assignment Recommendations](features/activity/ACTIVITY_REQUIREMENTS_ALGORITHM.md) is the canonical technical reference for precedence, coverage, fair allocation, bounded repair, overfill, background jobs, review states, and application persistence.
 
-The controller retains request admission, basic feature operations and API projection. Cohesive owners under
-`modules/activity/` assemble participant/linked-plan context, decode and analyze requirements, collect warnings,
-coordinate reviewed/generated recommendation persistence, execute generation/jobs and manage review commands.
-Review commands depend on execution and guarded persistence; those depend on shared context, warning and algorithm
-owners, with no dependency back to the controller. The execution owner has one job coordinator. Database services
+The controller owns request admission, requirement decoding/analysis/commands, API projection and schedule
+presentation. The existing `autoAssignment.ts` assembles participant/linked-plan context and algorithm input,
+coordinates generation and guarded persistence, and supplies callbacks to the single `recommendationJobs.ts`
+coordinator. The existing `recommendations.ts` owns review, application and warning operations. Both use pure
+normalization/warning rules in `availability.ts`; business modules do not import the controller. Database services
 retain transactions and stored rows; the common requirements engine and fair allocator remain the sole calculations.
-`schedulePresentation.ts` builds print data from already selected inputs without performing database reads.
+The previous six business extraction modules and separate schedule presentation module were consolidated under
+the maintainer's further 2026-10-26 existing-owner instruction, preserving algorithm and queue behavior.
 
 Printable participant totals count distinct profile UUIDs from the plan's assignments and its linked event's
 registrations. The controller selects those scopes; one DBAL aggregate query unions UUIDs and returns a scalar count,
@@ -558,7 +583,9 @@ persists secrets/files or replays writes. Session/security revalidation and scop
 
 ### Shared contracts, state and commands
 
-`contracts/api/v1/` owns wire schemas and operation policy. Generation emits declaration contracts and standalone
+`contracts/api/v1/` owns wire schemas and operation policy. The root `openapi.yaml` composes references; existing
+feature files own their operations. Shared contracts have neutral names in `common.yaml`; genuinely domain-specific
+contracts and compatibility aliases stay at their feature boundary. Generation emits declaration contracts and standalone
 runtime validators; no second handwritten wire schema or runtime schema compilation exists. Transport adapters decode
 and present around the same controller business owners. Page admission, method grants and private projections remain
 separate; reusable controls never grant authority.
@@ -568,6 +595,13 @@ field and optional row/day labels; shared typed diagnostics retain only safe gen
 at render time. Constraints remain in authored schemas and business checks in controllers. Matching creation and
 duplicate permission matrices use `CreationPermissions`, a closed-by-default disclosure that keeps controls and
 drafts mounted while the existing form retains submission and admission.
+
+The maintainer-approved R5 applies generated pre-dispatch validation at the shared transport boundary to every
+frontend operation: bodies, serialized parameters and authored header constraints, including multipart metadata and
+Finance XHR. Request and response roles follow exact authored usage before bundling rather than schema names.
+Validators load lazily; additive response validation remains distinct from strict input validation. Loader failures
+remain local, and captured actor/cancellation checks guard dispatch after loading. Native controls derive existing
+bounds from generated metadata; draft retention and deliberate Unicode/native-control differences remain intact.
 
 Express's ordinary `req.session` is the single request Session. Admission checks current stored generation without
 adopting another snapshot; its plain hydrated actor captures identity for the operation. Initial session projection
@@ -884,9 +918,9 @@ The implementation keeps these responsibilities separate:
 | `modules/archive/policy.ts` | Pure UTC cutoff, effective-state, and personal-placement rules. |
 | `database/services/EntityLifecycleService.ts` | Root and parent reads, coherent raw snapshots, lifecycle writes, conditional automatic updates, and transaction locks. |
 | Existing `database/services/UserService.ts` and feature services | Visibility preference persistence, membership queries, and bounded overview queries; feature services own the shared SQL membership predicates. |
-| Existing `controller/entityAdminController.ts` and versioned adapters | Lifecycle validation and authorization, effective-state and scheduling projection, presentation capabilities and generated API transport. |
+| Existing `controller/entityAdminController.ts` and versioned adapters | Shared administration entry points and generated API transport through the lifecycle business owner. |
 | Existing `controller/userController.ts` | Personal visibility validation and membership decisions under the service-managed lock, overview navigation normalization, and bounded presentation. |
-| `modules/entityArchival.ts` | Independent startup/hourly scheduling and local overlap prevention. |
+| `modules/entityArchival.ts` | Lifecycle validation/authorization, effective-state and scheduling projection, presentation capabilities, independent startup/hourly scheduling and local overlap prevention. |
 | App-owned lifecycle/card controls and feature query owners | Server-calculated state, bounded navigation, explicit commands and authorized refresh after success. |
 
 Overview membership is discovered before archival placement. Direct and parent state are resolved once per distinct reference in a `REPEATABLE READ` snapshot and reused across participation/administration cards. Personal `hidden` and `shown` overrides belong to the active profile; no preference means default placement. They never enter shared entity serialization or the event's **Things to do** filtering. Creation and settings event pickers include authorized historical and archived events by default, with explicit date, archive, period, and registration-deadline filters.

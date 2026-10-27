@@ -166,7 +166,11 @@ async function save(): Promise<void> {
     }
     const input = requirementInput(draft.value);
     const resource = props.planId;
-    await command.run(async scope => {
+    await command.run(
+    /** Release only this current actor/resource's confirmed draft before the
+     * causal refresh. Removed IDs already committed must never be sent again
+     * merely because that following read fails. */
+    async scope => {
         const result = await api.saveRequirements(resource, input, scope);
         // Do not publish an old actor's draft into a later visit. The command
         // owner independently retains pending/unknown status through retirement.

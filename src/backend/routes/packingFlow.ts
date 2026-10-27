@@ -2,7 +2,7 @@ import {searchEntityEvents} from '../modules/event/linkage';
 
 import {readEventLinkSelection} from '../modules/event/linkage';
 import * as controller from '../controller/packingController';
-import {getEntityViewAdmission} from '../controller/entityAdminController';
+import {getEntityViewAdmission} from '../modules/event/linkage';
 
 import * as service from '../modules/database/services/PackingService';
 import type {PackingList} from '../modules/database/entities/packing/PackingList';

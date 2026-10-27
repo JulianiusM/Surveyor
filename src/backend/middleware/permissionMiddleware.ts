@@ -51,7 +51,7 @@ function requirePermInternal(
     err: ErrorAdapter,
     requiredParentPerm?: number | number[],
 ) {
-    return async (req: Request, _res: Response, next: NextFunction) => {
+    return /** Admit one independent subject; partial grants never combine. */ async (req: Request, _res: Response, next: NextFunction) => {
         let ok = false;
         // Keep alternative roots independent: combining their masks here could
         // admit a document even when no individual subject grants its operation.

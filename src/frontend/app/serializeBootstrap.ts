@@ -143,8 +143,8 @@ async function validateGuest(value: unknown): Promise<boolean> {
 }
 
 async function validatePackingCreate(value: unknown): Promise<boolean> {
-    const {validatePackingCreateContext} = await import('../../../.generated/api/v1/browser/validatePackingCreateContext.mjs');
-    return validatePackingCreateContext(value);
+    const {validateEntityCreationContext} = await import('../../../.generated/api/v1/browser/validateEntityCreationContext.mjs');
+    return validateEntityCreationContext(value);
 }
 
 async function validateSurveyCreate(value: unknown): Promise<boolean> {

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {DOMWrapper, flushPromises, mount} from '@vue/test-utils';
+import {DOMWrapper, mount} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import {defineComponent, ref, type Component} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
@@ -9,7 +10,7 @@ import {createFrontendContext, frontendContextKey} from '../../src/frontend/app/
 import App from '../../src/frontend/app/App.vue';
 import {useDraftProtection} from '../../src/frontend/composables/command';
 import {createFrontendEventSession, createFrontendEventView, frontendEventId as eventId} from '../factories/frontendEventFactory';
-import {frontendEventJson as json, frontendEventButton as button, mountFrontendEvent} from '../keywords/frontendEventKeywords';
+import {frontendEventJson as json, frontendEventButton as button, mountFrontendEvent} from '../keywords/frontendUiKeywords';
 import {eventKeys, overviewKeys} from '../../src/frontend/app/queryKeys';
 import EventParticipants from '../../src/frontend/features/event/EventParticipants.vue';
 import EventBypassLinks from '../../src/frontend/features/event/EventBypassLinks.vue';

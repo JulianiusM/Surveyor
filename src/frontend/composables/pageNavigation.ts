@@ -34,7 +34,11 @@ export function createPageReadiness(router: Router): FrontendPageReadiness {
      * older anchor/history intent, even if it returns to the same public URL. */
     function wait(destination: RouteLocationNormalized): Promise<boolean> {
         if (disposed) return Promise.resolve(false);
-        return new Promise(function awaitRenderedVisit(resolve) {
+        return new Promise(
+        /** Subscribe before checking rendered readiness. Either a settled visit
+         * or explicit cancellation removes its watcher and waiter; a replaced
+         * destination resolves false rather than borrowing another renderer. */
+        function awaitRenderedVisit(resolve) {
             // Subscribe before checking so a mounted/cached owner can complete
             // synchronously without leaving an orphaned watcher behind.
             const stop = watch(settled, finish, {flush: 'post'});

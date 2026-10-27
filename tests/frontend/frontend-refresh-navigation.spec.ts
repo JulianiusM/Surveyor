@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {flushPromises, mount} from '@vue/test-utils';
+import {mount} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import {computed, defineComponent, nextTick, reactive, type Component} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
@@ -17,7 +18,7 @@ import PackingPage from '../../src/frontend/features/packing/PackingPage.vue';
 import EventPicker from '../../src/frontend/components/EventPicker.vue';
 import OverviewRegion from '../../src/frontend/features/overview/OverviewRegion.vue';
 import OverviewPage from '../../src/frontend/features/overview/OverviewPage.vue';
-import OverviewCard from '../../src/frontend/features/overview/OverviewCard.vue';
+import OverviewCard from '../../src/frontend/components/EntityCard.vue';
 import AppNavigationDropdown from '../../src/frontend/components/AppNavigationDropdown.vue';
 import ActionButton from '../../src/frontend/components/ActionButton.vue';
 import App from '../../src/frontend/app/App.vue';

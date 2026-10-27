@@ -1,6 +1,6 @@
 import type {components, paths} from '../../types/api/v1';
 import type {ApiOperationId} from '../../types/ApiTransportTypes';
-import type {FrontendDecodedResponse, FrontendRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
+import type {FrontendContext, FrontendDecodedResponse, FrontendRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
 import {FrontendTransport, ObsoleteRequestError, UnconfirmedResponseError} from './transport';
 import {validateSessionView} from '../../../.generated/api/v1/browser/validateSessionView.mjs';
 import {validatePasswordResetCheck} from '../../../.generated/api/v1/browser/validatePasswordResetCheck.mjs';
@@ -12,6 +12,25 @@ import {validateProfileWorkflowCompletion} from '../../../.generated/api/v1/brow
 
 type Session = components['schemas']['SessionView'];
 type IdentityEvidence = {session: Pick<Session, 'context'>} | {resultingContext: Session['context']};
+
+/** Reuse one lazily constructed feature adapter per application transport.
+ * Each feature creates its own resolver/cache; no feature registry is loaded and
+ * request-local SSR transports never share adapters or captured actors. */
+export function createFeatureApiResolver<Adapter>(AdapterType: new (api: FrontendApi) => Adapter) {
+    const owners = new WeakMap<FrontendApi, Adapter>();
+
+    /** Context wrappers may differ for localization while retaining this transport identity. */
+    return function resolveFeatureApi(context: Pick<FrontendContext, 'api'>): Adapter {
+        // Key only by the request-local transport; localized component wrappers
+        // reuse its adapter, while another SSR request starts its own lazy owner.
+        let owner = owners.get(context.api);
+        if (!owner) {
+            owner = new AdapterType(context.api);
+            owners.set(context.api, owner);
+        }
+        return owner;
+    };
+}
 
 /** Session and identity commands are needed by the shell; product feature operations stay with their routes. */
 export class FrontendApi extends FrontendTransport {

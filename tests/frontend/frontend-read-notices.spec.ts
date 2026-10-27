@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {flushPromises, mount} from '@vue/test-utils';
+import {mount} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import {defineComponent, provide, ref, shallowRef} from 'vue';
 import I18NextVue from 'i18next-vue';
 import {createFrontendContext, frontendContextKey} from '../../src/frontend/app/context';

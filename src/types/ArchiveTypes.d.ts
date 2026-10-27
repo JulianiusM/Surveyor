@@ -35,6 +35,7 @@ export interface ArchiveTarget {
 export interface LockedArchiveContext {
     initialEventId: string | null | undefined;
     root: ArchiveTarget | null;
+    /** Shared uuidKey identities; values retain the loaded row's stored ID. */
     parents: Map<string, ArchiveTarget>;
 }
 

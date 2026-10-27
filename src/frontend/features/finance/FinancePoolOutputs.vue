@@ -3,7 +3,7 @@ import {ref} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {FrontendPlainMessageKey} from '../../../types/FrontendUiTypes';
 import {useActionState, useFrontend} from '../../app/context';
-import {useCommand} from '../../composables/command';
+import {useCommand, useCommandReview} from '../../composables/command';
 import {useFinanceApi} from './api';
 import FinanceCalculationReview from './FinanceCalculationReview.vue';
 import FinanceShares from './FinanceShares.vue';
@@ -24,12 +24,17 @@ const {messages} = context;
 const api = useFinanceApi(context);
 const selected = ref<'calculation' | 'notify' | 'rollback' | null>(null);
 const completed = ref(false);
-const inspected = ref(false);
+
 const notificationCount = ref<number | null>(null);
 const command = useCommand(props.refresh, true, {dirty: () => false, unknownMessage: 'draft.leaveUnknown', recoveryEligible: () => props.active});
+const {inspected, inspect: inspectSaved, acknowledge} = useCommandReview(command, () => props.refresh(), {
+    eligible: () => props.active, release: () => { selected.value = null; },
+});
 const action = useActionState({eligible: () => props.active, blocked: () => command.action.disabled.value});
 const submitAction = useActionState({eligible: () => props.active && !completed.value,
     blocked: () => command.action.disabled.value, pending: () => command.pending.value});
+
+
 
 /** Opening deliberately starts a new output intent. A still-unknown request
  * cannot be replaced by another dialog or silently sent a second time. */
@@ -69,13 +74,8 @@ async function submit(): Promise<void> {
 
 /** Inspect saved state before acknowledging uncertain mail/rollback delivery.
  * Reading cannot establish SMTP delivery or replay either operation. */
-async function inspectSaved(): Promise<void> {
-    if (props.active && await command.reconcileSafely(props.refresh)) inspected.value = true;
-}
-function acknowledge(): void {
-    if (!inspected.value || command.pending.value || command.recovering.value) return;
-    command.acknowledge(); selected.value = null;
-}
+
+
 function calculationSaved(notice: FrontendPlainMessageKey): void {emit('saved', notice);}
 </script>
 

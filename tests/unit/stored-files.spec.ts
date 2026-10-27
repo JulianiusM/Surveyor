@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import path from 'node:path';
-import {resolveStoredFile} from '../../src/backend/modules/lib/storedFiles';
+import {resolveStoredFile} from '../../src/backend/modules/lib/fileCommons';
 
 describe('stored-file lexical confinement compatibility', () => {
     it('resolves relative and absolute stored references through the same configured root', () => {

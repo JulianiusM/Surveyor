@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {DOMWrapper, flushPromises} from '@vue/test-utils';
+import {DOMWrapper} from '@vue/test-utils';
 import type {components} from '../../src/types/api/v1';
 import FinanceSection from '../../src/frontend/features/finance/FinanceSection.vue';
 import FinanceSubmission from '../../src/frontend/features/finance/FinanceSubmission.vue';
@@ -12,7 +12,7 @@ import StatusNotice from '../../src/frontend/components/StatusNotice.vue';
 import {ApiFailure} from '../../src/frontend/app/transport';
 import {eventKeys} from '../../src/frontend/app/queryKeys';
 import {createFrontendEventSession, frontendEventId as eventId} from '../factories/frontendEventFactory';
-import {frontendEventButton as button, frontendEventJson as json, mountFrontendEvent} from '../keywords/frontendEventKeywords';
+import {flushFrontendPromises as flushPromises, frontendEventButton as button, frontendEventJson as json, mountFrontendEvent} from '../keywords/frontendUiKeywords';
 
 const poolId = '22222222-2222-4222-8222-222222222222';
 const pool: components['schemas']['FinancePool'] = {id: poolId, name: '<Saved pool>', description: 'Saved costs', status: 'OPEN',
@@ -901,7 +901,10 @@ describe('P7 finance saved reads and participant invoices', () => {
         await mounted.wrapper.get('form').trigger('submit'); await flushPromises();
         expect(button(mounted.wrapper, 'Submission unconfirmed').attributes('disabled')).toBeDefined();
         expect(chooser.files?.[0]).toBe(file);
+        const replacementRefresh = vi.fn(refresh);
+        await mounted.wrapper.setProps({refresh: replacementRefresh});
         await button(mounted.wrapper, 'Check invoice history').trigger('click'); await flushPromises();
+        expect(replacementRefresh).toHaveBeenCalledOnce();
         expect(refresh).toHaveBeenCalledTimes(1);
         expect(upload).toHaveBeenCalledTimes(1);
         expect(button(mounted.wrapper, 'Submission unconfirmed').attributes('disabled')).toBeDefined();

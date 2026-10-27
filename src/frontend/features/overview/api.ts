@@ -1,3 +1,4 @@
+import {createFeatureApiResolver} from '../../app/api';
 import type {components, paths} from '../../../types/api/v1';
 import type {FrontendContext, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {FrontendApi} from '../../app/api';
@@ -48,10 +49,5 @@ export class OverviewApi {
 }
 
 // The transport is application/request-local and survives each component's useFrontend wrapper.
-const owners = new WeakMap<FrontendApi, OverviewApi>();
-/** Reuse the request/application transport owner through component-local translation bindings. */
-export function useOverviewApi(context: FrontendContext): OverviewApi {
-    let owner = owners.get(context.api);
-    if (!owner) { owner = new OverviewApi(context.api); owners.set(context.api, owner); }
-    return owner;
-}
+/** Reuse this feature adapter for its application-local transport. */
+export const useOverviewApi = createFeatureApiResolver(OverviewApi);

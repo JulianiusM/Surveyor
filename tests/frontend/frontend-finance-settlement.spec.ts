@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {DOMWrapper, flushPromises} from '@vue/test-utils';
+import {DOMWrapper} from '@vue/test-utils';
 import type {components} from '../../src/types/api/v1';
 import FinanceSettlement from '../../src/frontend/features/finance/FinanceSettlement.vue';
 import FinanceShares from '../../src/frontend/features/finance/FinanceShares.vue';
 import {ApiFailure} from '../../src/frontend/app/transport';
 import {frontendEventId as eventId} from '../factories/frontendEventFactory';
-import {frontendEventButton as button, frontendEventJson as json, mountFrontendEvent} from '../keywords/frontendEventKeywords';
+import {flushFrontendPromises as flushPromises, frontendEventButton as button, frontendEventJson as json, mountFrontendEvent} from '../keywords/frontendUiKeywords';
 
 const poolId = '22222222-2222-4222-8222-222222222222';
 const saved: components['schemas']['FinanceShare'] = {id: '2', poolId, poolName: '<Saved pool>', payerName: '<Alice>',

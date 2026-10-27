@@ -8,6 +8,11 @@ import {useFrontend} from '../../src/frontend/app/context';
 import {usePackingApi} from '../../src/frontend/features/packing/api';
 import {useOverviewApi} from '../../src/frontend/features/overview/api';
 import {useHelpApi} from '../../src/frontend/features/help/api';
+import {useDriversApi} from '../../src/frontend/features/drivers/api';
+import {useActivityApi} from '../../src/frontend/features/activity/api';
+import {useEventApi} from '../../src/frontend/features/event/api';
+import {useSurveysApi} from '../../src/frontend/features/surveys/api';
+import {useFinanceApi} from '../../src/frontend/features/finance/api';
 import StatusNotice from '../../src/frontend/components/StatusNotice.vue';
 import {ApiFailure} from '../../src/frontend/app/transport';
 import {validateProblem} from '../../.generated/api/v1/browser/validateProblem.mjs';
@@ -64,7 +69,8 @@ describe('typed i18next-vue binding', () => {
             // The real library creates a translation wrapper per component. API ownership
             // belongs to the stable transport instead of those short-lived wrappers.
             expect(bindings[0]).not.toBe(bindings[1]);
-            for (const owner of [usePackingApi, useOverviewApi, useHelpApi]) {
+            for (const owner of [usePackingApi, useDriversApi, useActivityApi, useEventApi,
+                useSurveysApi, useFinanceApi, useOverviewApi, useHelpApi]) {
                 expect(owner(bindings[0]!)).toBe(owner(bindings[1]!));
                 expect(owner(bindings[2]!)).toBe(owner(bindings[3]!));
                 expect(owner(bindings[0]!)).not.toBe(owner(bindings[2]!));

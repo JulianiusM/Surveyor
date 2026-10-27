@@ -1,13 +1,13 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {DOMWrapper, flushPromises} from '@vue/test-utils';
+import {DOMWrapper} from '@vue/test-utils';
 import type {components} from '../../src/types/api/v1';
 import FinanceAssignments from '../../src/frontend/features/finance/FinanceAssignments.vue';
 import FinanceAdjustments from '../../src/frontend/features/finance/FinanceAdjustments.vue';
 import FinanceTakeovers from '../../src/frontend/features/finance/FinanceTakeovers.vue';
 import FinancePoolActions from '../../src/frontend/features/finance/FinancePoolActions.vue';
 import {frontendEventId as eventId} from '../factories/frontendEventFactory';
-import {frontendEventButton as button, frontendEventJson as json, mountFrontendEvent} from '../keywords/frontendEventKeywords';
+import {flushFrontendPromises as flushPromises, frontendEventButton as button, frontendEventJson as json, mountFrontendEvent} from '../keywords/frontendUiKeywords';
 
 const poolId = '22222222-2222-4222-8222-222222222222';
 const participants = [{id: '7', name: 'Original payer', email: 'payer@example.test'},

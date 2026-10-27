@@ -6,6 +6,7 @@ import type {FrontendBootstrap, FrontendRenderResult, FrontendPreparedDocument} 
 import {createTranslator, localeManifest} from '../../common/localization/translator';
 import {frontendDevelopmentAssets, frontendDevelopmentServer} from './frontendDevelopment';
 import settings from './settings';
+import {escapeHtml} from './lib/util';
 
 interface AssetChunk {file: string; name?: string; isDynamicEntry?: boolean; css?: string[]; imports?: string[]}
 interface FrontendRenderer {render(url: string, bootstrap: FrontendBootstrap): Promise<FrontendRenderResult>}
@@ -29,12 +30,6 @@ export async function initializeFrontendRenderer(): Promise<void> {
     const development = frontendDevelopmentServer();
     if (development) await development.ssrLoadModule('/src/frontend/app/entry-server.ts');
     else await loadInstalledFrontendRenderer();
-}
-
-/** Escape plain text for HTML; bootstrap JSON has its own script-element serializer. */
-function escapeHtml(value: string): string {
-    const entities: Record<string, string> = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};
-    return value.replace(/[&<>"']/g, function replaceCharacter(character) {return entities[character]!;});
 }
 
 /** Keep startup presentation independent of module/CSS delivery. App.vue owns

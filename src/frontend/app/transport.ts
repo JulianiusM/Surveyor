@@ -1,19 +1,21 @@
 import {isImageMimeType} from '../../common/lib/fileMedia';
-import createClient from 'openapi-fetch';
+import createClient, {defaultBodySerializer} from 'openapi-fetch';
 import type {components, paths} from '../../types/api/v1';
-import type {FrontendDecodedResponse, FrontendPlainMessageKey, FrontendRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
+import type {FrontendDecodedResponse, FrontendDispatchOptions, FrontendPlainMessageKey, FrontendRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
 import {validateProblem} from '../../../.generated/api/v1/browser/validateProblem.mjs';
 import {validateSafeProblemDetails} from '../../../.generated/api/v1/browser/validateSafeProblemDetails.mjs';
 import {validateComparisonToken} from '../../../.generated/api/v1/browser/validateComparisonToken.mjs';
-import {apiCompatibility, operationPolicies} from '../../../.generated/api/v1/policy.mjs';
+import {apiCompatibility, loadInputValidator, operationInputs, operationPolicies} from '../../../.generated/api/v1/policy.mjs';
 import type {ApiOperationId} from '../../types/ApiTransportTypes';
 import type {ErrorObject} from 'ajv';
 import type {FrontendInputField} from '../../types/FrontendFeedbackTypes';
 import type {InputDiagnostic} from '../../types/InputValidationTypes';
-import {fieldDiagnostic, fieldDiagnosticInput} from '../../common/localization/inputValidation';
+import {decodeScalarParameter, fieldDiagnostic, fieldDiagnosticInput} from '../../common/localization/inputValidation';
 
 type Validator<T> = (value: unknown) => value is T;
 type Problem = components['schemas']['Problem'];
+const dispatchScope = Symbol('captured request scope');
+const dispatchRequest = Symbol('constructed request');
 
 /** Intentional disposal is distinct from a failed network read and must not produce an error toast. */
 export class ObsoleteRequestError extends Error {
@@ -60,7 +62,7 @@ export class UnconfirmedResponseError extends Error {
     constructor() { super('The server response did not confirm the requested operation.'); }
 }
 
-/** The shared validator rejected input before any network side effect was attempted.
+/** Input admission failed before any network side effect was attempted.
  * Features may identify the invalid field with a typed catalog key; private
  * diagnostic text never becomes user feedback or implies a dispatched command. */
 export class InvalidInputError extends Error {
@@ -119,10 +121,178 @@ export class FrontendTransport {
     readonly client;
     private nextAllowedRead = new Map<string, number>();
 
+    /** Keep the generated client's public API while routing every HTTP method
+     * through the same pre-dispatch runtime admission boundary. */
     constructor(protected isCurrent: (scope: FrontendRequestScope, checkLocale?: boolean) => boolean,
                 protected identityLost: () => void, requestFetch: typeof fetch = globalThis.fetch,
                 private mayRead?: (scope: FrontendRequestScope) => boolean) {
-        this.client = createClient<paths>({baseUrl: `${globalThis.location?.origin ?? 'http://localhost'}/api/v1`, fetch: requestFetch});
+        const client = createClient<paths>({baseUrl: `${globalThis.location?.origin ?? 'http://localhost'}/api/v1`, fetch: requestFetch});
+        const transport = this;
+        // Capture the original serialized Request before caller middleware runs.
+        // Its per-dispatch marker never enters headers, URLs or retained state.
+        client.use({onRequest({request, params}) {
+            const capture = (params as {[dispatchRequest]?: {request?: Request}})[dispatchRequest];
+            if (capture) capture.request = request;
+        }});
+        // Binding happens when a method is read, without loading a feature or
+        // replacing the generated client's request/serialization implementation.
+        this.client = new Proxy(client, {
+            /** Intercept only dispatch methods; middleware registration and all
+             * other client members retain their original identity and behavior. */
+            get(target, name, receiver) {
+                const method = Reflect.get(target, name, receiver);
+                if (typeof name !== 'string' || typeof method !== 'function'
+                    || !['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD', 'TRACE', 'request'].includes(name)) return method;
+                // Generic request has a separate method argument; both surfaces
+                // delegate their untouched payload through one admission path.
+                return async function dispatch(...args: unknown[]) {
+                    const generic = name === 'request';
+                    const httpMethod = generic ? String(args[0]).toUpperCase() : name;
+                    const path = String(args[generic ? 1 : 0]);
+                    const options = args[generic ? 2 : 1] as FrontendDispatchOptions | undefined;
+                    const guarded = await transport.prepareDispatch(httpMethod, path, options ?? {});
+                    return Reflect.apply(method, target, generic ? [args[0], path, guarded] : [path, guarded]);
+                };
+            },
+        });
+    }
+
+    /** Admit the actual serialized request once, before fetch can have a side
+     * effect. Feature guards retain their more specific field/row diagnostics;
+     * every other client entry uses the same authored operation validators. */
+    private async prepareDispatch(method: string, path: string, options: FrontendDispatchOptions): Promise<FrontendDispatchOptions> {
+        const contract = operationInputs.find(input => input.method === method && input.path === path);
+        if (!contract) throw new InvalidInputError();
+        // A replacement constructor could change bytes after serialization.
+        // All application requests use the transport's native Request owner.
+        if (Object.hasOwn(options, 'Request')) throw new InvalidInputError();
+        const scope = (options.params?.header as {[dispatchScope]?: FrontendRequestScope} | undefined)?.[dispatchScope];
+        const check = () => {
+            this.checkReadCancellation(options.signal ?? undefined);
+            if (scope && !this.isCurrent(scope)) throw new ObsoleteRequestError();
+        };
+        check();
+        const [parameters, body, headers] = await this.loadDispatchValidators(contract, check);
+        check();
+        if (options.body === undefined && body && !body(undefined)) throw generatedInputError(body.errors, () => undefined);
+        if (!body && options.body !== undefined) throw new InvalidInputError();
+        const serialize = options.bodySerializer ?? defaultBodySerializer;
+        const capture: {request?: Request} = {};
+        const params = {...options.params, [dispatchRequest]: capture};
+        return {...options,
+            params,
+            bodySerializer: (value, headers) => {
+                check();
+                const serialized = serialize(value, headers);
+                this.validateSerializedBody(contract, serialized, body);
+                return serialized;
+            },
+            middleware: [...(options.middleware ?? []), {onRequest: ({request}) => {
+                check();
+                // Request bodies are streams. Require the original serializer's
+                // object rather than clone/read uploaded proof bytes to revalidate.
+                if (capture.request !== request) throw new InvalidInputError();
+                this.validateDispatchParameters(contract, request, parameters, headers);
+            }}],
+        };
+    }
+
+    /** A failed lazy validator load is definite local nondelivery. Fetch and
+     * XHR share this classification while retaining actor/cancellation priority. */
+    private async loadDispatchValidators(contract: typeof operationInputs[number], check: () => void): Promise<[
+        Awaited<ReturnType<typeof loadInputValidator>>, Awaited<ReturnType<typeof loadInputValidator>> | null,
+        Awaited<ReturnType<typeof loadInputValidator>>]> {
+        check();
+        try {
+            const validators = await Promise.all([loadInputValidator(contract.parametersValidator),
+                contract.bodyValidator ? loadInputValidator(contract.bodyValidator) : Promise.resolve(null),
+                loadInputValidator(contract.headersValidator)]);
+            check();
+            return validators;
+        } catch {
+            // A retired chunk has not dispatched a command. Keep its draft and
+            // report a definite local failure, with obsolete scope taking priority.
+            check();
+            throw new InvalidInputError(undefined, 'state.loadFailed');
+        }
+    }
+
+    /** Validate multipart metadata and presence without reading, cloning or
+     * retaining file bytes. The original FormData is sent by its existing owner. */
+    private validateSerializedBody(contract: typeof operationInputs[number], serialized: unknown,
+                                   validate: Awaited<ReturnType<typeof loadInputValidator>> | null): void {
+        if (!validate) return;
+        let value: unknown;
+        if (contract.mediaType === 'multipart/form-data') {
+            if (!(serialized instanceof FormData)) throw new InvalidInputError();
+            // Project only names and JSON metadata. Repeated parts and claimed
+            // filenames cannot stand in for the original binary upload object.
+            // Preserve special JavaScript names as submitted own properties so
+            // the closed schema can reject every unexpected part consistently.
+            const fields: Record<string, unknown> = Object.create(null);
+            for (const [name, part] of serialized.entries()) {
+                if (Object.hasOwn(fields, name)) throw new InvalidInputError();
+                if (contract.binaryParts.includes(name) && typeof part === 'string') throw new InvalidInputError();
+                if (typeof part !== 'string') fields[name] = part.name;
+                else if (name === 'data') {
+                    try { fields[name] = JSON.parse(part); } catch { throw new InvalidInputError(); }
+                } else fields[name] = part;
+            }
+            value = fields;
+        } else {
+            // Validate exactly what the existing JSON serializer will send,
+            // including omitted undefined fields, without changing its output.
+            if (typeof serialized !== 'string') throw new InvalidInputError();
+            try { value = JSON.parse(serialized); } catch { throw new InvalidInputError(); }
+        }
+        if (!validate(value)) throw generatedInputError(validate.errors, () => undefined);
+    }
+
+    /** Decode the URL and declared headers exactly as the server's scalar
+     * binding does. Unknown query fields remain visible to the closed schema;
+     * infrastructure and policy headers retain their separate admission owner. */
+    private validateDispatchParameters(contract: typeof operationInputs[number], request: Request,
+                                       validate: Awaited<ReturnType<typeof loadInputValidator>>,
+                                       validateHeaders: Awaited<ReturnType<typeof loadInputValidator>>): void {
+        const url = new URL(request.url);
+        const origin = globalThis.location?.origin ?? 'http://localhost';
+        if (url.origin !== origin || request.method !== contract.method || !url.pathname.startsWith('/api/v1/')) throw new InvalidInputError();
+        // Submitted query names remain ordinary data keys, including names
+        // which have inherited setters on a normal JavaScript object.
+        const value: Record<string, Record<string, unknown>> = {
+            path: Object.create(null), query: Object.create(null), header: Object.create(null),
+        };
+        // Select the exact route before decoding its path/query occurrences;
+        // repeated query values retain their multiplicity for scalar rejection.
+        const names: string[] = [];
+        const pattern = contract.path.split(/(\{[^{}]+\})/u).map(part => part.startsWith('{')
+            ? (names.push(part.slice(1, -1)), '([^/]+)') : part.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('');
+        const match = new RegExp('^/api/v1' + pattern + '$', 'u').exec(url.pathname);
+        if (!match) throw new InvalidInputError();
+        for (const [index, name] of names.entries()) {
+            try { value.path![name] = decodeURIComponent(match[index + 1]!); } catch { throw new InvalidInputError(); }
+        }
+        for (const name of new Set(url.searchParams.keys())) {
+            const values = url.searchParams.getAll(name);
+            value.query![name] = values.length === 1 ? values[0] : values;
+        }
+        for (const parameter of contract.parameters) {
+            // Header lookup is case-insensitive. Ordinary parameters use the
+            // same scalar syntax decoder as the backend before schema checks.
+            if (parameter.in === 'header' && request.headers.has(parameter.name)) value.header![parameter.name] = request.headers.get(parameter.name);
+            const raw = value[parameter.in]![parameter.name];
+            if (raw === undefined) continue;
+            const decoded = decodeScalarParameter(raw, parameter.type);
+            if (!decoded.valid) throw generatedInputError([{instancePath: '/' + parameter.in + '/' + parameter.name,
+                schemaPath: '', keyword: 'type', params: {type: parameter.type}}], () => undefined);
+            value[parameter.in]![parameter.name] = decoded.value;
+        }
+        if (!validate(value)) throw generatedInputError(validate.errors, () => undefined);
+        // Structural policy-header validation grants no authority. Conditional
+        // Event headers retain their authored optional/unbounded string shape.
+        const policy = Object.fromEntries(contract.policyHeaders.filter(name => request.headers.has(name))
+            .map(name => [name, request.headers.get(name)]));
+        if (!validateHeaders(policy)) throw generatedInputError(validateHeaders.errors, () => undefined);
     }
 
     /** Sessionless public reads/actions carry no fabricated identity evidence.
@@ -133,6 +303,9 @@ export class FrontendTransport {
         // caller too, rather than submit half a stored session's evidence.
         if ((scope.context === null) !== (scope.csrfToken === null)) throw new InvalidInputError(undefined, 'state.sessionChanged');
         return {
+            // Enumerable symbols survive feature header spreads while the HTTP
+            // serializer only emits string names. This capture is never authority.
+            [dispatchScope]: scope,
             ...(scope.context !== null ? {'X-Surveyor-Context': scope.context, 'X-CSRF-Token': scope.csrfToken!} : {}),
             'X-Surveyor-Locale': scope.locale,
             'X-Surveyor-Api-Compatibility': apiCompatibility,
@@ -245,6 +418,17 @@ export class FrontendTransport {
             throw new InvalidInputError(undefined, 'state.uploadDestinationInvalid');
         const headers = this.headers(scope);
 
+        // XHR bypasses the generated fetch client, so admit its same multipart
+        // envelope and concrete URL before constructing the transfer object.
+        const contract = operationInputs.find(input => input.operationId === operationId && input.method === 'POST');
+        if (!contract || contract.mediaType !== 'multipart/form-data' || !contract.bodyValidator) throw new InvalidInputError();
+        const [parameters, bodyValidator, headerValidator] = await this.loadDispatchValidators(contract, () => {
+            if (!this.isCurrent(scope)) throw new ObsoleteRequestError();
+        });
+        this.validateSerializedBody(contract, form, bodyValidator);
+        this.validateDispatchParameters(contract, new Request(`${globalThis.location?.origin ?? 'http://localhost'}/api/v1${path}`,
+            {method: 'POST', headers: Object.fromEntries(Object.entries(headers))}), parameters, headerValidator);
+
         // XHR supplies upload progress which fetch does not expose. Do not set
         // Content-Type: the browser must retain its multipart boundary and bytes.
         const request = new XMLHttpRequest();
@@ -252,7 +436,11 @@ export class FrontendTransport {
         request.timeout = 180000;
         for (const [name, value] of Object.entries(headers)) request.setRequestHeader(name, value);
 
-        await new Promise<void>(function send(resolve, reject) {
+        await new Promise<void>(
+        /** Send the same form once and settle only transport delivery. Byte
+         * progress cannot confirm persistence; network/timeout/abort and a thrown
+         * send remain unconfirmed until the separate HTTP response boundary. */
+        function send(resolve, reject) {
             request.upload.onprogress = reportProgress;
             request.upload.onload = uploaded;
             request.onload = completed;

@@ -82,7 +82,7 @@ export interface FrontendBootstrap {
     guestEntry?: components['schemas']['GuestEntry'];
     packingError?: PackingPageError;
     /** Only admitted creation/duplication forms receive these public form definitions and copied values. */
-    packingCreateContext?: components['schemas']['PackingCreateContext'];
+    packingCreateContext?: components['schemas']['EntityCreationContext'];
     /** An initial event query is resolved by the shared selection owner before drafting. */
     packingSelectedEvent?: components['schemas']['EventPickerOption'] | null;
     packingDuplicate?: components['schemas']['PackingDuplicate'];

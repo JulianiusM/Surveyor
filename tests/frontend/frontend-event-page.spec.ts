@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {DOMWrapper, flushPromises} from '@vue/test-utils';
+import {DOMWrapper} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import {QueryClient, QueryObserver} from '@tanstack/vue-query';
 import type {components} from '../../src/types/api/v1';
 import EventPage from '../../src/frontend/features/event/EventPage.vue';
@@ -10,7 +11,7 @@ import {eventKeys, overviewKeys} from '../../src/frontend/app/queryKeys';
 import {refetchFreshQueries} from '../../src/frontend/app/queryCache';
 import {ApiFailure, UnconfirmedResponseError} from '../../src/frontend/app/transport';
 import {createFrontendEventSession, createFrontendEventView, frontendEventId} from '../factories/frontendEventFactory';
-import {frontendEventJson as json, mountFrontendEvent} from '../keywords/frontendEventKeywords';
+import {frontendEventJson as json, mountFrontendEvent} from '../keywords/frontendUiKeywords';
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {

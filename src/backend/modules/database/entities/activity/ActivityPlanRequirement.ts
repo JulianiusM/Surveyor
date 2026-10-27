@@ -30,7 +30,7 @@ export class ActivityPlanRequirement extends NumericBase implements ParentEntity
     requiredShifts!: number;
 
     @RelationId((a: ActivityPlanRequirement) => a.role)
-    roleId!: string;
+    roleId!: number;
 
     @ManyToOne(() => ActivityRole, {
         // A role-specific requirement has no meaning after its role is removed.

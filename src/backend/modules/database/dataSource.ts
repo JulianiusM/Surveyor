@@ -21,11 +21,15 @@ import {entities, migrations, subscribers} from "./__index__";
 export let AppDataSource: DataSource;
 let initialized: boolean = false;
 
+/** Initialize the configured ORM source; completed initialization is idempotent,
+ * while a failed attempt leaves the success guard unset for a later retry. */
 export async function initDataSource() {
     if (initialized) {
         return;
     }
 
+    // Resolve database settings before constructing a source. The existing
+    // exported reference is assigned before connection, independently of the success guard.
     if (!settings.value.initialized) {
         await settings.read();
     }
@@ -49,6 +53,8 @@ export async function initDataSource() {
         },
     });
 
+    // Only a successful connection sets the completed flag; constructor/connection
+    // failures propagate without making a subsequent call skip initialization.
     await AppDataSource.initialize();
     initialized = true;
 }

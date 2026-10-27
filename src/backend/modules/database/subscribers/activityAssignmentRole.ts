@@ -31,6 +31,9 @@ export class ActivityAssignmentRolesSubscriber
         return ActivityAssignmentRole;
     }
 
+    /** Reject missing relation references, an absent assignment or a full configured role quota.
+     * A missing insert entity is a no-op. Reads use the insert's manager without
+     * acquiring new locks; the surrounding operation retains its concurrency scope. */
     async beforeInsert(event: InsertEvent<ActivityAssignmentRole>) {
         const {entity, manager} = event;
         if (!entity) return;
@@ -76,7 +79,8 @@ export class ActivityAssignmentRolesSubscriber
             .andWhere("ar.role_id = :roleId", {roleId})
             .getCount();
 
-        // Only enforce when a slotRole row exists and max_qty is set
+        // A missing quota or unset quantity retains unrestricted insertion.
+        // This read-before-insert check adds no separate transaction or lock.
         if (slotRole?.maxQty != null && currentCount >= slotRole.maxQty) {
             throw new Error("Role capacity reached for this slot");
         }

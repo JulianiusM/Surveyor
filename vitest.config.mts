@@ -48,6 +48,11 @@ export default defineConfig({
         // existing suites' explicitly managed mocks, including beforeAll reads.
         clearMocks: false,
         environment: 'node',
+        // Installed SSR artifacts already contain the release's compiled graph.
+        // Load them through Node as production does; re-transforming that graph
+        // delays real integration setup and changes its module-loading boundary.
+        // Authored application sources keep ordinary Vitest transformation/isolation.
+        server: {deps: {external: [/[\\/]dist[\\/]frontend-server[\\/]/]}},
         // Date fixtures and the database contract use UTC, as CI already does.
         // Apply that contract in each worker so a developer's local zone cannot
         // turn an unchanged serializer into a misleading regression failure.

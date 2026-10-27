@@ -18,10 +18,10 @@ import type {AssignmentCandidate} from '../../../../types/ActivityTypes';
 
 
 import {EntityManager, In, Not} from "typeorm";
-import type {ActivityCreationCompletion, ActivityPropertyPatch, SlotAssignmentMap} from "../../../../types/ActivityTypes";
+import type {ActivityCreationCompletion, ActivityPropertyPatch} from "../../../../types/ActivityTypes";
 
 import {toParticipantKey} from "../../../../common/activity/requirements";
-import {generateUniqueId} from "../../lib/util";
+import {generateUniqueId, sameUuid, uuidKey} from "../../lib/util";
 import {AppDataSource} from "../dataSource";
 import {ActivityAssignment} from "../entities/activity/ActivityAssignment";
 import {ActivityAssignmentRole} from "../entities/activity/ActivityAssignmentRole";
@@ -66,12 +66,12 @@ export async function lockActivityContext(manager: EntityManager, planId: string
         const siblings = await repo.find({
             where: {event: {id: initialEventId}}, order: {id: 'ASC'}, lock: {mode: 'pessimistic_write'},
         });
-        planIds = [...new Set([planId, ...siblings.map((plan) => plan.id)])].sort();
+        planIds = [...new Set([planId, ...siblings.map((plan) => plan.id)].map(uuidKey))].sort();
     }
     const plan = await lockActivityPlan(manager, planId);
     // Rejecting a concurrent reassociation is the controller's responsibility. Avoid taking
     // locks in its new event before that decision, which would invert the parent lock order.
-    if (plan && (plan.eventId ?? null) === initialEventId) {
+    if (plan && ((plan.eventId ?? null) === initialEventId || sameUuid(plan.eventId, initialEventId))) {
         await manager.getRepository(ActivitySlot).find({
             where: {entity: {id: In(planIds)}}, select: {id: true}, order: {id: 'ASC'}, lock: {mode: 'pessimistic_write'},
         });
@@ -281,7 +281,9 @@ export async function createActivityPlanTx(
     headerImg?: string | null,
     complete?: ActivityCreationCompletion,
 ) {
-    return await AppDataSource.transaction(async (manager) => {
+    return await AppDataSource.transaction(
+    /** Persist generated root/slot identities and prepare optional caller output before this transaction commits. */
+    async (manager) => {
         const id = generateUniqueId();
         const planRepo = manager.getRepository(ActivityPlan);
         const slotRepo = manager.getRepository(ActivitySlot);
@@ -480,12 +482,13 @@ export async function addActivitySlots(planId: string, slots: Partial<ActivitySl
     else await AppDataSource.transaction(saveSlots);
 }
 
+/** Read this plan's deterministically ordered slots and correlated assignment counts on the supplied manager. */
 export async function getActivitySlotsFlat(planId: string, manager: EntityManager = AppDataSource.manager) {
     const repo = manager.getRepository(ActivitySlot);
 
+    // The scalar count avoids multiplying slot rows through an assignment join.
     const {entities: slots, raw} = await repo
         .createQueryBuilder("s")
-        //.leftJoin("s.assignments", "a", "a.planId = :planId", {planId})
         .addSelect((qb) =>
                 qb.select("COUNT(*)")
                     .from("activity_assignments", "a")
@@ -497,10 +500,10 @@ export async function getActivitySlotsFlat(planId: string, manager: EntityManage
         .addOrderBy("s.start_time IS NULL", "ASC")
         .addOrderBy("s.start_time", "ASC")
         .addOrderBy("s.pos", "ASC")
-        .getRawAndEntities(); // entities now have s.assignedCount
+        .getRawAndEntities();
 
-    // Type hint: (ActivitySlot & { assignedCount: number })[]
-    // Group slots by day using reduce (Object.groupBy not available in Node.js 24)
+    // Raw counts align with the ordered hydrated entities. MariaDB scalar
+    // counts arrive as strings; this projection exposes their numeric value.
     return slots.map((slot, i) => ({
         ...slot,
         assignedCount: Number(raw[i].assignedCount),
@@ -604,7 +607,7 @@ export async function getParticipantAssignmentsWithSlots(planId: string, manager
     // Group the established structural slot facts under each profile identity.
     const map: Record<string, AssignmentCandidate[]> = {};
     for (const assignment of assignments) {
-        const participantKey = toParticipantKey({profileId: assignment.profile.id});
+        const participantKey = toParticipantKey({profileId: uuidKey(assignment.profile.id)});
         if (!map[participantKey]) map[participantKey] = [];
         map[participantKey].push({
             id: assignment.item.id,
@@ -634,7 +637,8 @@ export async function getActivitySlotAssignmentById(assignId: number) {
 // Aggregates
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getActivitySlotAssignees(planId: string, manager: EntityManager = AppDataSource.manager): Promise<SlotAssignmentMap> {
+/** Read this plan's raw assignment/profile/role rows on the caller's manager for business projections. */
+export async function getActivitySlotAssigneeRows(planId: string, manager: EntityManager = AppDataSource.manager): Promise<ActivityAssignment[]> {
     // Use QueryBuilder to avoid DISTINCT alias issues in MySQL/MariaDB when loading nested relations.
     const assignments = await manager.getRepository(ActivityAssignment)
         .createQueryBuilder('aa')
@@ -645,29 +649,7 @@ export async function getActivitySlotAssignees(planId: string, manager: EntityMa
         .where('aa.entity_id = :planId', {planId})
         .getMany();
 
-    const map: SlotAssignmentMap = {};
-
-    for (const assignment of assignments) {
-        const slotId = assignment.item.id;
-
-        const name = assignment.profile.name ?? "—";
-
-        const roles = assignment.activityAssignmentRoles.map(
-            (ar) => ar.role.title
-        );
-
-        const assignee = {
-            id: assignment.id,
-            profileId: assignment.profile.id,
-            name,
-            roles,
-        };
-
-        if (!map[slotId]) map[slotId] = [];
-        map[slotId].push(assignee);
-    }
-
-    return map;
+    return assignments;
 }
 
 /**
@@ -727,7 +709,7 @@ export async function getParticipantRolesForPlan(planId: string, manager: Entity
     for (const assignment of assignments) {
         let participantKey: string | null = null;
         if (assignment.profile?.id) {
-            participantKey = `profile:${assignment.profile.id}`;
+            participantKey = toParticipantKey({profileId: uuidKey(assignment.profile.id)});
         }
 
         if (!participantKey) continue;
@@ -753,6 +735,9 @@ export async function deleteActivitySlotAssignment(assignId: number, manager: En
     return await manager.getRepository(ActivityAssignment).delete(assignId);
 }
 
+/** Read configured slot-role quotas and their distinct named-role assignment counts.
+ * The two queries retain their independent read scope; returned rows preserve the
+ * quota query's order and the existing zero fallback for absent quantities/counts. */
 export async function getActivitySlotRoles(planId: string) {
     // Avoid TypeORM's DISTINCT subquery on MySQL/MariaDB that can mis-alias primary keys
     // when using Repository.find with nested relations. Use an explicit QueryBuilder instead.
@@ -765,6 +750,8 @@ export async function getActivitySlotRoles(planId: string) {
 
     const slotRoles = await qb.getMany();
 
+    // Count distinct assignments per slot/nondefault role separately from quota
+    // rows, so repeated role links do not multiply a slot's displayed occupancy.
     const assignedRows: Array<{slotId: string; roleId: string; assignedQty: string}> = await AppDataSource
         .getRepository(ActivityAssignmentRole)
         .createQueryBuilder('assignmentRole')
@@ -779,13 +766,17 @@ export async function getActivitySlotRoles(planId: string) {
         .groupBy('slot.id')
         .addGroupBy('assignedRole.id')
         .getRawMany();
+    // MariaDB counts arrive as text. Key both identifiers before joining these
+    // counts to the configured quota rows without loading assignment profiles.
     const assignedBySlotRole = new Map(
-        assignedRows.map((row) => [`${row.slotId}:${row.roleId}`, Number(row.assignedQty)]),
+        assignedRows.map((row) => [`${uuidKey(row.slotId)}:${row.roleId}`, Number(row.assignedQty)]),
     );
 
+    // Emit configured roles only, grouped by slot. Missing quota/count values
+    // keep their established zero presentation without choosing capacity policy.
     const map: Record<string, { id: number; name: string; maxQty: number; assignedQty: number }[]> = {};
     for (const sr of slotRoles) {
-        const slotId = sr.item.id;
+        const slotId = uuidKey(sr.item.id);
         if (!map[slotId]) map[slotId] = [];
         map[slotId].push({
             id: sr.role.id,
@@ -810,11 +801,17 @@ export async function addActivitySlotRoles(slotId: string, roles: number[]) {
     await repo.save(entries);
 }
 
+/** Apply the existing slot-role link diff in one transaction; callers own role validation.
+ * Removals and additions retain their distinct identifier comparisons, and newly
+ * inserted role links start with the existing quantity of one. */
 export async function updateActivitySlotRoles(slotId: string, roles: number[]) {
-    await AppDataSource.transaction(async (manager) => {
+    await AppDataSource.transaction(
+    /** Apply the current mapping-ID removal and role-ID insertion comparisons in their existing transaction. */
+    async (manager) => {
         const repo = manager.getRepository(ActivitySlotRole);
 
-        // 1. Get all roles for this slot
+        // Read this slot's current mapping rows and related role IDs before
+        // calculating either side of the existing replacement operation.
         const currentRoles = await repo.find({
             where: {item: {id: slotId}}, // relations ARE allowed in find()
             select: {
@@ -826,13 +823,19 @@ export async function updateActivitySlotRoles(slotId: string, roles: number[]) {
             }
         });
 
+        // Preserve the existing split comparison: removal uses mapping-row IDs
+        // against supplied IDs, while additions compare the stored role IDs.
         const toDelete = currentRoles.filter(r => !roles.includes(r.id));
         const toCreate = roles.filter(id => !currentRoles.map(r => r.roleId).includes(id))
 
+        // Remove selected mapping rows before creating missing role links on
+        // the same manager, retaining the operation's original write order.
         if (toDelete.length > 0) {
             await repo.remove(toDelete);
         }
 
+        // Each new relationship retains its initial quota. Saving the batch
+        // completes this transaction without changing existing retained quotas.
         const newRoles: ActivitySlotRole[] = [];
         for (const roleId of toCreate) {
             newRoles.push(repo.create({item: {id: slotId}, role: {id: roleId}, maxQty: 1}));

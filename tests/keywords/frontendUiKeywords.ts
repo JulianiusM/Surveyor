@@ -9,6 +9,13 @@ import {createFrontendContext, frontendContextKey} from '../../src/frontend/app/
 import App from '../../src/frontend/app/App.vue';
 import {createFrontendEventSession, frontendEventId} from '../factories/frontendEventFactory';
 
+/** Drain real lazy request-validator imports before observing their resulting
+ * Vue state. Outstanding HTTP promises stay outstanding for concurrency tests. */
+export async function flushFrontendPromises(): Promise<void> {
+    await vi.dynamicImportSettled();
+    await flushPromises();
+}
+
 /** Return a normal admitted wire response; tests replace no decoder or production owner. */
 export function frontendEventJson(value: unknown): Response {
     return new Response(JSON.stringify(value), {headers: {'Content-Type': 'application/json',
@@ -33,7 +40,7 @@ export async function mountFrontendEvent(component: Component, handler: (request
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
         provide: {[frontendContextKey as symbol]: context},
     }});
-    await flushPromises();
+    await flushFrontendPromises();
 
     async function dispose(): Promise<void> {
         wrapper.unmount();

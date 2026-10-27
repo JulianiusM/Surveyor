@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {flushPromises} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import EventRegistration from '../../src/frontend/features/event/EventRegistration.vue';
 import {useEventApi} from '../../src/frontend/features/event/api';
 import {createFrontendEventSession, createFrontendEventView, frontendEventId} from '../factories/frontendEventFactory';
-import {frontendEventButton as button, frontendEventJson as json, mountFrontendEvent} from '../keywords/frontendEventKeywords';
+import {frontendEventButton as button, frontendEventJson as json, mountFrontendEvent} from '../keywords/frontendUiKeywords';
 
 const cleanups: Array<() => Promise<void>> = [];
 beforeEach(() => {vi.stubGlobal('confirm', vi.fn(() => true));});

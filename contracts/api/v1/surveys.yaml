@@ -15,7 +15,7 @@ schemas:
           - $ref: '#/schemas/SurveyCreateContext'
           - type: 'null'
   SurveyResourceEntry:
-    $ref: ./common.yaml#/schemas/PackingResourceEntry
+    $ref: ./common.yaml#/schemas/EntityResourceEntry
   SurveyCombinationInput:
     description: A recurring monthly weekday and occurrence, not a concrete date.
     type: object
@@ -117,7 +117,7 @@ schemas:
         $ref: '#/schemas/SurveyCreateInput'
       image: {type: string, format: binary}
   SurveyCreated:
-    $ref: ./common.yaml#/schemas/PackingCreated
+    $ref: ./common.yaml#/schemas/EntityCreationResult
   SurveyDuplicate:
     type: object
     additionalProperties: false
@@ -153,7 +153,7 @@ schemas:
       archived: {type: boolean}
       inheritedArchived: {type: boolean, const: false}
   SurveyMetadataPatch:
-    $ref: ./common.yaml#/schemas/PackingMetadataPatch
+    $ref: ./common.yaml#/schemas/BasicEntityMetadataPatch
   SurveySettings:
     description: Applicable owner settings only. The presentation token is not a write precondition; surveys expose no event association, general permissions, administrators or automatic archival.
     type: object
@@ -186,7 +186,7 @@ schemas:
           manageArchive: {type: boolean}
       currentEvent: {type: 'null'}
       archive:
-        $ref: ./common.yaml#/schemas/PackingArchive
+        $ref: ./common.yaml#/schemas/EntityArchive
       access: {type: 'null'}
 paths:
   /surveys/create-entry:
@@ -578,7 +578,7 @@ paths:
           content:
             application/octet-stream:
               schema:
-                $ref: ./common.yaml#/schemas/PackingHeaderBinary
+                $ref: ./common.yaml#/schemas/EntityHeaderBinary
         default: *a1
     put:
       operationId: uploadSurveyHeader
@@ -608,7 +608,7 @@ paths:
         content:
           multipart/form-data:
             schema:
-              $ref: ./openapi.yaml#/components/schemas/PackingHeaderUpload
+              $ref: ./openapi.yaml#/components/schemas/EntityHeaderUpload
     delete:
       operationId: deleteSurveyHeader
       x-surveyor-command:

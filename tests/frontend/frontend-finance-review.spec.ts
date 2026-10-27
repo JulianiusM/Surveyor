@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {DOMWrapper, flushPromises} from '@vue/test-utils';
+import {DOMWrapper} from '@vue/test-utils';
 import type {Component} from 'vue';
 import type {components} from '../../src/types/api/v1';
 import FinanceInvoiceReview from '../../src/frontend/features/finance/FinanceInvoiceReview.vue';
@@ -10,7 +10,7 @@ import FinanceSection from '../../src/frontend/features/finance/FinanceSection.v
 import FinanceHistory from '../../src/frontend/features/finance/FinanceHistory.vue';
 import {ApiFailure} from '../../src/frontend/app/transport';
 import {createFrontendEventSession, frontendEventId as eventId} from '../factories/frontendEventFactory';
-import {frontendEventButton as button, frontendEventJson as json, mountFrontendEvent} from '../keywords/frontendEventKeywords';
+import {flushFrontendPromises as flushPromises, frontendEventButton as button, frontendEventJson as json, mountFrontendEvent} from '../keywords/frontendUiKeywords';
 
 const poolId = '22222222-2222-4222-8222-222222222222';
 const pool: components['schemas']['FinancePool'] = {id: poolId, name: 'Saved pool', description: 'Saved description', status: 'CLOSED',

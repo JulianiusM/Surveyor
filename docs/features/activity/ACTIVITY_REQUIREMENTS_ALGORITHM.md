@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; advanced activity-plan contributors
 owner: activity-plan maintainers
 status: current
-last-verified: 2026-10-26
+last-verified: 2026-10-27
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: approved R3 Activity business/DBAL owner separation reconciled; existing algorithm behavior and decisions retained
-source-anchors: src/types/ActivityTypes.d.ts; src/backend/modules/database/services/ActivityService.ts; tests/unit/activity-linked-recommendations.spec.ts; tests/integration/activity-plan-interlinking.spec.ts; tests/e2e/frontend-activity-advanced.spec.ts; src/common/activity/requirements.ts; src/backend/modules/activity/context.ts; src/backend/modules/activity/requirementOperations.ts; src/backend/modules/activity/warningOperations.ts; src/backend/modules/activity/recommendationPersistence.ts; src/backend/modules/activity/recommendationExecution.ts; src/backend/modules/activity/recommendationOperations.ts; src/backend/modules/activity/availability.ts; src/backend/modules/activity/fairAssignment.ts; src/backend/modules/activity/autoAssignment.ts; src/backend/modules/activity/recommendations.ts; src/backend/modules/activity/recommendationJobs.ts; src/backend/modules/database/services/ActivityRequirementService.ts; src/backend/modules/database/services/ActivityRecommendationService.ts; src/backend/controller/activityController.ts; tests/unit/activity-requirements.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/frontend/features/activity/; src/backend/routes/api/v1/activity.ts
+verification-scope: approved R6 identity and R7 saved-provenance matching reconciled; original algorithm, queue and DBAL decisions retained
+source-anchors: src/types/ActivityTypes.d.ts; src/backend/modules/database/services/ActivityService.ts; tests/unit/activity-linked-recommendations.spec.ts; tests/integration/activity-plan-interlinking.spec.ts; tests/e2e/frontend-activity-advanced.spec.ts; src/common/activity/requirements.ts; src/backend/modules/activity/availability.ts; src/backend/modules/activity/fairAssignment.ts; src/backend/modules/activity/autoAssignment.ts; src/backend/modules/activity/recommendations.ts; src/backend/modules/activity/recommendationJobs.ts; src/backend/modules/database/services/ActivityRequirementService.ts; src/backend/modules/database/services/ActivityRecommendationService.ts; src/backend/controller/activityController.ts; tests/unit/activity-requirements.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/frontend/features/activity/; src/backend/routes/api/v1/activity.ts
 next-review: implementation-change,D14
 -->
 
@@ -21,11 +21,18 @@ The implementation has four cooperating layers:
 
 1. `requirements.ts` calculates participant requirements, live coverage, hypothetical open-role coverage, and baseline suggestions.
 2. `fairAssignment.ts` proposes fair default-role assignments and permitted reassignments.
-3. `recommendationJobs.ts` runs the bounded, coalescing queue and rejects stale results; `recommendationExecution.ts` supplies its generation/context and guarded persistence callbacks.
-4. The requirement, warning and recommendation business modules validate and coordinate review/application. Database services own the queries, transactions and writes that preserve review, rejection and audit history.
+3. `recommendationJobs.ts` runs the bounded, coalescing queue and rejects stale results; the existing `autoAssignment.ts` supplies generation/context and guarded persistence callbacks.
+4. The controller owns requirement commands; the existing `recommendations.ts` validates and coordinates review/application and warning operations. Database services own the queries, transactions and writes that preserve review, rejection and audit history.
 
-The controller retains request admission and delegates cohesive operations to these modules. Shared context and pure
-calculations sit below the business operations; none of those modules imports the controller.
+The controller retains request admission and delegates generation/review to these modules. Shared context lives in
+`autoAssignment.ts`; pure normalization/warning calculations live in `availability.ts` below both business owners.
+None of those modules imports the controller. The maintainer's further 2026-10-26 instruction consolidates the earlier
+six business extraction modules into these existing owners, preserving the calculations and queue lifecycle.
+
+Backend UUID identity uses the existing `lib/util.ts` owner. Warning contexts preserve loaded references;
+`buildPlanRecommendationContext` makes canonical plain copies for allocation and fingerprinting. Profile dictionary
+keys and requirement participant/override/target references share canonical profile identity. The common requirements
+module remains browser-safe without importing backend utilities.
 
 The browser imports the same pure requirement module used by the server. Unsaved requirement edits therefore use the same precedence and coverage calculations as persisted settings. The browser preview does not save anything; the organizer must explicitly save the requirement settings.
 
@@ -183,7 +190,9 @@ Generation uses a deterministic snapshot containing:
 - Existing reviewed recommendation history.
 - Sibling plan modes and saved commitments in the same event, including active Pending/Approved target proposals.
 
-Participants already assigned to the plan and participants named in overrides are merged into the context. Existing role assignments supply the role IDs used by requirement precedence.
+Generation uses event registrations and, for a standalone plan or when external participation is enabled, existing
+assignees. Retained overrides contribute requirements rather than independent participant eligibility. Existing role
+assignments supply role IDs for the selected participants' requirement precedence.
 
 Approved assignment recommendations are treated as locked input while replaceable pending work is recalculated. Generated Pending rows in this plan are replaceable output and excluded from its job fingerprint. Retained manual drafts and reviewed decisions, including rejections, remain input. Sibling Pending proposals are input for this plan and remain in its fingerprint, including their status and operation provenance.
 
@@ -300,6 +309,13 @@ The active review UI permits these transitions:
 
 A newly staged manual operation starts as Approved. Manual operations can be removed before saving. Rejecting a manual operation discards it rather than creating automatic rejection memory.
 
+Review updates, previews and application share the existing resolver. A recognized saved row ID in the current plan
+has priority; when the submitted ID is absent or unknown, the resolver matches operation, source slot, target slot
+and profile through the single `availability.ts` operation-key implementation. UUID spelling does not change that
+match. A matched row retains its stored identity and generated/manual provenance. An unmatched new manual proposal
+receives a server-generated row ID; a client-supplied unknown ID cannot select another plan's saved row. Internal
+calculation keys stay separate from the loaded references returned in review and authorized warning details.
+
 Automatic rejection memory is target-based: it prevents another generated recommendation for the same participant and target slot. If a calculation already in progress emits that pair, persistence re-exposes it as Rejected instead of Pending. Returning it to Pending or Approved and saving removes that rejection state from future input.
 
 ## Manual review operations
@@ -396,15 +412,11 @@ A change to this subsystem should review all of the following together:
 - Requirement and baseline calculations: `src/common/activity/requirements.ts`
 - Availability and warning rules: `src/backend/modules/activity/availability.ts`
 - Fair recommendation algorithm: `src/backend/modules/activity/fairAssignment.ts`
-- Participant and linked-plan context: `src/backend/modules/activity/context.ts`
-- Algorithm input assembly and guarded recommendation writes: `src/backend/modules/activity/recommendationPersistence.ts`
-- Participant merging: `src/backend/modules/activity/autoAssignment.ts`
-- Requirement decoding/analysis and commands: `src/backend/modules/activity/requirementOperations.ts`
-- Warning admission and private projection: `src/backend/modules/activity/warningOperations.ts`
-- Batch warning calculation: `src/backend/modules/activity/recommendations.ts`
+- Participant merging/context, algorithm input and guarded generation writes: `src/backend/modules/activity/autoAssignment.ts`
+- Requirement decoding/analysis and commands: `src/backend/controller/activityController.ts`
+- Warning admission/private projection and recommendation review/application: `src/backend/modules/activity/recommendations.ts`
 - Job coordination: `src/backend/modules/activity/recommendationJobs.ts`
-- Generation/job integration: `src/backend/modules/activity/recommendationExecution.ts`
-- Recommendation review/application commands: `src/backend/modules/activity/recommendationOperations.ts`
+- Generation/job integration: `src/backend/modules/activity/autoAssignment.ts`
 - Requirement DBAL: `src/backend/modules/database/services/ActivityRequirementService.ts`
 - Recommendation DBAL: `src/backend/modules/database/services/ActivityRecommendationService.ts`
 - Controller orchestration: `src/backend/controller/activityController.ts`

@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import {parameterFieldAttributes} from '../../../../.generated/api/v1/policy.mjs';
 import {computed, nextTick, onBeforeUnmount, ref, shallowRef, toRaw, watch} from 'vue';
 import {isNavigationFailure, useRoute, useRouter} from 'vue-router';
 import type {LocationQuery, NavigationFailure, RouteLocationNormalized} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components, paths} from '../../../types/api/v1';
-import type {FrontendOverviewCardInteraction, FrontendOverviewCountRead, FrontendOverviewRegionProps, FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import type {FrontendEntityCardInteraction, FrontendOverviewCountRead, FrontendOverviewRegionProps, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import {overviewQueryParameters, useOverviewApi} from './api';
 import {usePackingApi} from '../packing/api';
 import {useEventApi} from '../event/api';
@@ -14,6 +15,7 @@ import {useActivityApi} from '../activity/api';
 import {createEntityLifecycle, useEntityRemoval} from '../../composables/entityLifecycle';
 import {useActionState, useFrontend, refreshInterval} from '../../app/context';
 import {useCommand} from '../../composables/command';
+import {presentAction} from '../../composables/listActions';
 import {isOrdinaryNavigation, useConfirmedNavigation} from '../../composables/pageEntry';
 import {useDebouncedValue} from '../../composables/debounced';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
@@ -28,7 +30,7 @@ import StatusNotice from '../../components/StatusNotice.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import AppNavigationDropdown from '../../components/AppNavigationDropdown.vue';
-import OverviewCard from './OverviewCard.vue';
+import EntityCard from '../../components/EntityCard.vue';
 import OverviewItems from './OverviewItems.vue';
 
 const props = withDefaults(defineProps<FrontendOverviewRegionProps>(), {active: true});
@@ -42,16 +44,16 @@ const surveyApi = useSurveysApi(context);
 const activityApi = useActivityApi(context);
 // The mixed projection owns feature command dispatch. Cards receive operations
 // from this owner, keeping their presentation independent of feature endpoints.
-const packingInteraction: FrontendOverviewCardInteraction = {clientNavigation: true, readHeader: packingApi.header.bind(packingApi)};
-const documentInteraction: FrontendOverviewCardInteraction = {clientNavigation: false};
+const packingInteraction: FrontendEntityCardInteraction = {clientNavigation: true, readHeader: packingApi.header.bind(packingApi)};
+const documentInteraction: FrontendEntityCardInteraction = {clientNavigation: false};
 // Typed identity is presentation only: different entity families may share a UUID.
 // The existing command remains the only request, authority and outcome owner.
-const pendingRemoval = shallowRef<{type: components['schemas']['OverviewCard']['type']; id: string} | null>(null);
+const pendingRemoval = shallowRef<{type: components['schemas']['EntityCard']['type']; id: string} | null>(null);
 // Menu disclosure closes before its asynchronous command finishes. Keep only
 // the initiating card's identity; the existing command owns actual progress.
-const pendingMenu = shallowRef<{type: components['schemas']['OverviewCard']['type']; id: string} | null>(null);
+const pendingMenu = shallowRef<{type: components['schemas']['EntityCard']['type']; id: string} | null>(null);
 
-function cardInteraction(card: components['schemas']['OverviewCard']): FrontendOverviewCardInteraction {
+function cardInteraction(card: components['schemas']['EntityCard']): FrontendEntityCardInteraction {
     const removePending = pendingRemoval.value?.type === card.type && pendingRemoval.value.id === card.id;
     const menuPending = command.pending.value && pendingMenu.value?.type === card.type && pendingMenu.value.id === card.id;
     const writeState = {removePending, menuPending, removeDisabled: removal.action.disabled.value, writesDisabled: overviewInvalidated.value};
@@ -204,7 +206,11 @@ function finishOverviewRead(value: components['schemas']['OverviewRegion'], upda
     imageReadRevision.value++;
 }
 
-watch(overview.data, (value) => {
+watch(overview.data,
+/** Adopt this observer's admitted receipt without overwriting a newer typed
+ * search or target navigation. Its scoped timestamp/counts remain read evidence,
+ * independently of command or image authority. */
+(value) => {
     if (value && !deniedRead.value) {
         // Bookmarked reads render the server's normalized query. Adopt it
         // only while this field still represents the route's unchanged input;
@@ -223,8 +229,9 @@ watch([overview.dataUpdatedAt, overview.isFetching, overview.error], restoreComm
 const retryAvailable = useReadRetry(() => navigationError.value ?? readError.value);
 const retryAt = useReadRetryAt(() => navigationError.value ?? readError.value, retryAvailable);
 watch([context.epoch, context.locale], retirePresentation, {flush: 'sync'});
-// A private preference can change both collection appearances. Refresh all mounted regions
-// together; server-owned placement remains separate from authoritative archival.
+/** Recover this exact terminal region or refresh all currently active Overview
+ * regions after a shared preference change. The captured actor/generation fences
+ * both paths; closed sibling regions cannot acquire a new read from recovery. */
 async function refresh(): Promise<void> {
     const scope = context.capture();
     const generation = readGeneration;
@@ -548,7 +555,7 @@ function targetQuery(parameters: Query): LocationQuery {
 
 /** Event expansion remembers its originating card and scroll position. Filter
  * changes retain that origin so Back can reveal the card instead of restoring an obsolete offset. */
-function expand(card: components['schemas']['OverviewCard']): void {
+function expand(card: components['schemas']['EntityCard']): void {
     if (!navigationAction.isAvailable()) return;
     returnPosition = {eventId: card.id, filters: filterKey(query.value), scrollY: window.scrollY};
     void navigate({event: card.id, childPage: undefined}, 'push', 'expand');
@@ -600,7 +607,7 @@ const searchQueryFields = computed(() => Object.entries(route.query).filter(([ke
 function pageHref(next: number): string {
     return navigationHref({[displayed.value?.parent ? 'childPage' : 'page']: String(next)});
 }
-function expandHref(card: components['schemas']['OverviewCard']): string {
+function expandHref(card: components['schemas']['EntityCard']): string {
     return navigationHref({event: card.id, childPage: undefined});
 }
 function filterType(type: string): void {
@@ -613,7 +620,7 @@ function filterType(type: string): void {
  * The server checks membership; the region's command owner refreshes current
  * projections without turning the selected visibility label into authority. */
 async function setVisibility(
-    card: components['schemas']['OverviewCard'],
+    card: components['schemas']['EntityCard'],
     value: components['schemas']['OverviewVisibilityInput']['visibility'],
 ): Promise<void> {
     if (writesBlocked.value) return;
@@ -626,7 +633,7 @@ async function setVisibility(
 /** Confirm the shared lifecycle action using the card's inherited-state wording.
  * Fresh server policy remains authoritative; the command refreshes affected
  * regions and cannot silently turn restore/archive into personal hiding. */
-async function archive(card: components['schemas']['OverviewCard'], restore: boolean): Promise<void> {
+async function archive(card: components['schemas']['EntityCard'], restore: boolean): Promise<void> {
     if (writesBlocked.value) return;
     const lifecycle = card.type === 'event' ? eventLifecycle : card.type === 'drivers' ? driversLifecycle
         : card.type === 'survey' ? surveyLifecycle : card.type === 'activity' ? activityLifecycle : packingLifecycle;
@@ -637,7 +644,7 @@ async function archive(card: components['schemas']['OverviewCard'], restore: boo
 /** Personal Overview retains schedule controls for admitted Event and
  * standalone Activity roots. Reuse their generated operations and this region's
  * command/refresh lifetime; card state never replaces server authorization. */
-async function automate(card: components['schemas']['OverviewCard'], paused: boolean): Promise<void> {
+async function automate(card: components['schemas']['EntityCard'], paused: boolean): Promise<void> {
     if (writesBlocked.value || !card.automation?.canManage) return;
 
     // Only these existing feature APIs support independent schedules. Other
@@ -649,34 +656,20 @@ async function automate(card: components['schemas']['OverviewCard'], paused: boo
 
 /** Retain only the initiating menu's presentation through its existing command
  * and follow-up reads. Confirmation, dispatch and failure remain with that owner. */
-async function presentMenuCommand(card: components['schemas']['OverviewCard'], operation: () => Promise<unknown>): Promise<void> {
-    const intent = {type: card.type, id: card.id};
-    pendingMenu.value = intent;
-    try {
-        await operation();
-    } finally {
-        // Actor retirement may clear this selection while the admitted write
-        // settles. An old completion cannot clear a later gesture's presentation.
-        if (pendingMenu.value === intent) pendingMenu.value = null;
-    }
+async function presentMenuCommand(card: components['schemas']['EntityCard'], operation: () => Promise<unknown>): Promise<void> {
+    await presentAction(pendingMenu, {type: card.type, id: card.id}, operation);
 }
 
 /** Deliver permanent deletion through the existing confirmed-navigation owner.
  * A failed destination retains its receipt for read/delivery Retry; the
  * deleted card cannot become another eligible DELETE just because delivery failed. */
-async function remove(card: components['schemas']['OverviewCard']): Promise<void> {
+async function remove(card: components['schemas']['EntityCard']): Promise<void> {
     if (writesBlocked.value) return;
     const success = card.type === 'event' ? 'event.deleted' : card.type === 'drivers' ? 'drivers.deleted'
         : card.type === 'survey' ? 'survey.deleted' : card.type === 'activity' ? 'activity.deleted' : 'packing.deleted';
     const intent = {type: card.type, id: card.id};
-    pendingRemoval.value = intent;
-    try {
-        await removal.remove({operation: deleteCard, confirmation: 'overview.confirmDelete', success});
-    } finally {
-        // Actor retirement can clear this presentation before the admitted write
-        // settles. An old completion cannot clear a newer initiating gesture.
-        if (pendingRemoval.value === intent) pendingRemoval.value = null;
-    }
+    await presentAction(pendingRemoval, intent,
+        () => removal.remove({operation: deleteCard, confirmation: 'overview.confirmDelete', success}));
 
     async function deleteCard(commandScope: FrontendRequestScope): Promise<void> {
         if (card.type === 'event') await eventApi.deleteEvent(card.id, commandScope);
@@ -734,7 +727,7 @@ function page(next: number): void {
                                 :name="prefix + 'q'"
                                 class="form-control"
                                 type="search"
-                                maxlength="200"
+                                :maxlength="parameterFieldAttributes.getOverview.query.q.maxLength"
                                 :aria-label="
                                     messages.t('overview.collectionSearch', {
                                         title: title.toLocaleLowerCase(context.locale.value),
@@ -785,7 +778,7 @@ function page(next: number): void {
                         >
                             <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>{{ messages.t('overview.back') }}
                         </a>
-                        <OverviewCard
+                        <EntityCard
                             :card="displayed.parent"
                             :interaction="cardInteraction(displayed.parent)"
                             :disabled="actionsBlocked"
@@ -829,7 +822,7 @@ function page(next: number): void {
                                 @remove="remove"
                                 @page="page"
                             />
-                        </OverviewCard>
+                        </EntityCard>
                     </template>
                     <OverviewItems
                         v-else

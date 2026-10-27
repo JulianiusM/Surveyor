@@ -19,7 +19,7 @@ import {DeepPartial, EntityNotFoundError, type EntityManager} from "typeorm";
 import {getLockedListAssignment} from './ListService';
 import type {BasicEntityPropertyPatch} from '../../../../types/EntityPropertyTypes';
 import type {DriversItemAssignee, EnrichedDriversItem} from "../../../../types/DriversTypes";
-import {generateUniqueId} from '../../lib/util';
+import {generateUniqueId, groupByUuid} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {DriversAssignment} from '../entities/drivers/DriversAssignment';
 import {DriversItem} from '../entities/drivers/DriversItem';
@@ -290,7 +290,10 @@ export async function getDriversAssignments(listId: string, profileId: string): 
     return rows.map(r => r.item.id);
 }
 
-export async function getDriversItemAssignees(listId: string) {
+/** Group one list's assignment/profile display data by shared item UUID identity.
+ * Preserve stored handles, profile references, names and row order for the admitted caller. */
+export async function getDriversItemAssignees(listId: string): Promise<Record<string, DriversItemAssignee[]>> {
+    // Keep the existing scoped query and relation loading before grouping its result.
     const rows = await AppDataSource.getRepository(DriversAssignment).find({
         where: {entity: {id: listId}},  // if `list` is a relation
         relations: {
@@ -299,16 +302,11 @@ export async function getDriversItemAssignees(listId: string) {
         },
     });
 
-    return rows.reduce((map, r) => {
-        const key = r.item.id;
-        map[key] = map[key] || [];
-        map[key].push({
-            id: r.id,
-            profileId: r.profile.id,
-            name: r.profile.name,
-        });
-        return map;
-    }, {} as Record<string, DriversItemAssignee[]>);
+    // Merge UUID aliases before projection rather than overwriting an earlier bucket.
+    const groups = groupByUuid(rows, row => row.item.id);
+    return Object.fromEntries([...groups].map(([id, assignments]) => [id, assignments.map(assignment => ({
+        id: assignment.id, profileId: assignment.profile.id, name: assignment.profile.name,
+    }))]));
 }
 
 /** Delete an approved assignment handle through the existing simple operation. */

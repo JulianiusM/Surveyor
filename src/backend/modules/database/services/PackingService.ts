@@ -18,7 +18,7 @@
 import {type EntityManager} from "typeorm";
 import {getLockedListAssignment} from './ListService';
 import type {BasicEntityPropertyPatch} from '../../../../types/EntityPropertyTypes';
-import {generateUniqueId} from '../../lib/util';
+import {generateUniqueId, groupByUuid} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {PackingAssignment} from '../entities/packing/PackingAssignment';
 import {PackingItem} from '../entities/packing/PackingItem';
@@ -52,11 +52,14 @@ export async function createPackingListTx(
     headerImg?: string | null,
     manager?: EntityManager
 ) {
+    /** Save a new Packing root before its caller-selected item identities on this transaction. */
     async function persist(manager: EntityManager) {
         const listId = generateUniqueId();
         const listRepo = manager.getRepository(PackingList);
         const itemRepo = manager.getRepository(PackingItem);
 
+        // Persist the root before any child can refer to it; an absent parent
+        // stays omitted from the new row rather than introducing a relation object.
         const list = listRepo.create({
             id: listId,
             owner: {id: ownerId},
@@ -69,6 +72,8 @@ export async function createPackingListTx(
         });
         await listRepo.save(list);
 
+        // Empty input creates only the root. Supplied item IDs and values stay
+        // with the controller's selection and share its parent/default transaction.
         if (items.length) {
             const itemEntities = items.map(it => itemRepo.create({
                 id: it.id,
@@ -328,18 +333,11 @@ export async function getPackingItemAssignees(listId: string) {
             profile: true
         }
     });
-    const map: Record<string, { id: number, profileId: string, name: string }[]> = {};
-    // Group the unchanged row projection without modifying entity membership.
-    for (const r of rows) {
-        const name = r.profile.name || '—';
-        if (!map[r.itemId]) map[r.itemId] = [];
-        map[r.itemId].push({
-            id: r.id,
-            profileId: r.profileId,
-            name
-        });
-    }
-    return map;
+    // Merge UUID aliases before projection, preserving every assignment and its stored references.
+    const groups = groupByUuid(rows, row => row.itemId);
+    return Object.fromEntries([...groups].map(([id, assignments]) => [id, assignments.map(assignment => ({
+        id: assignment.id, profileId: assignment.profileId, name: assignment.profile.name || '—',
+    }))]));
 }
 
 /** Load the selected assignment with its owning item so the controller can

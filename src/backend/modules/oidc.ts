@@ -41,6 +41,9 @@ function getCurrentUrlFromRequest(req: Request) {
     return new URL(`${proto}://${host}${req.originalUrl || req.url}`);
 }
 
+/** Prepare a provider authorization URL with fresh session-bound PKCE and state.
+ * Provider metadata selects the existing nonce compatibility path; the route
+ * retains persistence and redirect ownership after this preparation succeeds. */
 export async function startLogin(session: Request['session']) {
     if (!config) await initOIDC();
 

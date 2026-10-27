@@ -1,3 +1,4 @@
+import {createFeatureApiResolver} from '../../app/api';
 import type {components, operations} from '../../../types/api/v1';
 import type {FrontendContext, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {FrontendApi} from '../../app/api';
@@ -26,19 +27,5 @@ export class HelpApi {
 }
 
 // The transport is application/request-local and survives each component's useFrontend wrapper.
-const owners = new WeakMap<FrontendApi, HelpApi>();
-
-/** Reuse this application/request's Help adapter through component-local translation
- * wrappers. Its shared transport identity keeps actors from sharing another app's owner. */
-export function useHelpApi(context: FrontendContext): HelpApi {
-    let owner = owners.get(context.api);
-
-    // Construct only for a new transport. Remounts retain the same adapter while
-    // the WeakMap lets disposal release an otherwise unreachable application owner.
-    if (!owner) {
-        owner = new HelpApi(context.api);
-        owners.set(context.api, owner);
-    }
-
-    return owner;
-}
+/** Reuse this feature adapter for its application-local transport. */
+export const useHelpApi = createFeatureApiResolver(HelpApi);

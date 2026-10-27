@@ -22,15 +22,6 @@ import {PackingItem} from "./PackingItem";
 
 @Entity("packing_lists", {schema: "surveyor"})
 export class PackingList extends DefaultEntity {
-    @OneToMany(
-        () => PackingAssignment,
-        (packingAssignments) => packingAssignments.entity
-    )
-    packingAssignments!: PackingAssignment[];
-
-    @OneToMany(() => PackingItem, (packingItems) => packingItems.entity)
-    packingItems!: PackingItem[];
-
     @RelationId((pl: PackingList) => pl.event)
     eventId?: string;
 

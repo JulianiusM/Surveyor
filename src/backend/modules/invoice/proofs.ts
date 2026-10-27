@@ -19,7 +19,7 @@ import fs from 'node:fs';
 import settings from '../settings';
 import type {EventInvoice} from '../database/entities/event/EventInvoice';
 import {APIError} from '../lib/errors';
-import {resolveStoredFile} from '../lib/storedFiles';
+import {resolveStoredFile} from '../lib/fileCommons';
 
 /** Files stay outside the DBAL and retain the existing configured-directory deletion boundary. */
 export async function deleteInvoiceProof(proofPath?: string | null): Promise<void> {

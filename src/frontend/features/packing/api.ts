@@ -1,3 +1,4 @@
+import {createFeatureApiResolver} from '../../app/api';
 import type {components} from '../../../types/api/v1';
 import type {FrontendContext, FrontendEventPickerQuery, FrontendEventPickerSource, FrontendRead, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {FrontendApi} from '../../app/api';
@@ -6,25 +7,25 @@ import {packingKeys} from '../../app/queryKeys';
 import {createMultipartForm, generatedInputError} from '../../app/transport';
 import {validatePackingListView} from '../../../../.generated/api/v1/browser/validatePackingListView.mjs';
 import {validatePackingMetadata} from '../../../../.generated/api/v1/browser/validatePackingMetadata.mjs';
-import {validatePackingMetadataPatch} from '../../../../.generated/api/v1/browser/validatePackingMetadataPatch.mjs';
-import {validatePackingAssignmentResult} from '../../../../.generated/api/v1/browser/validatePackingAssignmentResult.mjs';
-import {validatePackingSettings} from '../../../../.generated/api/v1/browser/validatePackingSettings.mjs';
+import {validateBasicEntityMetadataPatch} from '../../../../.generated/api/v1/browser/validateBasicEntityMetadataPatch.mjs';
+import {validateListAssignmentResult} from '../../../../.generated/api/v1/browser/validateListAssignmentResult.mjs';
+import {validateListSettings} from '../../../../.generated/api/v1/browser/validateListSettings.mjs';
 import {validatePackingDuplicate} from '../../../../.generated/api/v1/browser/validatePackingDuplicate.mjs';
 import {validatePackingCreateInput} from '../../../../.generated/api/v1/browser/validatePackingCreateInput.mjs';
-import {validatePackingCreated} from '../../../../.generated/api/v1/browser/validatePackingCreated.mjs';
+import {validateEntityCreationResult} from '../../../../.generated/api/v1/browser/validateEntityCreationResult.mjs';
 import {validatePackingNewItem} from '../../../../.generated/api/v1/browser/validatePackingNewItem.mjs';
 import {validatePackingItemPatch} from '../../../../.generated/api/v1/browser/validatePackingItemPatch.mjs';
 import {validateMutationResult} from '../../../../.generated/api/v1/browser/validateMutationResult.mjs';
 import {validateEventPickerOptions} from '../../../../.generated/api/v1/browser/validateEventPickerOptions.mjs';
-import {validatePackingEventChanged} from '../../../../.generated/api/v1/browser/validatePackingEventChanged.mjs';
-import {validatePackingProfileOptions} from '../../../../.generated/api/v1/browser/validatePackingProfileOptions.mjs';
+import {validateEntityEventChangeResult} from '../../../../.generated/api/v1/browser/validateEntityEventChangeResult.mjs';
+import {validateEntityAdministratorProfileOptions} from '../../../../.generated/api/v1/browser/validateEntityAdministratorProfileOptions.mjs';
 import {validateGuestEntry} from '../../../../.generated/api/v1/browser/validateGuestEntry.mjs';
-import {validatePackingCreateEntry} from '../../../../.generated/api/v1/browser/validatePackingCreateEntry.mjs';
-import {validatePackingResourceEntry} from '../../../../.generated/api/v1/browser/validatePackingResourceEntry.mjs';
+import {validateEntityCreationEntry} from '../../../../.generated/api/v1/browser/validateEntityCreationEntry.mjs';
+import {validateEntityResourceEntry} from '../../../../.generated/api/v1/browser/validateEntityResourceEntry.mjs';
 
 type List = components['schemas']['PackingListView'];
 type Metadata = components['schemas']['PackingMetadata'];
-type Assignment = components['schemas']['PackingAssignmentResult'];
+type Assignment = components['schemas']['ListAssignmentResult'];
 
 /** Feature operations own their generated validators; transport and actor admission are shared. */
 export class PackingApi {
@@ -71,10 +72,10 @@ export class PackingApi {
     /** Submit a sparse generated metadata patch against its reviewed token.
      * A confirmed response must include newly admitted header evidence as well as
      * valid field data; neither the previous token nor saved values renew authority. */
-    async saveMetadata(listId: string, patch: components['schemas']['PackingMetadataPatch'], etag: string,
+    async saveMetadata(listId: string, patch: components['schemas']['BasicEntityMetadataPatch'], etag: string,
                        scope: FrontendRequestScope): Promise<FrontendRead<Metadata>> {
         // Structural validation precedes transport; business/field checks remain server-owned.
-        if (!validatePackingMetadataPatch(patch)) throw generatedInputError(validatePackingMetadataPatch.errors, path => packingInputField(path));
+        if (!validateBasicEntityMetadataPatch(patch)) throw generatedInputError(validateBasicEntityMetadataPatch.errors, path => packingInputField(path));
 
         const result = this.transport.read('updatePackingMetadata', await this.transport.client.PATCH('/packing-lists/{listId}/metadata', {
             params: {path: {listId}, header: {...this.transport.headers(scope), 'If-Match': etag}}, body: patch, cache: 'no-store',
@@ -89,46 +90,46 @@ export class PackingApi {
         const result = assigned
             ? await this.transport.client.PUT('/packing-lists/{listId}/items/{itemId}/self-assignment', options)
             : await this.transport.client.DELETE('/packing-lists/{listId}/items/{itemId}/self-assignment', options);
-        return this.transport.read(assigned ? 'assignPackingItem' : 'unassignPackingItem', result, validatePackingAssignmentResult, scope).data;
+        return this.transport.read(assigned ? 'assignPackingItem' : 'unassignPackingItem', result, validateListAssignmentResult, scope).data;
     }
 
     /** Settings are a separately authorized projection, not authority inherited
      * from detail or metadata. Preserve cancellation and the settings read's own
      * cooldown while its generated validator checks the permitted panels/tokens. */
-    async settings(listId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['PackingSettings']> {
+    async settings(listId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['ListSettings']> {
         const transport = this.transport;
         function readSettings() {
             return transport.client.GET('/packing-lists/{listId}/settings', {
                 params: {path: {listId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
         }
-        return (await transport.readJson(`packing/${listId}/settings`, scope, readSettings, 'getPackingSettings', validatePackingSettings, signal)).data;
+        return (await transport.readJson(`packing/${listId}/settings`, scope, readSettings, 'getPackingSettings', validateListSettings, signal)).data;
     }
 
     /** Creation admission is distinct from the public duplication projection. The caller supplies
      * its exact return destination; the server owns account admission and bounded destination policy. */
     async createEntry(scope: FrontendRequestScope, signal?: AbortSignal,
-                      returnTo?: string, eventId?: string): Promise<components['schemas']['PackingCreateEntry']> {
+                      returnTo?: string, eventId?: string): Promise<components['schemas']['EntityCreationEntry']> {
         const transport = this.transport;
         function readCreationEntry() {
             return transport.client.GET('/packing-lists/create-entry', {
                 params: {query: {returnTo, eventId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
         }
-        return (await transport.readJson('packing/create-entry/' + (returnTo ?? '') + '/' + (eventId ?? ''), scope, readCreationEntry, 'getPackingCreateEntry', validatePackingCreateEntry, signal)).data;
+        return (await transport.readJson('packing/create-entry/' + (returnTo ?? '') + '/' + (eventId ?? ''), scope, readCreationEntry, 'getPackingCreateEntry', validateEntityCreationEntry, signal)).data;
     }
 
     /** Detail and explicit guest routes deliberately have different admission. Never
      * infer either route from session presence or from permissions on the other projection. */
     async resourceEntry(listId: string, view: 'detail' | 'guest', scope: FrontendRequestScope,
-                        signal?: AbortSignal): Promise<components['schemas']['PackingResourceEntry']> {
+                        signal?: AbortSignal): Promise<components['schemas']['EntityResourceEntry']> {
         const transport = this.transport;
         function readResourceEntry() {
             return transport.client.GET('/packing-lists/{listId}/entry', {
                 params: {path: {listId}, query: {view}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
         }
-        return (await transport.readJson(`packing/${listId}/entry/${view}`, scope, readResourceEntry, 'getPackingResourceEntry', validatePackingResourceEntry, signal)).data;
+        return (await transport.readJson(`packing/${listId}/entry/${view}`, scope, readResourceEntry, 'getPackingResourceEntry', validateEntityResourceEntry, signal)).data;
     }
 
     /** Read only the server's permitted duplication surface. Destination selection
@@ -150,7 +151,7 @@ export class PackingApi {
      * Only a validated creation receipt confirms success, and uncertain delivery is left to
      * the shared command owner without replaying this non-idempotent request. */
     async createPacking(input: components['schemas']['PackingCreateInput'], image: File | null,
-                        scope: FrontendRequestScope, itemRows?: readonly number[]): Promise<components['schemas']['PackingCreated']> {
+                        scope: FrontendRequestScope, itemRows?: readonly number[]): Promise<components['schemas']['EntityCreationResult']> {
         // Validate machine data before adapting it to the established multipart envelope.
         // The image is a separate part rather than a second handwritten creation schema.
         if (!validatePackingCreateInput(input)) {
@@ -163,7 +164,7 @@ export class PackingApi {
         // A lost response cannot be treated as proof that no list was created.
         return this.transport.read('createPackingList', await this.transport.client.POST('/packing-lists', {
             params: {header: this.transport.headers(scope)}, body: {data: input}, bodySerializer: () => form, cache: 'no-store',
-        }), validatePackingCreated, scope).data;
+        }), validateEntityCreationResult, scope).data;
     }
 
     /** Quick-add keeps its separate generated creation bounds. A rejected row
@@ -172,7 +173,7 @@ export class PackingApi {
         if (!validatePackingNewItem(input)) throw generatedInputError(validatePackingNewItem.errors, path => packingInputField(path));
         return this.transport.read('createPackingItem', await this.transport.client.POST('/packing-lists/{listId}/items', {
             params: {path: {listId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
-        }), validatePackingCreated, scope).data;
+        }), validateEntityCreationResult, scope).data;
     }
 
     /** Existing-item edits retain their own scalar rules and comparison token;
@@ -217,10 +218,10 @@ export class PackingApi {
         return (await transport.readJson(`packing/events/${JSON.stringify(query)}`, scope, readEventOptions, 'searchPackingEvents', validateEventPickerOptions, signal)).data;
     }
 
-    async linkEvent(listId: string, input: components['schemas']['PackingEventChange'], token: string, scope: FrontendRequestScope) {
+    async linkEvent(listId: string, input: components['schemas']['EntityEventChangeInput'], token: string, scope: FrontendRequestScope) {
         return this.transport.read('changePackingEvent', await this.transport.client.PUT('/packing-lists/{listId}/event', {
             params: {path: {listId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: input, cache: 'no-store',
-        }), validatePackingEventChanged, scope).data;
+        }), validateEntityEventChangeResult, scope).data;
     }
 
     async setDefaults(listId: string, defaults: components['schemas']['PermissionDefaultsPatch'], token: string, scope: FrontendRequestScope) {
@@ -239,10 +240,10 @@ export class PackingApi {
                 params: {path: {listId}, query: {q}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
         }
-        return (await transport.readJson(`packing/${listId}/profiles/${q}`, scope, readProfileOptions, 'searchPackingProfiles', validatePackingProfileOptions, signal)).data;
+        return (await transport.readJson(`packing/${listId}/profiles/${q}`, scope, readProfileOptions, 'searchPackingProfiles', validateEntityAdministratorProfileOptions, signal)).data;
     }
 
-    async addAdmin(listId: string, input: components['schemas']['PackingAdminInput'], token: string, scope: FrontendRequestScope) {
+    async addAdmin(listId: string, input: components['schemas']['EntityAdministratorInput'], token: string, scope: FrontendRequestScope) {
         return this.transport.read('addPackingAdmin', await this.transport.client.POST('/packing-lists/{listId}/admins', {
             params: {path: {listId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: input, cache: 'no-store',
         }), validateMutationResult, scope).data;
@@ -345,19 +346,5 @@ function packingInputField(path: string, itemRows?: readonly number[]): Frontend
     return undefined;
 }
 
-const owners = new WeakMap<FrontendApi, PackingApi>();
-
-/** Reuse one Packing transport wrapper for this application/request's API owner.
- * Component-local translation bindings may create context wrappers, but they retain the
- * same transport. A WeakMap preserves that ownership without sharing actors across apps. */
-export function usePackingApi(context: FrontendContext): PackingApi {
-    let owner = owners.get(context.api);
-
-    // Construct lazily for this transport identity; component remounts reuse the wrapper
-    // while disposal releases it when the application-local API is no longer referenced.
-    if (!owner) {
-        owner = new PackingApi(context.api);
-        owners.set(context.api, owner);
-    }
-    return owner;
-}
+/** Reuse this feature adapter for its application-local transport. */
+export const usePackingApi = createFeatureApiResolver(PackingApi);

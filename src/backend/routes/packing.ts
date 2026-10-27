@@ -8,7 +8,10 @@ import {bootstrap} from '../middleware/frontendDocuments';
 const router = createGuestFlowRouter(packingFlow);
 
 /** Preserve existing packing statuses while rendering only known, localized admission messages. */
-router.use(async function renderPackingAdmissionError(error: unknown, req: Request, res: Response, next: NextFunction) {
+router.use(/** Render only recognized Packing admission failures with their
+ * existing status and localized safe message. Other errors and rendering failures
+ * keep the outer boundary, without exposing the protected page. */
+async function renderPackingAdmissionError(error: unknown, req: Request, res: Response, next: NextFunction) {
     // This router owns Packing admission outcomes, including errors from its
     // parameter loader. Other error categories retain the common boundary.
     if (!(error instanceof ExpectedError)) return next(error);

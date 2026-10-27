@@ -1,7 +1,7 @@
 import type {AutoAssignmentContext} from '../../src/types/ActivityTypes';
 import {describe, expect, it} from 'vitest';
 import {generateFairRecommendations} from '../../src/backend/modules/activity/fairAssignment';
-import {buildRecommendationWarnings} from '../../src/backend/modules/activity/recommendations';
+import {buildRecommendationWarnings} from '../../src/backend/modules/activity/availability';
 import {fingerprintRecommendationContext} from '../../src/backend/modules/activity/recommendationJobs';
 
 import type {ActivityLinkedPlanContext, AssignmentCandidate} from '../../src/types/ActivityTypes';

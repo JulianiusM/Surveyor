@@ -36,17 +36,18 @@ export interface ParentEntityRelation {
     entity: BaseEntity;
 }
 
-export interface ParentItemRelation {
-    itemId: string;
+export interface ParentItemRelation<ItemId extends string | number = string> {
+    itemId: ItemId;
     item: BaseEntityItem;
 }
 
 export interface DefaultItemRelationEntity extends ParentEntityRelation, ChildAssigmentRelation {
 }
 
-export interface DefaultItemAssignmentRelationEntity extends ParentEntityRelation, ParentItemRelation {
+export interface DefaultItemAssignmentRelationEntity<ItemId extends string | number = string>
+    extends ParentEntityRelation, ParentItemRelation<ItemId> {
 }
 
 export type EntityItemAssignment = NumericProfileBase | UuidProfileBase;
 
-export type DefaultEntityItemAssignment = DefaultNumericEntityItemAssignment | DefaultUuidEntityItemAssignment;
+export type DefaultEntityItemAssignment = DefaultNumericEntityItemAssignment<string | number> | DefaultUuidEntityItemAssignment<string | number>;

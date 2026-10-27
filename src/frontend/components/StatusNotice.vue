@@ -4,8 +4,7 @@ import type {MessageKey} from '../../types/LocalizationTypes';
 import type {FrontendNoticeAction} from '../../types/FrontendFeedbackTypes';
 import {createTranslator, formatReadTime} from '../../common/localization/translator';
 import {frontendContextKey, useClientInitialization, useFrontend} from '../app/context';
-import {isElementVisible, noticeTargetKey, readFailureMessage, useTransientNotice} from '../composables/feedback';
-import {useNoticePresentation} from '../composables/noticePresentation';
+import {isElementVisible, noticeTargetKey, readFailureMessage, useNoticePresentation, useTransientNotice} from '../composables/feedback';
 import ActionButton from './ActionButton.vue';
 
 // Teleport has no DOM element for automatic fallthrough. Preserve the original

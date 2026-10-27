@@ -18,9 +18,9 @@ export interface GuestFlowResponse<Result> {
 /** Feature contracts remain distinct while their HTTP workflow has one owner. */
 export interface GuestFlowSchemas {
     packing: {
-        context: components['schemas']['PackingCreateContext'];
+        context: components['schemas']['EntityCreationContext'];
         input: components['schemas']['PackingCreateInput'];
-        created: components['schemas']['PackingCreated'];
+        created: components['schemas']['EntityCreationResult'];
         duplicate: components['schemas']['PackingDuplicate'];
         detail: components['schemas']['PackingListView'];
     };

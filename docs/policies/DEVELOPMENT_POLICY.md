@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; developers; AI coding agents
 owner: project maintainers
 status: current
-last-verified: 2026-10-26
+last-verified: 2026-10-27
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit R3 architecture-remediation authority and R4 administration-deferral amendment recorded; final-answer-only questions and prior responsibility, session and delivery boundaries retained
+verification-scope: explicit R6 single shared UUID implementation and R7 provenance correction approvals recorded; prior remediation history and responsibility/session/delivery boundaries retained
 source-anchors: AGENTS.md; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/development-check.json; scripts/check-development-policy.mjs; scripts/tests/development-policy-check.test.mjs; docs/DEVELOPMENT.md; docs/ARCHITECTURE.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; src/; tests/; package.json
 next-review: explicit-maintainer-policy-amendment
 -->
@@ -183,6 +183,27 @@ admission; existing DBAL services retain transaction/lock ownership. Preserve gr
 tokens, validation order, zero versus absent grants and every feature's lock/commit order. The rejected earlier
 attempt and rollback remain historical; this amendment neither accepts that patch retrospectively nor authorizes
 changed administration rules or other excluded backend remedies.
+
+**Further direct maintainer instruction (2026-10-26):** after rejecting incomplete shared ownership, the maintainer
+instructs implementation of the renewed review's proposals, including IMP-159 through IMP-174 and incomplete
+original remedies. The maintainer explicitly approves R5 for all frontend validation, broadens IMP-154 to every
+feature-specific shared contract and the root OpenAPI operation ownership, and requires reuse of existing owners.
+Review already created modules and consolidate overlapping responsibilities into their actual existing owner;
+create a module only when no existing module has the same or a similar job. This authorizes the reviewed current
+ownership corrections and the separately identified identifier/ORM corrections, not copying implementations,
+forwarding facades or a blanket future redesign. Preserve original decisions and deliberate feature differences;
+R4's matching permission administration remains in its existing shared controller. New consequences outside these
+specified proposals still follow the ordinary individual decision rules.
+
+**Subsequent explicit decisions (2026-10-27):** the maintainer approves R6/IMP-175 with the requirement that UUID
+identity handling have one shared implementation rather than controller copies. Adopt it throughout the confirmed
+scope, lookup, ordering, submitted-reference and Activity job paths using existing owners. Preserve grants, foreign
+and missing-row checks, transaction/lock order, numeric identifiers and case-sensitive opaque security evidence;
+the generic job coordinator retains its own responsibility. The maintainer separately approves R7/IMP-176:
+the existing recommendation resolver uses its assignment-detail match when a supplied row ID is unrecognized,
+preserving saved provenance and legitimate new manual proposals. Current-plan ownership remains authoritative;
+an unknown submitted ID supplies no authority over another plan's saved row. These decisions supersede the two
+pending requests, not unrelated exclusions or the ordinary approval rules for future consequences.
 
 ## Implementation principles
 

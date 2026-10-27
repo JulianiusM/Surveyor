@@ -39,6 +39,8 @@ function assertSafeSqlName(value: string, label: string): void {
     }
 }
 
+/** Match the child FK's physical UUID storage to the actual parent definition.
+ * Validate interpolated type/character identifiers before issuing the ALTER. */
 async function alignEntityIdWithActivityPlan(queryRunner: QueryRunner): Promise<void> {
     const columns: IdColumnMetadata[] = await queryRunner.query(`
         SELECT COLUMN_TYPE AS columnType,
@@ -81,6 +83,8 @@ async function alignEntityIdWithActivityPlan(queryRunner: QueryRunner): Promise<
 export class AddActivityPlanStayRequirements1787688000000 implements MigrationInterface {
     name = "AddActivityPlanStayRequirements1787688000000";
 
+    /** Resume additive stay-requirement setup, align UUID storage before adding
+     * a missing parent FK, and preserve existing rows/indexes on repeated runs. */
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`CREATE TABLE IF NOT EXISTS \`${TABLE}\` (
             \`id\` int NOT NULL AUTO_INCREMENT,

@@ -92,7 +92,10 @@ async function admitProfileWorkflow(req: Request, res: Response, accountOnly: bo
     return await applyPageEntry(req, res, state, entry) ? null : state;
 }
 
-router.get('/oidc/login', asyncHandler(async function startFrontendOidc(req, res) {
+router.get('/oidc/login', asyncHandler(/** Apply configured provider admission,
+ * store the safe application return choice, and persist the protocol owner's
+ * PKCE/state preparation before delivering its authorization redirect. */
+async function startFrontendOidc(req, res) {
     const entry = frontendIdentityPageEntry('oidc', settings.value, req.query.next);
     if (entry.kind === 'denied') {
         const state = await bootstrap(req);
@@ -131,7 +134,10 @@ router.get('/logout', addNextQuery('/users/logout', '/users'), asyncHandler(asyn
     res.redirect(typeof req.query.next === 'string' ? safeFrontendReturn(req.query.next) : destination);
 }));
 
-router.get('/reset-password/:token', asyncHandler(async function renderPasswordResetFrontend(req, res) {
+router.get('/reset-password/:token', asyncHandler(/** Read reset-token admission
+ * without consuming it, rendering localized denial/bootstrap when necessary.
+ * The later password command independently rechecks expiry and consumption. */
+async function renderPasswordResetFrontend(req, res) {
     const state = await bootstrap(req);
     const entry = frontendIdentityPageEntry('reset', settings.value);
     if (await applyPageEntry(req, res, state, entry)) return;
@@ -153,7 +159,10 @@ router.get('/reset-password/:token', asyncHandler(async function renderPasswordR
 /** Complete account activation through the shared identity controller. Document
  * configuration/admission precedes the token operation; success retains the
  * login handoff and failures retain their existing document status/presentation. */
-router.get('/activate/:token', asyncHandler(async function activateIdentity(req, res) {
+router.get('/activate/:token', asyncHandler(/** Apply local-login admission before
+ * the identity owner's staged token/notice transaction. Failures rebootstrap the
+ * current actor; success adopts the committed session before redirect delivery. */
+async function activateIdentity(req, res) {
     // Resolve the request's presentation and local-login configuration before
     // attempting token activation, matching the existing document-entry owner.
     applyPresentationLocale(req);

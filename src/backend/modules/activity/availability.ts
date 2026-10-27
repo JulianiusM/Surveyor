@@ -15,13 +15,13 @@
  */
 
 import type {SlotTimeboxCandidate, AttendanceCheck, AttendancePolicy} from '../../../types/ActivityTypes';
-
-
+import type {RecommendationWarningOptions, RecommendationInput, RecommendationWarningResult} from '../../../types/ActivityTypes';
+import {toParticipantKey} from '../../../common/activity/requirements';
+import {uuidKey, sameUuid, indexByUuid} from '../lib/util';
 
 import type {ParticipantAttendance} from "../../../types/ActivityRequirementTypes";
 import {parseTimeToMinutes, slotsOverlap} from './timebox';
 import type {AssignmentCandidate, AssignmentWarning} from '../../../types/ActivityTypes';
-
 
 function isBefore(a: string, b: string): boolean {
     return a < b;
@@ -64,7 +64,7 @@ export function findOverlapConflicts(candidate: AssignmentCandidate, existing: A
     // applying the established date/time overlap semantics.
     const conflicts: string[] = [];
     for (const slot of existing) {
-        if (slot.id === candidate.id) continue;
+        if (sameUuid(slot.id, candidate.id)) continue;
         if (slotsOverlap(candidate, slot)) {
             conflicts.push(slot.id);
         }
@@ -93,6 +93,9 @@ function isMorningSlot(slot: SlotTimeboxCandidate): boolean {
     return startMinutes < 12 * 60;
 }
 
+/** Collect attendance-boundary, restricted-time and overlap warnings using the
+ * supplied policy over its defaults. This pure engine retains overlap provenance;
+ * callers separately decide blocking, confirmation and identity redaction. */
 export function collectAssignmentWarnings(
     slot: AssignmentCandidate,
     participant: ParticipantAttendance,
@@ -102,6 +105,8 @@ export function collectAssignmentWarnings(
     const warnings: AssignmentWarning[] = [];
     const attendancePolicy = {...DEFAULT_POLICY, ...policy};
 
+    // Date admission precedes time-of-day policy; an admitted same-day stay can
+    // still receive both its arrival and departure boundary warnings.
     const attendance = checkAttendanceForDay(slot.day, participant.arrivalDate ?? null, participant.departureDate ?? null);
     if (!attendance.allowed) {
         warnings.push({type: "outside_attendance"});
@@ -152,4 +157,134 @@ export function toAssignmentCandidate(slot: Pick<AssignmentCandidate,
         isArrivalEvening: slot.isArrivalEvening,
         isDepartureMorning: slot.isDepartureMorning,
     };
+}
+
+/** Supply recommendation defaults while preserving presented references; calculations explicitly request shared UUID keys. */
+export function normalizeRecommendationInput(input: RecommendationInput, referenceMode: 'preserve' | 'canonical' = 'preserve'): RecommendationInput {
+    const operation = input.operation ?? "ASSIGN";
+    const sourceItemId = input.sourceItemId == null ? null : String(input.sourceItemId);
+
+    return {
+        // Row identity retains its stored spelling. Only internal calculations change reference spellings to lookup keys.
+        id: input.id,
+        itemId: referenceMode === 'canonical' ? uuidKey(input.itemId) : input.itemId,
+        profileId: referenceMode === 'canonical' ? uuidKey(String(input.profileId)) : String(input.profileId),
+        status: input.status ?? "PENDING",
+        operation,
+        sourceItemId: operation === "REASSIGN" && sourceItemId !== null
+            ? referenceMode === 'canonical' ? uuidKey(sourceItemId) : sourceItemId
+            : null,
+        manual: Boolean(input.manual),
+        hidden: Boolean(input.hidden),
+    };
+}
+
+/** Identify the complete operation independently of UUID spelling; rejection memory intentionally uses a narrower target key. */
+export function recommendationInputKey(recommendation: RecommendationInput): string {
+    const source = recommendation.sourceItemId ? uuidKey(recommendation.sourceItemId) : "";
+    const profile = recommendation.profileId ? uuidKey(recommendation.profileId) : recommendation.profileId;
+    return `${recommendation.operation ?? "ASSIGN"}:${source}:${uuidKey(recommendation.itemId)}:${profile}`;
+}
+
+/** Evaluate the complete selected batch against attendance, projected commitments
+ * and supplied capacities. Releases are applied before targets so swaps do not
+ * depend on payload order; foreign work remains reserved. Missing slots throw,
+ * and callers retain admission, disclosure and persistence ownership. */
+export function buildRecommendationWarnings({
+                                                slots,
+                                                recommendations,
+                                                existingAssignments = {},
+                                                linkedAssignments = {},
+                                                participantAttendance = {},
+                                                slotCapacities = {},
+                                                allowOverfill = false,
+                                                attendancePolicy,
+                                            }: RecommendationWarningOptions): RecommendationWarningResult[] {
+    // Resolve targets once and normalize every operation before projecting any
+    // participant's releases or additions from this batch.
+    const slotMap = indexByUuid(slots, (slot) => slot.id);
+
+    const slotUsage = new Map<string, number>();
+    const results: RecommendationWarningResult[] = [];
+    const normalizedRecommendations = recommendations.map((input) => normalizeRecommendationInput(input, 'canonical'));
+    const releasedCapacity = new Map<string, number>();
+    const releasedByParticipant = new Map<string, Set<string>>();
+    const proposedByParticipant = new Map<string, AssignmentCandidate[]>();
+
+    // Collect the whole batch's local releases and proposed targets first.
+    // An UNASSIGN releases its current slot but adds no replacement commitment.
+    for (const recommendation of normalizedRecommendations) {
+        const releasedSlotId = recommendation.operation === "REASSIGN"
+            ? recommendation.sourceItemId
+            : recommendation.operation === "UNASSIGN"
+                ? recommendation.itemId
+                : null;
+        if (releasedSlotId) {
+            releasedCapacity.set(releasedSlotId, (releasedCapacity.get(releasedSlotId) ?? 0) + 1);
+            const key = toParticipantKey({profileId: recommendation.profileId});
+            const released = releasedByParticipant.get(key) ?? new Set<string>();
+            released.add(releasedSlotId);
+            releasedByParticipant.set(key, released);
+        }
+        if (recommendation.operation !== 'UNASSIGN') {
+            const slot = slotMap.get(recommendation.itemId);
+            if (!slot) throw new Error(`Slot ${recommendation.itemId} not found for recommendation warnings`);
+            const key = toParticipantKey({profileId: recommendation.profileId});
+            const proposed = proposedByParticipant.get(key) ?? [];
+            proposed.push({...toAssignmentCandidate(slot), title: slot.title});
+            proposedByParticipant.set(key, proposed);
+        }
+    }
+
+    // Emit warnings in submitted order against the same complete projection.
+    for (const [index, rec] of normalizedRecommendations.entries()) {
+        const slot = slotMap.get(rec.itemId);
+        if (!slot) {
+            throw new Error(`Slot ${rec.itemId} not found for recommendation warnings`);
+        }
+
+        const participantKey = toParticipantKey({profileId: rec.profileId});
+        const attendance = participantAttendance[participantKey] ?? {profileId: rec.profileId};
+        // Warnings return the submitted/loaded spellings used by mounted review rows;
+        // canonical calculation keys must not become a different presentation identity.
+        const presented = normalizeRecommendationInput(recommendations[index]!);
+        if (rec.operation === "UNASSIGN") {
+            results.push({recommendation: presented, warnings: []});
+            continue;
+        }
+
+        // Project the complete selected batch before checking any target, making swaps
+        // and paired removals independent of payload order. Foreign sources are never
+        // released by this plan's proposals: their own application has not committed.
+        const released = releasedByParticipant.get(participantKey);
+        const local = (existingAssignments[participantKey] ?? []).filter((assignment) => !released?.has(uuidKey(assignment.id)));
+        const projected = [
+            ...local,
+            ...(linkedAssignments[participantKey] ?? []),
+            ...(proposedByParticipant.get(participantKey) ?? []),
+        ];
+
+        const candidate = toAssignmentCandidate(slot);
+        const warnings = collectAssignmentWarnings(candidate, attendance, projected, attendancePolicy);
+
+        // Count selected targets against the supplied capacity plus this batch's
+        // released local places; explicit overfill bypasses only this warning.
+        if (!allowOverfill) {
+            const capacity = slotCapacities[uuidKey(slot.id)];
+            if (capacity !== undefined) {
+                const slotKey = uuidKey(slot.id);
+                const used = slotUsage.get(slotKey) ?? 0;
+                const available = capacity + (releasedCapacity.get(slotKey) ?? 0);
+                if (used >= available) {
+                    warnings.push({type: "over_capacity"});
+                }
+                slotUsage.set(slotKey, used + 1);
+            }
+        }
+
+        results.push({recommendation: presented, warnings});
+
+    }
+
+    return results;
 }

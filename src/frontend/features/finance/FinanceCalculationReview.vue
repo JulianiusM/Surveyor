@@ -4,7 +4,7 @@ import type {components} from '../../../types/api/v1';
 import type {FrontendPlainMessageKey} from '../../../types/FrontendUiTypes';
 import {useActionState, useFrontend} from '../../app/context';
 import {ApiFailure} from '../../app/transport';
-import {useCommand} from '../../composables/command';
+import {useCommand, useCommandReview} from '../../composables/command';
 import {useReadRetry} from '../../composables/feedback';
 import {useFinanceApi} from './api';
 import {financeMoney} from './presentation';
@@ -29,12 +29,15 @@ const preview = shallowRef<components['schemas']['FinancePreview'] | null>(null)
 const previewing = ref(false);
 const valid = ref(false);
 const completed = ref(false);
-const inspected = ref(false);
+
 const sendEmails = ref(props.pool.settings?.sendCalculationEmails ?? true);
 const recalculate = props.pool.status === 'CLOSED';
 const readFailure = shallowRef<Error | null>(null);
 const retry = useReadRetry(() => readFailure.value);
 const command = useCommand(props.refresh, true, {dirty: () => false, unknownMessage: 'draft.leaveUnknown', recoveryEligible: () => props.active});
+const {inspected, inspect: inspectSaved, acknowledge} = useCommandReview(command, () => props.refresh(), {
+    eligible: () => props.active, release: () => { emit('close'); },
+});
 const readAction = useActionState({eligible: () => props.active && context.mayRead() && retry.value && !completed.value,
     blocked: () => command.action.disabled.value, pending: () => previewing.value});
 const applyAction = useActionState({eligible: () => props.active && valid.value && !!preview.value && !completed.value,
@@ -50,6 +53,8 @@ let mounted = true;
 watch(() => props.open, opened => {if (opened) void loadPreview(); else retirePreview();}, {immediate: true});
 watch([() => props.active, context.epoch, () => context.session.value?.context, locale], retirePreview);
 onBeforeUnmount(() => {mounted = false; retirePreview();});
+
+
 
 /** Retire only this review's read authority. It cannot cancel an admitted
  * calculation command or turn its unknown delivery into a safe retry. */
@@ -116,13 +121,8 @@ async function apply(): Promise<void> {
 
 /** Fresh saved data can explain unknown delivery without reissuing calculation
  * or silently changing the revision which the organizer originally reviewed. */
-async function inspectSaved(): Promise<void> {
-    if (props.active && await command.reconcileSafely(props.refresh)) inspected.value = true;
-}
-function acknowledge(): void {
-    if (!inspected.value || command.pending.value || command.recovering.value) return;
-    command.acknowledge(); emit('close');
-}
+
+
 function close(): void {
     if (!command.mayLeave()) return;
     if (command.uncertain.value) command.acknowledge();

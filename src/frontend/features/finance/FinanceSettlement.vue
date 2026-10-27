@@ -3,7 +3,7 @@ import {computed, ref, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {FrontendPlainMessageKey} from '../../../types/FrontendUiTypes';
 import {useActionState, useFrontend} from '../../app/context';
-import {useCommand} from '../../composables/command';
+import {useCommand, useCommandReview} from '../../composables/command';
 import {useFinanceApi} from './api';
 import {financeMoney, financeSettlementMessages} from './presentation';
 import ActionButton from '../../components/ActionButton.vue';
@@ -25,11 +25,17 @@ const context = useFrontend();
 const {messages, locale} = context;
 const api = useFinanceApi(context);
 const reviewed = ref({...props.share});
-const inspected = ref(false);
+
 const completed = ref(false);
 const wording = computed(() => financeSettlementMessages(reviewed.value));
 const command = useCommand(props.refresh, true, {dirty: () => false,
     unknownMessage: 'draft.leaveUnknown', recoveryEligible: () => props.active});
+
+/** Read saved settlement status without resending the command. An unchanged
+ * status cannot prove whether the request was rejected or never arrived. */
+const {inspected, inspect: inspectSaved, acknowledge} = useCommandReview(command, () => props.refresh(), {
+    eligible: () => recovery.isAvailable(), release: () => { emit('close'); }, blocked: () => busy.value,
+});
 const action = useActionState({eligible: () => props.active && !completed.value && Number(reviewed.value.amount) !== 0,
     blocked: () => command.action.disabled.value, pending: () => command.pending.value});
 const recovery = useActionState({eligible: () => props.active, blocked: () => command.recoveryAction.disabled.value,
@@ -37,6 +43,8 @@ const recovery = useActionState({eligible: () => props.active, blocked: () => co
 const busy = computed(() => command.pending.value || command.recovering.value);
 watch(busy, pending => emit('pending', pending));
 watch([() => props.eventId, () => props.share.id], resetSelection);
+
+
 
 /** A different admitted row starts another review. Same-row reads retain the
  * exact original amount and operation until this review is explicitly retired. */
@@ -71,19 +79,6 @@ async function confirm(): Promise<void> {
         emit('saved', notice);
         emit('close');
     }
-}
-
-/** Read saved settlement status without resending the command. An unchanged
- * status cannot prove whether the request was rejected or never arrived. */
-async function inspectSaved(): Promise<void> {
-    if (!recovery.isAvailable()) return;
-    // Keep the captured review locked while exposing current authoritative facts.
-    if (await command.reconcileSafely(props.refresh)) inspected.value = true;
-}
-function acknowledge(): void {
-    if (!inspected.value || busy.value) return;
-    command.acknowledge();
-    emit('close');
 }
 </script>
 

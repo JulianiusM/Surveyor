@@ -1,13 +1,16 @@
 // @vitest-environment happy-dom
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
+import * as inputPolicy from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {mount, flushPromises} from '@vue/test-utils';
-import {defineComponent, nextTick, onBeforeUnmount, ref} from 'vue';
+import {mount} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
+import {defineComponent, nextTick, onBeforeUnmount, ref, shallowRef} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import I18NextVue from 'i18next-vue';
 import {createFrontendContext, frontendContextKey} from '../../src/frontend/app/context';
 import {ApiFailure, InvalidInputError, ObsoleteRequestError} from '../../src/frontend/app/transport';
 import {useCommand} from '../../src/frontend/composables/command';
+import {presentAction} from '../../src/frontend/composables/listActions';
 import {useSettingsAccessRetirement} from '../../src/frontend/composables/listDetail';
 import CommandFeedback from '../../src/frontend/components/CommandFeedback.vue';
 import type {components} from '../../src/types/api/v1';
@@ -22,6 +25,34 @@ const session: components['schemas']['SessionView'] = {
 };
 const cleanups: (() => void)[] = [];
 afterEach(() => { cleanups.splice(0).forEach(cleanup => cleanup()); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+describe('initiating action presentation', () => {
+    it.each(['normal', 'shallow'] as const)(
+        'keeps a newer selection when an older %s-ref operation completes', async kind => {
+            const selection = kind === 'normal' ? ref<{id: string} | null>(null) : shallowRef<{id: string} | null>(null);
+            let finishFirst!: (result: string) => void;
+            let finishSecond!: (result: string) => void;
+            const first = presentAction(selection, {id: 'first'},
+                () => new Promise<string>(resolve => { finishFirst = resolve; }));
+            const second = presentAction(selection, {id: 'second'},
+                () => new Promise<string>(resolve => { finishSecond = resolve; }));
+
+            finishFirst('first result');
+            expect(await first).toBe('first result');
+            expect(selection.value?.id).toBe('second');
+            finishSecond('second result');
+            expect(await second).toBe('second result');
+            expect(selection.value).toBeNull();
+        },
+    );
+
+    it('releases its presentation and preserves the operation failure', async () => {
+        const selection = ref<{id: string} | null>(null);
+        const failure = new Error('Operation failed');
+        await expect(presentAction(selection, {id: 'selected'}, async () => { throw failure; })).rejects.toBe(failure);
+        expect(selection.value).toBeNull();
+    });
+});
 
 async function mountedCommand(review = false, request?: typeof fetch) {
     const context = createFrontendContext({session}, false, request);
@@ -77,6 +108,18 @@ function unloadAttempt(): Event {
 }
 
 describe('reconcile-only commands', () => {
+    it('keeps a validator chunk failure definite and retains the unsent draft without unknown-write protection', async () => {
+        const request = vi.fn(async () => { throw new Error('Unexpected dispatch'); });
+        const {command, context, wrapper} = await mountedCommand(true, request);
+        await wrapper.get('input').setValue('Keep this unsent draft');
+        vi.spyOn(inputPolicy, 'loadInputValidator').mockRejectedValueOnce(new TypeError('Retired validator chunk'));
+        await command.run(scope => context.api.logout(scope), false);
+        expect(request).not.toHaveBeenCalled();
+        expect(command.outcome.value).toEqual({confirmation: 'rejected', refresh: 'not-requested'});
+        expect(command.uncertain.value).toBe(false);
+        expect(command.pending.value).toBe(false);
+        expect(wrapper.get<HTMLInputElement>('input').element.value).toBe('Keep this unsent draft');
+    });
     it.each(['notice', 'error'] as const)('retains a newer same-key %s receipt while an older read finishes', async kind => {
         const {command, refresh} = await mountedCommand();
         const previous = new Error('Previous failed GET');
@@ -478,6 +521,9 @@ describe('reconcile-only commands', () => {
             expect(command.outcome.value).toEqual({confirmation: 'confirmed', refresh: 'pending'});
             expect(command.pending.value).toBe(true);
             expect(refresh).not.toHaveBeenCalled();
+            // Request admission may load its generated validator before fetch.
+            // Observe the actual outstanding read before releasing its response.
+            await vi.dynamicImportSettled();
             expect(request).toHaveBeenCalledOnce();
 
             if (mode === 'failure') failSession(new TypeError('Session read unavailable'));

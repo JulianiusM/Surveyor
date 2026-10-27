@@ -394,7 +394,7 @@ async function saveEvent(): Promise<void> {
     const previousRead = completedSettingsReads;
     relinkingMetadata = true;
     pendingAction.value = 'event';
-    let result: components['schemas']['PackingEventChanged'] | undefined;
+    let result: components['schemas']['EntityEventChangeResult'] | undefined;
     try {
         result = await command.run((scope) =>
             api.linkEvent!(

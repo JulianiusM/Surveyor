@@ -1,4 +1,4 @@
-import {findOrCreateUserFromOidc} from '../../src/backend/modules/identity/oidcAccounts';
+import {findOrCreateUserFromOidc} from '../../src/backend/controller/userController';
 import type {Request, Response} from 'express';
 import type {SessionData} from 'express-session';
 import {randomUUID} from 'node:crypto';

@@ -20,7 +20,10 @@ import type {components} from '../../types/api/v1';
  * Confirmed expiry follows the existing logout owner; operational failures do not
  * clear server identity or provider evidence merely because a read failed.
  */
-export const admitFrontendDocument = asyncHandler(async function admitFrontendDocument(req, res, next) {
+export const admitFrontendDocument = asyncHandler(/** Select locale before actor
+ * admission. Only confirmed identity expiry enters logout/notice persistence;
+ * operational failures keep their existing outer error boundary. */
+async function admitFrontendDocument(req, res, next) {
     // Select presentation language before identity admission so any ensuing
     // document outcome uses this request's existing locale precedence.
     applyPresentationLocale(req);

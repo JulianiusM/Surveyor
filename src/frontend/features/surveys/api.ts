@@ -1,3 +1,4 @@
+import {createFeatureApiResolver} from '../../app/api';
 import type {components} from '../../../types/api/v1';
 import type {FrontendContext, FrontendRead, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {FrontendApi} from '../../app/api';
@@ -271,15 +272,5 @@ export class SurveysApi {
     }
 }
 
-const owners = new WeakMap<FrontendApi, SurveysApi>();
-
-/** One wrapper per request/application transport avoids sharing actors or drafts
- * globally while allowing mounted matching components to reuse their API owner. */
-export function useSurveysApi(context: FrontendContext): SurveysApi {
-    let owner = owners.get(context.api);
-    if (!owner) {
-        owner = new SurveysApi(context.api);
-        owners.set(context.api, owner);
-    }
-    return owner;
-}
+/** Reuse this feature adapter for its application-local transport. */
+export const useSurveysApi = createFeatureApiResolver(SurveysApi);

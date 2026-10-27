@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {fieldAttributes as textFields} from "../../../../.generated/api/v1/browser/validateActivityTextFieldInput.mjs";
 import {computed, ref} from 'vue';
 import type {components} from '../../../types/api/v1';
 import {useFrontend} from '../../app/context';
@@ -38,6 +39,8 @@ const permissionLost = computed(() => open.value && !!id.value && openingTitleAl
 const command = useCommand(props.refresh, false, {dirty: () => dirty.value, unknownMessage: 'draft.leaveUnknown'});
 const blocked = computed(() => props.disabled || command.action.disabled.value || permissionLost.value);
 
+/** Enter only the current field's granted editor, seeding its mounted baseline
+ * and comparison token once. Opening the dialog never persists field changes. */
 function edit(field?: components['schemas']['ActivityTextField']): void {
     if (blocked.value || (field ? !field.capabilities.edit : !props.manage)) return;
     // View-only editors enter the existing textarea directly; managers
@@ -46,6 +49,8 @@ function edit(field?: components['schemas']['ActivityTextField']): void {
         void inlineEditors.value[field.id]?.begin();
         return;
     }
+    // Managers capture title authority separately from later background reads;
+    // the dialog owns the resulting title/text draft until its existing release.
     id.value = field?.id ?? null;
     title.value = field?.title ?? '';
     text.value = field?.text ?? '';
@@ -144,7 +149,7 @@ async function reviewUnknown(): Promise<void> {
                     :disabled="blocked"
                     :label="messages.t('activity.text')"
                     multiline
-                    :max-length="16000"
+                    :max-length="textFields.text.maxLength"
                     :save="(value, token) => inline(field, value, token)">
                     <template v-if="field.text">{{ field.text }}</template>
                     <em v-else class="text-secondary">{{ messages.t('activity.emptyText') }}</em>
@@ -168,7 +173,7 @@ async function reviewUnknown(): Promise<void> {
                     label-class=""
                     required
                     :required-marker="false"
-                    :max-length="255"
+                    :max-length="textFields.title.maxLength"
                     :read-only="!!id && !current?.capabilities.editTitle"
                     :disabled="blocked"
                     control-class="form-control-sm"
@@ -181,7 +186,7 @@ async function reviewUnknown(): Promise<void> {
                     label-class=""
                     multiline
                     :rows="6"
-                    :max-length="16000"
+                    :max-length="textFields.text.maxLength"
                     :disabled="blocked"
                     :pending="command.pending.value && !removingId" />
                 <StatusNotice v-if="conflict" kind="warning">

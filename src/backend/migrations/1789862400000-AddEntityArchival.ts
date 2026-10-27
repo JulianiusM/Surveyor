@@ -20,6 +20,8 @@ const PREFERENCES = 'entity_visibility_preferences';
 export class AddEntityArchival1789862400000 implements MigrationInterface {
     name = 'AddEntityArchival1789862400000';
 
+    /** Add resumable lifecycle/schedule metadata and private visibility storage
+     * with parent-compatible UUID columns and defaults preserving current state. */
     public async up(queryRunner: QueryRunner): Promise<void> {
         // NULL means no direct archival. Adding the nullable column leaves existing
         // roots active until an organizer or the configured background job archives them.
@@ -93,6 +95,8 @@ export class AddEntityArchival1789862400000 implements MigrationInterface {
         }
     }
 
+    /** Check all organizer/private state before any MariaDB DDL, then remove
+     * only archival preferences, dependent indexes and lifecycle columns in order. */
     public async down(queryRunner: QueryRunner): Promise<void> {
         // Preflight every table before any DDL: MariaDB implicitly commits schema changes.
         // Refuse to discard organizer state or private choices silently. A transaction

@@ -19,3 +19,6 @@ export interface InputDiagnostic {
     limit?: number;
     type?: string;
 }
+
+/** Scalar transport syntax is shared by browser admission and server decoding. */
+export type ScalarParameterResult = {valid: true; value: string | number | boolean} | {valid: false};

@@ -1,11 +1,12 @@
-import {getAssignmentWarnings} from '../../src/backend/modules/activity/warningOperations';
-import {autoGenerateRecommendations} from '../../src/backend/modules/activity/recommendationExecution';
-import {getRecommendations, updateRecommendations, applyRecommendations} from '../../src/backend/modules/activity/recommendationOperations';
-import {saveGeneratedRecommendations} from '../../src/backend/modules/activity/recommendationPersistence';
-import {getRequirements, updateRequirements, calculateBaselineRequirement} from '../../src/backend/modules/activity/requirementOperations';
+import {getAssignmentWarnings} from '../../src/backend/modules/activity/recommendations';
+import {getRecommendations, getRecommendationWarningPreview, updateRecommendations, applyRecommendations} from '../../src/backend/modules/activity/recommendations';
+import {randomUUID} from 'node:crypto';
+import {saveGeneratedRecommendations, projectActivityAssignees} from '../../src/backend/modules/activity/autoAssignment';
+import {getRequirements, updateRequirements, calculateBaselineRequirement} from '../../src/backend/controller/activityController';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {Request} from 'express';
 import activityController from '../../src/backend/controller/activityController';
+import {generateActivityRecommendations, readActivityRecommendationJob} from '../../src/backend/controller/activityController';
 import driversController from '../../src/backend/controller/driversController';
 import * as entityAdminController from '../../src/backend/controller/entityAdminController';
 import eventPoolController from '../../src/backend/controller/eventPoolController';
@@ -60,6 +61,22 @@ import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../suppor
 let owner: Profile;
 let participant: Profile;
 let secondParticipant: Profile;
+
+/** Exercise production admission and await its real queued job before asserting saved recommendations. */
+async function generateQueuedRecommendations(planId: string): Promise<void> {
+    const session = {profile: owner, auth: {user: owner.user!}};
+    const queued = await generateActivityRecommendations(planId, session);
+    // Observe the same bounded job API as clients; terminal failures must fail this test immediately.
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+        const {job} = await readActivityRecommendationJob(planId, queued.job.id, session);
+        if (!['QUEUED', 'RUNNING'].includes(job.status)) {
+            expect(job.status).toBe('COMPLETE');
+            return;
+        }
+        await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    throw new Error('Recommendation job did not finish before the existing observation deadline');
+}
 
 beforeAll(async () => {
     await initializeIntegrationDatabase();
@@ -164,7 +181,7 @@ describe('activity plan user stories', () => {
         }, {profile: owner} as never);
         const slots = await activityService.getActivitySlotsFlat(planId);
         await assignActivitySlot(slots[0].id, participant.id);
-        const assignmentId = (await activityService.getActivitySlotAssignees(planId))[slots[0].id][0].id;
+        const assignmentId = (await activityService.getActivitySlotAssigneeRows(planId).then(projectActivityAssignees))[slots[0].id][0].id;
         await activityController.updateSlotAttr(slots[0].id, {field: 'title', value: 'Updated activity'}, {itemAllow: () => true} as never);
         await activityController.reorderSlots(planId, [{slotId: slots[0].id, pos: 2}, {slotId: slots[1].id, pos: 1}]);
         expect(await activityService.getActivitySlotsFlat(planId)).toMatchObject([
@@ -187,10 +204,10 @@ describe('activity plan user stories', () => {
 
         const [slot] = await activityService.getActivitySlotsFlat(planId);
         await assignActivitySlot(slot.id, participant.id);
-        const firstAssignmentId = (await activityService.getActivitySlotAssignees(planId))[slot.id][0].id;
+        const firstAssignmentId = (await activityService.getActivitySlotAssigneeRows(planId).then(projectActivityAssignees))[slot.id][0].id;
         await assignActivitySlot(slot.id, participant.id);
         expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toHaveLength(1);
-        expect((await activityService.getActivitySlotAssignees(planId))[slot.id][0].id).toBe(firstAssignmentId);
+        expect((await activityService.getActivitySlotAssigneeRows(planId).then(projectActivityAssignees))[slot.id][0].id).toBe(firstAssignmentId);
     });
 
     it('shows assignment counts and participant plans', async () => {
@@ -207,7 +224,7 @@ describe('activity plan user stories', () => {
 
         const [slot] = await activityService.getActivitySlotsFlat(planId);
         await assignActivitySlot(slot.id, participant.id);
-        const assignmentId = (await activityService.getActivitySlotAssignees(planId))[slot.id][0].id;
+        const assignmentId = (await activityService.getActivitySlotAssigneeRows(planId).then(projectActivityAssignees))[slot.id][0].id;
         await activityController.deleteAssignment(assignmentId);
         expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([]);
     });
@@ -484,7 +501,7 @@ describe('automatic activity assignment user stories', () => {
             'assign',
         )).resolves.toBeUndefined();
         await assignActivitySlot(slot.id, secondParticipant.id);
-        expect((await activityService.getActivitySlotAssignees(planId))[slot.id]).toHaveLength(2);
+        expect((await activityService.getActivitySlotAssigneeRows(planId).then(projectActivityAssignees))[slot.id]).toHaveLength(2);
     });
 
     it('shows required progress before a participant takes their first slot', async () => {
@@ -531,7 +548,7 @@ describe('automatic activity assignment user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Free duties event');
         const planId = await createEventActivityPlan(owner.id, eventId);
 
-        await expect(autoGenerateRecommendations(planId)).rejects.toMatchObject({status: 409});
+        await expect(generateQueuedRecommendations(planId)).rejects.toMatchObject({status: 409});
     });
 
     it('calculates a realistic baseline requirement for registered participants', async () => {
@@ -612,7 +629,7 @@ describe('automatic activity assignment user stories', () => {
             }),
         ]);
 
-        await autoGenerateRecommendations(planId);
+        await generateQueuedRecommendations(planId);
         expect((await getRecommendations(planId)).recommendations).toHaveLength(1);
 
         const [slot] = await activityService.getActivitySlotsFlat(planId);
@@ -645,7 +662,7 @@ describe('automatic activity assignment user stories', () => {
             roleRequirements: [], overrides: [],
         });
 
-        await autoGenerateRecommendations(planId);
+        await generateQueuedRecommendations(planId);
         const result = await getRecommendations(planId);
 
         expect(result.recommendations).toHaveLength(2);
@@ -664,7 +681,7 @@ describe('automatic activity assignment user stories', () => {
             stayRequirements: createStayRequirementSchedule(3, 1),
             roleRequirements: [], overrides: [],
         });
-        await autoGenerateRecommendations(planId);
+        await generateQueuedRecommendations(planId);
         const generated = await getRecommendations(planId);
         const recommendation = generated.recommendations[0];
 
@@ -687,7 +704,7 @@ describe('automatic activity assignment user stories', () => {
             stayRequirements: createStayRequirementSchedule(3, 1),
             roleRequirements: [], overrides: [],
         });
-        await autoGenerateRecommendations(planId);
+        await generateQueuedRecommendations(planId);
         const generated = await getRecommendations(planId);
         const recommendation = generated.recommendations[0];
 
@@ -744,6 +761,107 @@ describe('automatic activity assignment user stories', () => {
 
         expect(await recommendationService.getRecommendations(planId)).toEqual([]);
         expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([]);
+    });
+
+    describe.each([
+        {name: 'review update', write: updateRecommendations},
+        {name: 'review application', write: applyRecommendations},
+    ])('$name provenance resolution', ({write}) => {
+        it.each(['absent', 'stale', 'uppercase'] as const)(
+            'retains manual provenance with an %s supplied row identity', async (identity) => {
+                const planId = await createActivityPlanWithSlot(owner.id);
+                const [slot] = await activityService.getActivitySlotsFlat(planId);
+                await updateRecommendations(planId, {recommendations: [{itemId: slot.id, profileId: participant.id,
+                    status: 'PENDING', operation: 'ASSIGN', manual: true}]});
+                const [saved] = await recommendationService.getRecommendations(planId);
+                const id = identity === 'absent' ? undefined : identity === 'uppercase' ? saved.id.toUpperCase() : randomUUID();
+                const review = {id, itemId: slot.id.toUpperCase(), profileId: participant.id.toUpperCase(),
+                    status: 'PENDING', operation: 'ASSIGN', manual: false};
+
+                // Preview resolves the same owned provenance but must not save the submitted status or identity.
+                const preview = await getRecommendationWarningPreview(planId, {recommendations: [review]});
+                expect(preview.warnings).toMatchObject([{recommendation: {id: saved.id, manual: true,
+                    itemId: review.itemId, profileId: review.profileId}}]);
+                expect(await recommendationService.getRecommendations(planId)).toMatchObject([{id: saved.id, status: 'PENDING'}]);
+                await write(planId, {recommendations: [{...review, status: 'REJECTED'}]});
+
+                expect(await recommendationService.getRecommendations(planId)).toEqual([]);
+                expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([]);
+            },
+        );
+
+        it.each(['absent', 'stale', 'uppercase'] as const)(
+            'retains generated rejection memory with an %s supplied row identity', async (identity) => {
+                const planId = await createActivityPlanWithSlot(owner.id);
+                const [slot] = await activityService.getActivitySlotsFlat(planId);
+                await recommendationService.saveRecommendations(planId, [{itemId: slot.id, profileId: participant.id,
+                    status: 'PENDING', operation: 'ASSIGN', manual: false}]);
+                const [saved] = await recommendationService.getRecommendations(planId);
+                const id = identity === 'absent' ? undefined : identity === 'uppercase' ? saved.id.toUpperCase() : randomUUID();
+                const review = {id, itemId: slot.id.toUpperCase(), profileId: participant.id.toUpperCase(),
+                    status: 'PENDING', operation: 'ASSIGN', manual: true};
+
+                const preview = await getRecommendationWarningPreview(planId, {recommendations: [review]});
+                expect(preview.warnings).toMatchObject([{recommendation: {id: saved.id, manual: false,
+                    itemId: review.itemId, profileId: review.profileId}}]);
+                await write(planId, {recommendations: [{...review, status: 'REJECTED'}]});
+
+                expect(await recommendationService.getRecommendations(planId)).toMatchObject([
+                    {id: saved.id, status: 'REJECTED', hidden: true, manual: false},
+                ]);
+                expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([]);
+                // A generation result calculated before this review still encounters the saved rejection memory.
+                await saveGeneratedRecommendations(planId, [{itemId: slot.id, profileId: participant.id,
+                    status: 'PENDING', operation: 'ASSIGN'}]);
+                expect(await recommendationService.getRecommendations(planId)).toMatchObject([
+                    {status: 'REJECTED', manual: false},
+                ]);
+            },
+        );
+
+        it('preserves known owned identity priority when its edited details match another row', async () => {
+            const planId = await createActivityPlanWithSlot(owner.id);
+            const [slot] = await activityService.getActivitySlotsFlat(planId);
+            await recommendationService.saveRecommendations(planId, [
+                {itemId: slot.id, profileId: participant.id, manual: true, status: 'PENDING'},
+                {itemId: slot.id, profileId: secondParticipant.id, manual: false, status: 'PENDING'},
+            ]);
+            const saved = (await recommendationService.getRecommendations(planId)).find(row => row.manual)!;
+
+            await write(planId, {recommendations: [{id: saved.id.toUpperCase(), itemId: slot.id,
+                profileId: secondParticipant.id, status: 'REJECTED', manual: false}]});
+
+            // ID-first editing still selects the saved manual row, so rejection discards it rather than inventing memory.
+            expect(await recommendationService.getRecommendations(planId)).toEqual([]);
+            expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([]);
+            expect(await activityService.getActivitySlotAssignments(planId, secondParticipant.id)).toEqual([]);
+        });
+
+        it.each(['fresh', 'foreign'] as const)('retains a genuinely new manual proposal with a %s unknown ID safely', async (identity) => {
+            const foreignPlanId = await createActivityPlanWithSlot(owner.id);
+            const [foreignSlot] = await activityService.getActivitySlotsFlat(foreignPlanId);
+            await recommendationService.saveRecommendations(foreignPlanId, [{itemId: foreignSlot.id,
+                profileId: secondParticipant.id, status: 'PENDING', manual: true}]);
+            const [foreign] = await recommendationService.getRecommendations(foreignPlanId);
+            const planId = await createActivityPlanWithSlot(owner.id);
+            const [slot] = await activityService.getActivitySlotsFlat(planId);
+            const id = identity === 'fresh' ? randomUUID() : foreign.id.toUpperCase();
+            const applies = write === applyRecommendations;
+
+            await write(planId, {recommendations: [{id, itemId: slot.id.toUpperCase(),
+                profileId: participant.id.toUpperCase(), status: applies ? 'APPROVED' : 'PENDING', manual: true}]});
+
+            const saved = await recommendationService.getRecommendations(planId);
+            expect(saved).toHaveLength(1);
+            expect(saved[0]).toMatchObject({entityId: planId, item: {id: slot.id}, profile: {id: participant.id},
+                status: applies ? 'APPLIED' : 'PENDING', hidden: applies, manual: true});
+            expect(saved[0].id.toLowerCase()).not.toBe(id.toLowerCase());
+            expect(await recommendationService.getRecommendations(foreignPlanId)).toMatchObject([
+                {id: foreign.id, entityId: foreignPlanId, item: {id: foreignSlot.id},
+                    profile: {id: secondParticipant.id}, status: 'PENDING', manual: true},
+            ]);
+            expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual(applies ? [slot.id] : []);
+        });
     });
 
     it('discards both manual swap legs when either leg is submitted as rejected', async () => {

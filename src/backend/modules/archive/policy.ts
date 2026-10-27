@@ -6,12 +6,14 @@
  */
 
 import type {ArchiveReference, PersonalVisibility} from '../../../types/ArchiveTypes';
+import {uuidKey} from '../lib/util';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Use the full polymorphic identity for every lifecycle and preference lookup. */
+/** Use one polymorphic UUID identity for lifecycle and preference lookups.
+ * UUID spelling cannot change a database identity or split its in-memory state. */
 export function archiveKey(ref: ArchiveReference): string {
-    return `${ref.type}:${ref.id}`;
+    return `${ref.type}:${uuidKey(ref.id)}`;
 }
 
 /**
@@ -32,6 +34,8 @@ export function isHiddenInOverview(archived: boolean, visibility: PersonalVisibi
     return visibility === 'hidden' || (visibility === 'default' && archived);
 }
 
+/** Reject unsafe delays/clocks and cutoffs outside SQL DATE's representable
+ * range before startup scheduling or a sweep can submit any database work. */
 export function validateArchiveAfterDays(afterDays: number, now: Date): void {
     // Reject fractions, negative delays, overflow and invalid clocks before building
     // SQL. The job validates even while disabled, so a bad setting is visible at startup.

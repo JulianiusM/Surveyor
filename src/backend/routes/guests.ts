@@ -15,7 +15,10 @@ router.get('/recovery', function redirectGuestRecovery(req, res) {
 });
 
 /** Preserve capability-link GET login and its 302, preparing notice/authority together without request rollback leaks. */
-router.get('/:guestId/login/:token', asyncHandler(async function enterFrontendGuest(req, res) {
+router.get('/:guestId/login/:token', asyncHandler(/** Complete the emailed GET
+ * capability login through the existing identity owner. Render only known token
+ * denial; adopt durable feedback/session before redirect without another save. */
+async function enterFrontendGuest(req, res) {
     applyPresentationLocale(req);
     const destination = frontendReturn(req, req.query.next);
     let committed: IdentityCompletionReceipt<string>;

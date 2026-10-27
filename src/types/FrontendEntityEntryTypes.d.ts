@@ -34,7 +34,7 @@ export interface EntityEntryRetirementSource {
  * and denial invalidation. No guest capability is consumed by this presentation. */
 export interface EntityEntryPageProps {
     queryKey: readonly unknown[];
-    initial?: components['schemas']['PackingResourceEntry'];
-    read: (scope: FrontendRequestScope, signal: AbortSignal) => Promise<components['schemas']['PackingResourceEntry']>;
+    initial?: components['schemas']['EntityResourceEntry'];
+    read: (scope: FrontendRequestScope, signal: AbortSignal) => Promise<components['schemas']['EntityResourceEntry']>;
     deniedQueries: (entry: {readonly status: number}, scope: FrontendRequestScope) => EntityEntryRetirement;
 }

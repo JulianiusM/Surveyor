@@ -3,7 +3,7 @@ import type {components} from '../../../types/api/v1';
 import type {FrontendPlainMessageKey, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {FinanceInvoiceReviewInput, FinanceInvoiceReviewCallbacks} from '../../../types/FrontendFinanceReviewTypes';
 import {useActionState, useFrontend} from '../../app/context';
-import {useCommand} from '../../composables/command';
+import {useCommand, useCommandReview} from '../../composables/command';
 import {useFinanceApi} from './api';
 import {financeDecimal} from './numbers';
 
@@ -24,7 +24,6 @@ export function useFinanceInvoiceReview(props: FinanceInvoiceReviewInput, callba
     const closedPool = ref(props.pool.status === 'CLOSED');
     const operation = ref(props.action);
     const reviewing = ref(false);
-    const inspected = ref(false);
     const completed = ref(false);
     const draft = reactive(initialDraft());
     const baseline = ref(JSON.stringify(draft));
@@ -35,6 +34,12 @@ export function useFinanceInvoiceReview(props: FinanceInvoiceReviewInput, callba
     const rejection = computed(() => operation.value === 'decline' || operation.value === 'reject');
     const command = useCommand(props.refresh, true, {dirty: () => JSON.stringify(draft) !== baseline.value,
         unknownMessage: 'draft.leaveUnknown', recoveryEligible: () => props.active});
+    /** A stale review must be explicitly abandoned and reopened from current data.
+     * Inspection alone never upgrades this review's captured calculation revision. */
+    const {inspected, inspect: inspectSaved, acknowledge} = useCommandReview(command, () => props.refresh(), {
+        eligible: () => recovery.isAvailable(), release: callbacks.close,
+    });
+
     const actionState = useActionState({eligible: () => props.active && !completed.value
         && (!props.inline || props.invoice.status === 'NEW')
         // Participant recovery keeps read admission after status changes; only
@@ -85,6 +90,9 @@ export function useFinanceInvoiceReview(props: FinanceInvoiceReviewInput, callba
         // Command feedback/outcome belong to the persistent row owner and are
         // deliberately untouched, including a confirmed write's failed read.
     }
+    /** Inline cancellation retains its row draft. A real departure respects
+     * pending/recovery/unknown guards, acknowledging only accepted uncertainty
+     * before the feature's existing close callback releases this presentation. */
     function close(): void {
         // Canceling an inline confirmation leaves its row and unsaved fields in
         // place. It is not a departure from their existing draft owner.
@@ -199,17 +207,6 @@ export function useFinanceInvoiceReview(props: FinanceInvoiceReviewInput, callba
         // Retroactive source changes have a separate recalculation reminder.
         if (action === 'revise') return closedPool.value ? 'finance.invoiceCorrectedClosed' : 'finance.invoiceCorrected';
         return closedPool.value ? 'finance.invoiceRejectedClosed' : 'finance.invoiceRejectedFromThePool';
-    }
-
-    /** A stale review must be explicitly abandoned and reopened from current data.
-     * Inspection alone never upgrades this review's captured calculation revision. */
-    async function inspectSaved(): Promise<void> {
-        if (recovery.isAvailable() && await command.reconcileSafely(props.refresh)) inspected.value = true;
-    }
-    function acknowledge(): void {
-        if (!inspected.value || command.pending.value || command.recovering.value) return;
-        command.acknowledge();
-        callbacks.close();
     }
 
     return {id, form, invoice, closedPool, operation, reviewing, inspected, completed, draft,

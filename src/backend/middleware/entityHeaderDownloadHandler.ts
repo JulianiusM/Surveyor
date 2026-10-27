@@ -6,13 +6,16 @@ import {asyncHandler} from '../modules/lib/asyncHandler';
 import {APIError} from '../modules/lib/errors';
 import type {SessionLike} from '../../types/PermissionTypes';
 import settings from '../modules/settings';
-import {resolveStoredFile} from '../modules/lib/storedFiles';
+import {resolveStoredFile} from '../modules/lib/fileCommons';
 
 /** Serve a domain-authorized header file with its stored MIME and private cache
  * policy. The calling domain supplies its controller read; this adapter owns
  * only application-relative file confinement and HTTP delivery. */
 export function createHeaderHandler(read: (id: string, session: SessionLike) => Promise<string>): RequestHandler {
-    return asyncHandler(async function downloadHeader(req, res) {
+    return asyncHandler(/** Read only the actor-admitted header path, constrain it
+     * to configured storage, and retain distinct absent/unreadable diagnostics
+     * before private file delivery. */
+    async function downloadHeader(req, res) {
         const actor = await captureApiActor(req);
         const storedPath = await read(String(req.params.headerId), actor);
         // Resolve only beneath the configured header root before touching the file.

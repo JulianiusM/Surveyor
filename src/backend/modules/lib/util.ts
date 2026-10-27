@@ -21,7 +21,64 @@ import type {DashboardEntities, Entity, EntityBase} from "../../../types/UserTyp
 import type {EntityItemType, EntityType} from "../../../types/UtilTypes";
 import settings from "../settings";
 import {addCivilDays} from '../../../common/lib/civilDate';
+import type {EventRegistration} from '../database/entities/event/EventRegistration';
+import type {ParticipantRow} from '../../../types/EventTypes';
+import type {components} from '../../../types/api/v1';
 
+/** Project shared card data after callers evaluate ownership using the permission owner.
+ * Membership, admission and ownership evaluation stay outside this pure projection. */
+export function projectEntityCard(card: Entity, ownsCard: boolean, ownerCollection = false,
+    sharedLifecycle = false): components['schemas']['EntityCard'] {
+    // These five resource families support card actions. Output documents retain
+    // their feature-owned URLs independently of these card destinations.
+    const supportedType = card.type === 'packing' || card.type === 'event' || card.type === 'drivers'
+        || card.type === 'survey' || card.type === 'activity';
+    const ownerActions = (supportedType || sharedLifecycle) && ownerCollection && ownsCard;
+    const resource = encodeURIComponent(card.id);
+    const headerFamily = card.type === 'event' ? 'events' : card.type === 'drivers' ? 'drivers-lists'
+        : card.type === 'survey' ? 'surveys' : card.type === 'activity' ? 'activity-plans' : 'packing-lists';
+    const eventContext = card.eventContext ? {...card.eventContext,
+        url: card.eventContext.url.replace(/^\/event\//u, '/event/')} : null;
+    return {id: card.id, type: card.type, title: card.title, description: card.description ?? null,
+        url: supportedType ? `/${card.type}/${resource}` : card.url,
+        headerUrl: card.imageUrl ? supportedType ? `/api/v1/${headerFamily}/${resource}/header` : card.imageUrl : null,
+        headerVersion: card.imageVersion ?? null, eventContext,
+        visibility: card.visibility ?? 'default', overviewHidden: Boolean(card.overviewHidden),
+        archived: Boolean(card.archive?.archived), inheritedArchived: Boolean(card.archive?.inheritedFromEventId),
+        capabilities: {archive: (supportedType || sharedLifecycle) && Boolean(card.archive?.canArchive),
+            restore: (supportedType || sharedLifecycle) && Boolean(card.archive?.canRestore),
+            duplicate: ownerActions, remove: ownerActions},
+        // Event Things to do retains its existing optional schedule context.
+        // Personal Overview exposes the same controls only to an actor
+        // admitted to manage that independent schedule; other viewers receive
+        // neither its pause state nor a new management capability.
+        ...((sharedLifecycle || supportedType && card.archive?.canManageAutomation) && card.archive?.hasAutomaticSchedule ? {automation: {
+            paused: card.archive.autoArchivePaused, canManage: card.archive.canManageAutomation}} : {}),
+        children: card.overview ? {total: card.overview.total, matching: card.overview.matching} : null};
+}
+
+/** Project already loaded Event registration rows for business consumers, retaining their order and fallback contract. */
+export function projectEventParticipants(rows: readonly EventRegistration[]): ParticipantRow[] {
+    // Names prefer the profile's explicit name; only names are trimmed. Contact
+    // and dietary absence retain their existing marker/null representation.
+    return rows.map((r): ParticipantRow => ({
+        id: r.id,
+        profileId: r.profile.id ?? null,
+        name: r.profile.name?.trim() || r.profile.user?.name?.trim() || r.profile.user?.username || r.profile.guest?.username || '—',
+        email: r.profile.user?.email || r.profile.guest?.email || '—',
+        arrivalDate: r.arrivalDate,
+        departureDate: r.departureDate,
+        dietaryChoices: r.dietaryChoices ?? null,
+    }));
+}
+
+const HTML_ENTITIES: Record<string, string> = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};
+
+/** Encode plain text for HTML text and quoted attributes. Script-element JSON
+ * serialization and URL admission remain with their distinct delivery owners. */
+export function escapeHtml(value: string): string {
+    return value.replace(/[&<>"']/g, function replaceCharacter(character) {return HTML_ENTITIES[character]!;});
+}
 
 // Generic currency helpers for invoice math
 export function toAmount(val: string | number | undefined | null): number {
@@ -65,6 +122,70 @@ export function generateUniqueId() {
     return uuidv4();
 }
 
+// This classifies the spelling for identity comparison; request admission owns
+// UUID validity. Do not impose version bits or reinterpret non-UUID/opaque text.
+const UUID_IDENTITY_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+
+/** Key a stored/admitted UUID independently of ASCII letter case, without
+ * trimming, coercion or changing another identifier/token's spelling. */
+export function uuidKey(id: string): string {
+    return UUID_IDENTITY_SHAPE.test(id) ? id.toLowerCase() : id;
+}
+
+/** Compare two present resource references. Absence is never identity evidence;
+ * callers retain explicit nullable-field and omitted-input rules. */
+export function sameUuid(left: string | null | undefined, right: string | null | undefined): boolean {
+    return typeof left === 'string' && left.length > 0 && typeof right === 'string' && right.length > 0
+        && uuidKey(left) === uuidKey(right);
+}
+
+/** Index one loaded batch by UUID identity while retaining each original row.
+ * Returned values keep their stored ID spelling for persistence and presentation. */
+export function indexByUuid<Value>(values: Iterable<Value>, id: (value: Value) => string): Map<string, Value> {
+    const index = new Map<string, Value>();
+    for (const value of values) index.set(uuidKey(id(value)), value);
+    return index;
+}
+
+/** Group one loaded batch by UUID identity, preserving row order and stored values. */
+export function groupByUuid<Value>(values: Iterable<Value>, id: (value: Value) => string): Map<string, Value[]> {
+    const groups = new Map<string, Value[]>();
+    // Bucket each row once; aliases share a bucket without copying or reordering rows.
+    for (const value of values) {
+        const key = uuidKey(id(value));
+        const rows = groups.get(key) ?? [];
+        rows.push(value);
+        groups.set(key, rows);
+    }
+    return groups;
+}
+
+/** Resolve submitted UUID references against one loaded batch. Partial sequences,
+ * ordering and multiplicity are preserved; a missing reference rejects the sequence. */
+export function resolveUuidReferences<Value>(ids: readonly string[], values: Iterable<Value>,
+    id: (value: Value) => string): Value[] | undefined {
+    const index = indexByUuid(values, id);
+    const resolved: Value[] = [];
+
+    // Lookup once per submitted reference; no row is copied or queried again.
+    for (const reference of ids) {
+        const value = index.get(uuidKey(reference));
+        if (value === undefined) return undefined;
+        resolved.push(value);
+    }
+    return resolved;
+}
+
+/** Resolve a complete unique list order, rejecting even differently spelled
+ * aliases of one UUID. Partial-order workflows use resolveUuidReferences instead. */
+export function resolveCompleteUuidOrder<Value extends {id: string}>(ids: readonly string[],
+    values: readonly Value[]): Value[] | undefined {
+    if (ids.length !== values.length) return undefined;
+    const resolved = resolveUuidReferences(ids, values, value => value.id);
+    if (!resolved || new Set(resolved.map(value => uuidKey(value.id))).size !== values.length) return undefined;
+    return resolved;
+}
+
 // Returns 'YYYY-MM-DD' in the server's local time zone
 export function toLocalISODate(dateObj: Date) {
     const y = dateObj.getUTCFullYear();
@@ -100,6 +221,8 @@ export function rewriteISOToZone(isoString: string, timeZone: string): string {
     const Y = +y, M = +mo, D = +d, H = +h, Min = +mi, S = +s, Ms = +ms.padEnd(3, "0");
 
     // 2) Helper: get offset in minutes for a given UTC epoch in the target zone
+    /** Interpret this zone's offset at the supplied instant using supported GMT
+     * forms. Unmatched representations retain the existing zero-minute fallback. */
     function getOffsetMinutes(epochMs: number) {
         const p = new Intl.DateTimeFormat('en-US', {
             timeZone,

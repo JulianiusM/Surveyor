@@ -6,6 +6,24 @@ import type {components} from './api/v1';
 import type {LocalizationContext, Locale, MessageKey, MessageParameters, RichMessageKey} from './LocalizationTypes';
 import type {FrontendPageCompletion, FrontendBootstrap} from './FrontendTypes';
 import type {FrontendApi} from '../frontend/app/api';
+import type {HeadersOptions, Middleware} from 'openapi-fetch';
+
+/** Runtime interception preserves the generated client's typed public methods. */
+export interface FrontendDispatchOptions extends Omit<RequestInit, 'body' | 'headers'> {
+    params?: {header?: HeadersOptions; path?: object; query?: object};
+    headers?: HeadersOptions;
+    body?: unknown;
+    bodySerializer?: (body: unknown, headers: Headers) => unknown;
+    middleware?: Middleware[];
+}
+
+/** Saved-data review owns no draft, row matching or retry policy. */
+export interface FrontendCommandReviewOptions {
+    eligible: () => boolean;
+    release: () => void;
+    afterInspect?: (readSaved: () => Promise<unknown>) => unknown | Promise<unknown>;
+    blocked?: () => boolean;
+}
 
 /** Loading geometry is public route presentation, never a projection of admission,
  * records or capabilities. Matching page and scoped reads consume this same shape. */
@@ -249,7 +267,7 @@ export interface FrontendEventPickerSource {
 /** The card's host supplies feature operations and destination behavior. Cards
  * consume this bounded policy without importing another feature's API or choosing
  * an endpoint from its entity type; explicit document links retain ordinary navigation. */
-export interface FrontendOverviewCardInteraction {
+export interface FrontendEntityCardInteraction {
     clientNavigation: boolean;
     lifecycle?: boolean;
     readHeader?: FrontendImageRead;

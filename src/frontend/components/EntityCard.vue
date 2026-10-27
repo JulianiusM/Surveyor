@@ -1,20 +1,20 @@
 <script setup lang="ts">
 import {computed, watch} from 'vue';
 import {RouterLink} from 'vue-router';
-import type {components} from '../../../types/api/v1';
-import type {FrontendActionState, FrontendOverviewCardInteraction, FrontendRequestScope} from '../../../types/FrontendUiTypes';
-import {useFrontend} from '../../app/context';
-import {useAuthorizedImage} from '../../composables/authorizedImage';
-import {ObsoleteRequestError} from '../../app/transport';
-import {isOrdinaryNavigation} from '../../composables/pageEntry';
-import ActionButton from '../../components/ActionButton.vue';
-import AppNavigationDropdown from '../../components/AppNavigationDropdown.vue';
+import type {components} from '../../types/api/v1';
+import type {FrontendActionState, FrontendEntityCardInteraction, FrontendRequestScope} from '../../types/FrontendUiTypes';
+import {useFrontend} from '../app/context';
+import {useAuthorizedImage} from '../composables/authorizedImage';
+import {ObsoleteRequestError} from '../app/transport';
+import {isOrdinaryNavigation} from '../composables/pageEntry';
+import ActionButton from './ActionButton.vue';
+import AppNavigationDropdown from './AppNavigationDropdown.vue';
 
 // Personal Overview and Event children share this presentation. Their owning
 // feature supplies navigation, lifecycle and binary-read operations explicitly.
 const props = withDefaults(defineProps<{
-    card: components['schemas']['OverviewCard'];
-    interaction: FrontendOverviewCardInteraction;
+    card: components['schemas']['EntityCard'];
+    interaction: FrontendEntityCardInteraction;
     disabled?: boolean;
     navigationState?: FrontendActionState;
     expansion?: boolean;
@@ -25,7 +25,7 @@ const props = withDefaults(defineProps<{
     personalVisibility?: boolean;
 }>(), {personalVisibility: true});
 const emit = defineEmits<{
-    visibility: [value: components['schemas']['OverviewVisibilityInput']['visibility']];
+    visibility: [value: components['schemas']['EntityCard']['visibility']];
     expand: [];
     archive: [restore: boolean];
     automate: [paused: boolean];

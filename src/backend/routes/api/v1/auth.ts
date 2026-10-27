@@ -82,7 +82,10 @@ router.post('/auth/login', asyncHandler(async function loginIdentity(req, res) {
 }));
 
 /** Ordinary logout prepares its anonymous receipt before commit; provider sessions retain their existing owner. */
-router.post('/auth/logout', asyncHandler(async function logoutIdentity(req, res) {
+router.post('/auth/logout', asyncHandler(/** Admit the captured logout command,
+ * preserving the existing truthy-token distinction between local completion and
+ * provider handoff, including each owner's session and delivery ordering. */
+async function logoutIdentity(req, res) {
     await admit(req, res, 'logoutIdentity');
     // Classification follows the existing logout owner, including truthy empty
     // token objects. Account/guest kind never selects a provider workflow.

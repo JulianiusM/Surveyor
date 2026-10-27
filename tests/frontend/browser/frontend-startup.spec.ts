@@ -1415,11 +1415,11 @@ test('initial startup exposes localized recovery before context creation when th
 });
 
 test('initial startup never exposes inactive creation controls when its bootstrap validator fails', async ({page}) => {
-    const packingCreateContext: components['schemas']['PackingCreateContext'] = {
+    const packingCreateContext: components['schemas']['EntityCreationContext'] = {
         defaults: {participant: 0, guest: 0, authenticated: 0, public: 0}, permissions: [], presets: []};
     const delivery = await startupDocument(page, '/packing/create', {
         session: startupSession(), pageEntry: {kind: 'render'}, packingCreateContext});
-    const module = await failStartupModule(page, /\/app\/assets\/validatePackingCreateContext-[^/]+\.js(?:\?|$)/u);
+    const module = await failStartupModule(page, /\/app\/assets\/validateEntityCreationContext-[^/]+\.js(?:\?|$)/u);
     try {
         await page.goto(delivery.url, {waitUntil: 'commit'});
         await module.started;

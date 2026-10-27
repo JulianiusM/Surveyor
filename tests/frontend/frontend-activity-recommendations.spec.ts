@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {flushPromises, mount} from '@vue/test-utils';
+import {mount} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import {defineComponent, shallowRef} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
@@ -14,6 +15,8 @@ import ActivityRecommendations from '../../src/frontend/features/activity/Activi
 import {manualRecommendationRows, pairRecommendationRows, reconcileRecommendationRows, recommendationIdentity,
     recommendationPartners, recommendationRelationship, recommendationReview, revalidateRecommendationGroups,
     rolelessRecommendationAssignments} from '../../src/frontend/features/activity/recommendationDraft';
+import {buildRecommendationWarnings} from '../../src/backend/modules/activity/availability';
+import {createActivitySlotEntity} from '../factories/integrationEntityFactory';
 
 const planId = '11111111-1111-4111-8111-111111111111';
 const profileId = '22222222-2222-4222-8222-222222222222';
@@ -104,6 +107,7 @@ async function mounted(handler: (request: Request) => Promise<Response>) {
         provide: {[frontendContextKey as symbol]: context},
     }});
     cleanups.push(async () => {root.unmount(); stopInitial(); await context.queryClient.cancelQueries(); context.queryClient.clear();});
+    await flushPromises();
     await vi.waitFor(() => expect(root.find('[data-recommendations-schedule]').exists()).toBe(true));
     await flushPromises();
     return {root, context, requests, router, currentView};
@@ -141,6 +145,65 @@ async function stageMove(root: ReturnType<typeof mount>, profile: string, counte
 }
 
 describe('Activity recommendation review production frontend', () => {
+    it('attaches calculated warnings to stored uppercase UUID rows and the manual preview dialog', async () => {
+        const saved = workspace();
+        const storedProfile = 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA';
+        const storedSlot = 'BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB';
+        const storedTarget = 'CCCCCCCC-CCCC-4CCC-8CCC-CCCCCCCCCCCC';
+        const storedConflict = 'EEEEEEEE-EEEE-4EEE-8EEE-EEEEEEEEEEEE';
+        saved.slots = saved.slots.map((slot, index) => ({...slot, id: index === 0 ? storedSlot : storedTarget}));
+        saved.slots.push({...saved.slots[0], id: storedConflict, title: 'Shared briefing', startTime: '08:00', endTime: '14:00'});
+        saved.recommendations[0] = {...saved.recommendations[0], item: saved.slots[0],
+            profile: {id: storedProfile, name: 'Alex'}};
+        saved.participantOptions = [{...saved.participantOptions[0], key: 'profile:' + storedProfile, profileId: storedProfile}];
+        saved.existingAssignments = [
+            {item: saved.slots[0], profile: {id: storedProfile, name: 'Alex'}, roles: ['default']},
+            {item: saved.slots[2], profile: {id: storedProfile, name: 'Alex'}, roles: ['Coordinator']},
+        ];
+        const slots = saved.slots.map(slot => createActivitySlotEntity(slot));
+        // DBAL references retain stored IDs but deliberately have no title. The
+        // warning must keep that ID so the UI can resolve its visible slot label.
+        const existingAssignments = {[`profile:${storedProfile.toLowerCase()}`]: [{
+            id: storedConflict, day: '2030-06-01', startTime: '08:00', endTime: '14:00',
+        }]};
+        function calculatedWarnings(input: components['schemas']['ActivityRecommendationReview']) {
+            return buildRecommendationWarnings({slots, recommendations: input.recommendations, existingAssignments})
+                .map(result => ({...result, recommendation: {...result.recommendation,
+                    profileId: result.recommendation.profileId ?? undefined}}));
+        }
+        saved.warnings = calculatedWarnings({recommendations: [{id: recommendationId, itemId: storedSlot,
+            profileId: storedProfile, status: 'PENDING', operation: 'ASSIGN', manual: false}]});
+        const {root, currentView, requests} = await mounted(async request => {
+            if (path(request).endsWith('/warnings')) {
+                return json({warnings: calculatedWarnings(await request.json())});
+            }
+            return json(saved);
+        });
+        currentView.value = {...currentView.value, slots: saved.slots.map((slot, index) =>
+            ({...(currentView.value.slots[index] ?? currentView.value.slots[0]!), ...slot}))};
+        await flushPromises();
+
+        expect(root.get('[data-recommendation-warnings]').text()).toContain('overlap');
+        expect(root.get('[data-recommendation-warnings]').text()).toContain('Shared briefing');
+        await root.get(`[data-add-recommendation][data-slot-id="${storedSlot}"]`).trigger('click');
+        await flushPromises();
+        const duplicateOptions = document.querySelector<HTMLSelectElement>('#addRecommendationParticipant')!;
+        expect(Array.from(duplicateOptions.options, option => option.value)).not.toContain('profile:' + storedProfile);
+        document.querySelector<HTMLButtonElement>('#addRecommendationModal .modal-header .btn-close')!.click();
+        await flushPromises();
+        await root.get(`[data-add-recommendation][data-slot-id="${storedTarget}"]`).trigger('click');
+        await flushPromises();
+        await selectDialogValue('addRecommendationOperation', 'REASSIGN');
+        await selectDialogValue('addRecommendationParticipant', 'profile:' + storedProfile);
+        const sources = document.querySelector<HTMLSelectElement>('#addRecommendationSource')!;
+        expect(Array.from(sources.options, option => option.value)).toContain(storedSlot);
+        await selectDialogValue('addRecommendationSource', storedSlot);
+
+        expect(document.querySelector('[data-add-warning]')?.textContent).toContain('overlap');
+        expect(document.querySelector('[data-add-warning]')?.textContent).toContain('Shared briefing');
+        expect(requests.some(request => path(request).endsWith('/apply'))).toBe(false);
+    });
+
     it('shows stored civil days in both locales without replacing a pending recommendation', async () => {
         vi.stubEnv('TZ', 'America/Los_Angeles');
         const {root, context, requests} = await mounted(async request => path(request).endsWith('/warnings') ? json({warnings: []}) : json(workspace()));

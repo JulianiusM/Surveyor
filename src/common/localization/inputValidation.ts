@@ -1,5 +1,5 @@
 import type {ErrorObject} from 'ajv';
-import type {FieldDiagnostic, InputDiagnostic} from '../../types/InputValidationTypes';
+import type {FieldDiagnostic, InputDiagnostic, ScalarParameterResult} from '../../types/InputValidationTypes';
 import type {LocalizationContext, MessageKey} from '../../types/LocalizationTypes';
 import {formatCivilDate} from '../lib/civilDate';
 import {isPlainMessageKey} from './translator';
@@ -70,6 +70,23 @@ const rules = new Set<FieldDiagnostic['rule']>(['required', 'type', 'format', 'm
     'minProperties', 'maxProperties', 'pattern', 'enum', 'uniqueItems', 'additionalProperties', 'invalid']);
 const valueTypes = new Set<NonNullable<FieldDiagnostic['type']>>(
     ['integer', 'number', 'string', 'boolean', 'array', 'object', 'email', 'date', 'time', 'uuid']);
+
+/** Decode the API's authored scalar serialization without coercing malformed
+ * numbers, repeated values or structured parameters into valid input. Callers
+ * retain their own field pointers and error presentation. */
+export function decodeScalarParameter(value: unknown, type: unknown): ScalarParameterResult {
+    if (typeof value !== 'string') return {valid: false};
+    if (type === 'boolean') return value === 'true' || value === 'false'
+        ? {valid: true, value: value === 'true'} : {valid: false};
+    if (type === 'integer' || type === 'number') {
+        const pattern = type === 'integer' ? /^-?(?:0|[1-9]\d*)$/u : /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/u;
+        const number = Number(value);
+        if (!pattern.test(value) || !Number.isFinite(number) || type === 'integer' && !Number.isSafeInteger(number))
+            return {valid: false};
+        return {valid: true, value: number};
+    }
+    return {valid: true, value};
+}
 
 /** Retain only safe generated metadata for one actionable validation failure.
  * Branch summaries carry no field/rule explanation and are deliberately skipped.

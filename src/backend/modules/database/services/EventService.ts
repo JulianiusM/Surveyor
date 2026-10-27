@@ -16,7 +16,7 @@
 
 // TypeORM-based implementation of the event module
 import {EntityManager, IsNull, MoreThanOrEqual} from 'typeorm';
-import type {DIETARY, EventLinkOptionsQuery, ParticipantRow} from "../../../../types/EventTypes";
+import type {DIETARY, EventLinkOptionsQuery} from "../../../../types/EventTypes";
 import type {EntityPermissionQueryScope} from '../../../../types/PermissionTypes';
 import {WithRequired} from "../../../../types/UtilTypes";
 import {generateUniqueId, generateUniqueToken, now} from '../../lib/util';
@@ -260,12 +260,12 @@ export async function getRegistrationsForEvent(eventId: string) {
     return await AppDataSource.getRepository(EventRegistration).findBy({event: {id: eventId}});
 }
 
-/** Read the ordered participant projection with profile/contact and dietary relations. */
-export async function getEventParticipants(eventId: string, manager: EntityManager = AppDataSource.manager): Promise<ParticipantRow[]> {
-    // Hydrate the existing relation set before applying the established name/contact
-    // fallbacks; this query does not decide which caller may disclose those fields.
+/** Read ordered registration rows with the profile/contact and dietary relations required by business projections. */
+export async function getEventParticipantRows(eventId: string, manager: EntityManager = AppDataSource.manager): Promise<EventRegistration[]> {
+    // The supplied manager retains the caller's snapshot. Display fallbacks and
+    // disclosure decisions belong to the business presentation owners.
     const repo = manager.getRepository(EventRegistration);
-    const rows = await repo.find({
+    return repo.find({
         where: {event: {id: eventId}},
         relations: {
             profile: {
@@ -276,15 +276,6 @@ export async function getEventParticipants(eventId: string, manager: EntityManag
         },
         order: {id: 'ASC'},
     });
-    return rows.map((r): ParticipantRow => ({
-        id: r.id,
-        profileId: r.profile.id ?? null,
-        name: r.profile.name?.trim() || r.profile.user?.name?.trim() || r.profile.user?.username || r.profile.guest?.username || '—',
-        email: r.profile.user?.email || r.profile.guest?.email || '—',
-        arrivalDate: r.arrivalDate,
-        departureDate: r.departureDate,
-        dietaryChoices: r.dietaryChoices ?? null,
-    }));
 }
 
 /** Delete this profile's Event registration and stale affected pool calculations. */

@@ -15,6 +15,8 @@ const RECORDER_COLUMN = "recorded_by_profile_id";
 export class AddOrganizerInvoices1789603200000 implements MigrationInterface {
     name = "AddOrganizerInvoices1789603200000";
 
+    /** Admit organizer-only costs and optional recorder attribution, cloning
+     * referenced UUID storage without identity flags or rewriting participant invoices. */
     public async up(queryRunner: QueryRunner): Promise<void> {
         if (!await tableExists(queryRunner, TABLE)) return;
         const table = await queryRunner.getTable(TABLE);
@@ -54,6 +56,8 @@ export class AddOrganizerInvoices1789603200000 implements MigrationInterface {
         // Existing participant invoices keep their registration attribution and all saved settlement data.
     }
 
+    /** Refuse rollback while organizer-only costs need this schema, then remove
+     * recorder metadata/FKs without changing the original registration storage. */
     public async down(queryRunner: QueryRunner): Promise<void> {
         if (!await tableExists(queryRunner, TABLE)) return;
         const [remaining] = await queryRunner.query(`SELECT COUNT(*) AS count FROM \`${TABLE}\` WHERE \`registration_id\` IS NULL`);

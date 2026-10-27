@@ -723,7 +723,7 @@ export async function createResourceViaForm(request: APIRequestContext, testCase
             headers: await commandHeadersForE2E(request),
         });
         expect(contextResponse.status(), await contextResponse.text()).toBe(200);
-        const context = await contextResponse.json() as components['schemas']['PackingCreateContext'];
+        const context = await contextResponse.json() as components['schemas']['EntityCreationContext'];
         const defaults = {...context.defaults};
         for (const audience of Object.keys(defaults) as Array<keyof typeof defaults>) {
             const keys = Object.keys(form).filter(key => key.startsWith(`defaultPerms[${audience}][`));

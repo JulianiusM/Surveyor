@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {fieldAttributes as guestFields} from "../../../../.generated/api/v1/browser/validateGuestRegistrationInput.mjs";
 import {computed, reactive, ref, watch} from 'vue';
 import {useRoute, useRouter, RouterLink} from 'vue-router';
 import type {components} from '../../../types/api/v1';
@@ -277,7 +278,7 @@ function requestRecovery(scope: FrontendRequestScope): Promise<components['schem
                     large-group
                     :placeholder="messages.t('auth.yourName')"
                     required
-                    :max-length="100"
+                    :max-length="guestFields.username.maxLength"
                     autocomplete="nickname"
                     :disabled="blocked"
                     :pending="submittingGuest"
@@ -295,7 +296,7 @@ function requestRecovery(scope: FrontendRequestScope): Promise<components['schem
                     :placeholder="messages.t('auth.guestEmailPlaceholder')"
                     input-mode="email"
                     type="email"
-                    :max-length="100"
+                    :max-length="guestFields.email.maxLength"
                     autocomplete="email"
                     :disabled="blocked"
                     :pending="submittingGuest"

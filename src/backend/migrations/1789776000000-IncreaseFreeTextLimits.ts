@@ -31,6 +31,8 @@ export class IncreaseFreeTextLimits1789776000000 implements MigrationInterface {
         }
     }
 
+    /** Preflight every affected column for long content before any implicitly
+     * committed narrowing DDL; refuse rather than truncate existing text. */
     public async down(queryRunner: QueryRunner): Promise<void> {
         // MariaDB DDL commits implicitly. Check every column before narrowing any of them.
         for (const {table, column} of columns) {

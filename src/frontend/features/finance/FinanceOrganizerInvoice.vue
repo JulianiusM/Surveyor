@@ -4,7 +4,7 @@ import {proofFileAccept} from '../../../common/lib/fileMedia';
 import {computed, reactive, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
 import {useActionState, useFrontend} from '../../app/context';
-import {useCommand} from '../../composables/command';
+import {useCommand, useCommandReview} from '../../composables/command';
 import {useFinanceApi} from './api';
 import {financeDecimal, protectFinanceNumberFromScroll} from './numbers';
 import FinanceHistory from './FinanceHistory.vue';
@@ -33,9 +33,14 @@ const id = useId();
 const form = ref<HTMLFormElement | null>(null);
 const draft = reactive({amount: '', description: '', registrationId: ''});
 const proof = ref<File | null>(null);
-const inspected = ref(false);
 const command = useCommand(props.refresh, true, {dirty: () => !!draft.amount || !!draft.description || !!draft.registrationId || !!proof.value,
     unknownMessage: 'draft.leaveUnknown', recoveryEligible: () => props.active});
+
+/** Inspection refreshes saved history without resubmitting this creation. Its
+ * acknowledgement remains an explicit human decision, never a row heuristic. */
+const {inspected, inspect: inspectHistory, acknowledge} = useCommandReview(command, () => props.refresh(), {
+    eligible: () => recovery.isAvailable(), release: releaseDraft, afterInspect: () => { emit('history'); },
+});
 const action = useActionState({eligible: () => props.active, blocked: () => command.action.disabled.value});
 const recovery = useActionState({eligible: () => props.active, blocked: () => command.recoveryAction.disabled.value,
     pending: () => command.recovering.value});
@@ -52,6 +57,8 @@ function close(): void {
     releaseDraft();
     emit('close');
 }
+
+
 
 /** Capture one organizer expense before locking its controls. Optional proof
  * and participant attribution remain absent when the user selected neither. */
@@ -75,21 +82,6 @@ async function submit(): Promise<void> {
     emit('history');
 }
 function transferProgress(): void { /* The shared command pending state covers transfer and application confirmation. */ }
-
-/** Inspection refreshes saved history without resubmitting this creation. Its
- * acknowledgement remains an explicit human decision, never a row heuristic. */
-async function inspectHistory(): Promise<void> {
-    if (!recovery.isAvailable()) return;
-    if (await command.reconcileSafely(props.refresh)) {
-        inspected.value = true;
-        emit('history');
-    }
-}
-function acknowledge(): void {
-    if (!inspected.value || command.pending.value || command.recovering.value) return;
-    command.acknowledge();
-    releaseDraft();
-}
 </script>
 
 <template>

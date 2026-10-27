@@ -83,7 +83,7 @@ async function uploadHeader(request: APIRequestContext, type: 'event' | 'packing
     const proof = await frontendEventHeaders(request);
     const settings = await request.get(root + '/settings', {headers: proof});
     expect(settings.status()).toBe(200);
-    const baseline = await settings.json() as components['schemas']['PackingSettings'];
+    const baseline = await settings.json() as components['schemas']['ListSettings'];
     const response = await request.put(root + '/header', {headers: {...proof, 'If-Match': baseline.settingsToken},
         multipart: {image: {name: 'header.png', mimeType: 'image/png', buffer: readFileSync('src/public/img/logo.png')}}});
     expect(response.status()).toBe(200);

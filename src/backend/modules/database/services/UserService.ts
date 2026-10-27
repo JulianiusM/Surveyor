@@ -480,9 +480,12 @@ function overviewRootQuery(manager: EntityManager, profileId: string, collection
     return query;
 }
 
+/** Build heterogeneous overview membership CTEs with bind parameters in SQL placeholder order. */
 function overviewSource(manager: EntityManager, profileId: string, input: OverviewQuery): OverviewSql {
     const branches: string[] = [];
     const parameters: unknown[] = [];
+    // Append each resource branch's binds immediately after its SQL; the later
+    // event-only parent branch contributes its parameters after all root branches.
     for (const type of OVERVIEW_TYPES) {
         const query = overviewRootQuery(manager, profileId, input.collection, type, input);
         const [sql, branchParameters] = query.getQueryAndParameters();
@@ -591,6 +594,8 @@ function overviewCard(row: OverviewRootRow & OverviewDisplayRow, visibility: Map
 /** Load full display fields only for a selected page, in at most one query per type. */
 async function loadOverviewCards(manager: EntityManager, rows: OverviewRootRow[], visibility: Map<string, PersonalVisibility>): Promise<Entity[]> {
     const fields = new Map<string, OverviewDisplayRow>();
+    // Hydrate only selected identities, batching by physical resource table.
+    // Wide descriptions/images stay outside membership UNION/pagination queries.
     for (const type of OVERVIEW_TYPES) {
         const ids: string[] = [];
         for (const row of rows) if (row.type === type) ids.push(row.id);
@@ -602,6 +607,8 @@ async function loadOverviewCards(manager: EntityManager, rows: OverviewRootRow[]
             .where('display.id IN (:...ids)', {ids}).getRawMany<OverviewDisplayRow>();
         for (const row of displayRows) fields.set(archiveKey({type, id: row.id}), row);
     }
+    // Rejoin display data in the page's original mixed order. A disappeared row
+    // contributes no placeholder card or new membership.
     const cards: Entity[] = [];
     for (const row of rows) {
         const display = fields.get(archiveKey(row));
@@ -619,6 +626,8 @@ async function loadOverviewCards(manager: EntityManager, rows: OverviewRootRow[]
 function overviewCardPage(manager: EntityManager, query: OverviewQuery, children = false): OverviewSql {
     const page = manager.createQueryBuilder().select('card.*')
         .from(children ? 'overview_region' : 'overview_cards', 'card');
+    // Resource-qualified title lookups avoid collisions between table-local IDs
+    // while retaining the deterministic title/type/id ordering before LIMIT.
     const titles: string[] = [];
     for (const type of OVERVIEW_TYPES) {
         const alias = `overviewTitle_${type}`;
@@ -632,6 +641,8 @@ function overviewCardPage(manager: EntityManager, query: OverviewQuery, children
         .addOrderBy('card.type').addOrderBy('card.id')
         .limit(OVERVIEW_PAGE_SIZE)
         .offset(((children ? query.childPage : query.page) - 1) * OVERVIEW_PAGE_SIZE);
+    // A child page is constrained to the selected event and current search;
+    // representative pages use the already grouped eligible card set.
     if (children) page.where('card.eventId = :overviewSelectedEvent AND card.matches = 1', {overviewSelectedEvent: query.eventId});
     const [sql, parameters] = page.getQueryAndParameters();
     return {sql, parameters};
@@ -733,6 +744,7 @@ async function readOverviewRegion(manager: EntityManager, profileId: string, inp
  * the controller must check their ACCESS_VIEW before revealing a title/link.
  */
 export async function getOverviewPages(profileId: string, queries: OverviewQuery[]): Promise<OverviewReadResult[]> {
+    /** Read ordered bounded surfaces, then attach one shared lifecycle and context-parent snapshot. */
     async function readPages(manager: EntityManager): Promise<OverviewReadResult[]> {
         const results: OverviewReadResult[] = [];
         const references: ArchiveReference[] = [];
@@ -748,6 +760,8 @@ export async function getOverviewPages(profileId: string, queries: OverviewQuery
             }
             if (result.event) references.push(result.event);
         }
+        // Batch lifecycle/context inputs after page selection. Repeated parent
+        // IDs need one context read; these parents never become extra members.
         const archives = await getArchiveSnapshot(references, manager);
         const contextEvents: Entity[] = [];
         if (contextIds.size) {
@@ -756,6 +770,8 @@ export async function getOverviewPages(profileId: string, queries: OverviewQuery
                 .where('parent.id IN (:...ids)', {ids: Array.from(contextIds)}).getRawMany<Pick<OverviewDisplayRow, 'id' | 'title' | 'ownerId'>>();
             for (const parent of parents) contextEvents.push(convertEntity(parent, 'event'));
         }
+        // Every returned surface receives the same completed context objects
+        // from this connection, rather than racing a later page-specific read.
         for (const result of results) {
             result.archiveSnapshot = archives;
             result.contextEvents = contextEvents;
@@ -765,6 +781,7 @@ export async function getOverviewPages(profileId: string, queries: OverviewQuery
     return AppDataSource.transaction('REPEATABLE READ', readPages);
 }
 
+/** Test actual managed-or-participating overview membership on the visibility writer's manager, without granting generic view access. */
 export async function isOverviewMember(profileId: string, ref: ArchiveReference, manager: EntityManager): Promise<boolean> {
     // Either overview permits a private choice. The managed query already includes
     // ownership and explicit administration assignments, so do not reduce
@@ -932,8 +949,11 @@ export async function updateProfileName(profileId: string, name: string) {
     await repo.update({id: profileId}, {name: name});
 }
 
+/** Change a profile's default flag atomically, clearing peer defaults only when selecting it. */
 export async function updateProfileDefault(profileId: string, isDefault: boolean) {
-    await AppDataSource.transaction(async em => {
+    await AppDataSource.transaction(
+    /** Clear defaults for this profile's stored account/guest owner before updating the selected row. */
+    async em => {
         const repo = em.getRepository(Profile);
         if (isDefault) {
             // Remove all other defaults for the owner of this profile if a new one is set
@@ -945,6 +965,8 @@ export async function updateProfileDefault(profileId: string, isDefault: boolean
                 await repo.update({guest: {id: profile.guestId}}, {defaultForOwner: false});
             }
         }
+        // Unselecting skips peer lookups/updates entirely; selecting preserves
+        // the existing user and guest owner branches in their original order.
         await repo.update({id: profileId}, {defaultForOwner: isDefault});
     })
 }

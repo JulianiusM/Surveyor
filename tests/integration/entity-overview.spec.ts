@@ -7,7 +7,7 @@ import {Survey} from '../../src/backend/modules/database/entities/surveys/Survey
 import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
 import * as activityService from '../../src/backend/modules/database/services/ActivityService';
 import * as adminService from '../../src/backend/modules/database/services/EntityAdminService';
-import {archiveEntity, getArchiveStates} from '../../src/backend/controller/entityAdminController';
+import {archiveEntity, getArchiveStates} from '../../src/backend/modules/entityArchival';
 import * as driverService from '../../src/backend/modules/database/services/DriverService';
 import * as eventService from '../../src/backend/modules/database/services/EventService';
 import * as packingService from '../../src/backend/modules/database/services/PackingService';

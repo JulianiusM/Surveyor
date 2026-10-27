@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {flushPromises} from '@vue/test-utils';
+import {flushFrontendPromises as flushPromises} from '../keywords/frontendUiKeywords';
 import {defineComponent} from 'vue';
 import type {components} from '../../src/types/api/v1';
 import EntityHeader from '../../src/frontend/components/EntityHeader.vue';
@@ -11,7 +11,7 @@ import ActivitySettings from '../../src/frontend/features/activity/ActivitySetti
 import PackingPage from '../../src/frontend/features/packing/PackingPage.vue';
 import {eventKeys, packingKeys} from '../../src/frontend/app/queryKeys';
 import {createFrontendEventSession, createFrontendEventView, frontendEventId} from '../factories/frontendEventFactory';
-import {frontendEventJson, mountFrontendEvent} from '../keywords/frontendEventKeywords';
+import {frontendEventJson, mountFrontendEvent} from '../keywords/frontendUiKeywords';
 
 const session = createFrontendEventSession();
 const childId = '22222222-2222-4222-8222-222222222222';

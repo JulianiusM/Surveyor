@@ -1,16 +1,18 @@
 <script setup lang="ts">
+import {fieldAttributes as activityFields} from "../../../../.generated/api/v1/browser/validateActivityCreateInput.mjs";
 import {computed, ref} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {EntityMetadataSnapshot, EntityMetadataValues} from '../../../types/FrontendEntityMetadataTypes';
 import type {FrontendRead, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import {useFrontend} from '../../app/context';
 import {activityKeys} from '../../app/queryKeys';
-import {normalizeNullableMetadataText} from '../../composables/metadataDraft';
-import {useMetadataEditorHandle} from '../../composables/metadataEditor';
+import {normalizeNullableMetadataText, useMetadataEditorHandle} from '../../composables/metadataDraft';
 import {useActivityApi} from './api';
 import EntityMetadataEditor from '../../components/EntityMetadataEditor.vue';
 import FormField from '../../components/FormField.vue';
 
+// Existing Activity metadata controls retain creation's native text bounds;
+// the looser legacy metadata wire contract remains unchanged.
 // Activity supplies dated root fields; admitted reads, sparse values, comparison
 // review and departure protection remain with the shared metadata editor.
 const props = withDefaults(defineProps<{planId: string; planTitle?: string; disabled?: boolean; busy?: boolean; active?: boolean}>(), {active: true});
@@ -85,7 +87,7 @@ defineExpose(useMetadataEditorHandle(editor));
                         :required="field !== 'description'"
                         :required-marker="false"
                         :pending="pending"
-                        :max-length="field === 'description' ? 16000 : field === 'title' ? 255 : undefined"
+                        :max-length="field === 'description' ? activityFields.description.maxLength : field === 'title' ? activityFields.title.maxLength : undefined"
                         @update:model-value="values[field] = $event"
                     />
                 </div>

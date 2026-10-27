@@ -15,32 +15,39 @@
  */
 
 import {defaultPermissionValues as activityDefaultValues, readEntityDefaultsBaseline, updateEntityDefaults, readEntityAdministratorBaseline, updateEntityAdministrator} from './entityAdminController';
-import {getRequirements, updateRequirements} from '../modules/activity/requirementOperations';
-import {presentActivitySchedule} from '../modules/activity/schedulePresentation';
-import {getRecommendations, getRecommendationWarningPreview, applyRecommendations} from '../modules/activity/recommendationOperations';
-import {invalidateEventContext, queueAutoGenerateRecommendations, getAutoRecommendationJob} from '../modules/activity/recommendationExecution';
+import type {RequirementOverrideInput} from '../../types/ActivityRequirementTypes';
+import * as requirementService from '../modules/database/services/ActivityRequirementService';
+import {calculateRequirementAnalysis, calculateBaselineRequirementForPlan, countInclusiveDays, toParticipantKey, toParticipantName} from '../../common/activity/requirements';
+import {buildParticipantAttendanceMap, projectActivityAssignees} from '../modules/activity/autoAssignment';
+import type {ActivityPrintDay, ActivityPrintWeek, SlotAssignmentMap} from '../../types/ActivityTypes';
+import {getRecommendations, getRecommendationWarningPreview, applyRecommendations} from '../modules/activity/recommendations';
+import {invalidateEventContext, queueAutoGenerateRecommendations, getAutoRecommendationJob} from '../modules/activity/autoAssignment';
 
-import {overlapConfirmation, requireOverlapConfirmation, getAssignmentWarningPreview, collectManualAssignmentWarnings} from '../modules/activity/warningOperations';
+import {overlapConfirmation, requireOverlapConfirmation, getAssignmentWarningPreview, collectManualAssignmentWarnings} from '../modules/activity/recommendations';
 
 import {authorizeEventLink, getEventLinkOptions, readEventLinkSelection} from '../modules/event/linkage';
-import {requireRequirementConfiguration, requireRecommendationContext} from '../modules/activity/context';
+import {requireRequirementConfiguration, requireRecommendationContext} from '../modules/activity/autoAssignment';
 import type {RecommendationJobView} from '../../types/ActivityTypes';
 
 
 // controllers/activityController.js
 import {hasAccountProfile} from './userController';
-import {getInitialPerms} from '../modules/lib/permissions';
 import {Request} from "express";
 
 import type {EntityManager} from "typeorm";
 import type {ActivityAssignment} from "../modules/database/entities/activity/ActivityAssignment";
-import {searchEntityProfiles, archiveEntity, assertEntityPropertyContext, comparisonToken, completeDefaults, entityMethodPermission, entityPropertyPermission, entityTag, getArchivePresentations, getAuthorizedEventUrl, getEntityPropertyPresentation, getEntityViewAdmission, permissionDefinitions, requireFieldComparison, restoreEntity, changeEntityEvent, setAutomaticArchival} from './entityAdminController';
+import {comparisonToken, entityTag, requireFieldComparison} from '../modules/api/transport';
+import {searchEntityProfiles, completeDefaults, getEntityPropertyPresentation, readEntitySettingsAccess, entityCreationPermissionContext} from './entityAdminController';
+import {assertEntityPropertyContext, getAuthorizedEventUrl, getEntityViewAdmission, changeEntityEvent, projectEntitySettingsEvent} from '../modules/event/linkage';
+import {archiveEntity, getArchivePresentations, restoreEntity, setAutomaticArchival} from '../modules/entityArchival';
+import {entityMethodPermission, entityPropertyPermission, entityPermissionKey} from '../modules/permissionEngine';
 
 import {ApiProblem} from '../modules/api/problem';
 import {checkNewImage, removeImage} from '../modules/lib/fileCommons';
 import * as adminService from '../modules/database/services/EntityAdminService';
-import {getHeaderImageVersion} from '../modules/lib/util';
+import {getHeaderImageVersion, projectEventParticipants, uuidKey, sameUuid, indexByUuid, resolveUuidReferences} from '../modules/lib/util';
 import {civilDateWeeks} from '../../common/lib/civilDate';
+import {archiveKey} from '../modules/archive/policy';
 import type {components} from '../../types/api/v1';
 import type {ActivityCommandPreparation, ActivityPropertyTransportContext, ActivitySlotAdmission} from '../../types/ActivityV1Types';
 // Business logic for the Activity routes
@@ -221,11 +228,11 @@ async function fetchForView(plan: ActivityPlan, req: Request, includeNameProvena
         participantRoles,
     ] = await Promise.all([
         activityService.getActivitySlotAssignments(plan.id, session.profile!.id),
-        activityService.getActivitySlotAssignees(plan.id),
+        activityService.getActivitySlotAssigneeRows(plan.id).then(projectActivityAssignees),
         activityService.getAllRoles(plan.id),
         activityService.getActivitySlotRoles(plan.id),
         requireRequirementConfiguration(plan.id),
-        plan.event?.id ? eventService.getEventParticipants(plan.event.id) : Promise.resolve([]),
+        plan.event?.id ? eventService.getEventParticipantRows(plan.event.id).then(projectEventParticipants) : Promise.resolve([]),
         activityService.getParticipantRolesForPlan(plan.id),
     ]);
     const textFields = await activityService.getActivityPlanTextFields(plan.id);
@@ -238,8 +245,8 @@ async function fetchForView(plan: ActivityPlan, req: Request, includeNameProvena
         if (slot.assignedCount < (slot.maxAssignees ?? 0)) open++;
     }
 
-    const currentProfileId = session.profile!.id;
-    const registration = eventParticipants.find((participant) => participant.profileId === currentProfileId);
+    const currentProfileId = uuidKey(session.profile!.id);
+    const registration = eventParticipants.find((participant) => sameUuid(participant.profileId, currentProfileId));
     const canSelfAssign = !plan.event?.id || Boolean(registration) || Boolean(plan.allowExternalAssignees);
     const currentRoleIds = participantRoles.find(
         (participant) => participant.participantKey === `profile:${currentProfileId}`,
@@ -322,17 +329,17 @@ async function fetchForView(plan: ActivityPlan, req: Request, includeNameProvena
 
     eventParticipants.forEach((participant) => {
         const participantKey = participant.profileId
-            ? `profile:${participant.profileId}`
+            ? toParticipantKey({profileId: uuidKey(participant.profileId)})
             : `registration:${participant.id}`;
-        const status = ensureParticipantStatus(participantKey, participant.profileId, participant.name);
+        const status = ensureParticipantStatus(participantKey, participant.profileId ? uuidKey(participant.profileId) : participant.profileId, participant.name);
         status.arrivalDate = participant.arrivalDate;
         status.departureDate = participant.departureDate;
     });
 
     Object.values(assigneeLists).flat().forEach((assignee) => {
         // Accumulate recorded work by profile while keeping the default role out of visible named roles.
-        const participantKey = `profile:${assignee.profileId}`;
-        const status = ensureParticipantStatus(participantKey, assignee.profileId, assignee.name);
+        const participantKey = toParticipantKey({profileId: uuidKey(assignee.profileId)});
+        const status = ensureParticipantStatus(participantKey, uuidKey(assignee.profileId), assignee.name);
         status.assignedShifts += 1;
         assignee.roles.forEach((role) => {
             if (role !== 'default') status.roles.add(role);
@@ -412,7 +419,7 @@ async function getScheduleExport(plan: ActivityPlan) {
     // their UUID union without loading names or a second participant roster.
     const [slotsByDate, assigneeLists, slotRoles, textFields, participantCount] = await Promise.all([
         activityService.getActivitySlots(plan.id),
-        activityService.getActivitySlotAssignees(plan.id),
+        activityService.getActivitySlotAssigneeRows(plan.id).then(projectActivityAssignees),
         activityService.getActivitySlotRoles(plan.id),
         activityService.getActivityPlanTextFields(plan.id),
         activityService.countActivityPlanParticipants(plan.id, plan.event?.id ?? null),
@@ -485,7 +492,11 @@ async function updateDescription(planId: string, body: any, expectedEventId?: st
  */
 async function saveActivityProperties(planId: string, patch: ActivityPropertyPatch, expectedEventId?: string | null,
     transport?: ActivityPropertyTransportContext): Promise<components['schemas']['ActivityMetadata'] | void> {
+    /** Recheck saved context and optional versioned field evidence under the plan lock,
+     * then persist the sparse patch and prepare its requested result before commit. */
     async function saveProperties(manager: EntityManager): Promise<components['schemas']['ActivityMetadata'] | void> {
+        // Acquire the current parent/plan context before interpreting an earlier
+        // relationship or projecting any field that the adapter may compare.
         const plan = await requireRecommendationContext(manager, planId);
         assertEntityPropertyContext(plan, expectedEventId);
         // The v1 adapter adds current field authority and its reviewed baseline inside
@@ -498,6 +509,8 @@ async function saveActivityProperties(planId: string, patch: ActivityPropertyPat
             const baseline = activityMetadataProjection(plan, permissions);
             requireFieldComparison(transport.token, activityMetadataToken(plan, baseline, transport.session), Object.keys(patch));
         }
+        // Omitted bounds retain the locked dates. Narrowing a range must retain
+        // every saved slot before cancellation or persistence can happen.
         const startDate = patch.startDate ?? plan.startDate;
         const endDate = patch.endDate ?? plan.endDate;
         if (startDate > endDate) throw new APIError('Start date must be before end date', {}, 400, {cause: 'ACTIVITY_DATE_RANGE_INVALID'});
@@ -510,6 +523,7 @@ async function saveActivityProperties(planId: string, patch: ActivityPropertyPat
             invalidateEventContext(planId);
             await recommendationService.invalidateGeneratedRecommendations(manager, planId);
         }
+        // Keep the approved sparse write on this same manager after its guards.
         await activityService.updateActivityPlanProperties(planId, patch, manager);
         if (transport) {
             // Prepare the already-known resulting representation before commit; no
@@ -536,15 +550,20 @@ async function saveActivitySlot(slotId: string, fields: Partial<ActivitySlot>, a
     const current = await activityService.getActivitySlotById(slotId);
     if (!current) throw new APIError('Activity slot not found', {slotId}, 404);
     const planId = current.entityId;
+
+    /** Revalidate this edit against the locked plan and optional current slot authority.
+     * The initial lookup supplies only its plan; the transaction owns admission and the write. */
     async function saveSlot(manager: EntityManager): Promise<boolean | undefined> {
         const plan = await requireRecommendationContext(manager, planId);
         // Optional transport authority is evaluated against this locked plan and
         // current slot, independently from the old browser's presentation bundle.
         if (admit) {
             const slot = await activityService.getActivitySlotById(slotId, manager);
-            if (!slot || slot.entityId !== plan.id) throw new ApiProblem('NOT_FOUND');
+            if (!slot || !sameUuid(slot.entityId, plan.id)) throw new ApiProblem('NOT_FOUND');
             await admit(manager, plan, slot);
         }
+
+        // A moved slot must fit the current range even when no transport callback is supplied.
         if (fields.day !== undefined) validateSlotDate(plan, fields.day);
         return activityService.updateActivitySlot(slotId, fields, manager);
     }
@@ -563,7 +582,7 @@ async function createTextField(planId: string, body: any) {
 async function updateTextField(planId: string, textFieldId: string, body: any, permData?: PermBundle) {
     // Resolve actual field ownership before validating content or disclosing a write result.
     const field = await activityService.getActivityPlanTextFieldById(textFieldId);
-    if (field?.entityId !== planId) {
+    if (!sameUuid(field?.entityId, planId)) {
         throw new APIError('Text field not found', {planId, textFieldId}, 404);
     }
     const {title, text = ''} = body;
@@ -582,7 +601,7 @@ async function updateTextField(planId: string, textFieldId: string, body: any, p
 async function deleteTextField(planId: string, textFieldId: string) {
     // Reject a foreign or missing field before invoking the unchanged deletion operation.
     const field = await activityService.getActivityPlanTextFieldById(textFieldId);
-    if (field?.entityId !== planId) {
+    if (!sameUuid(field?.entityId, planId)) {
         throw new APIError('Text field not found', {planId, textFieldId}, 404);
     }
     await activityService.deleteActivityPlanTextField(textFieldId);
@@ -654,6 +673,9 @@ async function updateSlotDescription(slotId: string, body: any, admit?: Activity
     return 'Description updated';
 }
 
+/** Adapt a direct field/value edit through its existing grants and normalization.
+ * Save scalar slot fields first; the existing role replacement follows separately,
+ * retaining its own transaction and the original diagnostic order. */
 async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle, admit?: ActivitySlotAdmission) {
     const {field, value} = body;
     if (field !== undefined && value !== undefined) body[field] = value;
@@ -673,6 +695,8 @@ async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle, 
         throw new APIError("Not allowed", body, 403);
     }
 
+    // Resolve supplied role IDs against the slot's actual plan before saving
+    // any scalar field; an omitted role field preserves all existing mappings.
     let normalizedRoles: number[] | undefined;
     if (body.roles !== undefined) {
         const slot = await activityService.getActivitySlotById(slotId);
@@ -680,6 +704,8 @@ async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle, 
         normalizedRoles = await validatePlanRoleIds(slot.entityId, body.roles, body);
     }
 
+    // Preserve each direct control's clearing/conversion behavior independently
+    // of versioned numeric drafts and their different transport contract.
     const staged: Partial<ActivitySlot> = {};
     if (body.startTime !== undefined) staged.startTime = body.startTime || null;
     if (body.endTime !== undefined) staged.endTime = body.endTime || null;
@@ -691,6 +717,7 @@ async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle, 
         throw new APIError('Unknown error while saving', body, 500);
     }
 
+    // Role replacement remains a later operation after the scalar save succeeds.
     if (normalizedRoles !== undefined) {
         await activityService.updateActivitySlotRoles(slotId, normalizedRoles);
     }
@@ -711,6 +738,9 @@ async function updateSettings(id: string, body: any) {
 }
 
 
+/** Check self-assignment scope and optional role eligibility before removal exits.
+ * Assign requests additionally require registration when configured; existing
+ * memberships and already held roles retain their capacity retry exemptions. */
 async function authorizeSelfAssignment(
     planId: string,
     slotId: string,
@@ -718,12 +748,14 @@ async function authorizeSelfAssignment(
     operation: 'assign' | 'unassign',
     roleName?: string,
 ) {
+    // Establish the actual plan/slot relationship before applying either role
+    // selection or participant rules to these requested identities.
     const [plan, slot] = await Promise.all([
         activityService.getActivityPlanById(planId),
         activityService.getActivitySlotById(slotId),
     ]);
 
-    if (!plan || !slot || slot.entityId !== planId) {
+    if (!plan || !slot || !sameUuid(slot.entityId, planId)) {
         throw new APIError('Activity slot not found in this plan', {planId, slotId}, 404);
     }
 
@@ -733,7 +765,7 @@ async function authorizeSelfAssignment(
             throw new APIError('Activity role is required', {slotId, roleName}, 400, {cause: 'ACTIVITY_ROLE_REQUIRED'});
         }
         const slotRoles = await activityService.getActivitySlotRoles(planId);
-        requestedRole = slotRoles[slotId]?.find((role) => role.name === roleName);
+        requestedRole = slotRoles[uuidKey(slot.id)]?.find((role) => role.name === roleName);
         if (!requestedRole) {
             throw new APIError('Activity role is not available for this slot', {slotId, roleName}, 400, {cause: 'ACTIVITY_ROLE_UNAVAILABLE'});
         }
@@ -743,6 +775,8 @@ async function authorizeSelfAssignment(
     // or plan policy changed after it was created.
     if (operation === 'unassign') return;
 
+    // Registration constrains assign requests only. Removal already returned
+    // above so changed enrollment cannot trap a saved assignment.
     if (plan.event?.id && !plan.allowExternalAssignees) {
         const registration = await eventService.getRegistrationFor(profileId, plan.event.id);
         if (!registration) {
@@ -755,8 +789,10 @@ async function authorizeSelfAssignment(
         }
     }
 
-    const assignees = (await activityService.getActivitySlotAssignees(planId))[slotId] ?? [];
-    const existingAssignee = assignees.find((assignee) => assignee.profileId === profileId);
+    // A current member may retry at slot capacity; taking another named role
+    // still has its separate configured quota below.
+    const assignees = (await activityService.getActivitySlotAssigneeRows(planId).then(projectActivityAssignees))[uuidKey(slot.id)] ?? [];
+    const existingAssignee = assignees.find((assignee) => sameUuid(assignee.profileId, profileId));
     if (
         !plan.allowOverfillAfterFull
         && !existingAssignee
@@ -867,7 +903,12 @@ async function assignActivityAssignmentRole(itemId: string, profileId: string, r
     const current = await activityService.getActivitySlotById(itemId);
     if (!current) throw new APIError('Activity slot not found', {itemId}, 404);
     const planId = current.entityId;
+    /** Admit and persist one commitment under parent/plan, slot and assignment locks.
+     * Existing role membership is idempotent; first commitments compare overlap
+     * review, while named-role quotas remain independent of slot overfill. */
     async function assignParticipant(manager: EntityManager): Promise<void> {
+        // Read each narrower scope only after its coordinating root context,
+        // retaining all selected rows on this transaction's manager.
         const plan = await requireRecommendationContext(manager, planId);
         const [slot] = await activityService.getLockedActivitySlots(manager, [itemId]);
         if (!slot) throw new APIError('Activity slot not found', {itemId}, 404);
@@ -875,7 +916,7 @@ async function assignActivityAssignmentRole(itemId: string, profileId: string, r
         // callers that omit it remain responsible for admission.
         await admit?.(manager, plan, slot);
         const assignments = await activityService.getLockedPlanAssignments(manager, planId, itemId);
-        const existing = assignments.find((assignment) => assignment.profile.id === profileId);
+        const existing = assignments.find((assignment) => sameUuid(assignment.profile.id, profileId));
         if (!existing && !plan.allowOverfillAfterFull && slot.maxAssignees != null && assignments.length >= slot.maxAssignees) {
             throw new APIError('This activity slot is already full', {itemId}, 409, {cause: 'ACTIVITY_FULL'});
         }
@@ -883,6 +924,7 @@ async function assignActivityAssignmentRole(itemId: string, profileId: string, r
         if (!role && roleName !== 'default') {
             throw new APIError('Activity role is not available for this plan', {itemId, roleName}, 400, {cause: 'ACTIVITY_ROLE_UNAVAILABLE'});
         }
+        // A repeated role signup ends before overlap review or another insert.
         if (role && existing && assignmentHasRole(existing, role.id)) return;
         if (!existing) {
             const warnings = await collectManualAssignmentWarnings(plan, slot, profileId, manager);
@@ -905,6 +947,8 @@ async function assignActivityAssignmentRole(itemId: string, profileId: string, r
                 throw new APIError('This activity role is already full', {itemId, roleName}, 409, {cause: 'ACTIVITY_ROLE_FULL'});
             }
         }
+        // Only the default role may be created here; the selected saved role
+        // attaches to the existing signup when one already belongs to this profile.
         if (!role) [role] = await activityService.ensureRoleId(planId, 'default', true, undefined, manager);
         await activityService.saveActivityAssignmentRole(manager, planId, itemId, profileId, role.id, existing?.id);
     }
@@ -922,6 +966,9 @@ async function unassignActivityAssignmentRole(itemId: string, profileId: string,
     const current = await activityService.getActivitySlotById(itemId);
     if (!current) return;
     const planId = current.entityId;
+    /** Remove the saved signup or selected role under the existing context locks.
+     * Missing signups are no-ops; the default command or removal of its sole role
+     * deletes the assignment, otherwise only the matching role link is deleted. */
     async function unassignParticipant(manager: EntityManager): Promise<void> {
         const plan = await requireRecommendationContext(manager, planId);
         await activityService.getLockedActivitySlots(manager, [itemId]);
@@ -932,8 +979,10 @@ async function unassignActivityAssignmentRole(itemId: string, profileId: string,
             if (!slot) throw new ApiProblem('NOT_FOUND');
             await admit(manager, plan, slot);
         }
+        // Decide from the locked persisted signup, rather than a previously
+        // displayed roster or role selection that may no longer exist.
         const assignments = await activityService.getLockedPlanAssignments(manager, planId, itemId);
-        const assignment = assignments.find((entry) => entry.item.id === itemId && entry.profile.id === profileId);
+        const assignment = assignments.find((entry) => sameUuid(entry.item.id, itemId) && sameUuid(entry.profile.id, profileId));
         if (!assignment) return;
         const role = assignment.activityAssignmentRoles.find((entry) => entry.role.title === roleName);
         if (roleName === 'default' || (role && assignment.activityAssignmentRoles.length === 1)) {
@@ -1046,7 +1095,7 @@ async function requireActivityMethod(id: string, permission: PermType, session: 
 async function requireActivitySlot(id: string, slotId: string, session: SessionLike) {
     const plan = await requireActivityPlan(id);
     const slot = await activityService.getActivitySlotById(slotId);
-    if (!slot || slot.entityId !== id) throw new ApiProblem('NOT_FOUND');
+    if (!slot || !sameUuid(slot.entityId, id)) throw new ApiProblem('NOT_FOUND');
     return {plan, slot, permissions: await activityItemPermissions(plan, slot, session)};
 }
 
@@ -1061,24 +1110,29 @@ async function activityPermissionBundle(plan: ActivityPlan, session: SessionLike
 function activityMetadataProjection(plan: ActivityPlan, permissions: PermView): components['schemas']['ActivityMetadata'] {
     const values: components['schemas']['ActivityMetadata']['values'] = {};
     const editableFields: components['schemas']['ActivityMetadata']['editableFields'] = [];
+
+    // Select each field through its own property grant; a partial editor must not
+    // receive other values merely because they share the same metadata response.
     for (const field of ['title', 'description', 'startDate', 'endDate'] as const) {
         if (!permissions.has(entityPropertyPermission('activity', field)!)) continue;
         editableFields.push(field);
         if (field === 'description') values.description = plan.description ?? null;
         else values[field] = plan[field];
     }
+
+    // Keep the existing root/link/archive context separate from the editable value set.
     return {entityType: 'activity', id: plan.id, values, editableFields, currentEventId: plan.eventId ?? null,
         archived: Boolean(plan.archivedAt), inheritedArchived: Boolean(plan.event?.archivedAt)};
 }
 
 /** Metadata refresh and comparisons contain only fields currently visible to this actor. */
 function activityMetadataToken(plan: ActivityPlan, data: components['schemas']['ActivityMetadata'], session: SessionLike): string {
-    return comparisonToken('activity-meta', plan.id, session, data.values);
+    return comparisonToken('activity-meta', uuidKey(plan.id), session, data.values);
 }
 
 /** Public creation definitions preserve the audience matrix without disclosing an existing plan. */
 export function activityFormContext(): components['schemas']['ActivityCreateContext'] {
-    return {defaults: completeDefaults(getInitialPerms('activity')), ...permissionDefinitions()};
+    return entityCreationPermissionContext('activity');
 }
 
 /** Initial creation retains account-only admission; duplicate GET has its own method grant. */
@@ -1140,9 +1194,9 @@ export async function readActivityPlan(id: string, session: SessionLike) {
     for (const slot of Object.values(source.slots).flat()) {
         const itemPermissions = bundle.item(slot.id);
         const visible = itemPermissions.allow('ACCESS_PARTICIPANTS', 'ACCESS_PARTICIPANTS');
-        const assigned = source.assigneeLists[slot.id] ?? [];
-        const own = assigned.find(assignment => assignment.profileId === profileId);
-        const configured = source.roles.slotRoles[slot.id] ?? [];
+        const assigned = source.assigneeLists[uuidKey(slot.id)] ?? [];
+        const own = assigned.find(assignment => sameUuid(assignment.profileId, profileId));
+        const configured = source.roles.slotRoles[uuidKey(slot.id)] ?? [];
         const values = activitySlotValues(slot, configured.map(role => role.id), itemPermissions);
         const roles = configured.map(role => {
             // A role remains visible while its holder's identity and removable
@@ -1150,13 +1204,13 @@ export async function readActivityPlan(id: string, session: SessionLike) {
             const assignee = assigned.find(assignment => assignment.roles.includes(role.name));
             return {id: String(role.id), name: role.name, maxQty: role.maxQty, assignedQty: role.assignedQty,
                 assignmentId: visible && assignee ? String(assignee.id) : null,
-                assigneeName: visible && assignee ? assignee.name : null, self: assignee?.profileId === profileId};
+                assigneeName: visible && assignee ? assignee.name : null, self: sameUuid(assignee?.profileId, profileId)};
         });
         slots.push({id: slot.id, day: slot.day, position: slot.pos, title: slot.title, description: slot.description ?? null,
             startTime: slot.startTime ?? null, endTime: slot.endTime ?? null, maxAssignees: slot.maxAssignees ?? null,
             assignedCount: slot.assignedCount, selfAssigned: Boolean(own), selfRoles: own?.roles ?? [], roles,
             assignees: visible ? assigned.map(assignment => ({assignmentId: String(assignment.id), name: assignment.name, roles: assignment.roles})) : [],
-            capabilities: activitySlotCapabilities(itemPermissions), editToken: comparisonToken('activity-slot', slot.id, session, values)});
+            capabilities: activitySlotCapabilities(itemPermissions), editToken: comparisonToken('activity-slot', uuidKey(slot.id), session, values)});
     }
     // Participant privacy is enforced by this new boundary; the shared
     // IMP-018 projection is neither serialized nor silently repaired here.
@@ -1177,7 +1231,7 @@ export async function readActivityPlan(id: string, session: SessionLike) {
     let currentEventUrl: string | null = null;
     if (plan.event) {
         const views = await evaluateEntities([{entityType: 'event', entityId: plan.event.id, ownerId: plan.event.ownerId, eventId: plan.event.id}], session);
-        currentEventUrl = getAuthorizedEventUrl(plan.event.id, views.get(`event:${plan.event.id}`)!)?.replace(/^\/event(?=\/|$)/u, '/event') ?? null;
+        currentEventUrl = getAuthorizedEventUrl(plan.event.id, views.get(entityPermissionKey('event', plan.event.id))!)?.replace(/^\/event(?=\/|$)/u, '/event') ?? null;
     }
     const metadata = activityMetadataProjection(plan, permissions);
     const data: components['schemas']['ActivityView'] = {
@@ -1189,12 +1243,12 @@ export async function readActivityPlan(id: string, session: SessionLike) {
         requirementProgress: source.requirementProgress ?? null, slots, weeks: projectActivityScheduleWeeks(plan.startDate, plan.endDate),
         allRoles: source.roles.allRoles.map(role => ({id: String(role.id), title: role.title, description: role.description ?? null})),
         textFields: source.textFields.map(field => ({id: field.id, title: field.title, text: field.text ?? '',
-            editToken: comparisonToken('activity-text', field.id, session, {text: field.text ?? '',
+            editToken: comparisonToken('activity-text', uuidKey(field.id), session, {text: field.text ?? '',
                 ...(permissions.has('MANAGE_REQUIREMENTS') ? {title: field.title} : {})}),
             capabilities: {edit: permissions.has('ACCESS_VIEW'), editTitle: permissions.has('MANAGE_REQUIREMENTS'), delete: permissions.has('MANAGE_REQUIREMENTS')}})),
         participants, counters: {participants: permissions.has('ACCESS_PARTICIPANTS') ? source.counters.participants : null,
             open: source.counters.open, empty: source.counters.empty},
-        orderToken: comparisonToken('activity-order', id, session, {order: slots.map(slot => ({slotId: slot.id, position: slot.position}))}),
+        orderToken: comparisonToken('activity-order', uuidKey(plan.id), session, {order: slots.map(slot => ({slotId: slot.id, position: slot.position}))}),
         capabilities: {editTitle: metadata.editableFields.includes('title'), editDescription: metadata.editableFields.includes('description'),
             editDates: metadata.editableFields.includes('startDate') || metadata.editableFields.includes('endDate'),
             addSlot: permissions.has('ITEM_ADD'), reorderSlots: permissions.has('ITEM_EDIT'),
@@ -1259,7 +1313,7 @@ export async function patchActivityMetadata(id: string, body: components['schema
     prepare?: ActivityCommandPreparation<components['schemas']['ActivityMetadata']>) {
     const patch = normalizeActivityProperties(body);
     const data = await saveActivityProperties(id, patch, undefined, {session, token, prepare}) as components['schemas']['ActivityMetadata'];
-    return {data, etag: comparisonToken('activity-meta', id, session, data.values)};
+    return {data, etag: comparisonToken('activity-meta', uuidKey(data.id), session, data.values)};
 }
 
 /** Settings compose shared metadata, event, lifecycle and access owners with their existing grants. */
@@ -1271,21 +1325,17 @@ export async function readActivitySettings(id: string, session: SessionLike): Pr
     const owns = isOwner(session, plan.ownerId);
     if (!owns && !metadata.editableFields.length && !permissions.any('EDIT_META', 'MANAGE_PERMISSIONS', 'DATA_DUPLICATE', 'DATA_EXPORT')) throw new ApiProblem('FORBIDDEN');
     const property = await getEntityPropertyPresentation('activity', plan, session);
-    const archive = (await getArchivePresentations([{type: 'activity', id}], session)).get(`activity:${id}`)!;
-    let access: components['schemas']['PackingAccess'] | null = null;
+    const reference = {type: 'activity' as const, id};
+    const archive = (await getArchivePresentations([reference], session)).get(archiveKey(reference))!;
+    let access: components['schemas']['EntityAccess'] | null = null;
     if (permissions.has('MANAGE_PERMISSIONS')) {
-        const admins = await adminService.listAdmins('activity', id);
-        access = {defaults: completeDefaults(await adminService.getDefaultPerms('activity', id)), ...permissionDefinitions(),
-            admins: admins.map(admin => ({profileId: admin.profileId, name: admin.profile.name, isGuest: Boolean(admin.profile.guestId),
-                mask: admin.perms, editToken: comparisonToken('activity-admin', `${id}:${admin.profileId}`, session, {mask: admin.perms})}))};
+        access = await readEntitySettingsAccess('activity', id, session);
     }
     // Parent disclosure follows its independent method grant, not child management.
-    const current = property.currentEvent;
-    const currentEvent = current ? {id: current.id, title: current.title ?? null, startDate: current.startDate ?? null,
-        endDate: current.endDate ?? null, url: current.url?.replace(/^\/event(?=\/|$)/u, '/event') ?? null} : null;
+    const currentEvent = projectEntitySettingsEvent(property.currentEvent);
     return {id, title: plan.title, ...activityHeaderProjection(plan),
         editableFields: metadata.editableFields,
-        settingsToken: comparisonToken('activity-settings', id, session, {eventId: plan.eventId ?? null, header: plan.headerImg ?? null,
+        settingsToken: comparisonToken('activity-settings', uuidKey(plan.id), session, {eventId: plan.eventId ?? null, header: plan.headerImg ?? null,
             ...(access ? {...activityDefaultValues(access.defaults), newAdmin: null} : {})}),
         capabilities: {editHeader: permissions.has(entityMethodPermission('editHeader')), linkEvent: permissions.has(entityMethodPermission('changeEvent')),
             managePermissions: permissions.has('MANAGE_PERMISSIONS'), duplicate: Boolean(session.auth?.user && permissions.has('DATA_DUPLICATE')),
@@ -1311,7 +1361,7 @@ export async function changeActivityEvent(id: string, body: components['schemas'
      * and meaningful-change checks, while retaining its parent/root locks. */
     async function reviewContext(manager: EntityManager): Promise<void> {
         const current = await requireActivityPlan(id, manager);
-        requireFieldComparison(token, comparisonToken('activity-settings', id, session, {eventId: current.eventId ?? null}), ['eventId']);
+        requireFieldComparison(token, comparisonToken('activity-settings', uuidKey(current.id), session, {eventId: current.eventId ?? null}), ['eventId']);
     }
     // Completion is prepared in that owner's transaction and retains existing page-admission semantics.
     async function prepareCompletion(manager: EntityManager, outcome: import('../../types/EntityPropertyTypes').EntityMutationOutcome) {
@@ -1356,7 +1406,7 @@ export async function searchActivityProfiles(id: string, query: string, session:
 /** Method-only header baseline supplies no stored path or protected page fields. */
 export async function readActivityHeaderBaseline(id: string, session: SessionLike): Promise<components['schemas']['ActivityHeaderBaseline']> {
     const {plan} = await requireActivityMethod(id, entityMethodPermission('editHeader'), session);
-    return {editToken: comparisonToken('activity-settings', id, session, {header: plan.headerImg ?? null})};
+    return {editToken: comparisonToken('activity-settings', uuidKey(plan.id), session, {header: plan.headerImg ?? null})};
 }
 
 /** Header bytes retain full detail admission independently of upload authority. */
@@ -1373,7 +1423,7 @@ export async function setActivityHeader(id: string, file: Express.Multer.File | 
     checkNewImage(file);
     // Header-only callers compare the same field as the full settings dialog;
     // no stored path or unrelated access values leave either baseline.
-    requireFieldComparison(token, comparisonToken('activity-settings', id, session, {header: plan.headerImg ?? null}), ['header']);
+    requireFieldComparison(token, comparisonToken('activity-settings', uuidKey(plan.id), session, {header: plan.headerImg ?? null}), ['header']);
     if (file) await updateHeaderImg(plan, file);
     else await deleteHeaderImg(plan);
 }
@@ -1406,10 +1456,10 @@ export async function deleteActivityPlan(id: string, session: SessionLike): Prom
 export async function readActivitySlotBaseline(id: string, slotId: string, session: SessionLike): Promise<components['schemas']['ActivitySlotBaseline']> {
     const {slot, permissions} = await requireActivitySlot(id, slotId, session);
     const configured = await activityService.getActivitySlotRoles(id);
-    const values = activitySlotValues(slot, (configured[slotId] ?? []).map(role => role.id), permissions);
+    const values = activitySlotValues(slot, (configured[uuidKey(slot.id)] ?? []).map(role => role.id), permissions);
     if (!Object.keys(values).length) throw new ApiProblem('FORBIDDEN');
     return {values, editableFields: Object.keys(values) as components['schemas']['ActivitySlotBaseline']['editableFields'],
-        editToken: comparisonToken('activity-slot', slotId, session, values)};
+        editToken: comparisonToken('activity-slot', uuidKey(slot.id), session, values)};
 }
 
 /** Slot creation delegates range/time/role validation and saved ordering to Quick Add. */
@@ -1426,14 +1476,14 @@ export async function patchActivitySlot(id: string, slotId: string, body: compon
     /** Recheck each submitted field against the locked current item rather than
      * treating the initial editor's permission bundle as mutation authority. */
     async function admitSlot(manager: EntityManager, currentPlan: ActivityPlan, currentSlot: ActivitySlot): Promise<void> {
-        if (currentPlan.id !== id) throw new ApiProblem('NOT_FOUND');
+        if (!sameUuid(currentPlan.id, id)) throw new ApiProblem('NOT_FOUND');
         const currentPermissions = await activityItemPermissions(currentPlan, currentSlot, session, manager);
         const configured = await activityService.getActivitySlotRoles(id);
-        const values = activitySlotValues(currentSlot, (configured[slotId] ?? []).map(role => role.id), currentPermissions);
+        const values = activitySlotValues(currentSlot, (configured[uuidKey(currentSlot.id)] ?? []).map(role => role.id), currentPermissions);
         for (const field of Object.keys(body)) {
             if (!Object.hasOwn(values, field)) throw new ApiProblem('FORBIDDEN');
         }
-        requireFieldComparison(token, comparisonToken('activity-slot', slotId, session, values), Object.keys(body));
+        requireFieldComparison(token, comparisonToken('activity-slot', uuidKey(currentSlot.id), session, values), Object.keys(body));
     }
     // The attribute operation requires its meta grant even for a mixed editor;
     // description-only saves use their separate shared method and fallback.
@@ -1455,20 +1505,22 @@ export async function removeActivitySlot(id: string, slotId: string, session: Se
 
 /** Ordering baseline discloses only slot identifiers/positions to current reorder callers. */
 export async function readActivityOrderBaseline(id: string, session: SessionLike): Promise<components['schemas']['ActivityOrderBaseline']> {
-    await requireActivityMethod(id, 'ITEM_EDIT', session);
+    const {plan} = await requireActivityMethod(id, 'ITEM_EDIT', session);
     const order = (await activityService.getActivitySlotsFlat(id)).map(slot => ({slotId: slot.id, position: slot.pos}));
-    return {order, editToken: comparisonToken('activity-order', id, session, {order})};
+    return {order, editToken: comparisonToken('activity-order', uuidKey(plan.id), session, {order})};
 }
 
 /** Direct ordering persists only submitted positions and leaves saved assignments intact. */
 export async function setActivityOrder(id: string, body: components['schemas']['ActivityOrderInput'], session: SessionLike, token?: string): Promise<void> {
-    await requireActivityMethod(id, 'ITEM_EDIT', session);
+    const {plan} = await requireActivityMethod(id, 'ITEM_EDIT', session);
     const current = await activityService.getActivitySlotsFlat(id);
     const order = current.map(slot => ({slotId: slot.id, position: slot.pos}));
-    requireFieldComparison(token, comparisonToken('activity-order', id, session, {order}), ['order']);
-    const slots = new Set(current.map(slot => slot.id));
-    if (body.order.some(row => !slots.has(row.slotId))) throw new ApiProblem('NOT_FOUND');
-    await reorderSlots(id, body.order.map(row => ({slotId: row.slotId, pos: row.position})));
+    requireFieldComparison(token, comparisonToken('activity-order', uuidKey(plan.id), session, {order}), ['order']);
+    const slots = resolveUuidReferences(body.order.map(row => row.slotId), current, slot => slot.id);
+    if (!slots) throw new ApiProblem('NOT_FOUND');
+    // Activity ordering is partial and permits repeated references; resolve identity
+    // without changing submitted positions or importing another list's uniqueness policy.
+    await reorderSlots(id, body.order.map((row, index) => ({slotId: slots[index].id, pos: row.position})));
 }
 
 /** Warning previews reuse the existing private sibling projection and opaque exact-overlap acknowledgement. */
@@ -1490,7 +1542,7 @@ export async function setActivityAssignment(id: string, slotId: string, body: co
     /** The new transport repeats its own context/method admission inside the
      * shared assignment owner's existing locks, without another write owner. */
     async function admitAssignment(manager: EntityManager, currentPlan: ActivityPlan): Promise<void> {
-        if (currentPlan.id !== id) throw new ApiProblem('NOT_FOUND');
+        if (!sameUuid(currentPlan.id, id)) throw new ApiProblem('NOT_FOUND');
         const currentPermissions = await activityPermissions(currentPlan, session, manager);
         if (!currentPermissions.has('ACCESS_VIEW')) throw new ApiProblem('FORBIDDEN');
         if (currentPlan.bindingDeadline && currentPlan.bindingDeadline.getTime() <= Date.now()
@@ -1503,7 +1555,7 @@ export async function setActivityAssignment(id: string, slotId: string, body: co
 /** Organizer removal uses the existing assignment owner and its per-item grant. */
 export async function removeActivityAssignment(id: string, assignmentId: string, session: SessionLike): Promise<void> {
     const assignment = await activityService.getActivitySlotAssignmentById(Number(assignmentId));
-    if (!assignment || assignment.entityId !== id) throw new ApiProblem('NOT_FOUND');
+    if (!assignment || !sameUuid(assignment.entityId, id)) throw new ApiProblem('NOT_FOUND');
     const {permissions} = await requireActivitySlot(id, assignment.item.id, session);
     if (!permissions.allow('MANAGE_ASSIGNMENTS')) throw new ApiProblem('FORBIDDEN');
     await deleteAssignment(Number(assignmentId));
@@ -1534,11 +1586,11 @@ export async function patchActivityTextField(id: string, fieldId: string, body: 
     // Text/title baselines are private to their existing method grants; shared
     // persistence remains the unchanged shared controller operation below.
     const field = await activityService.getActivityPlanTextFieldById(fieldId);
-    if (!field || field.entityId !== id) throw new ApiProblem('NOT_FOUND');
+    if (!field || !sameUuid(field.entityId, id)) throw new ApiProblem('NOT_FOUND');
     const permissions = await activityPermissions(plan, session);
     if (body.title !== undefined && !permissions.has('MANAGE_REQUIREMENTS')) throw new ApiProblem('FORBIDDEN');
     const values = {text: field.text ?? '', ...(permissions.has('MANAGE_REQUIREMENTS') ? {title: field.title} : {})};
-    requireFieldComparison(token, comparisonToken('activity-text', fieldId, session, values), Object.keys(body));
+    requireFieldComparison(token, comparisonToken('activity-text', uuidKey(field.id), session, values), Object.keys(body));
     await updateTextField(id, fieldId, body, await activityPermissionBundle(plan, session));
 }
 
@@ -1676,4 +1728,406 @@ export async function readActivityRecommendationJob(id: string, jobId: string, s
     await requireActivityMethod(id, 'MANAGE_ASSIGNMENTS', session);
     const result = await getAutoRecommendationJob(id, jobId);
     return {job: activityRecommendationJob(result.job)};
+}
+
+/** Render the existing UTC print schedule from controller-selected data without reading or mutating persistence. */
+function presentActivitySchedule(plan: ActivityPlan,
+    slotsByDate: Awaited<ReturnType<typeof activityService.getActivitySlots>>, assigneeLists: SlotAssignmentMap,
+    slotRoles: Awaited<ReturnType<typeof activityService.getActivitySlotRoles>>,
+    textFields: Awaited<ReturnType<typeof activityService.getActivityPlanTextFields>>, participantCount: number) {
+    // Stored plan dates already passed feature admission. Reuse the same civil
+    // Monday-week enumeration as creation and versioned schedule presentation.
+    const dayMap = new Map<string, ActivityPrintDay>();
+    const weeks: ActivityPrintWeek[] = [];
+    for (const week of civilDateWeeks(plan.startDate, plan.endDate)) {
+        const days: ActivityPrintDay[] = [];
+        for (const dayKey of week.days) {
+            const weekday = (new Date(dayKey + 'T00:00:00Z').getUTCDay() + 6) % 7;
+            const slots = (slotsByDate[dayKey] || []).map((slot) => ({
+                ...slot,
+                assignees: assigneeLists[uuidKey(slot.id)] || [],
+                roles: slotRoles[uuidKey(slot.id)] || [],
+            }));
+            const day = {date: dayKey, dayIndex: weekday, slots};
+            dayMap.set(dayKey, day);
+            days.push(day);
+        }
+        weeks.push({start: week.start, days});
+    }
+
+    // Occupancy still comes from the displayed slots; only the participant
+    // counter uses UUID deduplication, independently of display-name spelling.
+    const slotList = Array.from(dayMap.values()).flatMap((d) => d.slots);
+    let empty = 0, open = 0;
+
+    for (const slot of slotList) {
+        if (slot.assignedCount === 0) empty++;
+        if (slot.assignedCount < (slot.maxAssignees ?? 0)) open++;
+    }
+
+    return {
+        plan,
+        event: plan.event,
+        days: Array.from(dayMap.values()),
+        weeks,
+        textFields,
+        counters: {
+            participants: participantCount,
+            slots: slotList.length,
+            open,
+            empty,
+        },
+        generatedAt: new Date().toISOString(),
+    };
+}
+
+/** Decode the existing requirement form into its optional settings and replacement row sets. */
+function preprocessRequirementUpdate(body: any) {
+    // Keep row validation separate from plan settings; domain eligibility is checked under the later plan lock.
+    const roleRequirementSchema = Joi.object({
+        roleId: Joi.number().integer().positive().required(),
+        requiredShifts: Joi.number().integer().min(0).required(),
+    });
+
+    const stayRequirementSchema = Joi.object({
+        stayDays: Joi.number().integer().positive().required(),
+        requiredShifts: Joi.number().integer().min(0).required(),
+    });
+
+    const overrideSchema = Joi.object({
+        id: Joi.number().integer().positive().optional(),
+        roleId: Joi.number().integer().positive().allow(null),
+        profileId: Joi.string().uuid().required(),
+        requiredShifts: Joi.number().integer().min(0).required(),
+    });
+
+    const schema = Joi.object({
+        assignmentMode: Joi.string().valid("FREE", "REQUIRED").optional(),
+        generalRequiredShifts: Joi.number().integer().min(0).allow(null).optional(),
+        roundingMode: Joi.string().valid("CEIL", "ROUND", "FLOOR").allow(null).optional(),
+        bindingDeadline: Joi.alternatives()
+            .try(Joi.date().iso(), Joi.string().allow(null, ""))
+            .optional()
+            .custom((value, helpers) => {
+                // The legacy form uses a blank deadline as an explicit clear operation.
+                if (typeof value === "string" && value.trim() === "") {
+                    return null;
+                }
+                return value;
+            }),
+        allowOverfillAfterFull: Joi.boolean().optional(),
+        allowExternalAssignees: Joi.boolean().optional(),
+        allowArrivalDayEvening: Joi.boolean().optional(),
+        allowDepartureDayMorning: Joi.boolean().optional(),
+        roleRequirements: Joi.array().items(roleRequirementSchema).default([]),
+        stayRequirements: Joi.array().items(stayRequirementSchema).unique('stayDays').default([]),
+        overrides: Joi.array().items(overrideSchema).default([]),
+    });
+
+    // Preserve collected form diagnostics and the original optional-field/array-default semantics.
+    const {error, value} = schema.validate(body, {abortEarly: false, allowUnknown: true});
+    if (error) {
+        const msg = error.details.map((d: any) => d.message).join(', ');
+        throw new APIError(msg, body, 400);
+    }
+
+    return value as {
+        assignmentMode?: 'FREE' | 'REQUIRED';
+        generalRequiredShifts?: number | null;
+        roundingMode?: 'CEIL' | 'ROUND' | 'FLOOR' | null;
+        bindingDeadline?: string | Date | null;
+        allowOverfillAfterFull?: boolean;
+        allowExternalAssignees?: boolean;
+        allowArrivalDayEvening?: boolean;
+        allowDepartureDayMorning?: boolean;
+        roleRequirements: { roleId: number; requiredShifts: number }[];
+        stayRequirements: { stayDays: number; requiredShifts: number }[];
+        overrides: any[];
+    };
+}
+
+/** Analyze the existing saved requirements and return their shared presentation.
+ * The versioned projection may retain missing-name origin for reactive client
+ * localization; direct callers keep the exact existing response shape. */
+export async function getRequirements(planId: string, includeNameProvenance = false) {
+    // Reuse the admitted plan's existing configuration, participants and slots.
+    const [plan, requirementConfig, assignments, slots, allRoles, slotRoles] = await Promise.all([
+        activityService.getActivityPlanById(planId),
+        requireRequirementConfiguration(planId),
+        activityService.getParticipantAssignmentsWithSlots(planId),
+        activityService.getActivitySlotsFlat(planId),
+        activityService.getAllRoles(planId),
+        activityService.getActivitySlotRoles(planId),
+    ]);
+
+    if (!plan) {
+        throw new APIError('Activity plan not found', {planId}, 404);
+    }
+
+    const eventParticipants = plan.event ? await eventService.getEventParticipantRows(plan.event.id).then(projectEventParticipants) : [];
+
+    const attendance = await buildParticipantAttendanceMap(
+        plan,
+        requirementConfig.overrides,
+        assignments,
+        [],
+        eventParticipants,
+    );
+
+    const slotsWithRoles = projectRequirementSlots(slots, slotRoles);
+    const assignedShiftCounts = Object.fromEntries(
+        Object.entries(assignments).map(([participantKey, participantAssignments]) => [participantKey, participantAssignments.length]),
+    );
+    // The pure engine remains the sole owner of requirement arithmetic. Optional
+    // label provenance below changes neither its inputs nor its saved results.
+    const analysis = calculateRequirementAnalysis({
+        plan,
+        participants: Object.values(attendance),
+        roleRequirements: requirementConfig.roleRequirements,
+        overrides: requirementConfig.overrides,
+        stayRequirements: requirementConfig.stayRequirements,
+        slots: slotsWithRoles,
+        assignedShiftCounts,
+    });
+    const roleTitles = new Map(allRoles.map((role) => [Number(role.id), role.title]));
+    const participants = analysis.participants.map((participant) => ({
+        ...participant,
+        roles: (participant.roleIds || [])
+            .map((roleId) => roleTitles.get(roleId))
+            .filter((title): title is string => Boolean(title && title !== 'default')),
+        assignmentMode: requirementConfig.plan.assignmentMode,
+    }));
+
+    const overrideTargets = eventParticipants.map((participant) => ({
+        key: toParticipantKey({...participant, profileId: participant.profileId ? uuidKey(participant.profileId) : participant.profileId}),
+        profileId: participant.profileId ? uuidKey(participant.profileId) : null,
+        label: toParticipantName(participant),
+        ...(includeNameProvenance ? {nameIsFallback: !participant.name} : {}),
+        arrivalDate: participant.arrivalDate ?? null,
+        departureDate: participant.departureDate ?? null,
+    }));
+
+    return {
+        ...requirementConfig,
+        participants,
+        capacitySummary: analysis.capacitySummary,
+        calculationContext: {
+            participants: Object.values(attendance),
+            assignedShiftCounts,
+            slots: slotsWithRoles,
+        },
+        overrideTargets,
+    };
+}
+
+/** Calculate the existing requirement baseline from saved configuration, attendance and slot capacity. */
+export async function calculateBaselineRequirement(planId: string) {
+    // Preserve the existing independent reads; this analysis does not start a write transaction.
+    const [plan, requirementConfig, slots, assignments, slotRoles] = await Promise.all([
+        activityService.getActivityPlanById(planId),
+        requireRequirementConfiguration(planId),
+        activityService.getActivitySlotsFlat(planId),
+        activityService.getParticipantAssignmentsWithSlots(planId),
+        activityService.getActivitySlotRoles(planId),
+    ]);
+
+    if (!plan) {
+        throw new APIError('Activity plan not found', {planId}, 404);
+    }
+
+    // Registered and already assigned identities use the same attendance policy as requirement analysis.
+    const eventParticipants = plan.event ? await eventService.getEventParticipantRows(plan.event.id).then(projectEventParticipants) : [];
+    const attendance = await buildParticipantAttendanceMap(
+        plan,
+        requirementConfig.overrides,
+        assignments,
+        [],
+        eventParticipants,
+    );
+
+    const slotsWithRoles = projectRequirementSlots(slots, slotRoles);
+    // Share structural slot inputs while retaining the baseline algorithm's distinct arithmetic.
+    const baseline = calculateBaselineRequirementForPlan({
+        plan,
+        slots: slotsWithRoles,
+        participants: Object.values(attendance),
+        roleRequirements: requirementConfig.roleRequirements,
+        overrides: requirementConfig.overrides,
+    });
+
+    return baseline;
+}
+
+/**
+ * A settings form may no longer list a saved profile after the plan moves to another event.
+ * Preserve those unchanged rows, including omitted rows, inside the same locked transaction.
+ * Versioned editors can explicitly remove an admitted saved ID without deleting unseen rows.
+ * Their existence never authorizes a new target or a changed override for a nonparticipant.
+ */
+async function mergeRequirementOverrides(
+    manager: EntityManager,
+    plan: ActivityPlan,
+    submitted: RequirementOverrideInput[],
+    removedOverrideIds: readonly string[],
+): Promise<RequirementOverrideInput[]> {
+    const {overrides: saved} = await requireRequirementConfiguration(plan.id, manager);
+    const savedById = new Map(saved.map((override) => [override.id, override]));
+    // Removal is deliberate and plan-scoped. Omission still means retention for
+    // former participants; it must never delete a concurrent unseen override.
+    const removedIds = new Set<number>();
+    for (const id of removedOverrideIds) {
+        const numericId = Number(id);
+        if (!Number.isSafeInteger(numericId) || String(numericId) !== id || !savedById.has(numericId) || removedIds.has(numericId)) {
+            throw new APIError('Removed override must identify one saved override belonging to this activity plan', {}, 400, {cause: 'ACTIVITY_OVERRIDE_INVALID'});
+        }
+        removedIds.add(numericId);
+    }
+    const registered = indexByUuid(plan.eventId ? await activityService.getRegisteredProfileIds(manager, plan.eventId) : [], id => id);
+    const result: RequirementOverrideInput[] = [];
+    const submittedIds = new Set<number>();
+    const targetKeys = new Set<string>();
+    for (const input of submitted) {
+        const override = {...input, roleId: input.roleId ?? null};
+        const previous = override.id == null ? undefined : savedById.get(override.id);
+        if (override.id != null && (!previous || submittedIds.has(override.id) || removedIds.has(override.id))) {
+            throw new APIError('Override does not belong to this activity plan or is duplicated', {}, 400, {cause: 'ACTIVITY_OVERRIDE_INVALID'});
+        }
+        const unchanged = previous && sameUuid(previous.profileId, override.profileId)
+            && (previous.roleId ?? null) === (override.roleId ?? null)
+            && previous.requiredShifts === override.requiredShifts;
+        if (!unchanged && (!override.profileId || !registered.has(uuidKey(override.profileId)))) {
+            throw new APIError('Overrides must target participants registered for this event', {}, 400, {cause: 'ACTIVITY_OVERRIDE_PARTICIPANT_REQUIRED'});
+        }
+        override.profileId = unchanged ? previous.profileId : registered.get(uuidKey(override.profileId!))!;
+        const key = `${uuidKey(override.profileId)}:${override.roleId ?? ''}`;
+        if (targetKeys.has(key)) throw new APIError('An override target may only appear once', {}, 400, {cause: 'ACTIVITY_OVERRIDE_DUPLICATE'});
+        targetKeys.add(key);
+        if (override.id != null) submittedIds.add(override.id);
+        result.push(override);
+    }
+    // Omission still removes a current participant's override, as in the existing editor.
+    // A former participant is absent from that editor's choices, so omission must retain
+    // the original row instead of turning an unrelated settings save into data deletion.
+    for (const previous of saved) {
+        if (registered.has(uuidKey(previous.profileId)) || submittedIds.has(previous.id) || removedIds.has(previous.id)) continue;
+        result.push({
+            id: previous.id,
+            profileId: previous.profileId,
+            roleId: previous.roleId ?? null,
+            requiredShifts: previous.requiredShifts,
+        });
+    }
+    return result;
+}
+
+/** Save one coherent requirements configuration under the existing plan lock.
+ * Explicit versioned removal IDs supplement the omission-retention rule;
+ * permissions, current membership checks and persistence remain with their owners. */
+export async function updateRequirements(planId: string, body: any, removedOverrideIds: readonly string[] = []) {
+    const {roleRequirements, stayRequirements, overrides, ...planSettings} = preprocessRequirementUpdate(body);
+    const expectedPlan = await activityService.getActivityPlanById(planId);
+
+    /** Recheck relationship, roles and requirement completeness on the locked
+     * plan, retaining unchanged former-participant overrides before replacing
+     * the approved configuration through the same transaction manager. */
+    async function saveRequirements(manager: EntityManager): Promise<void> {
+        // An unlocked editor baseline cannot authorize saving after a relink.
+        const plan = await requireRecommendationContext(manager, planId);
+        if (expectedPlan && (expectedPlan.eventId ?? null) !== (plan.eventId ?? null) && !sameUuid(expectedPlan.eventId, plan.eventId)) {
+            throw new APIError('Activity plan event changed; reload the requirements', {}, 409, {cause: 'ACTIVITY_CONTEXT_CHANGED'});
+        }
+
+        if (!plan.eventId) {
+            throw new APIError('Event is required to configure participant overrides', {planId}, 400, {cause: 'ACTIVITY_EVENT_REQUIRED'});
+        }
+
+        // Membership and saved-override decisions use this same locked transaction.
+        // Unchanged targets from a former event are retained; new/changed overrides still
+        // require current registration. Checking only the posted rows here would reject a
+        // harmless settings save after relinking and encourage the browser to drop history.
+
+        // Both general role requirements and individual overrides must name
+        // roles owned by this current plan, regardless of submitted ID spelling.
+        const allowedRoleIds = new Set((await activityService.getAllRoles(planId, manager)).map((role) => role.id));
+        const invalidRoleRequirement = roleRequirements.find((requirement) => !allowedRoleIds.has(requirement.roleId));
+        const invalidOverrideRole = overrides.find(
+            (override) => override.roleId != null && !allowedRoleIds.has(Number(override.roleId)),
+        );
+        if (invalidRoleRequirement || invalidOverrideRole) {
+            throw new APIError(
+                'Requirement roles must belong to this activity plan',
+                invalidRoleRequirement ?? invalidOverrideRole,
+                400,
+                {cause: 'ACTIVITY_REQUIREMENT_ROLE_INVALID'},
+            );
+        }
+
+        // REQUIRED mode needs one saved row for every inclusive stay duration;
+        // validate the complete table before settings or overrides can be written.
+        const planDays = countInclusiveDays(plan.startDate, plan.endDate);
+        const invalidStayRequirement = stayRequirements.find((requirement) => requirement.stayDays > planDays);
+        if (invalidStayRequirement) {
+            throw new APIError('Stay duration cannot exceed the activity plan duration', invalidStayRequirement, 400, {cause: 'ACTIVITY_STAY_DURATION_INVALID'});
+        }
+        const targetAssignmentMode = planSettings.assignmentMode ?? plan.assignmentMode;
+        const savedStayDays = new Set(stayRequirements.map((requirement) => requirement.stayDays));
+        if (
+            targetAssignmentMode === "REQUIRED"
+            && (stayRequirements.length !== planDays
+                || Array.from({length: planDays}, (_, index) => index + 1).some((day) => !savedStayDays.has(day)))
+        ) {
+            throw new APIError(
+                `Required mode needs exactly one saved requirement for every stay duration from 1 to ${planDays} days`,
+                {stayRequirements, planDays},
+                400,
+                {cause: 'ACTIVITY_STAY_REQUIREMENTS_INCOMPLETE'},
+            );
+        }
+
+        // Convert bindingDeadline string to Date if present
+        const normalizedSettings: Partial<Pick<ActivityPlan, "assignmentMode" | "generalRequiredShifts" | "roundingMode" | "bindingDeadline" | "allowOverfillAfterFull" | "allowExternalAssignees" | "allowArrivalDayEvening" | "allowDepartureDayMorning">> = {
+            assignmentMode: planSettings.assignmentMode,
+            generalRequiredShifts: planSettings.generalRequiredShifts,
+            roundingMode: planSettings.roundingMode,
+            allowOverfillAfterFull: planSettings.allowOverfillAfterFull,
+            allowExternalAssignees: planSettings.allowExternalAssignees,
+            allowArrivalDayEvening: planSettings.allowArrivalDayEvening,
+            allowDepartureDayMorning: planSettings.allowDepartureDayMorning,
+        };
+
+        if (planSettings.bindingDeadline !== undefined) {
+            if (planSettings.bindingDeadline === null) {
+                normalizedSettings.bindingDeadline = null;
+            } else if (typeof planSettings.bindingDeadline === 'string') {
+                normalizedSettings.bindingDeadline = new Date(planSettings.bindingDeadline);
+            } else {
+                normalizedSettings.bindingDeadline = planSettings.bindingDeadline;
+            }
+        }
+
+        // Merge explicit removals with retained history only after all shared
+        // configuration checks pass, then persist the coherent replacement once.
+        const retainedOverrides = await mergeRequirementOverrides(manager, plan, overrides, removedOverrideIds);
+        await requirementService.replaceRequirements(planId, roleRequirements, retainedOverrides, normalizedSettings, stayRequirements, manager);
+    }
+    await activityService.withActivityTransaction(saveRequirements);
+    return 'Requirements updated';
+}
+
+/** Project stored slot/role inputs once for analysis and baseline calculations, preserving their distinct engines. */
+function projectRequirementSlots(slots: ActivitySlot[],
+    slotRoles: Awaited<ReturnType<typeof activityService.getActivitySlotRoles>>) {
+    // Normalize role identity only; keep capacity and assignment quantities unchanged.
+    return slots.map((slot) => ({
+        id: uuidKey(slot.id),
+        day: slot.day,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        maxAssignees: slot.maxAssignees,
+        roles: (slotRoles[uuidKey(slot.id)] ?? []).map((role) => ({
+            roleId: Number(role.id),
+            maxQty: role.maxQty,
+            assignedQty: role.assignedQty,
+        })),
+    }));
 }

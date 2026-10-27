@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {DOMWrapper, flushPromises} from '@vue/test-utils';
+import {DOMWrapper} from '@vue/test-utils';
 import type {components} from '../../src/types/api/v1';
 import FinanceCalculationReview from '../../src/frontend/features/finance/FinanceCalculationReview.vue';
 import FinancePoolOutputs from '../../src/frontend/features/finance/FinancePoolOutputs.vue';
 import {frontendEventId as eventId} from '../factories/frontendEventFactory';
-import {frontendEventButton as button, frontendEventJson as json, mountFrontendEvent} from '../keywords/frontendEventKeywords';
+import {flushFrontendPromises as flushPromises, frontendEventButton as button, frontendEventJson as json, mountFrontendEvent} from '../keywords/frontendUiKeywords';
 
 const poolId = '22222222-2222-4222-8222-222222222222';
 const pool: components['schemas']['FinancePool'] = {id: poolId, name: 'Reviewed pool', description: '', status: 'OPEN',

@@ -1,6 +1,22 @@
 import {useFrontend} from '../app/context';
+import type {Ref} from 'vue';
 import type {FrontendListActionItem, FrontendListActionSource, FrontendListPendingControl} from '../../types/FrontendListTypes';
 import type {FrontendPlainMessageKey, FrontendRequestScope} from '../../types/FrontendUiTypes';
+
+/** Keep only this gesture's initiating control through its existing operation.
+ * Retirement and newer gestures may replace the selection; an older completion
+ * must not clear them. The command retains dispatch, authority and outcome ownership. */
+export async function presentAction<Selection, Result>(selection: Ref<Selection | null>, intent: Selection,
+    operation: () => Promise<Result>): Promise<Result> {
+    selection.value = intent;
+    // Normal refs may proxy an object; compare the actual assigned ref value.
+    const initiator = selection.value;
+    try {
+        return await operation();
+    } finally {
+        if (selection.value === initiator) selection.value = null;
+    }
+}
 
 /**
  * Restore the shared list membership, removal and Quick Add journeys. Features
@@ -19,18 +35,14 @@ export function useListActions(source: FrontendListActionSource) {
     async function perform(control: FrontendListPendingControl,
         operation: (scope: FrontendRequestScope) => Promise<unknown>, success: () => FrontendPlainMessageKey,
         reviewUnknown = false, confirmed?: () => void): Promise<void> {
-        source.pendingControl.value = control;
-        // Vue may proxy the assigned object. Retain the actual Ref identity so
-        // this settlement cannot clear an initiating control owned by another action.
-        const initiator = source.pendingControl.value;
-        try {
+        /** Complete the confirmed draft reset before releasing the initiating control. */
+        async function submitCommand(): Promise<void> {
             const result = await source.command.run(operation, true, reviewUnknown, {success: success()});
             // useCommand returns a confirmed result even after a failed follow-up
             // read. Rejection, uncertain delivery and actor retirement return none.
             if (result) confirmed?.();
-        } finally {
-            if (source.pendingControl.value === initiator) source.pendingControl.value = null;
         }
+        await presentAction(source.pendingControl, control, submitCommand);
     }
 
     /** Submit desired self membership once; the existing server owns capacity and identity. */

@@ -14,7 +14,8 @@ import * as packing from '../../src/backend/controller/packingController';
 import {packingFlow} from '../../src/backend/routes/packingFlow';
 import {readOverview, setOverviewVisibility} from '../../src/backend/modules/overview/api';
 import packingController from '../../src/backend/controller/packingController';
-import {archiveEntity, changeEntityEvent, getEntityViewAdmission, restoreEntity} from '../../src/backend/controller/entityAdminController';
+import {changeEntityEvent, getEntityViewAdmission} from '../../src/backend/modules/event/linkage';
+import {archiveEntity, restoreEntity} from '../../src/backend/modules/entityArchival';
 
 import {randomUUID} from 'node:crypto';
 import {QueryFailedError, type EntityManager} from 'typeorm';
@@ -63,7 +64,7 @@ async function expectPackingReadOrder(id: string, stage: string) {
     const order = await packing.readPackingItemOrderBaseline(id, session);
     expect(contractValidator('PackingListView')(versioned)).toBe(true);
     expect(contractValidator('PackingDuplicate')(duplicate)).toBe(true);
-    expect(contractValidator('PackingOrderEditBaseline')(order)).toBe(true);
+    expect(contractValidator('ListOrderBaseline')(order)).toBe(true);
     expect(versioned.items.map(item => item.id), `${stage}: versioned detail`).toEqual(nativeIds);
     expect(duplicate.items.map(item => item.title), `${stage}: versioned duplicate`).toEqual(nativeTitles);
     expect(order.items.map(item => item.id), `${stage}: versioned order baseline`).toEqual(nativeIds);
@@ -130,7 +131,7 @@ describe('complete versioned packing management', () => {
             expect(entry.selectedEvent?.id ?? null).toBe(expectedId);
             expect(duplicate.selectedEvent?.id ?? null).toBe(expectedId);
             expect(duplicate.eventId).toBeNull();
-            expect(contractValidator('PackingCreateEntry')(entry)).toBe(true);
+            expect(contractValidator('EntityCreationEntry')(entry)).toBe(true);
             expect(contractValidator('PackingDuplicate')(duplicate)).toBe(true);
             expect(Object.hasOwn(entry, 'selectedEvent')).toBe(eventId !== undefined);
             expect(Object.hasOwn(duplicate, 'selectedEvent')).toBe(eventId !== undefined);
@@ -172,7 +173,7 @@ describe('complete versioned packing management', () => {
         expect(view.data.items.every(item => item.assignedCount === 0)).toBe(true);
         expect(await adminService.getDefaultPerms('packing', id)).toEqual(creation().defaultPermissions);
         expect(contractValidator('PackingListView')(view.data)).toBe(true);
-        expect(contractValidator('PackingSettings')(await packing.readPackingSettings(id, actor(owner)))).toBe(true);
+        expect(contractValidator('ListSettings')(await packing.readPackingSettings(id, actor(owner)))).toBe(true);
     });
 
     it('preserves independent child fields and the packing ITEM_EDIT_META exception', async () => {
@@ -661,7 +662,7 @@ describe('complete versioned packing management', () => {
         await expect(packing.readPackingList(id, session)).rejects.toMatchObject({status: 403});
         const order = await packing.readPackingItemOrderBaseline(id, session);
         expect(order).toEqual({items: [{id: first.id, position: 0}, {id: second.id, position: 1}], orderToken: expect.any(String)});
-        expect(contractValidator('PackingOrderEditBaseline')(order)).toBe(true);
+        expect(contractValidator('ListOrderBaseline')(order)).toBe(true);
         await expect(packing.readPackingItemOrderBaseline(foreign, session)).rejects.toMatchObject({status: 403});
         const currentOwnerBaseline = await packing.readPackingItemEditBaseline(id, first.id, actor(owner));
         await packing.updatePackingItem(id, first.id, {description: 'Independent of order'}, currentOwnerBaseline.editToken, actor(owner));
@@ -698,7 +699,7 @@ describe('complete versioned packing management', () => {
         const [id, item] = await createPackingListWithItem(session.profile!.id);
         const settings = await packing.readPackingSettings(id, session);
         expect(settings.capabilities).toMatchObject({remove: true, duplicate: identity === 'account'});
-        expect(contractValidator('PackingSettings')(settings)).toBe(true);
+        expect(contractValidator('ListSettings')(settings)).toBe(true);
         expect((await packing.readPackingList(id, session)).data.capabilities.manageSettings).toBe(true);
         if (identity === 'guest') {
             await expect(packing.createPackingList(creation(), undefined, session)).rejects.toMatchObject({status: 403});
@@ -780,7 +781,7 @@ describe('complete versioned packing management', () => {
         // ACCESS_VIEW. The reply describes the new association, not the old standalone one.
         const changed = await packing.changePackingEvent(id, {eventId, expectedEventId: null}, session, settings.settingsToken);
         expect(changed).toEqual({changed: true, canView: false});
-        expect(contractValidator('PackingEventChanged')(changed)).toBe(true);
+        expect(contractValidator('EntityEventChangeResult')(changed)).toBe(true);
         expect((await packingService.getPackingListById(id))?.eventId).toBe(eventId);
 
         // Same-target acknowledgement still precedes stale/absent comparison evidence.

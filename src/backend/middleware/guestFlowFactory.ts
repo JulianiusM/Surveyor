@@ -65,7 +65,10 @@ export function createGuestFlow<Type extends EntityType, Root extends EntityBase
      */
     async function readResourceEntry(id: string, view: 'detail' | 'guest' | 'admin', actor: SessionLike,
         regToken?: string): Promise<GuestFlowResourceEntry> {
-        return config.withRoot(id, async function readEntry(root, manager): Promise<GuestFlowResourceEntry> {
+        return config.withRoot(id, /** Project entry admission without exposing a
+         * missing root. Guest entry precedes linked-event policy; ordinary and
+         * administration views retain their independent feature checks. */
+        async function readEntry(root, manager): Promise<GuestFlowResourceEntry> {
             // Missing roots do not reveal an owner, title, settings or related rows.
             if (!root) return {entry: {kind: 'denied', status: 404, messageKey: `${config.entityType}.notFound`}, guest: null};
             const resourceId = config.detailAddress === 'stored' ? root.id : id;
@@ -120,7 +123,10 @@ export function createGuestFlowRouter<Type extends EntityType, Root extends Enti
     }));
 
     /** Render a controller-authorized copy without creating an entity or identity. */
-    router.get(`/:${config.parameter}/duplicate`, asyncHandler(async function renderDuplicate(request, response) {
+    router.get(`/:${config.parameter}/duplicate`, asyncHandler(/** Seed the document
+     * from the feature's duplication grant and error adapter, without applying
+     * account-only creation admission to this read. */
+    async function renderDuplicate(request, response) {
         const state = await bootstrap(request);
         try {
             // Duplication has its own controller grant; it never inherits detail
@@ -215,7 +221,10 @@ export function createGuestFlowApiRouter<Type extends EntityType, Root extends E
     }
 
     /** Preserve each controller's real image ownership and receipt/commit lifecycle. */
-    router.post('/', asyncHandler(async function createResource(request, response) {
+    router.post('/', asyncHandler(/** Admit creation before allocating uploads,
+     * validate the complete multipart contract, and retain each feature's image
+     * ownership and receipt stage through success or uncertain completion. */
+    async function createResource(request, response) {
         // Reject nonaccounts before multipart processing allocates a temporary file.
         const actor = await requireApiContext(request, response, true);
         config.requireCreation(actor);
@@ -274,7 +283,10 @@ export function createGuestFlowApiRouter<Type extends EntityType, Root extends E
     }));
 
     /** Delete through existing ownership/transaction operations and deliver their original receipt. */
-    router.delete(resourcePath, asyncHandler(async function deleteResource(request, response) {
+    router.delete(resourcePath, asyncHandler(/** Delegate permanent deletion after
+     * its own profile/input admission, preserving the feature-selected receipt
+     * preparation stage instead of treating archival as deletion authority. */
+    async function deleteResource(request, response) {
         // Desired lifecycle state and permanent deletion remain different operations.
         const actor = await requireApiContext(request, response, config.deletion.profile);
         validateOperationRequest(request, operations.remove.operation);
@@ -311,7 +323,10 @@ export function createGuestFlowGuestRouter<Type extends EntityType, Root extends
     }));
 
     /** Complete the same guest identity transaction for every configured feature. */
-    router.post(route, asyncHandler(async function registerGuest(request, response) {
+    router.post(route, asyncHandler(/** Validate old-context evidence before public
+     * title lookup, preserve the admitted destination/capability, and deliver the
+     * identity owner's committed session and preprepared SMTP outcome. */
+    async function registerGuest(request, response) {
         // Validate old-context evidence and the declared command before public title lookup.
         await requireApiContext(request, response);
         const operation = config.operations.registerGuest;

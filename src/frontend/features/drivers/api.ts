@@ -1,3 +1,4 @@
+import {createFeatureApiResolver} from '../../app/api';
 import type {components} from '../../../types/api/v1';
 import type {FrontendContext, FrontendEventPickerQuery, FrontendEventPickerSource, FrontendRead, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {FrontendApi} from '../../app/api';
@@ -336,19 +337,5 @@ function driversInputField(path: string): FrontendInputField | undefined {
     return undefined;
 }
 
-const owners = new WeakMap<FrontendApi, DriversApi>();
-
-/** Reuse one Drivers transport wrapper for this application/request's API owner.
- * Component-local translation bindings may create context wrappers, but they retain the
- * same transport. A WeakMap preserves that ownership without sharing actors across apps. */
-export function useDriversApi(context: FrontendContext): DriversApi {
-    let owner = owners.get(context.api);
-
-    // Construct lazily for this transport identity; component remounts reuse the wrapper
-    // while disposal releases it when the application-local API is no longer referenced.
-    if (!owner) {
-        owner = new DriversApi(context.api);
-        owners.set(context.api, owner);
-    }
-    return owner;
-}
+/** Reuse this feature adapter for its application-local transport. */
+export const useDriversApi = createFeatureApiResolver(DriversApi);

@@ -65,3 +65,31 @@ schemas:
       searchResults:
         type: array
         items: {$ref: '#/schemas/HelpSearchResult'}
+paths:
+  /help:
+    get:
+      operationId: getHelpPage
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Read fixed-source help or search its contents
+      security: []
+      parameters:
+        - $ref: "./openapi.yaml#/components/parameters/Context"
+        - $ref: "./openapi.yaml#/components/parameters/Locale"
+        - $ref: "./openapi.yaml#/components/parameters/HelpDocument"
+        - $ref: "./openapi.yaml#/components/parameters/HelpQuery"
+      responses:
+        "200":
+          description: Current authorized representation
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+            Content-Language:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "./openapi.yaml#/components/schemas/HelpPageData"
+        default:
+          $ref: "./openapi.yaml#/components/responses/Problem"

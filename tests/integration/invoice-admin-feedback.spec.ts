@@ -7,6 +7,7 @@ import * as invoiceService from '../../src/backend/modules/database/services/Eve
 import * as eventService from '../../src/backend/modules/database/services/EventService';
 import * as userService from '../../src/backend/modules/database/services/UserService';
 import mailer from '../../src/backend/modules/email';
+import {projectEventParticipants} from '../../src/backend/modules/lib/util';
 import {createIntegrationEvent, persistIntegrationProfile, registerEventAttendance} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 
@@ -112,7 +113,7 @@ describe('invoice administration feedback and committed decisions', () => {
         try {
             await eventPoolController.approveInvoice(event, poolId, String(invoiceId), {}, session);
             expect(sendEmail.mock.calls[0][0]).toEqual({name: participant.user!.name, address: participant.user!.email});
-            expect((await eventService.getEventParticipants(event.id))[0].name).toBe(participant.user!.name);
+            expect((await eventService.getEventParticipantRows(event.id).then(projectEventParticipants))[0].name).toBe(participant.user!.name);
         } finally {
             await userService.updateProfileName(participant.id, participant.name);
         }
