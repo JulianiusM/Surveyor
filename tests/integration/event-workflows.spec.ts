@@ -15,7 +15,9 @@
  */
 
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import eventController, {canBypassDeadlineWithToken, isEventFull} from '../../src/backend/controller/eventController';
+import eventController from '../../src/backend/controller/eventController';
+import {canBypassDeadlineWithToken, isEventFull, listDeadlineBypassLinks,
+    updateRegistrationDates} from '../../src/backend/modules/event/registration';
 import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
 import * as activityService from '../../src/backend/modules/database/services/ActivityService';
 import * as driverService from '../../src/backend/modules/database/services/DriverService';
@@ -200,7 +202,7 @@ describe('event user stories', () => {
         await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-02'});
         const registration = await eventService.getRegistrationFor(participant.id, eventId);
         const event = await eventService.getEventById(eventId);
-        await eventController.updateRegistrationDates(event!, String(registration!.id), {
+        await updateRegistrationDates(event!, String(registration!.id), {
             arrivalDate: '2027-06-02',
             departureDate: '2027-06-03'
         });
@@ -232,7 +234,7 @@ describe('event user stories', () => {
             arrivalDate: '2027-06-01', departureDate: '2027-06-03', regToken: link.token,
         });
         const event = (await eventService.getEventById(eventId))!;
-        expect((await eventController.listDeadlineBypassLinks(event))[0]).toMatchObject({
+        expect((await listDeadlineBypassLinks(event))[0]).toMatchObject({
             id: link.id,
             status: 'consumed'
         });

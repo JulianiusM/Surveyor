@@ -194,8 +194,7 @@ async function startupDocument(page: Page, path: string, bootstrap: FrontendBoot
 
 /** Verify a real shell icon's font face and painted glyph. A font-family rule or
  * nonempty pseudo-element alone could still render a missing-font square. */
-async function expectLocalIconReady(page: Page): Promise<void> {
-    const icon = page.locator('header .bi-house-fill');
+async function expectLocalIconReady(page: Page, icon = page.locator('header .bi-house-fill')): Promise<void> {
     await expect(icon).toBeVisible();
     // Let the browser's ordinary CSS/font loading finish without explicitly
     // requesting a font that the delivered page never uses by itself.
@@ -834,6 +833,9 @@ for (const width of [1280, 1024, 390]) {
             const title = page.locator('main .card-header h1');
             await expect(title).toHaveText(list.title);
             const header = page.locator('main > section > .card-header');
+            // The actual Packing heading must paint its bundled glyph at each
+            // layout width, rather than merely carrying a nonempty CSS class.
+            await expectLocalIconReady(page, header.locator('.bi-bag-check'));
             const bounds = (await header.boundingBox())!;
             const heading = (await title.boundingBox())!;
             if (initialHeaderHeight !== undefined) expect(Math.abs(bounds.height - initialHeaderHeight)).toBeLessThan(1);
@@ -1792,8 +1794,8 @@ test('client startup preserves an explicitly supplied recovery completion and re
     await page.locator('header').getByRole('link', {name: 'Home', exact: true}).click();
     await expect(page).toHaveURL(/\/$/);
     await page.goBack();
-    await expect(page).toHaveURL(/\/users\/login$/);
-    await expect(page.getByRole('heading', {name: 'Login', exact: true})).toBeVisible();
+    await expect(page).toHaveURL(/\/guest\/recovery$/);
+    await expect(page.locator('#recovery-email')).toBeVisible();
 });
 
 test('client startup preserves the native expired-session notice', async ({page}) => {

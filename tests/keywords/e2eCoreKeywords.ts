@@ -519,6 +519,7 @@ export async function updateEntityAdministratorForE2E(request: APIRequestContext
  */
 export async function withPasswordResetAccountForE2E(
     exercise: (username: string, password: string, token: string) => Promise<void>,
+    existingPassword = 'Previous-password!A1',
 ): Promise<void> {
     /** Keep fixture insertion, exercise and exact-row cleanup inside the selected connection owner. */
     async function exerciseAccount(datasource: DataSource, requireBuilt: ReturnType<typeof createRequire>): Promise<void> {
@@ -529,7 +530,9 @@ export async function withPasswordResetAccountForE2E(
         try {
             // Persist only this factory's isolated account/profile after the wrapper
             // has checked the actual database selected by the test configuration.
-            const password = 'Previous-password!A1';
+            // Direct fixture insertion can represent an existing credential;
+            // it never claims that current registration admits that password.
+            const password = existingPassword;
             const fixture = createE2EPasswordResetAccount(await bcrypt.hash(password, 10));
             const user = await datasource.getRepository(User).save(fixture.user);
             userId = user.id;

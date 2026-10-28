@@ -9,10 +9,13 @@ import {bootstrap, applyPresentationLocale, flashPageNotice, frontendReturn} fro
 
 const router = Router();
 
-/** Existing recovery has no standalone GET form; the login page owns its existing form. */
-router.get('/recovery', function redirectGuestRecovery(req, res) {
-    res.redirect(frontendReturn(req, '/users/login'));
-});
+/** Admit guest recovery independently of local account/provider login.
+ * The common identity page hydrates its existing form; only an actual command
+ * completion can supply the one-time success message. */
+router.get('/recovery', asyncHandler(async function renderGuestRecovery(req, res) {
+    const state = await bootstrap(req);
+    await renderFrontend(res, req.originalUrl, state);
+}));
 
 /** Preserve capability-link GET login and its 302, preparing notice/authority together without request rollback leaks. */
 router.get('/:guestId/login/:token', asyncHandler(/** Complete the emailed GET

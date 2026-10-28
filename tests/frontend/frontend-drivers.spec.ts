@@ -82,6 +82,18 @@ async function mounted(component: Component, handler: (request: Request) => Prom
 }
 
 describe('Drivers production frontend consumers', () => {
+    it('retires both shared personal actions when refreshed method authority is denied', async () => {
+        const projection = {...list, items: [item, {...item, id: secondId, selfAssigned: true}]};
+        const {wrapper, context, request} = await mounted(DriversPage, async () => json(projection));
+        expect(wrapper.findAllComponents(EntityAssignmentActions).every(action => action.find('button').exists())).toBe(true);
+        context.queryClient.setQueryData(driversKeys.detail(session.context, listId),
+            {data: {...projection, capabilities: {...list.capabilities, selfAssign: false}}, etag: '"revoked"'});
+        await flushPromises();
+        expect(wrapper.findAllComponents(EntityAssignmentActions).every(action => !action.find('button').exists())).toBe(true);
+        expect(wrapper.text()).toContain('Passenger');
+        expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+    });
+
     it.each([
         {control: '#quick-description', value: 'x'.repeat(65536), message: 'Description: Use no more than 65535 characters.'},
         {control: '#quick-max', value: '2147483648', message: 'Max #: Enter a number no greater than 2147483647.'},

@@ -4,13 +4,12 @@ documentation-metadata
 audience: neue Nutzer; Gäste; registrierte Nutzer
 owner: identity feature maintainers
 status: current
-last-verified: 2026-10-20
+last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
+verification-scope: approved registration/reset password requirements and standalone guest recovery reconciled with current source; other article topics retain their prior review scope
 source-anchors: src/backend/controller/userController.ts; src/common/locales/de.json; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/identity/; src/frontend/components/CommandFeedback.vue; src/common/locales/; src/frontend/; src/backend/controller/helpController.ts
 heading-anchors: 1:getting-started-with-surveyor; 2:find-your-task; 2:choose-how-to-enter-surveyor; 2:create-and-activate-a-local-account; 3:activation-link-problems; 2:sign-in-with-an-organization-account; 2:log-in-to-a-local-account; 3:reset-a-local-password; 2:join-an-invitation-as-a-guest; 3:when-the-email-already-has-guest-accounts; 3:what-a-guest-account-can-do; 2:recover-guest-access-by-email; 2:understand-accounts-and-profiles; 2:edit-the-active-profile; 2:create-or-switch-profiles-on-a-full-account; 3:create-another-profile; 3:switch-profiles; 2:move-a-profile-to-another-full-account; 3:obtain-the-token-from-the-profile-being-moved; 3:complete-the-migration-in-the-receiving-account; 2:deactivate-a-profile-or-delete-an-account; 3:deactivate-one-profile-on-a-full-account; 3:delete-a-full-or-guest-account; 2:troubleshooting; 3:i-do-not-see-local-registration-or-password-fields; 3:local-login-says-the-account-is-not-activated; 3:i-requested-a-password-reset-but-received-no-email; 3:i-requested-guest-access-but-received-no-email; 3:my-overview-does-not-show-the-item-i-expected; 3:a-migration-token-is-rejected; 2:next-steps
 next-review: identity-or-authentication-visible-behavior-change
-production-reference: 2dfa257 native business comparator with current German migrated controls and approved exceptions; not an installed production commit
 -->
 
 Diese Anleitung hilft dir, Surveyor zu öffnen, deinen Zugang wiederherzustellen und das Profil zu verwalten, das dich repräsentiert. Die Beschriftungen entsprechen der deutschen Ansicht; englische E-Mail-Betreffzeilen und Schaltflächen in E-Mails bleiben zur Wiedererkennung angegeben.
@@ -55,7 +54,7 @@ Diese Schritte gelten, wenn **Registrieren** Felder für Benutzername, E-Mail un
    - **Anzeigename**: erster Name, den andere Teilnehmer sehen.
    - **E-Mail**: für Aktivierung und Passwortwiederherstellung.
    - **Passwort** und **Passwort wiederholen**: Passwort und Wiederholung.
-3. Verwende mindestens 8 Zeichen, mindestens einen Buchstaben und mindestens eine Ziffer.
+3. Verwende mindestens 15 Zeichen. Passphrasen sind willkommen; eine bestimmte Mischung aus Buchstaben, Ziffern oder Sonderzeichen ist nicht erforderlich. Die Grenze liegt bei 72 Bytes: Manche Akzentzeichen und Emojis benötigen jeweils mehrere Bytes.
 4. Prüfe, ob beide Passwörter übereinstimmen, und wähle **Registrieren**.
 5. Öffne die E-Mail mit dem Betreff **Activate your account** und wähle innerhalb einer Stunde **Activate account**.
 6. Wenn Surveyor **Anmelden** öffnet, gib unter **Benutzername oder E-Mail** Benutzername oder E-Mail sowie das Passwort ein und wähle **Anmelden**.
@@ -100,7 +99,7 @@ Surveyor öffnet **Deine Übersicht** und aktiviert das Standardprofil des Konto
 4. Öffne die E-Mail mit dem Betreff **Reset your password** und wähle innerhalb einer Stunde **Reset password**.
 5. Gib das neue Passwort zweimal ein und wähle **Passwort ändern**.
 
-Das neue Passwort braucht mindestens 8 Zeichen, mindestens einen Buchstaben und mindestens eine Ziffer. Beide Eingaben müssen übereinstimmen.
+Es gelten dieselben [Passwortanforderungen wie bei der Registrierung](#create-and-activate-a-local-account). Beide Eingaben müssen übereinstimmen.
 
 Aus Datenschutzgründen zeigt Surveyor dieselbe Bestätigung, unabhängig davon, ob ein Konto zur Eingabe passt. Kommt keine E-Mail an, prüfe Schreibweise, Spamordner und ob das Konto normalerweise die Organisationsanmeldung verwendet. Ein Rücksetzlink läuft nach einer Stunde ab und kann nach der Passwortänderung nicht wiederverwendet werden.
 
@@ -147,12 +146,11 @@ Gäste können keine neuen Umfragen, Veranstaltungen, Listen oder Pläne erstell
 
 Die Wiederherstellung per E-Mail funktioniert nur für Gastkonten, die mit einer E-Mail-Adresse erstellt wurden.
 
-1. Wähle **Anmelden**.
-2. Suche **Suchst du dein Gastkonto?**.
-3. Gib die bei der Gastregistrierung verwendete E-Mail-Adresse ein.
-4. Wähle **Zugang anfordern**.
-5. Öffne die E-Mail mit dem Betreff **Your guest accounts**.
-6. Wähle **Open _Gastname_** für das gewünschte Konto.
+1. Öffne die [Gastkonto-Wiederherstellung](/guest/recovery). Das funktioniert auch, wenn die Seite nur die Organisationsanmeldung anbietet. Auf der lokalen Seite **Anmelden** kannst du auch **Suchst du dein Gastkonto?** verwenden.
+2. Gib die bei der Gastregistrierung verwendete E-Mail-Adresse ein.
+3. Wähle **Zugang anfordern**.
+4. Öffne die E-Mail mit dem Betreff **Your guest accounts**.
+5. Wähle **Open _Gastname_** für das gewünschte Konto.
 
 Die E-Mail enthält jedes Gastkonto dieser Adresse mit Gastname und Erstellungszeit. Bei einem Ergebnis lautet die Überschrift **Your guest account**. Ein privater Link meldet dich beim zugehörigen Gastkonto an und öffnet normalerweise **Deine Übersicht**.
 

@@ -9,7 +9,6 @@ verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: Creation and duplication permission instructions reconciled with the shared collapsed disclosure and exact localized labels; existing task guidance, anchors and image bytes retained. Source review only; no new full-article browser verification claimed.
 source-anchors: src/backend/controller/entityAdminController.ts; src/backend/modules/archive/policy.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/modules/permissionEngine.ts; src/backend/modules/lib/permissions.ts; src/backend/middleware/permissionMiddleware.ts; src/backend/middleware/adminApiFactory.ts; src/backend/modules/database/services/EntityAdminService.ts; src/backend/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/components/permissions/CreationPermissions.vue; src/frontend/; src/common/locales/
 next-review: permission-or-entity-settings-behavior-change
-production-reference: 2dfa257 native frontend documentation; not an installed production commit
 -->
 
 Use permissions to decide which actions people may perform in an **Event**, **Activity plan**, **Packing list**, or **Drivers list**. Start with a sharing recipe, test it with a non-owner profile, and use the reference sections only when you need finer control.

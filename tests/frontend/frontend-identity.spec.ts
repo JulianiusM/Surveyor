@@ -529,7 +529,7 @@ describe('identity forms and packing overview navigation', () => {
         expect(activations).toBe(1);
     });
 
-    it.each([false, true])('keeps native header logout return precedence (explicit next=%s)', async explicit => {
+    it.each([false, true])('keeps header logout return precedence (explicit next=%s)', async explicit => {
         const destination = `/packing/${eventId}/duplicate?eventId=${profileId}`;
         const origin = '/help?doc=packing_lists' + (explicit ? '&next=' + encodeURIComponent(destination) : '');
         const anonymous = {...session, kind: 'anonymous' as const, context: 'logout-anonymous-context-1234567890',
@@ -549,6 +549,26 @@ describe('identity forms and packing overview navigation', () => {
         expect(router.currentRoute.value.fullPath).toBe(explicit ? destination : origin);
         expect(context.pageNotice.value).toEqual({kind: 'success', messageKey: 'auth.logoutDone'});
         expect(wrapper.get('.alert-success').text()).toBe('Logout successful');
+        expect(logoutCommands).toBe(1);
+    });
+
+    it('retires local identity and reports unconfirmed provider logout without replay', async () => {
+        const anonymous = {...session, kind: 'anonymous' as const, context: 'provider-logout-context-1234567890',
+            activeProfile: null, profiles: [], logoutUrl: null};
+        let logoutCommands = 0;
+        const {wrapper, context} = await mounted('/help', async request => {
+            if (request.method === 'POST') {
+                logoutCommands++;
+                return json({session: anonymous, personalLink: null, redirect: null, providerLogout: 'unconfirmed'}, 200, anonymous.context);
+            }
+            return json(anonymous, 200, anonymous.context);
+        }, {}, true);
+        await wrapper.get('header form').trigger('submit');
+        await flushPromises();
+        expect(context.session.value?.kind).toBe('anonymous');
+        expect(context.pageNotice.value).toEqual({kind: 'info', messageKey: 'auth.providerLogoutUnconfirmed'});
+        expect(wrapper.get('.alert-info').text()).toBe('You are signed out of Surveyor. Sign-out from your login provider could not be confirmed.');
+        expect(wrapper.find('header form').exists()).toBe(false);
         expect(logoutCommands).toBe(1);
     });
 
@@ -783,13 +803,28 @@ describe('identity forms and packing overview navigation', () => {
         expect(context.mayChangeIdentity()).toBe(true);
     });
 
-    it('follows recovery GET admission without manufacturing a successful mail result from its URL', async () => {
-        const {wrapper, router, request} = await mounted('/guest/recovery', async () => json({changed: true}));
+    it.each([
+        {localLoginEnabled: true, oidcEnabled: false},
+        {localLoginEnabled: true, oidcEnabled: true},
+        {localLoginEnabled: false, oidcEnabled: true},
+    ])('admits standalone recovery without sending mail or entering login for $localLoginEnabled/$oidcEnabled', async settings => {
+        const path = '/guest/recovery?next=' + encodeURIComponent('/packing/' + eventId + '?view=all#items');
+        const {wrapper, router, request} = await mounted(path, async () => json({changed: true}),
+            {session: {...session, shell: {...session.shell, ...settings}}});
         await flushPromises();
-        expect(router.currentRoute.value.path).toBe('/users/login');
-        expect(wrapper.get('h1').text()).toBe('Login');
+        expect(router.currentRoute.value.path).toBe('/guest/recovery');
+        expect(wrapper.find('#recovery-email').exists()).toBe(true);
+        expect(wrapper.find('#username').exists()).toBe(false);
         expect(wrapper.text()).not.toContain('The link(s) to your guest account(s)');
         expect(request).not.toHaveBeenCalled();
+        await wrapper.get('#recovery-email').setValue('guest@example.test');
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        const commands = request.mock.calls.map(([input]) => input as Request).filter(input => input.method === 'POST');
+        expect(commands).toHaveLength(1);
+        expect(await commands[0]!.clone().json()).toEqual({email: 'guest@example.test', next: '/packing/' + eventId + '?view=all#items'});
+        expect(wrapper.get('h1').text()).toBe('Success');
+        expect(wrapper.find('form').exists()).toBe(false);
     });
 
     it('renders an explicitly supplied recovery completion independently of local account configuration', async () => {
@@ -832,8 +867,8 @@ describe('identity forms and packing overview navigation', () => {
         expect(context.pageCompletion.value).toBeNull();
         await router.push(path);
         await flushPromises();
-        expect(router.currentRoute.value.path).toBe('/users/login');
-        expect(wrapper.get('h1').text()).toBe('Login');
+        expect(router.currentRoute.value.path).toBe('/guest/recovery');
+        expect(wrapper.find('#recovery-email').exists()).toBe(true);
         expect(wrapper.text()).not.toContain('The link(s) to your guest account(s)');
         expect(request).not.toHaveBeenCalled();
     });
@@ -860,7 +895,7 @@ describe('identity forms and packing overview navigation', () => {
         expect(request).not.toHaveBeenCalled();
     });
 
-    it('retires rejected native recovery feedback after departure and admits a later recovery visit as native GET', async () => {
+    it('retires rejected recovery feedback after departure and admits a later clean form', async () => {
         const path = '/guest/recovery';
         const identityProblem: components['schemas']['Problem'] = {type: 'about:blank', title: 'Bad Request', status: 400,
             code: 'VALIDATION_FAILED', messageKey: 'api:errors.VALIDATION_FAILED', params: {},
@@ -880,8 +915,8 @@ describe('identity forms and packing overview navigation', () => {
         expect(context.initialDocumentFor(path)).toBeUndefined();
         await router.push(path);
         await flushPromises();
-        expect(router.currentRoute.value.path).toBe('/users/login');
-        expect(wrapper.get('h1').text()).toBe('Login');
+        expect(router.currentRoute.value.path).toBe('/guest/recovery');
+        expect(wrapper.find('#recovery-email').exists()).toBe(true);
         expect(wrapper.text()).not.toContain('Check the submitted values.');
     });
 
@@ -1146,22 +1181,85 @@ describe('identity forms and packing overview navigation', () => {
             .toEqual([`/api/v1/packing-lists/${eventId}/guest`, `/api/v1/packing-lists/${profileId}/guest`]);
     });
 
-    it('retains registration password criteria while login/reset keep their native rules', async () => {
-        const {wrapper, request} = await mounted('/users/register', async () => json({changed: true}));
-        await wrapper.get('#password').setValue('eightletters');
-        await wrapper.get('#password-repeat').setValue('eightletters');
-        await wrapper.get('form').trigger('submit');
-        expect(request).not.toHaveBeenCalled();
-        expect(wrapper.get('#password-info').text()).toContain('At least one digit');
-        expect(wrapper.get('#password').classes()).toContain('is-invalid');
-        expect(wrapper.get('#password').attributes('aria-describedby')).toBe('password-info');
-        expect(wrapper.get('.alert-danger').text()).toBe('Use at least 8 characters, including a letter and a digit.');
-        expect(wrapper.get<HTMLInputElement>('#password').element.value).toBe('eightletters');
-        await wrapper.get('#password').setValue('eightletters1');
-        await wrapper.get('#password-repeat').setValue('eightletters1');
-        await wrapper.get('#password').trigger('blur');
+    describe.each(['register', 'reset'] as const)('%s new-password admission', operation => {
+        it('translates both criteria without replacing the retained password draft', async () => {
+            const path = operation === 'register' ? '/users/register' : '/users/reset-password/admitted-token';
+            const {wrapper, context} = await mounted(path, async () => json({valid: true}));
+            const password = '😀'.repeat(14);
+            await wrapper.get('#password').setValue(password);
+            await wrapper.get('#password-repeat').setValue(password);
+            await wrapper.get('form').trigger('submit');
+            context.locale.value = 'de';
+            await flushPromises();
+            expect(wrapper.get('#password-info').text()).toContain('Mindestens 15 Zeichen (Unicode-Codepunkte)');
+            expect(wrapper.get('#password-info').text()).toContain('Höchstens 72 UTF-8-Bytes');
+            expect(wrapper.get('.alert-danger').text()).toBe('Verwende ein Passwort, das beide angezeigten Grenzen erfüllt.');
+            expect(wrapper.get<HTMLInputElement>('#password').element.value).toBe(password);
+            expect(wrapper.get<HTMLInputElement>('#password-repeat').element.value).toBe(password);
+        });
+
+        it.each([
+            {name: 'fourteen ASCII characters', password: 'a'.repeat(14), valid: false},
+            {name: 'fourteen astral code points', password: '😀'.repeat(14), valid: false},
+            {name: 'letters without digits', password: 'a'.repeat(15), valid: true},
+            {name: 'digits without letters', password: '1'.repeat(15), valid: true},
+            {name: 'seventy-two ASCII bytes', password: 'a'.repeat(72), valid: true},
+            {name: 'seventy-three ASCII bytes', password: 'a'.repeat(73), valid: false},
+            {name: 'seventy-two multibyte bytes', password: 'é'.repeat(36), valid: true},
+            {name: 'seventy-four multibyte bytes', password: 'é'.repeat(37), valid: false},
+            {name: 'seventy-two astral bytes', password: '😀'.repeat(18), valid: true},
+            {name: 'seventy-six astral bytes', password: '😀'.repeat(19), valid: false},
+            {name: 'unnormalized combining characters', password: 'e\u0301'.repeat(8), valid: true},
+            {name: 'exact surrounding spaces', password: '  no digits here  ', valid: true},
+        ])('uses the shared Unicode/byte rules for $name without altering input', async ({password, valid}) => {
+            const path = operation === 'register' ? '/users/register' : '/users/reset-password/admitted-token';
+            const {wrapper, request} = await mounted(path, async req => json(req.method === 'GET'
+                ? {valid: true} : operation === 'register' ? {changed: true, emailDelivery: 'sent'} : {changed: true}));
+            if (operation === 'register') {
+                await wrapper.get('#username').setValue('policy-fixture');
+                await wrapper.get('#displayname').setValue('Policy fixture');
+                await wrapper.get('#email').setValue('policy@example.test');
+            }
+            for (const field of ['#password', '#password-repeat']) {
+                expect(wrapper.get(field).attributes('minlength')).toBeUndefined();
+                expect(wrapper.get(field).attributes('maxlength')).toBeUndefined();
+                await wrapper.get(field).setValue(password);
+            }
+            await wrapper.get('#password').trigger('focus');
+            const guidance = wrapper.get('#password-info');
+            expect(guidance.findAll('li')).toHaveLength(2);
+            expect(guidance.text()).toContain('At least 15 characters (Unicode code points)');
+            expect(guidance.text()).toContain('At most 72 UTF-8 bytes');
+            expect(wrapper.get('button[type="submit"]').attributes('disabled') !== undefined).toBe(!valid);
+            await wrapper.get('form').trigger('submit');
+            await flushPromises();
+            const commands = request.mock.calls.map(([req]) => req as Request).filter(req => req.method === 'POST');
+            expect(commands).toHaveLength(valid ? 1 : 0);
+            if (valid) {
+                expect(await commands[0]!.clone().json()).toMatchObject({password});
+                expect(wrapper.find('#password').exists()).toBe(false);
+            } else {
+                expect(wrapper.get('#password').classes()).toContain('is-invalid');
+                expect(wrapper.get('#password').attributes('aria-describedby')).toBe('password-info');
+                expect(wrapper.get('.alert-danger').text()).toBe('Use a password that meets both displayed limits.');
+                expect(wrapper.get<HTMLInputElement>('#password').element.value).toBe(password);
+                expect(wrapper.get<HTMLInputElement>('#password-repeat').element.value).toBe(password);
+            }
+        });
+    });
+
+    it.each(['oldpass1', 'é'.repeat(40)])('keeps existing-login admission separate for %s', async password => {
+        const {wrapper, request} = await mounted('/users/login', async req => req.method === 'POST'
+            ? json({session, personalLink: null, redirect: null}) : json(session));
+        await wrapper.get('#username').setValue('Existing account');
+        await wrapper.get('#password').setValue(password);
+        expect(wrapper.get('#password').attributes('minlength')).toBe('8');
+        expect(wrapper.get('#password').attributes('maxlength')).toBeUndefined();
         expect(wrapper.find('#password-info').exists()).toBe(false);
-        expect(wrapper.get('#password').classes()).toContain('is-valid');
+        await wrapper.findAll('form')[0]!.trigger('submit');
+        await flushPromises();
+        const command = request.mock.calls.map(([req]) => req as Request).find(req => req.method === 'POST')!;
+        expect(await command.clone().json()).toMatchObject({password});
     });
 
     it('identifies registration password mismatch through shared feedback before submission', async () => {
@@ -1534,8 +1632,7 @@ describe('identity forms and packing overview navigation', () => {
             await wrapper.get('#email').setValue('entered@example.test');
         }
         await wrapper.get('#password').setValue('Private password1');
-        if (operation !== 'login') await wrapper.get('#password-repeat').setValue(operation === 'reset'
-            ? 'Different password1' : 'Private password1');
+        if (operation !== 'login') await wrapper.get('#password-repeat').setValue('Private password1');
         await wrapper.get('form').trigger('submit');
         await flushPromises();
         expect(wrapper.get('.alert-danger').text()).toBe(nativeMessage);

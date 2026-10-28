@@ -250,7 +250,7 @@ test('keeps five-state personal history, attribution and retained proofs private
         const closeReview = participantPage.getByRole('dialog');
         await expect(closeReview).toHaveAccessibleName('Confirm invoice action');
         await expect(closeReview).toContainText(`Invoice #${invoice('Corrected evidence').id}`);
-        await expect(closeReview).toContainText('Close this accepted invoice for ?');
+        await expect(closeReview).toContainText('Close this accepted invoice for 18.00');
         expect(closeRequests).toEqual([]);
         await closeReview.locator('.modal-footer').getByRole('button', {name: 'Cancel', exact: true}).click();
         await expect(closeReview).toBeHidden();

@@ -705,8 +705,9 @@ schemas:
           - string
           - "null"
       maxUses:
-        type: number
+        type: integer
         minimum: 1
+        maximum: 32767
   EventThingsToDo:
     type: object
     additionalProperties: false

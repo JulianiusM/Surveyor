@@ -310,7 +310,7 @@ const reorder = useListReorder({
         <EntityHeader
             :resource-id="listId"
             :title="data?.title || messages.t('packing.items')"
-            icon="bi-bag-check-check"
+            icon="bi-bag-check"
             :image-version="data?.headerVersion"
             :image-query-key="key"
             :read-image="readHeader"
@@ -417,7 +417,7 @@ const reorder = useListReorder({
                                 <InlineCell
                                     :value="item.title"
                                     :token="item.editToken"
-                                    :editable="item.capabilities.showTitleEdit"
+                                    :editable="item.capabilities.editTitle"
                                     :write-admission="item.capabilities.editTitle"
                                     :disabled="blocked"
                                     :label="messages.t('packing.title')"
@@ -438,7 +438,7 @@ const reorder = useListReorder({
                                     class="text-center"
                                     :value="item.maxAssignees"
                                     :token="item.editToken"
-                                    :editable="item.capabilities.showCapacityEdit"
+                                    :editable="item.capabilities.editCapacity"
                                     :write-admission="item.capabilities.editCapacity"
                                     :disabled="blocked"
                                     :label="messages.t('packing.capacity')"
@@ -468,11 +468,11 @@ const reorder = useListReorder({
                                         />
                                         <span class="ms-1 small">{{ messages.t('common.all') }}</span>
                                     </div>
-                                    <!-- Admission displays these personal controls
-                                         even when the independent write grant is absent.
-                                         Preserve that presentation; the server rechecks
-                                         ACCESS_VIEW before every assignment command. -->
-                                    <EntityAssignmentActions :assigned="item.selfAssigned" :full="isFull(item)" :disabled="blocked"
+                                    <!-- Shared personal controls follow current method
+                                         availability; server admission still owns every
+                                         assignment command. Everyone retains its badge. -->
+                                    <EntityAssignmentActions :available="data.capabilities.selfAssign"
+                                        :assigned="item.selfAssigned" :full="isFull(item)" :disabled="blocked"
                                         :pending="command.pending.value && pendingControl?.kind === 'assign' && pendingControl.id === item.id"
                                         :everyone="item.requiredByAll ? messages.t('packing.everyone') : undefined"
                                         :assign-label="messages.t('packing.assign')" :remove-label="messages.t('packing.unassign')"

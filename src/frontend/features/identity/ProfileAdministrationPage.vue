@@ -337,7 +337,7 @@ function changeProfile(scope: FrontendRequestScope): Promise<components['schemas
                         <template v-else>
                             <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-outline-primary" to="/"><i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('profile.backHome') }}</RouterLink></div>
                             <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-outline-warning" :to="{path: '/users/profile/migrate/request', state: {profileTokenRequest: true}}"><i class="bi bi-archive me-1" aria-hidden="true"></i>{{ messages.t('profile.showMigrationToken') }}</RouterLink></div>
-                            <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-outline-danger" to="/users/profile/delete"><i class="bi bi-trash me-1" aria-hidden="true"></i>{{ messages.t('profile.deleteProfile') }}</RouterLink></div>
+                            <div v-if="context.session.value?.kind === 'account'" class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-outline-danger" to="/users/profile/delete"><i class="bi bi-trash me-1" aria-hidden="true"></i>{{ messages.t('profile.deleteProfile') }}</RouterLink></div>
                         </template>
                     </form>
                 </template>

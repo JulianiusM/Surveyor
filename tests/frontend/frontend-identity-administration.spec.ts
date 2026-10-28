@@ -85,6 +85,13 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
 }
 
 describe('profile administration consumers', () => {
+    it.each(['account', 'guest'] as const)('offers profile deactivation only to its account owner (%s)', async kind => {
+        const {wrapper, request} = await mounted('/users/profile', async () => json(profile), {kind: 'render'}, {...session, kind});
+        expect(wrapper.find('a[href="/users/profile/delete"]').exists()).toBe(kind === 'account');
+        expect(wrapper.find('#name').exists()).toBe(true);
+        expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+    });
+
     it.each(['edit', 'manage'] as const)('refreshes healthy profile %s data while retaining an unsaved name', async mode => {
         let current = {...profile};
         const path = mode === 'edit' ? '/users/profile' : '/users/profile/manage';

@@ -1578,7 +1578,7 @@ describe('packing presentation compatibility', () => {
             expect(mounted.wrapper.findAll('tbody tr')).toHaveLength(0);
             expect(mounted.wrapper.get('.card-header img').attributes('alt')).toBe(list.title);
             expect(mounted.wrapper.get('.card-header img').attributes('src')).toBe(objectUrl);
-            expect(mounted.wrapper.get('h1 i').classes()).toContain('bi-bag-check-check');
+            expect(mounted.wrapper.get('h1 i').classes()).toContain('bi-bag-check');
         } finally { await mounted.dispose(); }
     });
 

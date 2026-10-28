@@ -4,12 +4,11 @@ documentation-metadata
 audience: novice users; guests; registered users
 owner: identity feature maintainers
 status: current
-last-verified: 2026-10-20
+last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
+verification-scope: approved registration/reset password requirements and standalone guest recovery reconciled with current source; other article topics retain their prior review scope
 source-anchors: tests/unit/email-rendering.spec.ts; src/backend/controller/userController.ts; src/backend/middleware/permissionMiddleware.ts; src/backend/modules/database/services/UserService.ts; src/backend/modules/database/entities/user/; src/backend/modules/oidc.ts; src/backend/modules/settings.ts; src/backend/modules/email.ts; src/backend/modules/lib/guestRegistrationNags.ts; tests/integration/authentication-workflows.spec.ts; src/backend/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/identity/; src/frontend/components/CommandFeedback.vue; src/common/locales/; src/frontend/
 next-review: identity-or-authentication-visible-behavior-change
-production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
 -->
 
 Use this guide to enter Surveyor, recover access, and manage the profile that represents you.
@@ -54,7 +53,7 @@ Use these steps when **Register** shows username, email, and password fields.
    - **Display name**: the initial name shown to other participants.
    - **E-mail**: used for activation and password recovery.
    - **Password** and **Repeat password**.
-3. Use a password with at least 8 characters, at least one letter, and at least one digit.
+3. Use at least 15 characters. Passphrases are welcome; no particular mix of letters, digits or symbols is required. The limit is 72 bytes: some accented characters and emoji use several bytes each.
 4. Make sure **Repeat password** matches, then select **Register**.
 5. Open the email with subject **Activate your account** and select **Activate account** within one hour.
 6. When Surveyor opens **Login**, enter your **Username or email** and password, then select **Login**.
@@ -99,7 +98,7 @@ Surveyor opens **Your overview** and activates the account’s default profile. 
 4. Open the email with subject **Reset your password** and select **Reset password** within one hour.
 5. Enter the new password twice and select **Change password**.
 
-The new password must have at least 8 characters, at least one letter, and at least one digit. Both entries must match.
+Use the same [password requirements as registration](#create-and-activate-a-local-account). Both entries must match.
 
 For privacy, Surveyor shows the same confirmation whether or not an account matches the entered value. If no email arrives, check the spelling, the spam folder, and whether the account normally uses organization sign-in. A reset link expires after one hour and cannot be reused after the password is changed.
 
@@ -146,12 +145,11 @@ A guest cannot create new surveys, events, lists, or plans, and cannot create or
 
 Email recovery works only for guest accounts created with an email address.
 
-1. Select **Login**.
-2. Find **Looking for your guest account?**.
-3. Enter the email address used for guest registration.
-4. Select **Request access**.
-5. Open the email with subject **Your guest accounts**.
-6. Select **Open _guest name_** for the account you want to use.
+1. Open [guest recovery](/guest/recovery). This also works when the site uses only organization sign-in. On the local **Login** page, you can also use **Looking for your guest account?**.
+2. Enter the email address used for guest registration.
+3. Select **Request access**.
+4. Open the email with subject **Your guest accounts**.
+5. Select **Open _guest name_** for the account you want to use.
 
 The email lists every guest account connected to that address, including its guest name and creation time. When there is one result, the message heading is **Your guest account**. Opening a private link signs you in to that guest account and normally opens **Your overview**.
 

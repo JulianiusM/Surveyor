@@ -10,6 +10,7 @@ import openapiTS, {astToString} from 'openapi-typescript';
 import Ajv2020, {_, str} from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import standaloneCode from 'ajv/dist/standalone/index.js';
+import {_Code} from 'ajv/dist/compile/codegen/code.js';
 import {build} from 'esbuild';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -101,24 +102,21 @@ function schemaName(schema) {
 /** Derive a validator identifier from the already validated nonempty operation name. */
 function upperFirst(value) { return value[0].toUpperCase() + value.slice(1); }
 
-/**
- * Native HTML/password checks count UTF-16 units, while JSON Schema minLength counts
- * code points. Only an explicitly authored extension selects the native unit; other
- * string constraints retain their standard meaning. Inline Ajv code generation keeps
- * this check in both standalone runtimes without a runtime compiler or another validator.
- */
-function compileUtf16Minimum(context) {
+/** Compile the shared UTF-8 measurement into both standalone validation runtimes. */
+function compileUtf8Maximum(context) {
     const {data, schemaCode} = context;
-    // Ajv's string type rule guards this expression. The authored threshold is emitted
-    // directly, so no feature field names or copied password limits enter the generator.
-    context.fail(_`${data}.length < ${schemaCode}`);
+    // Bundle the exact common function below; no independent byte algorithm or
+    // generated runtime path is imported by the server or the browser.
+    const measure = context.gen.scopeValue('func', {ref: utf8ByteLength,
+        code: new _Code(`(${utf8ByteLength.toString()})`)});
+    context.fail(_`${measure}(${data}) > ${schemaCode}`);
 }
 
-function utf16MinimumMessage({schemaCode}) {
-    return str`must NOT have fewer than ${schemaCode} UTF-16 code units`;
+function utf8MaximumMessage({schemaCode}) {
+    return str`must NOT exceed ${schemaCode} UTF-8 bytes`;
 }
 
-function utf16MinimumParameters({schemaCode}) {
+function utf8MaximumParameters({schemaCode}) {
     return _`{limit: ${schemaCode}}`;
 }
 
@@ -284,6 +282,20 @@ for (const file of files) {
 
 const authoredRequests = authoredRequestSchemas(authoredDocuments, path.join(sourceDirectory, 'openapi.yaml'));
 const runtimeChoices = runtimeChoiceDeclarations(authoredDocuments);
+const passwordSchema = authoredDocuments.get(path.join(sourceDirectory, 'auth.yaml')).schemas.NewPassword;
+if (passwordSchema?.type !== 'string' || !Number.isInteger(passwordSchema.minLength) || passwordSchema.minLength < 1
+    || !Number.isInteger(passwordSchema['x-surveyor-max-utf8-bytes']) || passwordSchema['x-surveyor-max-utf8-bytes'] < 1) {
+    throw new Error('NewPassword must author its Unicode minimum and UTF-8 byte maximum');
+}
+const newPasswordPolicy = {minLength: passwordSchema.minLength, maxUtf8Bytes: passwordSchema['x-surveyor-max-utf8-bytes']};
+
+// The measurement helper has no generated inputs: a clean checkout can compile
+// it before publishing policy metadata, without a generator/runtime dependency cycle.
+const utf8Source = await fs.readFile(path.join(root, 'src/common/lib/utf8.ts'), 'utf8');
+sourceHash.update('src/common/lib/utf8.ts').update('\0').update(utf8Source).update('\0');
+const utf8Module = await build({stdin: {contents: utf8Source, loader: 'ts', sourcefile: 'utf8.ts'},
+    bundle: true, write: false, platform: 'neutral', format: 'esm', target: 'es2022', legalComments: 'none'});
+const {utf8ByteLength} = await import(`data:text/javascript;base64,${Buffer.from(utf8Module.outputFiles[0].text).toString('base64')}`);
 
 /** Derive runtime option data from annotated authored enums, independently of
  * bundler aliases. Metadata selects exports/groups; the enum owns allowed values.
@@ -515,6 +527,8 @@ for (const [name, value] of runtimeChoices) {
         ([group, choices]) => `[${JSON.stringify(group)}]: Object.freeze(${JSON.stringify(choices)} as const)`).join(',')}});\n`;
 }
 output.set('src/common/generated/domainChoices.ts', choiceSource);
+output.set('src/common/generated/passwordPolicy.ts', banner
+    + `export const newPasswordPolicy = Object.freeze(${JSON.stringify(newPasswordPolicy)} as const);\n`);
 const headerValidatorNames = new Map();
 // Every dispatch uses the strict request graph, even when the bundler selected
 // an explicitly response-only alias as the body's canonical exported name.
@@ -640,7 +654,6 @@ function nativeFieldAttributes(name) {
         const value = resolve(document, unresolved);
         const bounds = {};
         if (value.maxLength !== undefined) bounds.maxLength = value.maxLength;
-        if (value['x-surveyor-min-length-utf16'] !== undefined) bounds.minLength = value['x-surveyor-min-length-utf16'];
         if (Object.keys(bounds).length) attributes[field] = bounds;
     }
     return attributes;
@@ -652,9 +665,9 @@ for (const browser of [false, true]) {
     const ajv = new Ajv2020({strict: true, allErrors: true, coerceTypes: false, useDefaults: false,
         removeAdditional: false, validateFormats: true, discriminator: true, code: {source: true, esm: browser}});
     addFormats(ajv);
-    ajv.addKeyword({keyword: 'x-surveyor-min-length-utf16', type: 'string', schemaType: 'number',
-        metaSchema: {type: 'integer', minimum: 0}, code: compileUtf16Minimum,
-        error: {message: utf16MinimumMessage, params: utf16MinimumParameters}});
+    ajv.addKeyword({keyword: 'x-surveyor-max-utf8-bytes', type: 'string', schemaType: 'number',
+        metaSchema: {type: 'integer', minimum: 0}, code: compileUtf8Maximum,
+        error: {message: utf8MaximumMessage, params: utf8MaximumParameters}});
     // Binary is a transport marker; the upload owner checks file presence, media and size.
     ajv.addFormat('binary', true);
     for (const graphId of browser ? [id, requestId] : [id]) {

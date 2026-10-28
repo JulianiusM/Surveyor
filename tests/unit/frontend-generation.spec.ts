@@ -15,6 +15,7 @@ const artifacts = ['.generated/api/v1/openapi.json', '.generated/api/v1/operatio
     'src/common/localization/generated/resources.json', 'src/common/localization/generated/manifest.json',
     'src/common/localization/generated/permissions.ts', '.generated/api/v1/policy.mjs',
     'src/common/generated/domainChoices.ts',
+    'src/common/generated/passwordPolicy.ts',
     '.generated/api/v1/browser/validatePackingListView.mjs', '.generated/api/v1/browser/validateRegistrationInput.mjs'];
 
 /** Run the real generators in an empty output tree; never substitute hand-authored validators. */
@@ -33,6 +34,8 @@ async function prepareGenerationTree(directory: string): Promise<void> {
     }
     await fs.cp(path.join(root, 'contracts/api/v1'), path.join(directory, 'contracts/api/v1'), {recursive: true});
     await fs.cp(path.join(root, 'src/common/locales'), path.join(directory, 'src/common/locales'), {recursive: true});
+    await fs.mkdir(path.join(directory, 'src/common/lib'), {recursive: true});
+    await fs.copyFile(path.join(root, 'src/common/lib/utf8.ts'), path.join(directory, 'src/common/lib/utf8.ts'));
     await fs.mkdir(path.join(directory, 'src/backend/modules/lib'), {recursive: true});
     await fs.copyFile(path.join(root, 'src/backend/modules/lib/permissions.ts'), path.join(directory, 'src/backend/modules/lib/permissions.ts'));
     await fs.mkdir(path.join(directory, 'src/backend/modules/invoice/locales'), {recursive: true});
@@ -42,7 +45,7 @@ async function prepareGenerationTree(directory: string): Promise<void> {
 }
 
 /** Exercise watcher scheduling with a bounded slice of the actual authored API.
- * All five lifecycle batches still run the real API/catalog generators. Full-contract
+ * All lifecycle batches still run the real API/catalog generators. Full-contract
  * compilation, transport and deterministic output remain covered by the other cases. */
 async function prepareWatcherTree(directory: string): Promise<void> {
     // Copy the same scripts, catalogs and permission registry as the complete
@@ -263,6 +266,43 @@ describe('contract and catalog generation', () => {
             expect(browser[name]({id: 'invalid', name: profile.name})).toBe(false);
         }
     }, 30_000);
+
+    it('derives new-password runtime limits and both validators from the same authored schema', async function projectsPasswordPolicy() {
+        const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
+        try {
+            await prepareGenerationTree(temporary);
+            const source = path.join(temporary, 'contracts/api/v1/auth.yaml');
+            const auth = YAML.parseDocument(await fs.readFile(source, 'utf8'));
+            // Change only the detached authored policy, proving neither generator
+            // nor runtime metadata has independent copied acceptance thresholds.
+            auth.setIn(['schemas', 'NewPassword', 'minLength'], 16);
+            auth.setIn(['schemas', 'NewPassword', 'x-surveyor-max-utf8-bytes'], 80);
+            await fs.writeFile(source, auth.toString());
+            generate('generate-api.mjs', [], temporary);
+            const policyUrl = pathToFileURL(path.join(temporary, 'src/common/generated/passwordPolicy.ts')).href;
+            const serverUrl = pathToFileURL(path.join(temporary, '.generated/api/v1/server.cjs')).href;
+            const browserUrl = pathToFileURL(path.join(temporary, '.generated/api/v1/browser.mjs')).href;
+            const registrationUrl = pathToFileURL(path.join(temporary, '.generated/api/v1/browser/validateRegistrationInput.mjs')).href;
+            execFileSync(process.execPath, ['--input-type=module', '-e', `
+                globalThis.Function = function () { throw new Error('Runtime compilation is forbidden'); };
+                const {newPasswordPolicy} = await import(${JSON.stringify(policyUrl)});
+                if (newPasswordPolicy.minLength !== 16 || newPasswordPolicy.maxUtf8Bytes !== 80) throw new Error('Password policy drift');
+                const server = (await import(${JSON.stringify(serverUrl)})).default;
+                const browser = await import(${JSON.stringify(browserUrl)});
+                const registration = await import(${JSON.stringify(registrationUrl)});
+                for (const validators of [server, browser]) {
+                    if (!validators.validateResetInput({token: 'current', password: '😀'.repeat(20), confirmPassword: '😀'.repeat(20)})) throw new Error('Updated UTF8 bound rejected');
+                    if (validators.validateResetInput({token: 'current', password: '😀'.repeat(21), confirmPassword: '😀'.repeat(20)})) throw new Error('Updated UTF8 bound ignored');
+                    if (validators.validateResetInput({token: 'current', password: 'a'.repeat(15), confirmPassword: 'a'.repeat(16)})) throw new Error('Updated Unicode bound ignored');
+                    if (!validators.validateLoginInput({username: 'Existing', password: 'short'})) throw new Error('Existing login policy changed');
+                }
+                if (registration.fieldAttributes?.password || registration.fieldAttributes?.password_repeat) throw new Error('Unicode/byte policy became a UTF16 HTML bound');
+            `], {cwd: temporary, stdio: 'pipe'});
+        } finally {
+            await removeDependencyLink(temporary);
+            await removeTemporary(temporary);
+        }
+    }, 60_000);
 
     it('derives neutral runtime choices and validator admission from one authored inventory', async function projectsRuntimeChoices() {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
@@ -660,6 +700,20 @@ describe('contract and catalog generation', () => {
             expect(invoiceResources.en.ui.finance.base).toBe('Watched shared invoice base');
             const invoiceManifest = JSON.parse(await fs.readFile(path.join(generatedDirectory, 'manifest.json'), 'utf8'));
             expect(invoiceManifest.version).not.toBe(recoveredManifest.version);
+
+            // The exact shared UTF-8 helper is an authored API compiler input.
+            // An atomic helper save must regenerate before readiness; changing a
+            // comment retains behavior while making source-hash adoption observable.
+            const invoiceMarker = await fs.readFile(markerPath, 'utf8');
+            const beforeUtf8 = JSON.parse(await fs.readFile(path.join(temporary, '.generated/api/v1/operations.json'), 'utf8'));
+            const utf8Path = path.join(temporary, 'src/common/lib/utf8.ts');
+            await fs.writeFile(`${utf8Path}.next`, await fs.readFile(utf8Path, 'utf8') + '\n// Watched measurement input.\n');
+            await fs.rename(`${utf8Path}.next`, utf8Path);
+            enterPhase('regenerate standalone validators after atomic shared UTF-8 helper replacement');
+            await expect.poll(async function utf8ReadyMarker() { return readOptionalFile(markerPath); }, {timeout: 30_000})
+                .not.toBe(invoiceMarker);
+            const afterUtf8 = JSON.parse(await fs.readFile(path.join(temporary, '.generated/api/v1/operations.json'), 'utf8'));
+            expect(afterUtf8.sourceHash).not.toBe(beforeUtf8.sourceHash);
         } catch (error) {
             failedPhase = phase;
             assertionFailed = true;
@@ -969,14 +1023,15 @@ describe('contract and catalog generation', () => {
                 for (const validators of [browser, server]) {
                     if (!validators.validateBasicEntityMetadataPatch({title: '💡'.repeat(255)})) throw new Error('Unicode boundary rejected');
                     if (validators.validateBasicEntityMetadataPatch({title: '💡'.repeat(256)})) throw new Error('Unicode bound ignored');
-                    const password = 'A1' + '💡'.repeat(3);
-                    if (!validators.validateResetInput({token: 'Current-token', password, confirmPassword: password})) throw new Error('Native UTF-16 minimum rejected');
-                    if (validators.validateResetInput({token: 'Current-token', password: 'A1💡💡x', confirmPassword: password})) throw new Error('Native UTF-16 minimum ignored');
+                    const password = '💡'.repeat(18);
+                    if (!validators.validateResetInput({token: 'Current-token', password, confirmPassword: password})) throw new Error('Unicode byte boundary rejected');
+                    if (validators.validateResetInput({token: 'Current-token', password: '💡'.repeat(19), confirmPassword: password})) throw new Error('UTF-8 maximum ignored');
+                    if (validators.validateResetInput({token: 'Current-token', password: '💡'.repeat(14), confirmPassword: password})) throw new Error('Unicode minimum ignored');
                 }
                 for (const validators of [browser, server, registration]) {
-                    const input = {username: 'Account', displayname: 'Account', email: 'account@example.invalid', password: 'A1💡💡💡', password_repeat: 'A1💡💡💡'};
-                    if (!validators.validateRegistrationInput(input)) throw new Error('Standalone native UTF-16 registration rejected');
-                    if (validators.validateRegistrationInput({...input, password_repeat: 'A1💡💡x'})) throw new Error('Standalone native UTF-16 repetition accepted');
+                    const input = {username: 'Account', displayname: 'Account', email: 'account@example.invalid', password: 'a'.repeat(15), password_repeat: 'a'.repeat(15)};
+                    if (!validators.validateRegistrationInput(input)) throw new Error('Standalone new-password registration rejected');
+                    if (validators.validateRegistrationInput({...input, password_repeat: '💡'.repeat(19)})) throw new Error('Standalone over-byte-limit repetition accepted');
                 }
                 for (const validators of [browser, server, problem]) {
                     const input = {type: 'about:blank', title: 'Rejected', detail: 'Synthetic rejection', requestId: 'standalone-problem',

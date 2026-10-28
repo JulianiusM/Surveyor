@@ -12,11 +12,12 @@
     "Verify approval for potentially unintended consequences and every policy or design decision change.",
     "Apply all six Development Policy approval fields, a direct decision question and policy link to every approval or conflict-resolving clarification; independently review the exact request and obtain root review before sending; a rejected or withdrawn question grants no approval.",
     "Verify every maintainer question appears in the final answer with all outstanding requests and required explanations in full; commentary, question tools, files and earlier-question references are not substitutes.",
-    "Trace the original accepted baseline and explicit amendments; compare concrete owners, callers, reads, writes, authority and lifecycle effects before editing, not just the current implementation.",
+    "Independently review the actual final-answer implementation plan as complete readable prose; links, saved files, YAML/JSON records, ID lists and short summaries are supplementary, not delivery. This checker cannot verify conversation channels or certify that the plan was presented.",
+    "Review current implemented owners, callers, reads, writes, authority and lifecycle effects against explicit approved requirements; the frontend cutover is complete and former-frontend or past-commit comparisons are not required or permitted by the current-source amendment.",
     "Shared files, libraries, stores or schemas do not prove unchanged responsibility; tests and agent-authored authorization records cannot supply missing maintainer approval.",
     "Review new writable request-state mirrors, save interception, locks and common-admission writes before implementation; the configured identity-stage exception grants no permission for new callers, indirect aliases or expanded lifecycle effects.",
     "Review comment purpose, logical spacing, readability, DRY, information hiding and existing module reuse.",
-    "Verify controller-owned business decisions, locked authorization and pure DBAL persistence.",
+    "Verify controllers coordinate, feature modules own shared business implementation, locked authorization stays under the lock and services remain pure DBAL; review actual shared adoption at all matching callers.",
     "Verify established behavior and run the cheapest appropriate production checks."
   ]
 }

@@ -81,13 +81,13 @@ const {id, form, invoice, closedPool, operation, reviewing, inspected, completed
                         :label="messages.t('finance.rejectionReason')" :max-length="(operation === 'reject' ? rejectionFields : declineFields).rejectionReason.maxLength" required :required-marker="false"
                         :pending="command.pending.value" />
                 </template>
-                <!-- Own-history Close supplies no amount to this question.
-                     Keep that inherited presentation separate from organizer Close;
-                     the unchanged submitted/effective evidence stays in its row. -->
+                <!-- A participant confirms the effective amount already counted
+                     in their selected invoice row. Organizer Close retains its
+                     existing submitted-amount presentation. -->
                 <p v-if="operation === 'approve' || operation === 'decline' || operation === 'close'">
                     {{ messages.t(operation === 'approve' ? 'finance.confirmAcceptInvoice' : operation === 'decline'
-                        ? 'finance.confirmRejectInvoice' : 'finance.confirmCloseInvoice', {amount: participant && operation === 'close'
-                            ? '' : financeMoney(operation === 'close' ? invoice.amount : effectiveAmount, locale)}) }}
+                        ? 'finance.confirmRejectInvoice' : 'finance.confirmCloseInvoice', {amount: financeMoney(operation === 'close'
+                            && !participant ? invoice.amount : effectiveAmount, locale)}) }}
                 </p>
             </fieldset>
             <template v-if="reviewing">

@@ -6,10 +6,9 @@ owner: product documentation maintainers
 status: current
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
+verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Declared anchors and image bytes retained; no new browser execution claimed.
 source-anchors: docs/user-guide/en/; docs/user-guide/en/assets/; docs/features/help/HELP_VISUALS.md; src/backend/controller/helpController.ts; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; .github/workflows/release.yml; src/frontend/components/AppHeader.vue; src/frontend/features/help/; src/common/locales/; src/frontend/
 next-review: help-source-or-visible-UI-change
-production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
 -->
 
 Surveyor helps groups choose dates, organize events, coordinate packing and transport, and assign activities. Start with the path that matches how you entered the application.

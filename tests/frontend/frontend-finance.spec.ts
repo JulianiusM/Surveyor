@@ -223,11 +223,12 @@ describe('P7 finance saved reads and participant invoices', () => {
         expect(mounted.wrapper.get('[data-finance-invoice="12"]').isVisible()).toBe(true);
     });
 
-    it('opens and cancels the native participant Close gate, then closes only the captured own invoice', async () => {
+    it.each([null, '11.25'])('confirms the effective participant amount %s and closes only the captured invoice', async correctedAmount => {
         let closed = false;
         const confirm = vi.fn(() => true);
         vi.stubGlobal('confirm', confirm);
-        const accepted = {...invoice, correctedAmount: '11.25', status: 'APPROVED' as const, canRetract: false, canClose: true};
+        const accepted = {...invoice, correctedAmount, status: 'APPROVED' as const, canRetract: false, canClose: true};
+        const displayedAmount = correctedAmount ?? invoice.amount;
         const mounted = await mountFinance(async req => {
             if (req.method === 'POST') {
                 expect(new URL(req.url).pathname).toBe(`/api/v1/events/${eventId}/finance/pools/${poolId}/invoices/12/close`);
@@ -239,15 +240,14 @@ describe('P7 finance saved reads and participant invoices', () => {
         await button(mounted.wrapper, 'Invoice pools & payments').trigger('click');
         await button(mounted.wrapper, 'Submit an invoice & history').trigger('click');
         const row = mounted.wrapper.get('[data-finance-invoice="12"]');
-        expect(row.text()).toContain('11.25');
+        expect(row.text()).toContain(displayedAmount);
         await button(row, 'Close').trigger('click');
         const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
         expect(dialog.get('.modal-title').text()).toBe('Confirm invoice action');
         expect(dialog.get('p.fw-semibold').text()).toBe('Invoice #12');
-        // The native participant question has no amount hook; the financial
-        // evidence stays in the row rather than becoming an unapproved repair.
-        expect(dialog.text()).toContain('Close this accepted invoice for ?');
-        expect(dialog.text()).not.toContain('11.25');
+        // The selected row and confirmation present the same counted amount;
+        // opening/canceling still has no persistence effect.
+        expect(dialog.text()).toContain(`Close this accepted invoice for ${displayedAmount}`);
         expect(closed).toBe(false);
         await button(dialog, 'Cancel').trigger('click');
         expect(document.querySelector('[role="dialog"]')).toBeNull();

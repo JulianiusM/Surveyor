@@ -538,8 +538,9 @@ async function sendGuestRecoveryEmail(email: EmailRecipient, guestLinkData: Gues
     });
 }
 
-async function sendMigrationEmail(email: EmailRecipient, profile: Profile, newOwner: User): Promise<void> {
-    await sendEmail(email, 'Your profile was migrated', {
+/** One message definition serves immediate notification and transactional preparation. */
+function migrationContent(profile: Profile, newOwner: User): StructuredEmailContent {
+    return {
         eyebrow: 'Profile update',
         heading: 'Your profile has a new owner',
         preheader: `${profile.name} was migrated to ${newOwner.name}.`,
@@ -552,11 +553,21 @@ async function sendMigrationEmail(email: EmailRecipient, profile: Profile, newOw
         ],
         notice: 'If this was your final profile, the previous account was closed automatically as part of the migration.',
         closing: `Thank you for using ${settings.value.appName}.\nThe ${settings.value.appName} team`,
-    });
+    };
 }
 
-async function sendDeletionEmail(email: EmailRecipient, account: User | Guest): Promise<void> {
-    await sendEmail(email, 'Your account has been closed', {
+async function sendMigrationEmail(email: EmailRecipient, profile: Profile, newOwner: User): Promise<void> {
+    await sendEmail(email, 'Your profile was migrated', migrationContent(profile, newOwner));
+}
+
+/** Render the migration message before ownership/cleanup commits, leaving only SMTP afterward. */
+export function prepareMigrationEmail(email: EmailRecipient, profile: Profile, newOwner: User): PreparedIdentityEmail {
+    return prepareIdentityDelivery(createMailOptions(email, 'Your profile was migrated', migrationContent(profile, newOwner)));
+}
+
+/** Account closure uses one content owner for its existing and atomic completion paths. */
+function deletionContent(account: User | Guest): StructuredEmailContent {
+    return {
         eyebrow: 'Account update',
         heading: 'Your account has been closed',
         preheader: `The account ${account.username} was closed as requested.`,
@@ -564,7 +575,16 @@ async function sendDeletionEmail(email: EmailRecipient, account: User | Guest): 
         details: [{label: 'Account', value: account.username}],
         notice: 'Associated profiles have been deactivated. Existing event and survey participation remains visible where it is needed for shared records.',
         closing: `Thank you for using ${settings.value.appName}.\nThe ${settings.value.appName} team`,
-    });
+    };
+}
+
+async function sendDeletionEmail(email: EmailRecipient, account: User | Guest): Promise<void> {
+    await sendEmail(email, 'Your account has been closed', deletionContent(account));
+}
+
+/** Validate the recipient and render closure mail while deletion can still roll back. */
+export function prepareDeletionEmail(email: EmailRecipient, account: User | Guest): PreparedIdentityEmail {
+    return prepareIdentityDelivery(createMailOptions(email, 'Your account has been closed', deletionContent(account)));
 }
 
 export default {

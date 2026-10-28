@@ -5,9 +5,9 @@ documentation-metadata
 audience: all documentation readers
 owner: documentation maintainers
 status: current
-last-verified: 2026-10-25
+last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P11 cutover guidance reconciled with canonical routing, Vue rendering and native browser retirement; inherited domain and database safety retained; no deployment or exhaustive verification claim
+verification-scope: current architecture diagrams and DEC-007 navigation; existing domain and operator guidance retained without new deployment or exhaustive verification claim
 source-anchors: package.json; README.md; AGENTS.md; .github/copilot-instructions.md; .github/copilot/; docs/policies/documentation-check.json; docs/backlog/documentation-remediation.yml; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; docs/user-guide/; src/backend/server.ts; src/backend/app.ts; src/backend/modules/settings.ts; vitest.config.mts; playwright.config.ts; .github/workflows/ci.yml; .github/workflows/release.yml; docs/features/help/HELP_VISUALS.md; scripts/check-help-documentation.mjs; src/backend/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: documentation-inventory-or-status-change
 -->
@@ -42,6 +42,7 @@ The canonical in-app help source is [`docs/user-guide/`](user-guide/). The appli
 |---|---|---|
 | [Project README](../README.md) | Product entry point, clean-clone development start, commands, CI, and release summary | Current: D12 |
 | [Architecture](ARCHITECTURE.md) | Runtime, layers, identity, authorization, persistence, frontend, build, release, and testing boundaries | Current: D12 architecture plus D08 advanced activity allocation; D14 owns help-integration follow-up |
+| [Architecture diagrams](features/architecture/README.md) | Editable system, component, data, sequence, state, deployment and build views | Current source-derived structural reference; installed-schema and deployment verification remain separate |
 | [Development guide](DEVELOPMENT.md) | Clean-clone setup, generated files, current code patterns, change recipes, and troubleshooting | Current: D12 |
 | [Testing guide](TESTING_GUIDE.md) | Vitest/Playwright layer contracts, database safeguards, environments, commands, and CI | Current: D12/D14; content reports are separate from application tests |
 | [Activity requirement algorithm](features/activity/ACTIVITY_REQUIREMENTS_ALGORITHM.md) | Detailed requirement and coverage algorithm | Current: D08 canonical requirement, coverage, allocation, job, review-state, application, and limitation reference |
@@ -86,6 +87,7 @@ points and topic-specific navigation aids rather than competing rule owners.
 - [DEC-004: in-app help Markdown trust model](decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md)
 - [DEC-005: surveys and the general permission system](decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md)
 - [DEC-006: frontend framework](decisions/DEC-006-FRONTEND-FRAMEWORK.md)
+- [DEC-007: current application remediation boundaries](decisions/DEC-007-APPLICATION-ARCHITECTURE-REMEDIATION.md)
 - [Documentation policy](policies/DOCUMENTATION_POLICY.md)
 - [Development policy](policies/DEVELOPMENT_POLICY.md)
 - [Machine-readable remediation backlog](backlog/documentation-remediation.yml)
@@ -113,6 +115,7 @@ Use `npm run docs:check:strict` to include all configured stale concepts in the 
 | Maintain or review the permission engine | [Permission system reference](PERMISSIONS_REFERENCE.md) |
 | Understand activity requirement calculation | [Activity requirement algorithm](features/activity/ACTIVITY_REQUIREMENTS_ALGORITHM.md) |
 | Review recorded defects | [Remediation backlog](backlog/documentation-remediation.yml) |
+| Browse architecture diagrams | [Architecture diagram reference](features/architecture/README.md) |
 | Update documentation safely | [Documentation policy](policies/DOCUMENTATION_POLICY.md), including the in-app help trust boundary |
 
 - [In-App Help Visuals](features/help/HELP_VISUALS.md) — ownership and update rules for maintained interface maps.

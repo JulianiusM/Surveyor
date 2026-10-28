@@ -66,7 +66,7 @@ async function copyLink(link: Link): Promise<void> {
     if (available.isAvailable() && link.status === 'active') await clipboard.copy(link.id, registrationUrl(link.token));
 }
 
-/** Create one single-use registration link through the shared operation.
+/** Create a registration link with the requested bounded Uses through the shared operation.
  * Unknown creation needs deliberate review; no read or clipboard failure replays it. */
 async function createLink(event: Event): Promise<void> {
     if (!available.isAvailable()) return;

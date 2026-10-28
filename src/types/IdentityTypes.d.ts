@@ -3,6 +3,7 @@ import type {EntityManager} from 'typeorm';
 import type {components} from './api/v1';
 import type {TokenEndpointResponse} from 'openid-client';
 import type {OidcClaims} from './UserTypes';
+import type {PreparedIdentityEmail} from './EmailTypes';
 
 /** Verified provider evidence; local account selection and session completion remain controller-owned. */
 export interface OidcLoginEvidence {
@@ -11,10 +12,24 @@ export interface OidcLoginEvidence {
     tokens: TokenEndpointResponse;
 }
 
-/** The existing transfer/deactivation flow reports only completed former-owner
- * cleanup. Controller prose and localized API notices project the same facts; this
- * result does not promise atomicity or change the workflow's operation order. */
+/** Completed former-owner cleanup facts shared by transfer and deactivation.
+ * Each operation retains its own approved transaction and completion boundary. */
 export type ProfileOwnerCleanup = 'none' | 'account-deleted' | 'guest-deleted';
+
+/** Provider preparation follows confirmed local sign-out; absence preserves ordinary successful handoff. */
+export interface ProviderLogoutOutcome {
+    redirect: string;
+    providerLogout?: 'unconfirmed';
+}
+
+/** Validate/serialize completion while its business transaction may still roll back. */
+export type ProfileWorkflowPreparation<Result> = (completion: components['schemas']['ProfileWorkflowCompletion']) => Result | Promise<Result>;
+
+/** Required former-owner persistence and notification preparation have completed on the supplied manager. */
+export interface PreparedOwnerCleanup {
+    cleanup: ProfileOwnerCleanup;
+    emails: PreparedIdentityEmail[];
+}
 
 /** Select the application-owned email/link destination without accepting arbitrary route prefixes. */
 export interface IdentityLinkOptions {

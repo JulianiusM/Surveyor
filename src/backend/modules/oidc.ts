@@ -16,7 +16,7 @@
 
 import type {Request} from 'express';
 import * as oidc from 'openid-client';
-import type {OidcLoginEvidence} from '../../types/IdentityTypes';
+import type {OidcLoginEvidence, ProviderLogoutOutcome} from '../../types/IdentityTypes';
 import {ExpectedError} from "./lib/errors";
 import {persistSession} from "./lib/session";
 import {rotateFrontendSessionContext} from './lib/frontendSession';
@@ -120,34 +120,49 @@ export async function exchangeCallback(req: Request): Promise<OidcLoginEvidence>
     return {issuer, identityClaims, tokens};
 }
 
-/** Preserve provider logout's established local-clear, save and discovery order. */
-export async function logout(session: Request['session']) {
-    const id_token_hint = session.tokens?.id_token;
-    const isOidc = !!session.tokens;
-
-    // Clear local session first
+/** Clear local authority through the existing Session owner, without contacting a provider. */
+export async function logoutLocal(session: Request['session']): Promise<void> {
+    // Deactivation and token-free transactional completion share this mutation.
+    // The staging Session's existing deferred save keeps its actual write under the outer transaction.
     session.auth = undefined;
     session.profile = undefined;
     session.tokens = undefined;
+    session.frontendAuthReturn = undefined;
     rotateFrontendSessionContext(session);
-
     await persistSession(session);
+}
+
+export function logout(session: Request['session']): Promise<string>;
+export function logout(session: Request['session'], presentation: 'outcome'): Promise<ProviderLogoutOutcome>;
+/** Persist local-first logout before provider discovery; only explicit outcome callers distinguish remote failure. */
+export async function logout(session: Request['session'], presentation?: 'outcome'): Promise<string | ProviderLogoutOutcome> {
+    const id_token_hint = session.tokens?.id_token;
+    const isOidc = !!session.tokens;
+    // A local save failure is never converted into confirmed sign-out.
+    await logoutLocal(session);
 
     // Only initialize OIDC if this is an OIDC session
     if (isOidc) {
-        if (!config) await initOIDC();
+        try {
+            if (!config) await initOIDC();
 
-        const meta = config.serverMetadata();
-        const endSession = meta.end_session_endpoint;
-        const postLogoutRedirectUri = settings.value.rootUrl;
+            const meta = config.serverMetadata();
+            const endSession = meta.end_session_endpoint;
+            const postLogoutRedirectUri = settings.value.rootUrl;
 
-        if (endSession) {
-            const url = new URL(endSession);
-            if (id_token_hint) url.searchParams.set('id_token_hint', id_token_hint);
-            url.searchParams.set('post_logout_redirect_uri', postLogoutRedirectUri);
-            return url.toString();
+            if (endSession) {
+                const url = new URL(endSession);
+                if (id_token_hint) url.searchParams.set('id_token_hint', id_token_hint);
+                url.searchParams.set('post_logout_redirect_uri', postLogoutRedirectUri);
+                return presentation ? {redirect: url.toString()} : url.toString();
+            }
+        } catch (error) {
+            // Local identity is already durably cleared. Default callers retain
+            // their existing error behavior, notably provider-bearing account deletion.
+            if (!presentation) throw error;
+            return {redirect: settings.value.rootUrl, providerLogout: 'unconfirmed'};
         }
     }
 
-    return settings.value.rootUrl;
+    return presentation ? {redirect: settings.value.rootUrl} : settings.value.rootUrl;
 }

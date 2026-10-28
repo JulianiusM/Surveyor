@@ -13,6 +13,8 @@ import type {Request} from 'express';
 import type {components} from '../../src/types/api/v1';
 import {PERM} from '../../src/backend/modules/lib/permissions';
 import {randomUUID} from 'node:crypto';
+import {registerAttendance, canBypassDeadlineWithToken, isEventFull,
+    cancelRegistration} from '../../src/backend/modules/event/registration';
 import * as activityService from '../../src/backend/modules/database/services/ActivityService';
 import * as driverService from '../../src/backend/modules/database/services/DriverService';
 import * as packingService from '../../src/backend/modules/database/services/PackingService';
@@ -168,7 +170,7 @@ describe('versioned Event projections and native operation adoption', () => {
             expect(native.isFull).toBe(full);
             expect(versioned.isFull).toBe(full);
             expect(versioned.registrationCount).toBe(1);
-            expect(await eventApi.isEventFull(id)).toBe(full);
+            expect(await isEventFull(id)).toBe(full);
         }
     });
 
@@ -309,12 +311,58 @@ describe('versioned Event projections and native operation adoption', () => {
             .rejects.toMatchObject({status: 403});
     });
 
+    it('serializes two new registrations for the final place and preserves the winner’s updates', async () => {
+        const id = await createEvent('One remaining Event place', 1);
+        const body = {arrivalDate: '2027-06-01', departureDate: '2027-06-03'};
+        const results = await Promise.allSettled([
+            eventApi.saveEventRegistration(id, body, sessionFor(participant)),
+            eventApi.saveEventRegistration(id, body, sessionFor(other)),
+        ]);
+        expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+        expect(results.filter(result => result.status === 'rejected')).toEqual([
+            expect.objectContaining({reason: expect.objectContaining({status: 403, cause: 'EVENT_FULL'})}),
+        ]);
+        const rows = await eventService.getRegistrationsForEvent(id);
+        expect(rows).toHaveLength(1);
+        const winner = rows[0].profileId === participant.id ? participant : other;
+        await eventApi.saveEventRegistration(id, {...body, departureDate: '2027-06-02'}, sessionFor(winner));
+        expect(await eventService.getRegistrationsForEvent(id)).toHaveLength(1);
+        expect(await eventService.getRegistrationFor(winner.id, id)).toMatchObject({departureDate: '2027-06-02'});
+    });
+
+    it('uses locked current capacity instead of an earlier Event snapshot', async () => {
+        const id = await createEvent('Changed Event capacity', 20);
+        const before = (await eventService.getEventById(id))!;
+        await eventService.register(id, '2027-06-01', '2027-06-03', participant.id);
+        await eventService.updateEventProperties(id, {maxParticipants: 1});
+        await expect(eventController.registerAttendance(before,
+            {arrivalDate: '2027-06-01', departureDate: '2027-06-03'}, {session: sessionFor(other)}))
+            .rejects.toMatchObject({status: 403, cause: 'EVENT_FULL'});
+        expect(await eventService.getRegistrationsForEvent(id)).toHaveLength(1);
+    });
+
+    it('accepts absent or blank unchanged dietary notes after the deadline without allowing real dietary edits', async () => {
+        const id = await createEvent('Dietary note equivalence');
+        const body = {arrivalDate: '2027-06-01', departureDate: '2027-06-03', dietary: ['MEAT'] as const};
+        await eventApi.saveEventRegistration(id, {...body, dietary: [...body.dietary]}, sessionFor(participant));
+        await eventService.updateEventProperties(id, {bindingDeadline: '2000-01-01T00:00:00Z',
+            allowRegDateUpdatesAfterDeadline: true, allowRegDietUpdateAfterDeadline: false});
+        for (const notes of [{}, {allergyNotes: '', dietComment: ''}, {allergyNotes: '  ', dietComment: '  '}]) {
+            await eventApi.saveEventRegistration(id, {...body, dietary: [...body.dietary], ...notes,
+                departureDate: '2027-06-02'}, sessionFor(participant));
+        }
+        expect(await eventService.getRegistrationFor(participant.id, id)).toMatchObject({departureDate: '2027-06-02',
+            dietaryChoices: [{choice: 'MEAT', additionalInfo: null}]});
+        await expect(eventApi.saveEventRegistration(id, {...body, dietary: ['MEAT', 'COMMENT'], dietComment: 'A real change'},
+            sessionFor(participant))).rejects.toMatchObject({status: 403, cause: 'EVENT_DIET_UPDATES_CLOSED'});
+    });
+
     it('preserves native own-profile cancellation no-ops and checks the deadline before deleting attendance', async () => {
         const id = await createEvent('Cancellation parity');
         const event = (await eventService.getEventById(id))!;
         // An admitted profile without attendance is a successful native no-op,
         // including a second cancellation after another tab removed its row.
-        await expect(eventController.cancelRegistration(event, sessionFor(participant))).resolves.toBe('Registration cancelled');
+        await expect(cancelRegistration(event, sessionFor(participant))).resolves.toBe('Registration cancelled');
         await expect(eventApi.cancelEventRegistration(id, sessionFor(participant))).resolves.toEqual({changed: true});
         await eventService.register(id, '2027-06-01', '2027-06-03', participant.id);
         await expect(eventApi.cancelEventRegistration(id, sessionFor(participant))).resolves.toEqual({changed: true});
@@ -325,7 +373,7 @@ describe('versioned Event projections and native operation adoption', () => {
         await eventService.updateEventProperties(id, {bindingDeadline: '2000-01-01T00:00:00Z', allowRegCancelationAfterDeadline: false});
         const closed = (await eventService.getEventById(id))!;
         for (const profile of [participant, other]) {
-            await expect(eventController.cancelRegistration(closed, sessionFor(profile)))
+            await expect(cancelRegistration(closed, sessionFor(profile)))
                 .rejects.toMatchObject({status: 403, cause: 'EVENT_CANCELLATION_CLOSED'});
             await expect(eventApi.cancelEventRegistration(id, sessionFor(profile)))
                 .rejects.toMatchObject({status: 403, cause: 'EVENT_CANCELLATION_CLOSED'});
@@ -367,18 +415,58 @@ describe('versioned Event projections and native operation adoption', () => {
     it('carries a bypass token through entry reads without consumption and spends it only on submission', async () => {
         const id = await createEvent('Token continuity');
         await eventService.updateEventProperties(id, {bindingDeadline: '2000-01-01T00:00:00Z'});
-        const link = await eventApi.addEventRegistrationLink(id, {maxUses: 5}, sessionFor(owner));
+        const link = await eventApi.addEventRegistrationLink(id, {maxUses: 1}, sessionFor(owner));
         expect((await eventFlow.readResourceEntry(id, 'detail', {}, link.token)).entry)
             .toMatchObject({kind: 'redirect', url: `/event/${id}/guest?regToken=${link.token}`});
         expect((await eventFlow.readResourceEntry(id, 'guest', {}, link.token)).guest).toEqual({id, title: 'Token continuity'});
-        expect(await eventApi.canBypassDeadlineWithToken(id, link.token)).toEqual({ok: true, linkId: link.id});
-        const nativeLink = (await eventService.listDeadlineBypassLinks(id))[0];
-        expect(nativeLink.usedCount).toBe(0);
-        expect(nativeLink.maxUses).toBe(1); // Existing Uses defect remains outside migration.
+        expect(await canBypassDeadlineWithToken(id, link.token)).toEqual({ok: true, linkId: link.id});
+        const storedLink = (await eventService.listDeadlineBypassLinks(id))[0];
+        expect(storedLink.usedCount).toBe(0);
+        expect(storedLink.maxUses).toBe(1);
 
         await eventApi.saveEventRegistration(id, {arrivalDate: '2027-06-01', departureDate: '2027-06-03', regToken: link.token}, sessionFor(participant));
-        expect(await eventApi.canBypassDeadlineWithToken(id, link.token)).toEqual({ok: false});
+        expect(await canBypassDeadlineWithToken(id, link.token)).toEqual({ok: false});
         expect((await eventApi.readEventRegistrationLinks(id, sessionFor(owner))).items[0]).toMatchObject({status: 'consumed', used: true});
+    });
+
+    it('honors requested link uses and admits only one contender for its final use', async () => {
+        const id = await createEvent('Two-use Event link');
+        await eventService.updateEventProperties(id, {bindingDeadline: '2000-01-01T00:00:00Z'});
+        const link = await eventApi.addEventRegistrationLink(id, {maxUses: 2}, sessionFor(owner));
+        const body = {arrivalDate: '2027-06-01', departureDate: '2027-06-03', regToken: link.token};
+        await eventApi.saveEventRegistration(id, body, sessionFor(participant));
+        expect((await eventService.listDeadlineBypassLinks(id))[0]).toMatchObject({maxUses: 2, usedCount: 1});
+        expect(await canBypassDeadlineWithToken(id, link.token)).toMatchObject({ok: true});
+        const results = await Promise.allSettled([
+            eventApi.saveEventRegistration(id, body, sessionFor(other)),
+            eventApi.saveEventRegistration(id, body, sessionFor(editor)),
+        ]);
+        expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+        expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
+        expect(await eventService.getRegistrationsForEvent(id)).toHaveLength(2);
+        expect((await eventService.listDeadlineBypassLinks(id))[0]).toMatchObject({maxUses: 2, usedCount: 2});
+        expect(await canBypassDeadlineWithToken(id, link.token)).toEqual({ok: false});
+    });
+
+    it('preserves default single-use issuance, expiry and revocation and rolls back consumption on a failed attendance write', async () => {
+        const id = await createEvent('Event link boundaries');
+        const ordinary = await eventApi.addEventRegistrationLink(id, {}, sessionFor(owner));
+        const expired = await eventApi.addEventRegistrationLink(id, {maxUses: 2, expiresAt: '2000-01-01T00:00:00Z'}, sessionFor(owner));
+        const revoked = await eventApi.addEventRegistrationLink(id, {maxUses: 2}, sessionFor(owner));
+        await eventApi.revokeEventRegistrationLink(id, revoked.id, sessionFor(owner));
+        await eventService.updateEventProperties(id, {bindingDeadline: '2000-01-01T00:00:00Z'});
+        for (const link of [expired, revoked]) {
+            await expect(eventApi.saveEventRegistration(id,
+                {arrivalDate: '2027-06-01', departureDate: '2027-06-03', regToken: link.token}, sessionFor(participant)))
+                .rejects.toMatchObject({status: 403, cause: 'EVENT_DEADLINE_PASSED'});
+        }
+        const event = (await eventService.getEventById(id))!;
+        const vanished = {...participant, id: randomUUID()};
+        await expect(registerAttendance(event, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'},
+            sessionFor(vanished), ordinary.token)).rejects.toBeTruthy();
+        const stored = (await eventService.listDeadlineBypassLinks(id)).find(link => link.id === ordinary.id)!;
+        expect(stored).toMatchObject({maxUses: 1, usedCount: 0, usedAt: null});
+        expect(await eventService.getRegistrationsForEvent(id)).toHaveLength(0);
     });
 
     it('retains the existing final-use token lock across concurrent registrations', async () => {

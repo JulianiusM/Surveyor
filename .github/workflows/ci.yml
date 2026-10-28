@@ -79,9 +79,31 @@ jobs:
         run: |
           mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS surveyor_test;"
           mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS surveyor_e2e;"
-          mysql -h 127.0.0.1 -uroot -proot -e "GRANT ALL ON surveyor_test.* TO 'surveyor'@'%' IDENTIFIED BY 'surveyor';"
-          mysql -h 127.0.0.1 -uroot -proot -e "GRANT ALL ON surveyor_e2e.* TO 'surveyor'@'%' IDENTIFIED BY 'surveyor';"
-          mysql -h 127.0.0.1 -uroot -proot -e "FLUSH PRIVILEGES;"
+          # Reconcile the disposable CI account, including any broader grants
+          # supplied by service initialization. Quoted identifiers still need
+          # escaped underscores because database grants accept wildcard names.
+          mysql -h 127.0.0.1 -uroot -proot <<'SQL'
+          REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'surveyor'@'%';
+          GRANT ALL PRIVILEGES ON `surveyor\_test`.* TO 'surveyor'@'%';
+          GRANT ALL PRIVILEGES ON `surveyor\_e2e`.* TO 'surveyor'@'%';
+          SQL
+
+      - name: Verify isolated CI schema privileges
+        run: |
+          set -e
+          # These names would match the former underscore patterns. They exist
+          # only in this runner's disposable service and are removed on exit.
+          mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE surveyorXtest; CREATE DATABASE surveyorXe2e;"
+          trap 'mysql -h 127.0.0.1 -uroot -proot -e "DROP DATABASE IF EXISTS surveyorXtest; DROP DATABASE IF EXISTS surveyorXe2e;"' EXIT
+          for database in surveyor_test surveyor_e2e; do
+            mysql -h 127.0.0.1 -usurveyor -psurveyor --database="$database" -e "SELECT 1;" >/dev/null
+          done
+          for database in surveyorXtest surveyorXe2e; do
+            if mysql -h 127.0.0.1 -usurveyor -psurveyor --database="$database" -e "SELECT 1;" >/dev/null 2>&1; then
+              echo "CI account unexpectedly accesses $database"
+              exit 1
+            fi
+          done
 
       - name: Create tests/.env.test
         run: |
@@ -131,6 +153,12 @@ jobs:
         # Vitest transpiles fixtures. Check their contracts once, including real
         # SFC types; the other jobs retain their existing runtime boundaries.
         run: npm run typecheck:tests --ignore-scripts
+
+      - name: Build application for integration fixtures
+        if: matrix.stage == 'integration'
+        # Installed SSR fixtures consume the entry and lazy modules from this
+        # exact checkout. Another matrix runner's build is not shared here.
+        run: npm run build
 
       - name: Run selected Vitest project with coverage and mergeable reports
         if: matrix.stage != 'browser'

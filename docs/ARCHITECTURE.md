@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; developers; AI agents
 owner: architecture maintainers
 status: current
-last-verified: 2026-10-27
+last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved shared-owner remediation, directed contract references, generated options, final application receipts and durable proof ownership reconciled against source; no deployment claim
+verification-scope: current-source diagrams, controller/feature/DBAL ownership and approved identity/Event completion boundaries reconciled; no installed-release or deployment certification
 source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: architecture-or-help-delivery-change
 -->
@@ -17,6 +17,11 @@ server rendering and browser interaction. Express retains routing, sessions, aut
 the same existing controllers and database services serve every transport.
 
 This document defines the current technical shape of the repository. Configuration, database operation, production deployment, and recovery procedures are maintained separately in [Configuration](CONFIGURATION.md), [Database and Migrations](DATABASE.md), [Production Operations](OPERATIONS.md), and [Upgrading and Rolling Back](UPGRADING.md).
+
+The [architecture diagram reference](features/architecture/README.md) provides the system, component, data,
+sequence, state, deployment and build views. Its [Mermaid diagrams](features/architecture/DIAGRAMS.md) are the
+editable source for the visual reference. Implementation work is tracked separately in the
+[remediation backlog](backlog/documentation-remediation.yml).
 
 ## System context
 
@@ -210,7 +215,7 @@ registration and logout when no explicit destination was supplied, using the sha
 `src/backend/controller/` contains request/response orchestration and feature-level normalization. Controllers commonly:
 
 - normalize or validate posted values;
-- enforce business rules and authorization, including checks against locked database snapshots, delegating complex feature logic to existing feature modules;
+- coordinate admission and feature operations; shared business modules check domain rules and locked authorization snapshots;
 - call one or more service functions;
 - build authorized page/SSR or API projections;
 - choose flash messages, redirects, or expected errors; and
@@ -261,13 +266,13 @@ import the linkage owner directly, so those dependencies no longer point back to
 
 `src/backend/modules/database/services/` is the pure database abstraction layer (DBAL). It exports repository queries, locks,
 transactions, and persistence functions. Business rules, authorization decisions, and input checks belong to
-controllers and their dedicated business modules. Services do not throw `APIError`, `ExpectedError`, or other errors tied to an HTTP/UI context.
+feature modules, with controllers coordinating their invocation. Services do not throw `APIError`, `ExpectedError`, or other errors tied to an HTTP/UI context.
 Callers import the module namespace or named functions.
 
 Multi-step writes that must be atomic use TypeORM transactions. A service-managed transaction can invoke a named
-operation from the corresponding controller or its dedicated feature module with a manager and nullable locked rows.
+operation from the corresponding feature module with a manager and nullable locked rows.
 That operation checks the snapshot and calls DBAL writes with the same manager. Controllers orchestrate request context,
-feature operations, and service results; the controller layer decides whether absence,
+feature operations, and service results; the feature business owner decides whether absence,
 conflicts, capacity, or lifecycle state should reject the operation. Native database failures propagate normally.
 
 `ListService` supplies the matching Packing/Drivers root-lock transaction, item assignment evidence, assignment
@@ -276,7 +281,7 @@ sequence and CRUD operations; supplying a shared inner operation preserves the e
 
 ### Feature modularization and source ownership
 
-Complex business logic belongs in the corresponding feature folder when that boundary improves maintainability,
+Shared business implementation belongs in the corresponding feature folder,
 as established by activity recommendations and `src/backend/modules/invoice/`. Keep request orchestration in the existing
 controller and pure persistence in the existing DBAL. Reuse coherent modules rather than introduce parallel services
 or controllers. Re-exporting imported values, functions, or types is forbidden; consumers import their actual owner.
@@ -562,6 +567,12 @@ A drivers-list row represents a ride offered by the profile that created it. Pas
 
 Identity services manage activation, password reset, OIDC links, guest tokens/recovery, profile creation/default selection, profile migration, and deletion. Relationships throughout the collaboration domains use profiles as the human actor.
 
+Registration and reset share the authored `NewPassword` rule: at least 15 Unicode code points and at most 72 UTF-8
+bytes, without character-category requirements. Generated credential limits feed the common password evaluator and
+localized form guidance. One common UTF-8 measurement function also supplies the standalone API validators.
+The identity feature enforces business admission before persistence; DBAL retains unchanged hashing and stored
+credential verification. Exact entered values and existing-password login remain unchanged.
+
 `src/backend/modules/email.ts` owns message rendering and SMTP delivery. Its required named recipient contract provides a
 Nodemailer Address object for the To header and a single personal greeting before the heading in both HTML and plain
 text. Callers supply actual account, guest, or profile names. HTML text escaping and HTTP(S)-only action links apply
@@ -578,9 +589,9 @@ without those options retain their established message layout.
 and coherent built manifest assets without making HTTP calls to its own application. Each request owns its app,
 router, QueryClient, locale instance and bootstrap. Private state never lives in a module singleton or persisted cache.
 
-Public Home is `/` (`/home` remains an alias); personal Overview is `/users/dashboard`. Shell links, identity fallback and confirmed-removal delivery share the Overview
+Public Home is `/`; personal Overview is `/users/dashboard`. Shell links, identity fallback and confirmed-removal delivery share the Overview
 destination constant. Home renders its existing request-captured suggestion without reading personal collections.
-Dashboard document and warm navigation share the native account-or-guest/profile Login journey. Missing authoritative
+Dashboard document and warm navigation share the account-or-guest/profile Login journey. Missing authoritative
 identity does not manufacture anonymous admission. Resource guest/admin intent follows canonical Router records and
 explicit Express operation declarations, independently of equivalent case or trailing-slash URL spelling. Help route
 metadata identifies article readiness and locale-URL synchronization without classifying unmatched paths as articles.
@@ -611,12 +622,12 @@ persists secrets/files or replays writes. Session/security revalidation and scop
 feature files own their operations. Shared contracts have neutral names in `common.yaml`; genuinely domain-specific
 contracts and compatibility aliases stay at their feature boundary. Generation emits declaration contracts and standalone
 runtime validators; no second handwritten wire schema or runtime schema compilation exists. Transport adapters decode
-and present around the same controller business owners. Page admission, method grants and private projections remain
+and present around the same shared feature operations, coordinated by controllers. Page admission, method grants and private projections remain
 separate; reusable controls never grant authority.
 
 Generated local-input failures flow through the existing transport/command/feedback owners. Features supply visible
 field and optional row/day labels; shared typed diagnostics retain only safe generated rule metadata and translate
-at render time. Constraints remain in authored schemas and business checks in controllers. Matching creation and
+at render time. Constraints remain in authored schemas and shared business checks in feature modules. Matching creation and
 duplicate permission matrices use `CreationPermissions`, a closed-by-default disclosure that keeps controls and
 drafts mounted while the existing form retains submission and admission.
 
@@ -633,8 +644,8 @@ and public rendering without feedback create no anonymous row/cookie and return 
 Existing authenticated records can project bounded legacy metadata without a write; explicit identity transitions retain their existing
 completion owner. Browser claims/epochs/capabilities never grant authority. Controllers and stored server identity
 remain authoritative, including public grant-only methods without an invented anonymous principal. An intentional
-account-required document redirect retains native anonymous Session/flash persistence and one-time consumption,
-without a URL notice or metadata initialization. Ordinary saves and native expiry/provider effects retain their
+account-required document redirect uses anonymous Session/flash persistence and one-time consumption,
+without a URL notice or metadata initialization. Ordinary saves and expiry/provider effects retain their
 owners. The [Development guidance](DEVELOPMENT.md#backend-and-method-policy-contracts) describes these boundaries.
 
 The [Development contract guidance](DEVELOPMENT.md#contract-authoring-and-generated-consumers) owns supported
@@ -785,16 +796,14 @@ Activity's basic components own dated slot drafts, local filters and warning-rev
 owns inline values, comparison and conflict recovery; optional tag/multiline inputs change presentation only.
 Its Enter/Ctrl+Enter handler leaves active text composition to the browser before preventing any default or saving.
 Activity's distinct role input applies that same composition boundary before selecting/creating a role. Ordinary
-shortcuts, blur and mouse actions retain their existing owners. This approved composition behavior supersedes
-the historical native reference.
+shortcuts, blur and mouse actions retain their existing owners.
 Active description flags retain that same editor through a remote empty value, and slot modals retain opening fields
 while current permission loss disables submission. Client admission remains separate from server method grants.
 The schedule badge derives the complete saved-slot total independently of local filters. One pure browser-safe
 `civilDate.ts` owner supplies Activity creation and versioned detail weeks, plus matching Event/Activity date-only
 display. Its structural declaration lives under `src/types/`; UTC calendar stepping and explicit UTC formatting
-preserve the saved day while the selected locale controls wording. This approved presentation correction replaces
-the original separate native browser/server algorithms without changing persistence, business calculations,
-printable output or instant/deadline ownership.
+preserve the saved day while the selected locale controls wording. Browser and server share this date implementation;
+persistence, business calculations, printable output and instant/deadline handling retain their respective owners.
 
 `ActivityRequirements` owns its lexical settings draft and saved calculation context. It composes the existing
 `ActivityParticipants` presentation with unsaved results from the shared pure requirements engine; ordinary reads
@@ -810,16 +819,27 @@ the captured domain job. Neither read path maintains rows or enqueues work. The 
 engines retain eligibility, provenance, reciprocal moves, collision privacy, application and inherited completion
 behavior. Versioned projections select scalars, including former-participant override labels, and omit raw job diagnostics.
 
-Versioned reads and guest identity completion cannot create an Event; the adapter does not strengthen inherited multi-step creation
-finality. Ordinary profile workflow and Event child-deletion commands follow the same SPA transport boundary,
-without importing their excluded backend repairs. Router owns ordinary migrated links; true provider/capability
-arrivals and outputs retain explicit document ownership. Token issuance is deliberate
-command work, never Query, prefetch or history restoration; private output stays in its admitted mounted lifetime.
-Transfer/deactivation branches expose the same typed former-owner cleanup facts to native wording and generated
-catalog notices. Account/guest deletion uses that notice path too. Vue retains message keys through the
-existing completion/navigation/notice owners, so a visible confirmation reacts to language changes. No adapter
-parses prose or repeats a cleanup decision; native wording and operation sequencing remain unchanged.
-The controller's capacity predicate serves display and registration admission; its child-eligibility
+Versioned reads and guest identity completion cannot create an Event. Event creation retains its current multi-step
+completion boundary. Router owns ordinary application navigation; provider/capability arrivals and outputs retain
+explicit document ownership. Guest recovery also has its own admitted `/guest/recovery` form independent of local
+account login. Token issuance is deliberate command work, never Query, prefetch or history restoration; private
+output stays in its admitted mounted lifetime.
+
+The shared `modules/identity.ts` feature owns profile capability checks, transfer cleanup and deletion policy.
+Issuance checks current ownership under the Profile lock. Transfer locks sorted account owners, then any source
+Guest and the Profile, rechecks token/expiry, and completes transfer, required owner cleanup and response preparation
+before commit. It prepares mail before commit and delivers afterward without rotating the recipient's active profile.
+Token-free account/guest deletion uses the existing detached Session completion transaction for deletion, local
+sign-out and its prepared response. Provider-bearing deletion retains its separately scoped completion behavior.
+Final-profile deactivation retains its existing detach/cleanup/mail order, then ordinary local clear/save and Home
+completion rather than selecting a nonexistent remaining profile. Typed cleanup facts feed the existing localized
+completion/notice owners. Provider logout clears and saves local identity first; later provider preparation failure
+confirms local sign-out with an unconfirmed-provider notice. It neither restores identity nor replays the operation.
+
+The shared `modules/event/registration.ts` feature owns attendance and bypass-link policy. The Event root and ordered
+pool locks precede current membership/capacity checks and token consumption on one manager. Existing-member updates
+remain valid when full; token use rolls back with a failed attendance write. Its capacity predicate serves display
+and registration admission. The Event linkage owner's child-eligibility
 predicate serves related projections and scoped lifecycle rechecks. DBAL supplies counts, rows, locks and
 persistence rather than deciding either rule. Optional-session method declarations describe the existing public
 grant boundary; they do not change runtime authentication or widen profile-required operations.

@@ -380,8 +380,8 @@ export async function queryUserProfiles(prefix: string, limit: number): Promise<
 }
 
 /** Optional helpers you might find useful elsewhere */
-export async function getUserById(id: number): Promise<User | null> {
-    return await AppDataSource.getRepository(User).findOne({where: {id}, relations: {profiles: true}});
+export async function getUserById(id: number, manager: EntityManager = AppDataSource.manager): Promise<User | null> {
+    return await manager.getRepository(User).findOne({where: {id}, relations: {profiles: true}});
 }
 
 export async function getProfileById(id: string, manager: EntityManager = AppDataSource.manager) {
@@ -853,8 +853,10 @@ export async function setVisibility(profileId: string, ref: ArchiveReference, vi
     await repository.upsert({...target, visibility: storedVisibility}, ['profile', 'entityType', 'entityId']);
 }
 
-export async function generateMigrationToken(profileId: string) {
-    const repo = AppDataSource.getRepository(Profile);
+/** Replace one migration capability on the caller's already admitted transaction. */
+export async function generateMigrationToken(profileId: string, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(Profile);
+    // Token generation and its lifetime stay in the established persistence owner.
     const token = generateUniqueToken();
     const expiration = new Date(Date.now() + (3_600_000 * 24));
     await repo.update({id: profileId}, {
@@ -878,6 +880,41 @@ export async function verifyMigrationToken(token: string) {
     });
 }
 
+/** Hold the profile row while the feature checks current ownership or consumes its token. */
+export function withMigrationProfileTransaction<Result>(profileId: string,
+    operation: (manager: EntityManager, profile: Profile | null) => Promise<Result>,
+    source?: Pick<Profile, 'userId' | 'guestId'>, recipientId?: number): Promise<Result> {
+    /** Reissuance and consumption serialize on the same profile, with no request or policy dependency. */
+    async function lockProfile(manager: EntityManager): Promise<Result> {
+        // A transfer's owner rows precede the profile, matching account/guest
+        // deletion's FK updates. Stable User ordering also serializes reciprocal
+        // transfers without each holding the other's destination FK parent.
+        const userIds = [...new Set([source?.userId, recipientId].filter((id): id is number => typeof id === 'number'))].sort((a, b) => a - b);
+        for (const id of userIds) {
+            await manager.getRepository(User).findOne({where: {id}, lock: {mode: 'pessimistic_write'}});
+        }
+        if (source?.guestId) {
+            await manager.getRepository(Guest).findOne({where: {id: source.guestId}, lock: {mode: 'pessimistic_write'}});
+        }
+        const profile = await manager.getRepository(Profile).findOne({where: {id: profileId}, lock: {mode: 'pessimistic_write'}});
+        return operation(manager, profile);
+    }
+    return AppDataSource.transaction('READ COMMITTED', lockProfile);
+}
+
+/** Read/retain an identity owner lock on the caller's transaction. */
+export async function lockIdentityOwner(profile: Pick<Profile, 'userId' | 'guestId'>, manager: EntityManager): Promise<User | Guest | null> {
+    // Transfer prelocks candidate owner rows before its profile; deletion calls
+    // this before its FK changes. READ COMMITTED observes prior committed cleanup.
+    if (profile.userId) {
+        return manager.getRepository(User).findOne({where: {id: profile.userId}, lock: {mode: 'pessimistic_write'}});
+    }
+    if (profile.guestId) {
+        return manager.getRepository(Guest).findOne({where: {id: profile.guestId}, lock: {mode: 'pessimistic_write'}});
+    }
+    return null;
+}
+
 export async function addProfileToUser(profileId: string, userId: number, em?: EntityManager) {
     const repo = em ? em.getRepository(Profile) : AppDataSource.getRepository(Profile);
     await repo.update({id: profileId}, {
@@ -886,7 +923,7 @@ export async function addProfileToUser(profileId: string, userId: number, em?: E
 }
 
 /** Clear a profile's existing account/guest association and default flag.
- * Return the former owner for controller-owned cleanup, using the caller's
+ * Return the former owner for shared feature cleanup, using the caller's
  * transaction when supplied; absent profiles/associations remain undefined. */
 export async function removeProfileFromOwner(profileId: string, em?: EntityManager) {
     // Read both possible ownership relations through the same selected manager.
@@ -910,30 +947,29 @@ export async function removeMigrationToken(profileId: string, em?: EntityManager
     await repo.update({id: profileId}, {migrationToken: null, migrationTokenExpiration: null});
 }
 
-/** Move a profile to an account and consume its migration token atomically.
- * Controller admission remains separate; the existing transaction returns the
- * previous owner so later feature cleanup can retain its established ordering. */
-export async function moveProfileToUserTx(profileId: string, userId: number) {
-    return await AppDataSource.transaction(async em => {
+/** Move ownership and retire its token on the supplied transaction, or one standalone transaction. */
+export async function moveProfileToUserTx(profileId: string, userId: number, manager?: EntityManager) {
+    /** Preserve the existing mutation order; feature admission and cleanup use the same manager when supplied. */
+    async function moveProfile(em: EntityManager) {
         // Clear the source/default relationship before assigning the destination.
         const owner = await removeProfileFromOwner(profileId, em);
         await addProfileToUser(profileId, userId, em);
-        // Retire the same token inside this transaction, without adding a lock
-        // or changing the controller's earlier token-admission contract.
+        // Retire the same capability before any transfer transaction can commit.
         await removeMigrationToken(profileId, em);
         return owner;
-    })
+    }
+    return manager ? moveProfile(manager) : AppDataSource.transaction(moveProfile);
 }
 
-export async function deleteUser(userId: number) {
-    const repo = AppDataSource.getRepository(User);
+export async function deleteUser(userId: number, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(User);
     const deleted = await repo.findOneBy({id: userId});
     await repo.delete({id: userId});
     return deleted;
 }
 
-export async function deleteGuest(guestId: string) {
-    const repo = AppDataSource.getRepository(Guest);
+export async function deleteGuest(guestId: string, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(Guest);
     const deleted = await repo.findOneBy({id: guestId});
     await repo.delete({id: guestId});
     return deleted;

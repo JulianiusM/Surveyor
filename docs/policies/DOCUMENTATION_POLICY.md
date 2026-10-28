@@ -5,9 +5,9 @@ documentation-metadata
 audience: maintainers; documentation contributors; AI agents
 owner: documentation maintainers
 status: current
-last-verified: 2026-10-26
+last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-06-ci-repair
-verification-scope: maintainer-authorized final-answer-only question placement routed to the development policy; prior approval, provenance, runtime Help and profile boundaries retained
+verification-scope: 2026-10-28 backlog-only classification and completed frontend cutover amendments; direct prose plans, final-answer questions, approval provenance and runtime Help boundaries retained
 source-anchors: docs/policies/DEVELOPMENT_POLICY.md; scripts/check-documentation.mjs; scripts/tests/documentation-check.test.mjs; repository-tree; src/backend/controller/helpController.ts; src/frontend/features/help/; src/common/locales/; .github/workflows/release.yml; docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md; docs/policies/documentation-check.json; docs/backlog/documentation-remediation.yml; scripts/check-help-documentation.mjs; docs/features/help/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; tests/unit/help-localization.spec.ts
 next-review: documentation-pipeline-or-help-trust-boundary-change
 -->
@@ -60,6 +60,10 @@ The maintainer's 2026-10-26 clarification requires all questions and complete ou
 answer. Follow the Development Policy's [question presentation rule](DEVELOPMENT_POLICY.md#questions-belong-in-the-final-answer-2026-10-26)
 for their placement and review; an earlier question elsewhere or a pending-decision reference is not sufficient.
 
+The maintainer's 2026-10-28 correction also requires direct prose presentation of the complete implementation plan.
+Follow the Development Policy's [implementation-plan presentation rule](DEVELOPMENT_POLICY.md#implementation-plans-belong-in-the-final-answer-2026-10-28);
+repository records and links support that presentation rather than replace it.
+
 The maintainer's 2026-10-15 enforcement correction includes clarification or option questions that decide a conflict
 or changed boundary. Apply that section's full explanation, direct question and independent/root review before
 presenting such a request. A rejected or withdrawn question supplies no approval. Agent-authored decision text,
@@ -84,7 +88,7 @@ approval or silent updates to the design.
 | Feature/layer design and references | [`docs/features/`](../features/) | Durable specialist material for its intended maintainer audience. |
 | Optional task profiles and their working material | `docs/<directory>/PROFILE.md` and its owning directory | An approved profile describes its activation scope and owns temporary rules, evidence and any guide replacement staging for that task. Presence is optional. |
 | AI-agent summaries | [`AGENTS.md`](../../AGENTS.md) and [`.github/copilot/`](../../.github/copilot/) | These are summaries, not an independent source of behavioral truth. |
-| Machine-readable backlog and defect register | [`documentation-remediation.yml`](../backlog/documentation-remediation.yml) | Open findings/defects, durable decisions, acceptance criteria and concise closed-ID/package dispositions. |
+| Machine-readable backlog and defect register | [`documentation-remediation.yml`](../backlog/documentation-remediation.yml) | Backlog items only: findings/defects, their acceptance criteria, status and concise resolution evidence. |
 | Advisory report configuration | [`documentation-check.json`](documentation-check.json) | Baselines, metadata rules, and explicitly deferred stale-term debt. |
 
 Do not introduce an alias directory for end-user help. Code, links, release packaging, and contributor instructions must
@@ -104,6 +108,18 @@ Classify existing material before moving it. Backlog records belong under `docs/
 under `docs/decisions/`; permanent feature/layer designs go under `docs/features/`. Do not create aliases, duplicate
 copies or extra root documents. Review anything outside these classifications and request approval with the exact
 file list and reasons before removing it. Reports must never delete or rewrite material automatically.
+
+**Backlog classification amendment (2026-10-28):** the maintainer explicitly restricts the backlog to backlog items.
+The former inclusion of durable decisions and implementation packages does not authorize storing decisions, plans,
+approval transcripts, policy text or run histories there. Decisions belong in `docs/decisions/`, rules in
+`docs/policies/`, and feature references in `docs/features/`. Present implementation plans directly in the final
+answer under the Development Policy; repository files cannot substitute for that presentation. Keep only an item's
+current evidence, acceptance criteria and concise resolution with that item. Unique durable material must be
+classified into its canonical owner before removing misplaced copies.
+
+**Completed-cutover amendment (2026-10-28):** the frontend cutover is complete. Current application documentation
+describes the implemented application; it must not impose a migration state or comparison with a former frontend.
+Apply the Development Policy's current-source amendment when reviewing application behavior.
 
 ## Document roles and optional task profiles
 
@@ -348,7 +364,13 @@ does not suppress archive creation. Build and other application failures remain 
 
 ## Per-package workflow
 
-1. Select the explicitly authorized documentation scope or the next recorded behavior decision in the existing backlog.
+Backlog severity describes the effect of an item: **critical** means a likely core-task, access/security or safe-operation
+failure; **high** means a material common-task, contributor-workflow or production-responsibility problem; **medium**
+means avoidable confusion, incomplete feature use or maintenance friction with a usable workaround; **low** means
+limited-impact clarity, structure, metadata or polish. These definitions classify backlog items and are policy, not
+backlog items themselves. They are relocated here under the 2026-10-28 classification amendment.
+
+1. Select the explicitly authorized documentation scope or the next backlog item; obtain any required decision in the conversation.
 2. Reproduce only its findings against the current source anchors.
 3. Establish the feature-specific working contract from implementation evidence and any explicit maintainer decision, or keep the decision open.
 4. Classify each difference as intentional behavior, a transient defect, or unresolved; do not infer uniformity from peer features alone.
@@ -361,11 +383,11 @@ does not suppress archive creation. Build and other application failures remain 
 Newly discovered problems are recorded in the backlog with a package assignment. They do not expand the active package
 unless they block truthful completion of that package.
 
-Keep only durable decisions, open findings, concise closed-ID dispositions and latest relevant evidence in maintained
-records. Superseded runs, repeated failures, file inventories and completed implementation sequences remain in Git
-history and ignored run artifacts. Consolidate completed plans by transferring unique behavioral contracts to existing
-canonical owners before retiring the plan. Editorial cleanup does not authorize changed behavior or changing an
-approved technical decision.
+Keep backlog items and their concise resolution evidence in the backlog, approved decisions in decision records,
+and rules in policies. Superseded runs, repeated failures, file inventories and completed implementation sequences
+are transient evidence in ignored artifacts, not maintained backlog content. Transfer unique behavioral contracts
+to their canonical owners before removing misplaced material. Editorial cleanup does not authorize changed behavior
+or changing an approved technical decision.
 
 ## In-app help authoring reports and runtime protection
 

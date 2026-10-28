@@ -2826,24 +2826,24 @@ describe('packing command forms', () => {
         expect(confirm).not.toHaveBeenCalled();
     });
 
-    it('preserves original title/capacity affordances and their local denied feedback without admitting a write', async () => {
-        // Displayed edit affordances cannot grant the separate metadata permission.
+    it('withholds title/capacity editors when only display grants remain', async () => {
+        // Stale display flags cannot make a field editable without its current
+        // actual write admission; readable row values remain in place.
         const projection = {...list, items: [{...item, capabilities: {...item.capabilities,
             editTitle: false, editCapacity: false, showTitleEdit: true, showCapacityEdit: true}}]};
-        const {wrapper, context, request} = await mounted(PackingPage, {}, async () => json(projection));
+        const {wrapper, request} = await mounted(PackingPage, {}, async () => json(projection));
         const cells = wrapper.get(`[data-item-id="${itemId}"]`).findAll('td');
         for (const column of [2, 4]) {
-            expect(cells[column]!.attributes('data-edit')).toBeDefined();
+            expect(cells[column]!.attributes('data-edit')).toBeUndefined();
             await cells[column]!.trigger('dblclick');
             await flushPromises();
             expect(cells[column]!.find('input').exists()).toBe(false);
-            expect(wrapper.get('.alert-danger').text()).toBe('You need Item Edit permission to edit item details.');
         }
-        expect(wrapper.text()).toContain(context.messages.value.t('packing.inlineHint'));
+        expect(wrapper.find('.alert-danger').exists()).toBe(false);
         expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
     });
 
-    it('closes revoked settings while retaining native assignment controls and their server-denial feedback', async () => {
+    it('closes revoked settings and retires personal controls when their method grant disappears', async () => {
         let canManage = true;
         let canAssign = true;
         let listReads = 0;
@@ -2871,23 +2871,15 @@ describe('packing command forms', () => {
         expect(listReads).toBeGreaterThan(1);
         expect(context.queryClient.getQueryData(packingKeys.metadata(session.context, id))).toBeUndefined();
 
-        // The fixed native entity-assign handler sends both requests; ACCESS_VIEW
-        // middleware then reports this exact literal. A broader parent read grant
-        // must not invent local denial, hide the controls or disable their click.
-        const nativeDeniedMessage = 'Not allowed';
+        // The shared personal-action owner consumes refreshed method admission
+        // for both Take and Remove without hiding the readable assignments.
         canAssign = false;
         await context.queryClient.refetchQueries({queryKey: packingKeys.detail(session.context, id)});
         await flushPromises();
         const confirmedReads = listReads;
-        for (const label of ['Take', 'Remove']) {
-            const control = button(wrapper, label);
-            expect(control.attributes('disabled')).toBeUndefined();
-            await control.trigger('click');
-            await flushPromises();
-            expect(wrapper.get('.alert-danger').text()).toBe(nativeDeniedMessage);
-            expect(wrapper.text()).not.toContain(context.messages.value.t('state.unknownOutcome'));
-        }
-        expect(deniedAssignments).toEqual(['PUT', 'DELETE']);
+        expect(wrapper.findAll('button').filter(control => ['Take', 'Remove'].includes(control.text()))).toHaveLength(0);
+        expect(wrapper.text()).toContain('My equipment');
+        expect(deniedAssignments).toEqual([]);
         expect(listReads).toBe(confirmedReads);
         expect(context.mayChangeIdentity()).toBe(true);
     });

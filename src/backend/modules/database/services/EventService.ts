@@ -147,6 +147,22 @@ export async function lockEvent(manager: EntityManager, eventId: string): Promis
     return manager.getRepository(Event).findOne({where: {id: eventId}, lock: {mode: 'pessimistic_write'}});
 }
 
+/** Coordinate attendance writes under the Event root and stable pool locks.
+ * The supplied feature operation owns admission and missing-row decisions; this
+ * DBAL boundary only retains the current rows and transaction connection. */
+export async function withLockedRegistration<T>(eventId: string,
+    operation: (manager: EntityManager, event: Event | null) => Promise<T>): Promise<T> {
+    /** Hold parent/root coordination before any pool or deadline-token work. */
+    async function writeLocked(manager: EntityManager): Promise<T> {
+        // Pool coordination always follows the root. The feature may subsequently
+        // lock a token and reuse these pool locks while persisting attendance.
+        const event = await lockEvent(manager, eventId);
+        if (event) await lockEventPools(manager, eventId);
+        return operation(manager, event);
+    }
+    return withEventTransaction(writeLocked);
+}
+
 /** Store an already normalized patch using the controller's current locking transaction. */
 export async function updateEventProperties(eventId: string, patch: Partial<Event>, manager: EntityManager = AppDataSource.manager): Promise<void> {
     await manager.getRepository(Event).update(eventId, patch);
@@ -201,7 +217,7 @@ export async function getManagedEvents(profileId: string) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Registrations (no validation — controller handles it)
+// Registration persistence; admission belongs to the Event registration feature.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Persist a registration, dietary rows and default-pool enrollment together,
@@ -447,12 +463,12 @@ export async function revokeDeadlineBypassLink(eventId: string, linkId: string) 
     await repo.update({id: linkId, event: {id: eventId}}, {revokedAt: now()});
 }
 
-/** Load token state; deadline, revocation and usage checks are controller policy. */
-export async function getDeadlineBypassToken(eventId: string, token: string) {
-    return AppDataSource.getRepository(EventRegBypassLink).findOne({where: {event: {id: eventId}, token}});
+/** Load token state; the Event registration feature owns deadline and usage eligibility. */
+export async function getDeadlineBypassToken(eventId: string, token: string, manager: EntityManager = AppDataSource.manager) {
+    return manager.getRepository(EventRegBypassLink).findOne({where: {event: {id: eventId}, token}});
 }
 
-/** Lock token data on the controller's registration transaction before checking eligibility. */
+/** Lock token data on the supplied registration transaction before feature eligibility checks. */
 export async function lockDeadlineBypassLink(manager: EntityManager, eventId: string, linkId: string): Promise<EventRegBypassLink | null> {
     return manager.getRepository(EventRegBypassLink).findOne({
         where: {id: linkId, event: {id: eventId}}, lock: {mode: 'pessimistic_write'},
@@ -460,7 +476,7 @@ export async function lockDeadlineBypassLink(manager: EntityManager, eventId: st
 }
 
 /**
- * Record consumption after the controller checks the locked row. The caller must use the
+ * Record consumption after the feature checks the locked row. The caller must use the
  * same transaction for this write and registration: failure rolls both operations back.
  */
 export async function consumeDeadlineBypassToken(

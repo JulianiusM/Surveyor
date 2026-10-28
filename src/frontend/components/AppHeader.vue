@@ -2,6 +2,7 @@
 import {computed, onBeforeUnmount, ref, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
 import type {RouteLocationNormalized} from 'vue-router';
+import type {components} from '../../types/api/v1';
 import {useActionState, useFrontend} from '../app/context';
 import {localeManifest} from '../../common/localization/translator';
 import {frontendOverviewPath, safeFrontendReturn} from '../../common/lib/frontendIdentity';
@@ -139,8 +140,13 @@ async function logoutIdentity(scope: FrontendRequestScope) {
     const result = await context.api.logout(scope);
     // Next takes precedence over the provider's fallback logout URL.
     // Retry completes only this destination after the new actor is admitted.
+    // Local sign-out is confirmed even when the provider's later handoff failed.
+    // Keep its honest outcome through the existing shared notice/navigation owner.
+    const notice: components['schemas']['EntryNotice'] = result.providerLogout === 'unconfirmed'
+        ? {kind: 'info', messageKey: 'auth.providerLogoutUnconfirmed'}
+        : {kind: 'success', messageKey: 'auth.logoutDone'};
     await completeIdentityEntry(context, router, result,
-        {kind: 'redirect', url: destination, notice: {kind: 'success', messageKey: 'auth.logoutDone'}}, origin, completion);
+        {kind: 'redirect', url: destination, notice}, origin, completion);
     return result;
 }
 

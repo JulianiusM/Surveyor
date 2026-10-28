@@ -20,15 +20,23 @@ router.get('/profiles/workflow-entry', asyncHandler(async function getProfileWor
 /** Explicit issuance is a non-replayed command; no query refresh calls this owner. */
 router.post('/profiles/migration/token', asyncHandler(async function requestProfileMigrationToken(req, res) {
     await admit(req, res, 'requestProfileMigrationToken');
-    const result = await userController.requestProfileMigrationToken(req.apiActor!);
-    sendValidatedJson(req, res, 'requestProfileMigrationToken', 200, result);
+    /** Prepare the public capability response while its replacement may still roll back. */
+    function prepareToken(result: components['schemas']['ProfileMigrationToken']) {
+        return prepareValidatedJson(req, 'requestProfileMigrationToken', 200, result);
+    }
+    const result = await userController.requestProfileMigrationToken(req.apiActor!, prepareToken);
+    sendPreparedJson(req, res, result);
 }));
 
 /** Retain the existing transfer operation and return only its own scalar completion evidence. */
 router.post('/profiles/migration/execute', asyncHandler(async function executeIdentityProfileMigration(req, res) {
     await admit(req, res, 'executeIdentityProfileMigration');
-    const result = await userController.executeIdentityProfileMigration(req, req.body.token);
-    sendPreparedJson(req, res, prepareValidatedJson(req, 'executeIdentityProfileMigration', 200, result, result.resultingContext));
+    /** Validate and serialize before transfer/cleanup commit, leaving only HTTP delivery afterward. */
+    function prepareMigration(result: components['schemas']['ProfileWorkflowCompletion']) {
+        return prepareValidatedJson(req, 'executeIdentityProfileMigration', 200, result, result.resultingContext);
+    }
+    const result = await userController.executeIdentityProfileMigration(req, req.body.token, prepareMigration);
+    sendPreparedJson(req, res, result);
 }));
 
 /** A late existing selection failure remains uncertain after an entered deactivation. */
@@ -41,8 +49,12 @@ router.post('/profiles/current/deactivate', asyncHandler(async function deactiva
 /** Account deletion keeps provider handoff distinct from ordinary in-application navigation. */
 router.delete('/account', asyncHandler(async function deleteIdentityAccount(req, res) {
     await admit(req, res, 'deleteIdentityAccount');
-    const result = await userController.deleteIdentityAccount(req, req.body);
-    sendPreparedJson(req, res, prepareValidatedJson(req, 'deleteIdentityAccount', 200, result, result.resultingContext));
+    /** Token-free deletion prepares this receipt before its database and Session writes commit. */
+    function prepareDeletion(result: components['schemas']['ProfileWorkflowCompletion']) {
+        return prepareValidatedJson(req, 'deleteIdentityAccount', 200, result, result.resultingContext);
+    }
+    const result = await userController.deleteIdentityAccount(req, req.body, prepareDeletion);
+    sendPreparedJson(req, res, result);
 }));
 
 function requireLocalLogin(): void {
@@ -57,11 +69,11 @@ async function admit(req: Request, res: Response, operation: ApiOperationId): Pr
 
 /** Reply from the completed transition's own evidence, without reloading a later tab's actor. */
 async function sendIdentity(req: Request, res: Response, operation: 'logoutIdentity',
-    personalLink: string | null = null, redirect: string | null = null): Promise<void> {
+    personalLink: string | null = null, redirect: string | null = null, providerLogout?: 'unconfirmed'): Promise<void> {
     // Provider logout currently persists its authoritative transition before its
     // receipt. A later store read belongs to another actor and cannot replace it.
     const session = committedSessionView(req);
-    const result: components['schemas']['IdentityResult'] = {session, personalLink, redirect};
+    const result: components['schemas']['IdentityResult'] = {session, personalLink, redirect, ...(providerLogout ? {providerLogout} : {})};
     req.apiActor = {context: session.context, auth: req.session.auth, profile: req.session.profile};
     sendValidatedJson(req, res, operation, 200, result);
 }
@@ -101,12 +113,13 @@ async function logoutIdentity(req, res) {
         return;
     }
 
-    // Provider preparation/failure and its completed receipt keep their existing
-    // ordering until the separate behavior decision is resolved.
-    const redirect = await userController.logoutUserOidc(req.session);
+    // The explicit outcome confirms local persistence even when later provider
+    // discovery or handoff preparation fails. No local identity is restored.
+    const outcome = await userController.logoutUserOidc(req.session, 'outcome');
     // Local logout completes in the SPA. Only the provider's authoritative end-session URL
     // requires a full navigation; oidc.logout otherwise returns the application's own root.
-    await sendIdentity(req, res, 'logoutIdentity', null, redirect === settings.value.rootUrl ? null : redirect);
+    await sendIdentity(req, res, 'logoutIdentity', null,
+        outcome.redirect === settings.value.rootUrl ? null : outcome.redirect, outcome.providerLogout);
 }));
 
 router.post('/auth/register', asyncHandler(async function registerAccount(req, res) {

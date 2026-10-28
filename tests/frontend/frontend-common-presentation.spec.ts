@@ -372,7 +372,7 @@ describe('common frontend presentation', () => {
     });
 
     it.each([
-        {name: 'assignment', component: EntityAssignmentActions, props: {assigned: false, full: false, disabled: false,
+        {name: 'assignment', component: EntityAssignmentActions, props: {available: true, assigned: false, full: false, disabled: false,
             assignLabel: 'Join', removeLabel: 'Leave', fullLabel: 'Full'}, pending: {pending: true}, settled: {pending: false}},
         {name: 'quick add', component: EntityQuickAdd, props: {description: 'Keep this draft', capacity: null, disabled: false},
             pending: {pending: true}, settled: {pending: false}},

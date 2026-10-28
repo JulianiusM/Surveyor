@@ -55,7 +55,7 @@ const defaults: Settings = {
     oidcClientId: "CLIENT_ID",
     oidcClientSecret: "CLIENT_SECRET",
     oidcIssuerBaseUrl: "http://example.com",
-    oidcRedirectUrl: "http://localhost:3000/user/oidc/callback",
+    oidcRedirectUrl: "http://localhost:3000/users/oidc/callback",
 
     localLoginEnabled: true,
 

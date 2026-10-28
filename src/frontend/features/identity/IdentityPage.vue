@@ -17,7 +17,8 @@ import PageMessage from '../../components/PageMessage.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import {ApiFailure, ObsoleteRequestError} from '../../app/transport';
 import type {components} from '../../../types/api/v1';
-import {frontendDocumentUrl, frontendIdentityMessageFeedback, frontendIdentityPageEntry, frontendIdentityProblemKey, isRegistrationPasswordValid, passwordCriteria, safeFrontendReturn} from '../../../common/lib/frontendIdentity';
+import {frontendDocumentUrl, frontendIdentityMessageFeedback, frontendIdentityPageEntry, frontendIdentityProblemKey, isNewPasswordValid, passwordCriteria, safeFrontendReturn} from '../../../common/lib/frontendIdentity';
+import {newPasswordPolicy} from '../../../common/generated/passwordPolicy';
 import {isPlainMessageKey} from '../../../common/localization/translator';
 
 const context = useFrontend();
@@ -30,8 +31,8 @@ const mode = computed(
 );
 const next = computed(() => safeFrontendReturn(route.query.next));
 const initialBootstrap = context.initialDocumentFor(route.fullPath);
-// Native password controls retain the established registration minimum in every
-// mode; the Login wire schema still accepts legacy shorter saved passwords.
+// New-password admission is shared by registration/reset. Login keeps accepting
+// the exact existing credential without imposing the new-password policy.
 // Passwords belong only to this mounted form; neither bootstrap nor persistent recovery stores them.
 const fields = reactive({
     username: '',
@@ -40,6 +41,9 @@ const fields = reactive({
     displayname: '',
     email: '',
 });
+// Preserve Login's current browser presentation independently of new-password
+// code-point/byte policy. The Login API keeps its own existing admission.
+const loginPasswordMinLength = 8;
 const finished = ref(!!initialBootstrap?.identityFeedback && frontendIdentityMessageFeedback.includes(initialBootstrap.identityFeedback));
 // Signup completion stays on this visit's existing message surface. SMTP failure
 // changes its advisory text, never its confirmed account-creation outcome.
@@ -60,10 +64,13 @@ const pageCompleted = computed(() => {
         && frontendDocumentUrl(completion.destination) === frontendDocumentUrl(route.fullPath) && completion.messageKey === messageKey;
 });
 const showPasswordCriteria = ref(false);
+const newPasswordMode = computed(() => mode.value === 'register' || mode.value === 'reset');
 const criteria = computed(() => passwordCriteria(fields.password));
-const passwordState = computed(() => mode.value === 'register' && fields.password
-    ? isRegistrationPasswordValid(fields.password) ? 'valid' as const : 'invalid' as const : undefined);
-const repeatState = computed(() => mode.value === 'register' && (fields.password || fields.passwordRepeat)
+const newPasswordValid = computed(() => isNewPasswordValid(fields.password));
+const newPasswordReady = computed(() => newPasswordValid.value && fields.password === fields.passwordRepeat);
+const passwordState = computed(() => newPasswordMode.value && fields.password
+    ? newPasswordValid.value ? 'valid' as const : 'invalid' as const : undefined);
+const repeatState = computed(() => newPasswordMode.value && (fields.password || fields.passwordRepeat)
     ? fields.password === fields.passwordRepeat ? 'valid' as const : 'invalid' as const : undefined);
 const sessionRetryAvailable = useReadRetry(() => context.sessionRead.value.error);
 const command = useCommand(context.refreshSession, true, {dirty: isDirty,
@@ -247,8 +254,8 @@ const presentations = {
     error: {title: 'common.errorTitle', icon: 'bi-box-arrow-in-right',
         submit: 'common.errorTitle', submitIcon: 'bi-box-arrow-in-right'},
     oidc: signInPresentation,
-    recovery: {title: 'common.successTitle', icon: 'bi-check-circle',
-        submit: 'common.successTitle', submitIcon: 'bi-check-circle'},
+    recovery: {title: 'auth.recoveryTitle', icon: 'bi-envelope',
+        submit: 'auth.requestAccess', submitIcon: 'bi-box-arrow-in-right'},
 } as const;
 const presentation = computed(() => presentations[mode.value]);
 
@@ -288,13 +295,10 @@ async function submit(): Promise<void> {
     // The shared receipt survives the private view's identity-driven remount.
     if (blocked.value || finished.value) return;
     if (identityDenial.value || needsOidc.value || mode.value === 'reset' && !resetAllowed.value) return;
-    if (mode.value === 'register' && (!isRegistrationPasswordValid(fields.password)
-        || fields.password !== fields.passwordRepeat)) {
-        // Identify the failed requirement using the existing password policy;
-        // keep the field warning and the user's unsent credentials available.
-        // Reset has no such browser handler: its controller owns rejection and
-        // redisplay, including clearing both submitted password fields.
-        showPasswordCriteria.value = !isRegistrationPasswordValid(fields.password);
+    if (newPasswordMode.value && !newPasswordReady.value) {
+        // Both new-password forms use the same policy and retain unsent secrets
+        // for correction. Only an actual server rejection clears those secrets.
+        showPasswordCriteria.value = !newPasswordValid.value;
         command.setError(showPasswordCriteria.value ? 'auth.passwordRequirements' : 'auth.passwordMismatch', 'transient');
         return;
     }
@@ -400,15 +404,6 @@ function requestRecovery(scope: FrontendRequestScope): Promise<components['schem
 onMounted(() => {
     if (mode.value === 'activate' && !identityDenial.value) void submit();
 });
-/** Reused route components need the same admission as first mounts. A URL alone cannot
- * restore a completed command; only authorized initial feedback or the scoped receipt can. */
-function admitRecovery(): void {
-    if (context.browser && context.ready.value && mode.value === 'recovery' && !pageCompleted.value && !identityDenial.value) {
-        void router.replace('/users/login');
-    }
-}
-watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.value, context.ready.value],
-    admitRecovery, {immediate: true});
 </script>
 
 <template>
@@ -421,7 +416,6 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
     <PageMessage v-else-if="finished" :kind="mode === 'register' ? 'info' : 'success'" :message="messages.t(finishedMessage)" />
     <PageMessage v-else-if="pageCompleted" kind="success" :renewal="context.pageCompletion.value"
         :message="messages.t(mode === 'reset' ? 'auth.resetDone' : 'auth.recoverySent')" />
-    <LoadingSkeleton v-else-if="mode === 'recovery'" v-bind="route.meta.loadingSkeleton" page />
     <template v-else>
         <!-- Identity validation and activation feedback occupy the same shared region
              above the form card as account pages. Keep it outside the form. -->
@@ -446,7 +440,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                     <p class="text-center">{{ messages.t('auth.loginIntro') }}</p></template
                 >
                 <p v-if="mode === 'forgot'" class="lead text-center mb-4"><i class="bi bi-envelope-at-fill me-1" aria-hidden="true"></i>{{ messages.t('auth.forgotIntro') }}</p>
-                <form v-if="!needsOidc && (mode !== 'reset' || resetAllowed)" class="row gy-3 justify-content-center"
+                <form v-if="mode !== 'recovery' && !needsOidc && (mode !== 'reset' || resetAllowed)" class="row gy-3 justify-content-center"
                     @submit.prevent="submit">
                     <template v-if="context.session.value?.shell.localLoginEnabled || mode === 'guest-login'">
                         <FormField
@@ -499,23 +493,26 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                             class="col-md-6"
                             :label="messages.t(mode === 'reset' ? 'auth.newPassword' : 'auth.password')"
                             :label-icon="mode === 'reset' ? 'bi-key-fill' : 'bi-shield-lock'"
-                            :placeholder="mode === 'login' ? undefined : messages.t('auth.passwordPlaceholder')"
+                            :placeholder="mode === 'login' ? undefined : messages.t('auth.passwordPlaceholder', {
+                                min: newPasswordPolicy.minLength, max: newPasswordPolicy.maxUtf8Bytes})"
                             :state="passwordState"
-                            :described-by="showPasswordCriteria ? 'password-info' : undefined"
-                            @focus="showPasswordCriteria = mode === 'register'"
-                            @blur="showPasswordCriteria = mode === 'register' && !isRegistrationPasswordValid(fields.password)"
+                            :described-by="newPasswordMode && showPasswordCriteria ? 'password-info' : undefined"
+                            @focus="showPasswordCriteria = newPasswordMode"
+                            @blur="showPasswordCriteria = newPasswordMode && !newPasswordValid"
                             type="password"
                             required
-                            :min-length="registrationFields.password.minLength"
+                            :min-length="mode === 'login' ? loginPasswordMinLength : undefined"
                             :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
                             :disabled="blocked"
                             :pending="submittingIdentity"
                         >
-                            <small v-if="mode === 'register' && showPasswordCriteria" id="password-info" class="form-text">
+                            <small v-if="newPasswordMode && showPasswordCriteria" id="password-info" class="form-text">
                                 <ul class="list-unstyled mb-0 mt-1">
-                                    <li v-for="criterion in (['length', 'letter', 'digit'] as const)" :key="criterion" class="small" :class="criteria[criterion] ? 'text-success' : 'text-danger'">
+                                    <li v-for="criterion in (['length', 'bytes'] as const)" :key="criterion" class="small" :class="criteria[criterion] ? 'text-success' : 'text-danger'">
                                         <i class="bi" :class="criteria[criterion] ? 'bi-check-circle-fill' : 'bi-x-circle'" aria-hidden="true"></i>
-                                        {{ messages.t(criterion === 'length' ? 'auth.passwordLength' : criterion === 'letter' ? 'auth.passwordLetter' : 'auth.passwordDigit') }}
+                                        {{ criterion === 'length'
+                                            ? messages.t('auth.passwordLength', {min: newPasswordPolicy.minLength})
+                                            : messages.t('auth.passwordByteLimit', {max: newPasswordPolicy.maxUtf8Bytes}) }}
                                     </li>
                                 </ul>
                             </small>
@@ -533,7 +530,6 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                             :described-by="repeatState === 'invalid' ? 'password-repeat-info' : undefined"
                             type="password"
                             required
-                            :min-length="registrationFields.password.minLength"
                             autocomplete="new-password"
                             :disabled="blocked"
                             :pending="submittingIdentity"
@@ -544,7 +540,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                                 type="submit"
                                 variant="success"
                                 :pending="submittingIdentity"
-                                :disabled="blocked"
+                                :disabled="blocked || newPasswordMode && !newPasswordReady"
                                 ><i class="bi me-1" :class="submitIcon" aria-hidden="true"></i>{{ submitLabel }}</ActionButton
                             >
                         </div>
@@ -577,9 +573,11 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                         >
                     </div>
                 </form>
-                <template v-if="mode === 'login' && !needsOidc"
-                    ><hr />
-                    <h2 class="text-center">{{ messages.t('auth.recoveryTitle') }}</h2>
+                <!-- Both entry points share the same form, draft and command.
+                     A direct recovery visit never starts a provider/login flow. -->
+                <template v-if="mode === 'recovery' || mode === 'login' && !needsOidc">
+                    <hr v-if="mode === 'login'" />
+                    <h2 v-if="mode === 'login'" class="text-center">{{ messages.t('auth.recoveryTitle') }}</h2>
                     <p class="text-center">{{ messages.t('auth.recoveryIntro') }}</p>
                     <form class="row gy-3 justify-content-center" @submit.prevent="recover">
                         <FormField

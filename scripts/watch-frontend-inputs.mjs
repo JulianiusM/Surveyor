@@ -119,12 +119,18 @@ function observeInvoiceCatalog(_event, filename) {
     if (filename && filename.toString() === 'en.ts') schedule();
 }
 
+/** The standalone API compiler embeds this exact common measurement helper. */
+function observeUtf8Measurement(_event, filename) {
+    if (filename && filename.toString() === 'utf8.ts') schedule();
+}
+
 const watchers = [];
 for (const directory of ['contracts/api/v1', 'src/common/locales']) {
     watchers.push(watch(path.join(root, directory), {recursive: true}, observeContractOrCatalog));
 }
 watchers.push(watch(path.join(root, 'src/backend/modules/lib'), observePermissionRegistry));
 watchers.push(watch(path.join(root, 'src/backend/modules/invoice/locales'), observeInvoiceCatalog));
+watchers.push(watch(path.join(root, 'src/common/lib'), observeUtf8Measurement));
 
 /** Release timers, directory handles and the active child when the development group stops. */
 function stop() {

@@ -8,7 +8,8 @@ import path from 'node:path';
 import * as server from '../../.generated/api/v1/server.cjs';
 import * as browser from '../../.generated/api/v1/browser.mjs';
 import type {components} from '../../src/types/api/v1';
-import {isRegistrationPasswordValid} from '../../src/common/lib/frontendIdentity';
+import {isNewPasswordValid} from '../../src/common/lib/frontendIdentity';
+import {fieldDiagnostic} from '../../src/common/localization/inputValidation';
 import type {Request, RequestHandler, Response} from 'express';
 import {FrontendApi} from '../../src/frontend/app/api';
 import {createMultipartForm, InvalidInputError, ObsoleteRequestError} from '../../src/frontend/app/transport';
@@ -316,18 +317,20 @@ describe('generated v1 contract boundaries', () => {
         }
     });
 
-    it('preserves native password length acceptance without weakening other credential constraints', () => {
+    it('applies new-password bounds without restricting existing-password login or other credential fields', () => {
         const password = 'A1'.repeat(501);
         const registration = {username: 'Account', displayname: 'Account name', email: 'account@example.invalid',
             password, password_repeat: password};
         const reset = {token: 'Current-token', password, confirmPassword: password};
 
-        // Native forms have no password maximum. These independent long inputs catch
-        // an invented transport/DOM bound without changing bcrypt or registration policy.
+        // Existing login must retain its unbounded, nonempty-password contract.
+        // New registration/reset deliberately reject bcrypt-truncated inputs.
         for (const validators of [server, browser]) {
             expect(validators.validateLoginInput({username: 'Account', password})).toBe(true);
-            expect(validators.validateRegistrationInput(registration)).toBe(true);
-            expect(validators.validateResetInput(reset)).toBe(true);
+            expect(validators.validateRegistrationInput(registration)).toBe(false);
+            expect(validators.validateResetInput(reset)).toBe(false);
+            expect(validators.validateRegistrationInput({...registration, password: 'a'.repeat(15), password_repeat: 'a'.repeat(15)})).toBe(true);
+            expect(validators.validateResetInput({...reset, password: ' '.repeat(15), confirmPassword: ' '.repeat(15)})).toBe(true);
             expect(validators.validateLoginInput({username: 'Account', password: ''})).toBe(false);
             expect(validators.validateLoginInput({username: 'Account', password: 12345678})).toBe(false);
             expect(validators.validateRegistrationInput({...registration, password: 'Abc1234'})).toBe(false);
@@ -357,16 +360,16 @@ describe('generated v1 contract boundaries', () => {
         }
     });
 
-    it('counts explicitly authored password minima in native UTF-16 units without changing standard string lengths', () => {
-        const valid = ['Abcd1234', 'A1😀😀😀', 'A😀1😀😀', '😀A1😀😀', 'Abc😀😀1'];
-        const invalid = ['', 'Abc1234', 'A1😀😀x', 'A😀1😀x', 'A1😀😀'];
+    it('shares Unicode code-point and UTF-8-byte password limits in both standalone runtimes', () => {
+        const valid = ['a'.repeat(15), '7'.repeat(15), ' '.repeat(15), '😀'.repeat(15), '😀'.repeat(18),
+            '界'.repeat(24), 'é'.repeat(36), 'e\u0301'.repeat(15), 'a'.repeat(72)];
+        const invalid = ['', 'a'.repeat(14), '😀'.repeat(14), '😀'.repeat(19), '界'.repeat(25), 'é'.repeat(37), 'a'.repeat(73)];
         const registration = {username: 'Account', displayname: 'Account', email: 'account@example.invalid',
-            password: 'Password1234', password_repeat: 'Password1234'};
-        const reset = {token: 'Current-token', password: 'Password1234', confirmPassword: 'Password1234'};
+            password: 'a'.repeat(15), password_repeat: 'a'.repeat(15)};
+        const reset = {token: 'Current-token', password: 'a'.repeat(15), confirmPassword: 'a'.repeat(15)};
 
         for (const password of valid) {
-            expect(password.length).toBe(8);
-            expect(isRegistrationPasswordValid(password)).toBe(true);
+            expect(isNewPasswordValid(password)).toBe(true);
             for (const validators of [server, browser]) {
                 expect(validators.validateRegistrationInput({...registration, password, password_repeat: password})).toBe(true);
                 expect(validators.validateResetInput({...reset, password, confirmPassword: password})).toBe(true);
@@ -376,6 +379,7 @@ describe('generated v1 contract boundaries', () => {
         // Test each repetition separately: a valid primary password must not hide an
         // invalid confirmation. Non-string values still fail the ordinary type rule.
         for (const password of [...invalid, 12345678, null, {}, []]) {
+            expect(isNewPasswordValid(password)).toBe(false);
             for (const validators of [server, browser]) {
                 expect(validators.validateRegistrationInput({...registration, password})).toBe(false);
                 expect(validators.validateRegistrationInput({...registration, password_repeat: password})).toBe(false);
@@ -386,10 +390,12 @@ describe('generated v1 contract boundaries', () => {
         for (const validators of [server, browser]) {
             expect(validators.validateBasicEntityMetadataPatch({title: '😀'.repeat(255)})).toBe(true);
             expect(validators.validateBasicEntityMetadataPatch({title: '😀'.repeat(256)})).toBe(false);
-            expect(validators.validateRegistrationInput({...registration, password: 'A1😀😀x'})).toBe(false);
+            expect(validators.validateRegistrationInput({...registration, password: '😀'.repeat(19)})).toBe(false);
             expect(validators.validateRegistrationInput.errors).toEqual(expect.arrayContaining([
-                expect.objectContaining({keyword: 'x-surveyor-min-length-utf16', instancePath: '/password', params: {limit: 8}}),
+                expect.objectContaining({keyword: 'x-surveyor-max-utf8-bytes', instancePath: '/password', params: {limit: 72}}),
             ]));
+            const byteFailure = validators.validateRegistrationInput.errors?.find(error => error.keyword === 'x-surveyor-max-utf8-bytes');
+            expect(byteFailure && fieldDiagnostic(byteFailure)).toEqual({field: 'password', rule: 'invalid', limit: 72});
         }
     });
 

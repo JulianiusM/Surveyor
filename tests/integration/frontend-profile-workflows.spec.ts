@@ -8,6 +8,7 @@ import {Session} from '../../src/backend/modules/database/entities/session/Sessi
 import type {SessionData} from 'express-session';
 import * as userService from '../../src/backend/modules/database/services/UserService';
 import mailer from '../../src/backend/modules/email';
+import * as emailOwner from '../../src/backend/modules/email';
 import settings from '../../src/backend/modules/settings';
 import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
 import type {FrontendBootstrap} from '../../src/types/FrontendTypes';
@@ -91,9 +92,18 @@ function createHttpActor() {
 async function prepareApplicationListener(rendererReady: Promise<void>): Promise<void> {
     await initializeIntegrationDatabase();
     // Replace only external delivery. Actual routing, account/profile decisions,
-    // sessions and persistence remain intact, including native partial failures.
+    // sessions and persistence remain intact, including deliberately retained partial failures.
     vi.spyOn(mailer, 'sendMigrationEmail').mockResolvedValue();
     vi.spyOn(mailer, 'sendDeletionEmail').mockResolvedValue();
+    // Preserve real recipient/template preparation, replacing only the returned
+    // external SMTP delivery receipt for committed migration/deletion operations.
+    for (const method of ['prepareMigrationEmail', 'prepareDeletionEmail'] as const) {
+        const prepare = emailOwner[method];
+        vi.spyOn(emailOwner, method).mockImplementation(((...args: Parameters<typeof prepare>) => {
+            (prepare as (...values: Parameters<typeof prepare>) => unknown)(...args);
+            return {deliver: vi.fn().mockResolvedValue(true)};
+        }) as typeof prepare);
+    }
     const application = (await vi.importActual<typeof import('../../src/backend/app')>('../../src/backend/app')).default;
     // Module preparation is independent of persistence. Its failure must prevent
     // HTTP readiness while the shared hook still awaits both preparation branches.
@@ -224,7 +234,7 @@ describe('shared profile workflows through versioned SPA commands and initial do
             expect(token).not.toBe(before?.migrationToken);
             expect(await userService.getProfileById(actor.profileId)).toMatchObject({migrationToken: token});
 
-            // GET issuance is an existing native side effect. A deliberate second
+            // Initial-document GET issuance is an existing side effect. A deliberate second
             // document issues a new token, rather than retaining an invented lease.
             const second = await workflowDocument(actor, 'profile/migrate/request');
             expect(second.state.profileWorkflow).not.toEqual(first.state.profileWorkflow);
@@ -290,8 +300,8 @@ describe('shared profile workflows through versioned SPA commands and initial do
         expect(preview.kind).toBe('preview');
         const response = await postWorkflow(recipient, 'profile/migrate/execute', entry.state, {token});
 
-        // This is the original controller's transfer and previous-owner cleanup.
-        // The native token check is preserved; this test does not certify races.
+        // The shared transfer commits previous-owner cleanup with its prepared
+        // completion. Separate real-ORM cases exercise competing capabilities.
         const completion = JSON.parse(response.text) as components['schemas']['ProfileWorkflowCompletion'];
         expect(completion).toMatchObject({destination: '/users/profile/manage',
             resultingContext: entry.state.session.context, notice: {kind: 'success', messageKey: candidate.key}, redirect: null});
@@ -346,20 +356,22 @@ describe('shared profile workflows through versioned SPA commands and initial do
         expect(after.frontendCsrfToken).toBeUndefined();
     });
 
-    it('retains transfer work when external cleanup delivery fails and reports an uncertain command outcome', async function retainsPartialTransfer() {
+    it('confirms transfer and required cleanup despite a later external delivery failure', async function confirmsCommittedTransfer() {
         const source = await accountActor();
         const recipient = await accountActor();
         const issued = await workflowDocument(source, 'profile/migrate/request');
         if (issued.state.profileWorkflow?.kind !== 'token') throw new Error('Expected the issued migration token.');
         const entry = await workflowDocument(recipient, 'profile/migrate/show');
-        vi.mocked(mailer.sendMigrationEmail).mockRejectedValueOnce(new Error('Controlled external delivery failure'));
+        const prepare = vi.mocked(emailOwner.prepareMigrationEmail).getMockImplementation()!;
+        vi.mocked(emailOwner.prepareMigrationEmail).mockImplementationOnce(function prepareFailedDelivery(...args) {
+            prepare(...args);
+            return {deliver: vi.fn().mockRejectedValue(new Error('Controlled external delivery failure'))};
+        });
         const response = await postWorkflow(recipient, 'profile/migrate/execute', entry.state,
-            {token: issued.state.profileWorkflow.token}, 500);
-        expect(JSON.parse(response.text)).toMatchObject({status: 500, code: 'WORKFLOW_OUTCOME_UNKNOWN'});
+            {token: issued.state.profileWorkflow.token});
+        expect(JSON.parse(response.text)).toMatchObject({notice: {messageKey: 'profile.migrationCompletedAccountDeleted'}});
         expect(await userService.getProfileById(source.profileId)).toMatchObject({userId: recipient.userId, migrationToken: null});
-        // Existing cleanup stops after mail failure; this adapter neither rolls
-        // back the transfer nor resumes the operation behind the user's back.
-        expect(await AppDataSource.getRepository(User).findOneBy({id: source.userId!})).not.toBeNull();
+        expect(await AppDataSource.getRepository(User).findOneBy({id: source.userId!})).toBeNull();
         expect((await sessionOf(recipient)).activeProfile?.id).toBe(recipient.profileId);
     });
 
@@ -430,20 +442,18 @@ describe('shared profile workflows through versioned SPA commands and initial do
         expect(await AppDataSource.getRepository(User).findOneBy({id: actor.userId!})).not.toBeNull();
     });
 
-    it('reports unknown completion for the inherited last-profile failure after its actual deletion', async function retainsFinalProfileFailure() {
+    it('completes final-profile deactivation with local sign-out while preserving the detached profile', async function completesFinalProfile() {
         const actor = await accountActor();
         const document = await workflowDocument(actor, 'profile/delete');
         const response = await postWorkflow(actor, 'profile/delete', document.state,
-            {name: document.state.session.activeProfile!.name}, 500);
+            {name: document.state.session.activeProfile!.name});
 
-        // The external delivery boundary acknowledges this integration fixture.
-        // Native subsequent selection still fails after its account was deleted;
-        // migration does not reinterpret that partial result as rollback or alter
-        // the controller order.
-        expect(JSON.parse(response.text)).toMatchObject({status: 500, code: 'WORKFLOW_OUTCOME_UNKNOWN'});
+        expect(JSON.parse(response.text)).toMatchObject({destination: '/', redirect: null,
+            notice: {kind: 'success', messageKey: 'profile.deactivationCompletedAccountDeleted'}});
         expect(await AppDataSource.getRepository(User).findOneBy({id: actor.userId!})).toBeNull();
         expect(await userService.getProfileById(actor.profileId)).toMatchObject({userId: null});
         expect(mailer.sendDeletionEmail).toHaveBeenCalledOnce();
+        expect((await sessionOf(actor)).kind).toBe('anonymous');
     });
 
     it.each(['account', 'guest'] as const)('deletes the admitted %s identity and clears its real HTTP authority',

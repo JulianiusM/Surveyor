@@ -763,7 +763,8 @@ async function expectRetainedControlFocus(page: Page, control: Locator, operatio
         await control.evaluate(element => (element as HTMLElement).focus({preventScroll: true}));
         await expect(control).toBeFocused();
         const original = await control.elementHandle();
-        const before = await page.evaluate(() => ({x: scrollX, y: scrollY}));
+        const before = await control.evaluate(element => ({x: scrollX, y: scrollY,
+            top: element.getBoundingClientRect().top, documentHeight: document.documentElement.scrollHeight}));
         await operation.activate();
         await received.promise;
         if (responseFailure) throw responseFailure;
@@ -777,7 +778,15 @@ async function expectRetainedControlFocus(page: Page, control: Locator, operatio
         });
         // A deliberate later focus/scroll choice becomes the user's current
         // context. Command completion must preserve that choice independently.
-        const waiting = deliberateFocus ? await page.evaluate(() => ({x: scrollX, y: scrollY})) : before;
+        // An offscreen preventScroll focus choice does not move the reader's
+        // visible anchor. Its independent focus assertion still wins below.
+        let readingTarget = control;
+        if (deliberateFocus && await deliberateFocus.evaluate(element => {
+            const bounds = element.getBoundingClientRect();
+            return bounds.bottom > 0 && bounds.top < innerHeight && bounds.right > 0 && bounds.left < innerWidth;
+        })) readingTarget = deliberateFocus;
+        const waiting = deliberateFocus ? await readingTarget.evaluate(element => ({x: scrollX, y: scrollY,
+            top: element.getBoundingClientRect().top, documentHeight: document.documentElement.scrollHeight})) : before;
         const result = page.waitForResponse(response => response.request().method() === operation.method
             && new URL(response.url()).pathname === operation.endpoint);
         delivery.release();
@@ -789,7 +798,16 @@ async function expectRetainedControlFocus(page: Page, control: Locator, operatio
             await expect(control).toBeFocused();
             expect(await original!.evaluate(element => element === document.activeElement)).toBe(true);
         }
-        expect(await page.evaluate(() => ({x: scrollX, y: scrollY}))).toEqual(waiting);
+        const settled = await readingTarget.evaluate(element => ({x: scrollX, y: scrollY,
+            top: element.getBoundingClientRect().top, documentHeight: document.documentElement.scrollHeight}));
+        expect(settled.x).toBe(waiting.x);
+        if (settled.y !== waiting.y) {
+            // A new result occupies ordinary document space. Browser anchoring
+            // may compensate by exactly that height while retaining the chosen
+            // reader target in the viewport; unrelated scrolling still fails.
+            expect(Math.abs(settled.top - waiting.top)).toBeLessThan(1);
+            expect(Math.abs((settled.y - waiting.y) - (settled.documentHeight - waiting.documentHeight))).toBeLessThan(1);
+        }
     } finally {
         // Release any waiting real delivery and its exact interceptor together,
         // including when an assertion fails before response completion.
@@ -1054,7 +1072,7 @@ test('shared entry preserves header creation admission, exact duplicate login re
     }
 });
 
-test('shared recovery finishes at the canonical message URL and a reload follows its login GET', async ({browser, baseURL}, testInfo) => {
+test('shared recovery finishes once at its canonical URL and reload opens a clean recovery form', async ({browser, baseURL}, testInfo) => {
     test.setTimeout(60_000);
     const frontend = await browser.newContext({baseURL});
     const email = `no-matching-guest-${randomUUID()}@example.test`;
@@ -1070,8 +1088,9 @@ test('shared recovery finishes at the canonical message URL and a reload follows
         await expect(frontendPage.locator('main')).toContainText('The link(s) to your guest account(s) have been sent');
         await captureState(frontendPage, testInfo, 'frontend-recovery-completion');
         await frontendPage.reload({waitUntil: 'domcontentloaded'});
-        await expect(frontendPage).toHaveURL(new URL('/users/login?locale=en', baseURL).href);
-        await expect(frontendPage.locator('#username')).toBeVisible();
+        await expect(frontendPage).toHaveURL(new URL('/guest/recovery', baseURL).href);
+        await expect(frontendPage.locator('#recovery-email')).toBeVisible();
+        await expect(frontendPage.locator('main')).not.toContainText('The link(s) to your guest account(s) have been sent');
     } finally {
         await frontend.close();
     }

@@ -722,14 +722,16 @@ function packingItemPersistenceFields(body: components['schemas']['PackingItemPa
 /** Keep visible rendered controls separate from actual method authority. These
  * flags describe presentation; every command still evaluates current grants. */
 function itemCapabilities(permissions: PermView): components['schemas']['PackingItemView']['capabilities'] {
+    // The shared editor is offered only when the existing attribute method can
+    // accept that field. Display-only grants never imply mutation authority.
+    const editTitle = mayEditItemField(permissions, 'title');
+    const editCapacity = mayEditItemField(permissions, 'maxAssignees');
     return {
-        // The original rendered controls and the attribute operation deliberately have different
-        // grants. Preserve that visible UI without implying command authority.
-        showTitleEdit: permissions.allow('EDIT_TITLE', 'ITEM_EDIT'),
-        showCapacityEdit: permissions.allow('EDIT_CAPACITY', 'ITEM_EDIT'),
-        editTitle: mayEditItemField(permissions, 'title'),
+        showTitleEdit: editTitle,
+        showCapacityEdit: editCapacity,
+        editTitle,
         editDescription: mayEditItemField(permissions, 'description'),
-        editCapacity: mayEditItemField(permissions, 'maxAssignees'),
+        editCapacity,
         editRequired: mayEditItemField(permissions, 'requiredByAll'),
         removeItem: mayPerformPackingMethod(permissions, 'deleteItem'),
         removeAssignments: mayPerformPackingMethod(permissions, 'deleteAssignment'),

@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; developers; AI coding agents
 owner: project maintainers
 status: current
-last-verified: 2026-10-27
+last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit R21 checkbox-owner approval recorded alongside all twenty preceding architecture decisions; prior complete-role-removal, UUID/provenance and responsibility/session/delivery boundaries retained
+verification-scope: 2026-10-28 maintainer amendments establish completed frontend cutover, current-source review and controller/feature/DBAL ownership; direct prose plans and individual approval requirements retained
 source-anchors: AGENTS.md; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/development-check.json; scripts/check-development-policy.mjs; scripts/tests/development-policy-check.test.mjs; docs/DEVELOPMENT.md; docs/ARCHITECTURE.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; src/; tests/; package.json
 next-review: explicit-maintainer-policy-amendment
 -->
@@ -43,13 +43,20 @@ Preserve existing behavior unless a change is explicitly authorized or directly 
 instructions. Shared callers use the existing backend business owners. Record bounded approved exceptions without
 broadening them into an unrelated redesign.
 
-**Authorized enforcement correction (2026-10-15):** compare each touched responsibility with its original accepted
-baseline and explicit amendments, not only the latest implementation. Before editing, explain the intended owner,
+**Authorized enforcement correction (2026-10-15; amended below on 2026-10-28):** compare each touched responsibility with its accepted
+requirements and explicit amendments. Before editing, explain the intended owner,
 callers, reads, writes and lifecycle effects in the conversation. Reusing the same files, library, database table or
 schema does not prove that responsibility or behavior is unchanged. A new writable request-state mirror, save
 interceptor, lock or persistence from common admission requires review of those effects against the actual approval
 before dependent implementation. Existing scoped operations, middleware expiry/touch and feedback retain their
 approved behavior; this rule does not authorize their removal or a general backend redesign.
+
+**Current-source and completed-cutover amendment (2026-10-28):** the maintainer explicitly confirms that the frontend
+cutover has happened and the application is no longer in migration. Review the currently implemented application,
+its callers and tests; do not consult past commits or require comparison with a former frontend or "native"
+implementation. This supersedes historical-baseline comparison and migration-preservation requirements for current
+application work. Explicit approved requirements still govern intended behavior; obsolete migration framing does
+not supply an additional behavior to preserve. Working-tree diffs remain useful for reviewing the current change.
 
 ### Scope of separately authorized work
 
@@ -88,6 +95,34 @@ unresolved questions to the root rather than presenting them to the maintainer e
 review criteria and approval preflight remind agents of this requirement; they cannot inspect conversation channels
 or certify that the final answer was delivered correctly. This dated clarification narrows the earlier requirement
 to ask in the conversation; it preserves individual approval, independent review and the prohibition on inferred consent.
+
+### Implementation plans belong in the final answer (2026-10-28)
+
+The maintainer's explicit 2026-10-28 correction clarifies the existing prohibition on hiding implementation plans
+in documentation. When an implementation plan is requested or needed for a decision, present the complete plan
+directly in the final answer as readable prose. The maintainer must be able to understand and assess the proposed
+work without opening a file, following a link or reconstructing it from identifiers.
+
+Explain each independently decidable change: the current problem and intended result, its scope and existing
+owner, the approach, execution order and actual dependencies, material consequences and prior constraints, and
+the planned verification. Group related work for readability while keeping distinct changes and decisions clear.
+Distinguish remaining defects from verification or retirement of superseded findings, and required work from
+conditional proposals. Do not replace these explanations with a list of backlog IDs or a brief roadmap.
+
+Documentation, backlog entries and generated artifacts may support the plan when appropriate, but they do not
+deliver it. A file link, attachment, YAML/JSON record, code block, table, checklist, progress update or short summary
+is not a substitute for the complete prose plan in the final answer. This remains true when the task also requests
+saving material in the repository. Do not leave any proposed work or unresolved decision explained only in a file.
+
+The plan itself grants no implementation approval. Preserve existing valid approvals within their actual scope;
+apply the required change explanation separately to every actual approval request, and present every question
+under the final-answer question rule above. This clarification adds no blanket approval or requirement to seek
+permission again for authorized work.
+
+An independent nonauthor and the root agent review the actual proposed final-answer wording for completeness,
+clarity, scope, decision boundaries and question placement. Reviewing a saved plan or checking its identifiers is
+insufficient. The root agent checks the final answer that will actually be sent. Automated checks and metadata
+cannot certify conversational delivery.
 
 ### Required change explanation (2026-10-13)
 
@@ -231,10 +266,13 @@ authorize unrelated checkbox, backend or form-behavior changes.
 - Human readability, DRY, separation of concerns, a single source of truth and information hiding are acceptance
   criteria. Follow neighboring patterns; reuse an existing controller, service or middleware whose responsibility
   fits. Do not add forwarding modules or duplicate business rules for another frontend.
-- Controllers own business checks, authorization, validation and context-specific errors. Services are pure DBAL:
-  queries, locks, transactions and persistence. Services must not throw `APIError`, `ExpectedError`, `ApiProblem` or
-  request/UI-specific errors. Invoke the controller's named operation inside a service-managed transaction when its
-  decision depends on locked data; keep the check under the lock and outside the DBAL owner.
+- Controllers coordinate request admission, feature operations and responses. Feature modules own shared business
+  implementation, including business checks and errors. Services are pure DBAL: queries, locks, transactions and
+  persistence. Services must not throw `APIError`, `ExpectedError`, `ApiProblem` or request/UI-specific errors.
+  Invoke the feature operation inside a service-managed transaction when its decision depends on locked data;
+  keep the check under the lock and outside the DBAL owner. The maintainer explicitly clarified this ownership on
+  2026-10-28, superseding the earlier controller-owned-business wording. Adopt shared implementations at all matching
+  live callers; moving duplicate implementations or adding forwarding facades does not satisfy this boundary.
 - Enforce authentication, authorization, validation and ownership on the server. UI visibility is not a security
   boundary. Page admission, method grants and private projections remain distinct; reusable controls never grant
   authority. Captured actors, CSRF/context checks and lock-time authorization protect versioned commands.
@@ -322,8 +360,8 @@ Use the following task procedure; a repeated statement that policies were follow
 1. Obtain current task context through the documentation policy's shared bootstrap and read both policies and affected
    canonical/design sources before editing. Refresh selected profile identities on continuation or scope changes.
    Inspect the working tree and identify the exact task-owned files, existing user
-   changes, active profile scope, existing behavior and approval boundaries. Trace the original accepted owner and
-   its explicit amendments; identify any proposed change in reads, writes, authority or lifecycle before editing.
+   changes, active profile scope, existing behavior and approval boundaries. Trace current implemented owners and
+   explicit approved requirements; identify any proposed change in reads, writes, authority or lifecycle before editing.
 2. Resolve conflicts directly before dependent edits. Pass the resolved decision, file ownership, applied profile,
    remaining conflicts and required approval-request format to every subagent; require its policy acknowledgement
    and review its actual changes. Keep general defects outside the authorized scope and follow the

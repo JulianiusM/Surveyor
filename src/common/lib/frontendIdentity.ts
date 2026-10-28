@@ -1,6 +1,8 @@
 import type {MessageKey} from '../../types/LocalizationTypes';
 import type {components} from '../../types/api/v1';
 import type {FrontendIdentityOperation, IdentityLoginSettings} from '../../types/IdentityPresentationTypes';
+import {newPasswordPolicy} from '../generated/passwordPolicy';
+import {utf8ByteLength} from './utf8';
 
 type IdentityProblemCode = components['schemas']['Problem']['code'];
 
@@ -20,19 +22,19 @@ export function frontendOverviewPageEntry(session: Pick<components['schemas']['S
         notice: {kind: 'info', messageKey: 'auth.loginRequired'}};
 }
 
-/**
- * Registration guidance projects the password criteria using UTF-16 length
- * and the established character classes.
- * This is presentation guidance, while the identity controller owns submission checks.
- */
-export function passwordCriteria(password: string): {length: boolean; letter: boolean; digit: boolean} {
-    return {length: password.length >= 8, letter: /[a-z,A-Z]/u.test(password), digit: /\d/u.test(password)};
+/** Evaluate the authored new-password limits without altering the exact entered secret. */
+export function passwordCriteria(password: string): {length: boolean; bytes: boolean} {
+    // String iteration counts Unicode code points; the same neutral UTF-8 byte
+    // measurement is compiled into server/browser contract validators.
+    return {length: Array.from(password).length >= newPasswordPolicy.minLength,
+        bytes: utf8ByteLength(password) <= newPasswordPolicy.maxUtf8Bytes};
 }
 
-export function isRegistrationPasswordValid(password?: string): boolean {
-    if (!password) return false;
+/** Shared registration/reset admission; existing-password login deliberately does not consume this rule. */
+export function isNewPasswordValid(password: unknown): password is string {
+    if (typeof password !== 'string') return false;
     const criteria = passwordCriteria(password);
-    return criteria.length && criteria.letter && criteria.digit;
+    return criteria.length && criteria.bytes;
 }
 
 /** API problems describe transport outcomes, while forms retain operation-specific

@@ -1,10 +1,13 @@
 # Identity transitions deliberately return their new captured context. All commands require
 # the prior context and CSRF token; account controllers retain credential and ownership checks.
-# Password forms and controllers have no maximum length. Preserve their accepted
-# input rather than introducing a credential limit through the generated transport schema.
-# Registration/reset minima explicitly count native DOM/JavaScript UTF-16 units. Standard
-# JSON Schema string lengths elsewhere retain their existing Unicode code-point semantics.
+# One new-password policy serves registration/reset and generated runtime guidance.
+# Existing-password login keeps its separate admission and exact credential handling.
 schemas:
+  NewPassword:
+    description: New credentials count Unicode code points and reject bcrypt truncation; no composition, trimming or normalization.
+    type: string
+    minLength: 15
+    x-surveyor-max-utf8-bytes: 72
   ProfileWorkflowEntry:
     type: object
     additionalProperties: false
@@ -85,11 +88,9 @@ schemas:
         format: "email"
         maxLength: 100
       password:
-        type: "string"
-        x-surveyor-min-length-utf16: 8
+        $ref: '#/schemas/NewPassword'
       password_repeat:
-        type: "string"
-        x-surveyor-min-length-utf16: 8
+        $ref: '#/schemas/NewPassword'
   UsernameInput:
     type: "object"
     additionalProperties: false
@@ -140,11 +141,9 @@ schemas:
         minLength: 1
         maxLength: 256
       password:
-        type: "string"
-        x-surveyor-min-length-utf16: 8
+        $ref: '#/schemas/NewPassword'
       confirmPassword:
-        type: "string"
-        x-surveyor-min-length-utf16: 8
+        $ref: '#/schemas/NewPassword'
   TokenInput:
     type: "object"
     additionalProperties: false
@@ -233,6 +232,10 @@ schemas:
       - "personalLink"
       - "redirect"
     properties:
+      providerLogout:
+        description: Local sign-out is persisted; the provider logout could not be prepared or confirmed. Never replay the logout or restore the local identity.
+        type: string
+        enum: [unconfirmed]
       session:
         "$ref": "./session.yaml#/schemas/SessionView"
       personalLink:

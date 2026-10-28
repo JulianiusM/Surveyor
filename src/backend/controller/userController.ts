@@ -24,13 +24,14 @@ import type {Session} from '../modules/database/entities/session/Session';
 import {Profile} from "../modules/database/entities/user/Profile";
 import {User} from "../modules/database/entities/user/User";
 import * as userService from "../modules/database/services/UserService";
+import * as identity from '../modules/identity';
 import mailer, {prepareActivationEmail, prepareGuestLinkEmail, preparePasswordResetEmail, resolveEmailRecipientName} from "../modules/email";
 import type {PreparedIdentityEmail} from '../../types/EmailTypes';
 import {APIError, ExpectedError, ValidationError} from "../modules/lib/errors";
 import {createSessionStore, persistSession, readStoredSession, requireSessionProfileId, stageIdentitySession, writeStoredSession} from "../modules/lib/session";
 import {readFrontendSessionMetadata, rotateFrontendSessionContext, sameFrontendSessionIdentity} from '../modules/lib/frontendSession';
 import {safeFrontendReturn} from '../../common/lib/frontendIdentity';
-import type {AccountRegistrationTransactionOptions, RegistrationEmailDelivery, RegistrationReceipt, GuestRegistrationTransactionOptions, IdentityCompletionOptions, IdentityCompletionReceipt, IdentityLinkOptions, IdentityTransitionOptions, ProfileOwnerCleanup} from '../../types/IdentityTypes';
+import type {AccountRegistrationTransactionOptions, RegistrationEmailDelivery, RegistrationReceipt, GuestRegistrationTransactionOptions, IdentityCompletionOptions, IdentityCompletionReceipt, IdentityLinkOptions, IdentityTransitionOptions, ProfileOwnerCleanup, ProfileWorkflowPreparation, ProviderLogoutOutcome} from '../../types/IdentityTypes';
 import type {MessageKey} from '../../types/LocalizationTypes';
 import {ApiProblem} from '../modules/api/problem';
 import {buildGuestLink, ENTITIES, uuidKey} from "../modules/lib/util";
@@ -98,6 +99,9 @@ function validateUserRegistration(body: any) {
         throw new ValidationError(CREATE_TEMPLATE, 'Passwords do not match.', returnInfo, {cause: 'PASSWORD_MISMATCH'});
     }
 
+    // New-credential admission follows the existing required/equality diagnostics,
+    // before account lookups, hashing, tokens or notification preparation.
+    identity.requireNewPassword(password, CREATE_TEMPLATE);
     return {username, name, password, email};
 }
 
@@ -664,6 +668,8 @@ function validatePasswordResetInput(token: string, body: any) {
     if (password !== confirmPassword) {
         throw new ValidationError('users/reset-password', 'Passwords do not match!', {token}, {cause: 'PASSWORD_MISMATCH'});
     }
+    // Reject an invalid replacement before reading or consuming its reset token.
+    identity.requireNewPassword(password, 'users/reset-password');
     return password;
 }
 
@@ -775,10 +781,12 @@ export async function loginUserWithOidcCallback(req: Request) {
     await persistSession(req.session);
 }
 
-// POST /auth/logout → clears local session and (if available) does RP-initiated logout
-export async function logoutUserOidc(session: Request['session']) {
-    session.frontendAuthReturn = undefined;
-    return oidc.logout(session);
+export function logoutUserOidc(session: Request['session']): Promise<string>;
+export function logoutUserOidc(session: Request['session'], presentation: 'outcome'): Promise<ProviderLogoutOutcome>;
+/** Coordinate local/provider logout; explicit outcome consumers distinguish only post-save provider failure. */
+export async function logoutUserOidc(session: Request['session'], presentation?: 'outcome'): Promise<string | ProviderLogoutOutcome> {
+    // Provider-bearing account deletion keeps its current string/error contract.
+    return presentation ? oidc.logout(session, presentation) : oidc.logout(session);
 }
 
 /**
@@ -1017,61 +1025,6 @@ export async function hasGuestAccountForEmail(email: string) {
     return guests.length > 0;
 }
 
-export async function getMigrationToken(profileId: string) {
-    return await userService.generateMigrationToken(profileId);
-}
-
-/** Resolve the migration capability before any transfer. Its stable rejection
- * cause lets JSON distinguish an invalid token from an already entered transfer,
- * while direct entry points retain the same status, message and validation order. */
-export async function getProfileToMigrate(token: string) {
-    const profile = await userService.verifyMigrationToken(token);
-    if (!profile) {
-        throw new ExpectedError('Invalid or mismatched token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
-    }
-    return profile;
-}
-
-export function migrateProfile(userId: number, token: string): Promise<string>;
-export function migrateProfile(userId: number, token: string, presentation: 'facts'): Promise<ProfileOwnerCleanup>;
-/** Transfer and notify through the existing shared workflow. Direct callers keep
- * their exact prose; the API requests cleanup facts without parsing that prose or
- * repeating a read, persistence operation or mail side effect. */
-export async function migrateProfile(userId: number, token: string, presentation?: 'facts'): Promise<string | ProfileOwnerCleanup> {
-    // Keep capability validation, transfer and notification in their established order.
-    const profile = await getProfileToMigrate(token);
-    const previousOwner = await userService.moveProfileToUserTx(profile.id, userId);
-    if (previousOwner?.email) {
-        await mailer.sendMigrationEmail({name: resolveEmailRecipientName(previousOwner instanceof User ? previousOwner.name : undefined, previousOwner.username), address: previousOwner.email}, profile, (await userService.getUserById(userId))!)
-    }
-
-    // Only completed cleanup supplies presentation facts. An exception still
-    // stops this inherited sequence and remains unknown at the versioned adapter.
-    const cleanup = await handlePreviousProfileOwner(previousOwner);
-    return presentation === 'facts' ? cleanup : `Migration successful. ${profileOwnerCleanupMessage(cleanup)}`;
-}
-
-/** Preserve former-owner cleanup and delivery order while reporting its completed
- * branch. Presentation must never infer deletion from an earlier owner snapshot. */
-async function handlePreviousProfileOwner(previousOwner?: User | Guest): Promise<ProfileOwnerCleanup> {
-    // Account deletion remains conditional on the existing remaining-profile read.
-    if (previousOwner instanceof User) {
-        const otherProfiles = await userService.getProfilesForUser(previousOwner.id);
-        if (otherProfiles.length === 0) {
-            await userService.deleteUser(previousOwner.id);
-            await mailer.sendDeletionEmail({name: resolveEmailRecipientName(previousOwner.name, previousOwner.username), address: previousOwner.email}, previousOwner);
-            return 'account-deleted';
-        }
-    } else if (previousOwner instanceof Guest) {
-        await userService.deleteGuest(previousOwner.id);
-        if (previousOwner.email) {
-            await mailer.sendDeletionEmail({name: resolveEmailRecipientName(previousOwner.username, previousOwner.profile?.name), address: previousOwner.email}, previousOwner);
-        }
-        return 'guest-deleted';
-    }
-    return 'none';
-}
-
 /** Direct callers retain the original English suffix, including its empty value.
  * Only the existing controller's semantic result selects this presentation. */
 function profileOwnerCleanupMessage(cleanup: ProfileOwnerCleanup): string {
@@ -1083,51 +1036,8 @@ function profileOwnerCleanupMessage(cleanup: ProfileOwnerCleanup): string {
 /** Verify the typed username before selecting the existing account or
  * guest deletion workflow, including its mail and provider/logout completion. */
 export async function deleteAccount(body: any, session: Request['session']) {
-    const {username} = body;
-    // A mismatch is a confirmed rejection before either identity can be deleted.
-    if (!username || (username !== session.auth?.guest?.username && username !== session.auth?.user?.username)) {
-        throw new ValidationError("users/delete-account", "Invalid account deletion verification", {username},
-            {cause: 'ACCOUNT_DELETION_CONFIRMATION_INVALID'});
-    }
-    if (session.auth?.guest && session.auth.user) {
-        throw new ExpectedError("Ambiguous session. Log out and try again", "error", 500);
-    }
-    if (session.auth?.user) {
-        return deleteUser(session);
-    }
-    if (session.auth?.guest) {
-        return deleteGuest(session);
-    }
-    throw new ExpectedError("Invalid session. Log out and try again", "error", 500);
-}
-
-/** Delete the authenticated account, send its existing notification and complete logout. */
-export async function deleteUser(session: Request['session']) {
-    if (!session.auth?.user) {
-        throw new ExpectedError("Not logged in as user!", "error", 401);
-    }
-    // Retain the established delete-before-mail-before-logout sequence. Delivery
-    // and provider/session failures do not undo the already completed deletion.
-    const deleted = await userService.deleteUser(session.auth.user.id);
-    if (deleted?.email) {
-        await mailer.sendDeletionEmail({name: resolveEmailRecipientName(deleted.name, deleted.username), address: deleted.email}, deleted);
-    }
-    return await logoutUserOidc(session);
-}
-
-/** Delete the authenticated guest and retain its existing mail/logout completion. */
-export async function deleteGuest(session: Request['session']) {
-    if (!session.auth?.guest) {
-        throw new ExpectedError("Not logged in as guest!", "error", 401);
-    }
-
-    // Use the removed record for optional notification, then clear session/provider
-    // identity through the same logout owner used by account deletion.
-    const deleted = await userService.deleteGuest(session.auth.guest.id);
-    if (deleted?.email) {
-        await mailer.sendDeletionEmail({name: resolveEmailRecipientName(deleted.username, deleted.profile?.name), address: deleted.email}, deleted);
-    }
-    return await logoutUserOidc(session);
+    // Provider-bearing deletion retains its established feature-owned partial outcomes.
+    return identity.deleteAccount(body, session);
 }
 
 export function deactivateProfile(body: any, session: Request['session']): Promise<string>;
@@ -1136,20 +1046,8 @@ export function deactivateProfile(body: any, session: Request['session'], presen
  * The optional API projection reports facts after the same completed sequence;
  * default callers retain their exact original string and trailing empty suffix. */
 export async function deactivateProfile(body: any, session: Request['session'], presentation?: 'facts'): Promise<string | ProfileOwnerCleanup> {
-    // Confirmation is the existing first check, before any ownership write.
-    const {name} = body;
-    if (!name || name !== session.profile?.name) {
-        throw new ValidationError("users/profile/delete", "Invalid profile deactivation verification", {name},
-            {cause: 'PROFILE_DEACTIVATION_CONFIRMATION_INVALID'});
-    }
-
-    if (!session.profile) {
-        throw new ExpectedError("No active profile!", "error", 401);
-    }
-
-    // Cleanup still follows removal and can fail after that work has completed.
-    const previousOwner = await userService.removeProfileFromOwner(session.profile.id);
-    const cleanup = await handlePreviousProfileOwner(previousOwner);
+    // The feature owns confirmation, detach and cleanup; this controller selects presentation only.
+    const cleanup = await identity.deactivateProfile(body, session);
     return presentation === 'facts' ? cleanup : `Profile successfully deactivated. ${profileOwnerCleanupMessage(cleanup)}`;
 }
 
@@ -1270,7 +1168,7 @@ export async function getProfileMigrationPreview(session: SessionLike, token: st
     if (!hasAccountProfile(session)) throw new ApiProblem(session.auth?.guest ? 'FORBIDDEN' : 'AUTH_REQUIRED');
     let profile: Profile;
     try {
-        profile = await getProfileToMigrate(token);
+        profile = await identity.getProfileToMigrate(token);
     } catch (error) {
         // The shared read's known invalid-token result owns a full 401 message,
         // not authentication loss. Preserve that presentation without clearing an
@@ -1314,11 +1212,17 @@ function requireProfileWorkflow(session: SessionLike, accountOnly: boolean): voi
 }
 
 /** Issue once through the existing token owner; a lost result must never trigger automatic reissuance. */
-export async function requestProfileMigrationToken(session: SessionLike): Promise<components['schemas']['ProfileMigrationToken']> {
+export function requestProfileMigrationToken(session: SessionLike): Promise<components['schemas']['ProfileMigrationToken']>;
+export function requestProfileMigrationToken<Result>(session: SessionLike,
+    prepareResult: (result: components['schemas']['ProfileMigrationToken']) => Result | Promise<Result>): Promise<Result>;
+/** Coordinate captured admission and locked business issuance, including any precommit transport preparation. */
+export async function requestProfileMigrationToken<Result>(session: SessionLike,
+    prepareResult?: (result: components['schemas']['ProfileMigrationToken']) => Result | Promise<Result>): Promise<Result | components['schemas']['ProfileMigrationToken']> {
     requireProfileWorkflow(session, false);
     try {
-        return {token: await getMigrationToken(session.profile!.id)};
-    } catch {
+        return await identity.issueMigrationToken<Result | components['schemas']['ProfileMigrationToken']>(session, prepareResult ?? (result => result));
+    } catch (error) {
+        if (error instanceof ApiProblem) throw error;
         // Token persistence may already have replaced the previous capability.
         throw new ApiProblem('WORKFLOW_OUTCOME_UNKNOWN');
     }
@@ -1329,13 +1233,14 @@ export async function requestProfileMigrationToken(session: SessionLike): Promis
  * A later authoritative GET owns identity/roster display; no postcommit store
  * reload, flash save or full ORM projection can reject this completed workflow.
  */
-function profileWorkflowCompletion(req: Request, destination: string, messageKey: MessageKey, redirect: string | null = null):
+function profileWorkflowCompletion(req: Request, destination: string, messageKey: MessageKey, redirect: string | null = null,
+    session: Request['session'] = req.session):
     components['schemas']['ProfileWorkflowCompletion'] {
     // Explicit selection/logout rotates a complete metadata pair. A transfer
     // preserves the admitted actor, including read-only stored-data fallback when a
     // stored generation is partial. Its raw context alone is not that actor's scope.
-    const completeContext = req.session.frontendContext && req.session.frontendCsrfToken
-        ? req.session.frontendContext : req.apiActor?.context ?? null;
+    const completeContext = session.frontendContext && session.frontendCsrfToken
+        ? session.frontendContext : req.apiActor?.context ?? null;
     return {resultingContext: completeContext,
         destination, notice: {kind: 'success', messageKey}, redirect};
 }
@@ -1349,18 +1254,23 @@ const profileWorkflowNoticeKeys = {
         'guest-deleted': 'profile.deactivationCompletedGuestDeleted'},
 } as const satisfies Record<'migration' | 'deactivation', Record<ProfileOwnerCleanup, MessageKey>>;
 
-/** Reuse transfer and former-owner cleanup exactly; only the transport result changes. */
-export async function executeIdentityProfileMigration(req: Request, token: string): Promise<components['schemas']['ProfileWorkflowCompletion']> {
+export function executeIdentityProfileMigration(req: Request, token: string): Promise<components['schemas']['ProfileWorkflowCompletion']>;
+export function executeIdentityProfileMigration<Result>(req: Request, token: string, prepareResult: ProfileWorkflowPreparation<Result>): Promise<Result>;
+/** Coordinate admitted transfer and precommit response preparation without rotating the recipient's Session. */
+export async function executeIdentityProfileMigration<Result>(req: Request, token: string,
+    prepareResult?: ProfileWorkflowPreparation<Result>): Promise<Result | components['schemas']['ProfileWorkflowCompletion']> {
     requireProfileWorkflow(req.apiActor!, true);
     try {
-        // The shared owner validates the capability before moving the profile,
-        // then performs its established mail and previous-owner cleanup sequence.
-        const cleanup = await migrateProfile(req.apiActor!.auth!.user!.id, token, 'facts');
-        return profileWorkflowCompletion(req, '/users/profile/manage', profileWorkflowNoticeKeys.migration[cleanup]);
+        /** The feature invokes this while ownership, cleanup and result preparation may still roll back. */
+        function prepareCompletion(cleanup: ProfileOwnerCleanup) {
+            const completion = profileWorkflowCompletion(req, '/users/profile/manage', profileWorkflowNoticeKeys.migration[cleanup]);
+            return prepareResult ? prepareResult(completion) : completion;
+        }
+        return await identity.migrateProfile(req.apiActor!.auth!.user!.id, token, prepareCompletion);
     } catch (error) {
-        // Only the shared owner's explicitly annotated initial token rejection
-        // proves no transfer occurred. Every later failure may be partial work.
-        if (error instanceof ExpectedError && error.cause === 'TOKEN_INVALID') throw error;
+        // Current-token and locked admission rejections precede mutation. An
+        // unclassified error or uncertain commit must never invite automatic replay.
+        if ((error instanceof ExpectedError && error.cause === 'TOKEN_INVALID') || error instanceof ApiProblem) throw error;
         throw new ApiProblem('WORKFLOW_OUTCOME_UNKNOWN');
     }
 }
@@ -1373,28 +1283,52 @@ export async function deactivateIdentityProfile(req: Request, body: components['
         // Confirmation validation is the shared operation's first step. Its
         // existing separate deactivation and selection commits remain unchanged.
         const cleanup = await deactivateProfile(body, req.session, 'facts');
+        if (cleanup === 'account-deleted') {
+            // The final User no longer exists. Retain the detached Profile and
+            // finish ordinary local sign-out, without a new transaction or provider request.
+            await oidc.logoutLocal(req.session);
+            return profileWorkflowCompletion(req, '/', profileWorkflowNoticeKeys.deactivation[cleanup]);
+        }
         await changeActiveProfile(req.session);
         return profileWorkflowCompletion(req, '/users/profile/manage', profileWorkflowNoticeKeys.deactivation[cleanup]);
     } catch (error) {
         if (error instanceof ValidationError) throw error;
-        // In particular, the inherited last-profile 400 occurs after mutation;
-        // reporting it as a definite API rejection would invite an unsafe replay.
+        // Cleanup, remaining-profile selection and local save can fail after
+        // detach. Do not report those later failures as a definite rejection.
         throw new ApiProblem('WORKFLOW_OUTCOME_UNKNOWN');
     }
 }
 
-/** Preserve ordinary account/guest deletion, mail and provider completion without adding atomicity. */
-export async function deleteIdentityAccount(req: Request, body: components['schemas']['AccountDeletionInput']):
-    Promise<components['schemas']['ProfileWorkflowCompletion']> {
+export function deleteIdentityAccount(req: Request, body: components['schemas']['AccountDeletionInput']): Promise<components['schemas']['ProfileWorkflowCompletion']>;
+export function deleteIdentityAccount<Result>(req: Request, body: components['schemas']['AccountDeletionInput'],
+    prepareResult: ProfileWorkflowPreparation<Result>): Promise<Result>;
+/** Coordinate token-free deletion/session/receipt finality; preserve the provider-bearing operation's separate outcome. */
+export async function deleteIdentityAccount<Result>(req: Request, body: components['schemas']['AccountDeletionInput'],
+    prepareResult?: ProfileWorkflowPreparation<Result>): Promise<Result | components['schemas']['ProfileWorkflowCompletion']> {
     requireProfileWorkflow(req.apiActor!, false);
     try {
-        // The existing owner supplies the real provider/root destination. Do not
-        // preflight or replace that workflow with a new session transaction.
+        if (!req.session.tokens) {
+            /** Stage deletion, anonymous authority and serialized receipt on the same locked connection. */
+            async function prepareDeletion(manager: EntityManager, session: Request['session']) {
+                const emails = await identity.prepareAccountDeletion(body, session, manager);
+                await oidc.logoutLocal(session);
+                const completion = profileWorkflowCompletion(req, '/', 'profile.accountDeleted', null, session);
+                const result = prepareResult ? await prepareResult(completion) : completion;
+                return {result, emails};
+            }
+            const committed = await commitIdentityCompletion(req, req.apiActor!.context, prepareDeletion, true);
+            req.session = committed.session;
+            await identity.deliverPreparedIdentityEmails(committed.result.emails);
+            return committed.result.result;
+        }
+        // Provider-bearing deletion is deliberately not strengthened by the
+        // token-free decision, and retains its current partial/unknown failures.
         const redirect = await deleteAccount(body, req.session);
-        return profileWorkflowCompletion(req, '/', 'profile.accountDeleted',
+        const completion = profileWorkflowCompletion(req, '/', 'profile.accountDeleted',
             redirect === settings.value.rootUrl ? null : redirect);
+        return prepareResult ? await prepareResult(completion) : completion;
     } catch (error) {
-        if (error instanceof ValidationError) throw error;
+        if (error instanceof ValidationError || error instanceof ApiProblem) throw error;
         throw new ApiProblem('WORKFLOW_OUTCOME_UNKNOWN');
     }
 }

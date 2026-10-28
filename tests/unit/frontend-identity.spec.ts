@@ -1,8 +1,34 @@
 import {describe, expect, it} from 'vitest';
-import {frontendIdentityPageEntry, frontendOverviewPageEntry, safeFrontendReturn} from '../../src/common/lib/frontendIdentity';
+import {frontendIdentityPageEntry, frontendOverviewPageEntry, isNewPasswordValid, passwordCriteria, safeFrontendReturn} from '../../src/common/lib/frontendIdentity';
+import {utf8ByteLength} from '../../src/common/lib/utf8';
 import {readGuestLinkHandoff} from '../../src/backend/modules/lib/frontendSession';
 import {createTranslator} from '../../src/common/localization/translator';
 import {ApiProblem, validatedProblemBody} from '../../src/backend/modules/api/problem';
+
+describe('shared new-password admission and guidance', () => {
+    it('counts Unicode code points independently of the byte limit and accepts category-free secrets', () => {
+        expect(passwordCriteria('😀'.repeat(14))).toEqual({length: false, bytes: true});
+        expect(passwordCriteria('😀'.repeat(15))).toEqual({length: true, bytes: true});
+        expect(passwordCriteria('😀'.repeat(19))).toEqual({length: true, bytes: false});
+        for (const password of ['a'.repeat(15), '7'.repeat(15), ' '.repeat(15), ','.repeat(15)]) {
+            expect(isNewPasswordValid(password)).toBe(true);
+        }
+        for (const value of [undefined, null, 15, {}, []]) expect(isNewPasswordValid(value)).toBe(false);
+    });
+
+    it('measures original UTF-8 bytes without trimming or Unicode normalization', () => {
+        expect(utf8ByteLength('界'.repeat(24))).toBe(72);
+        expect(utf8ByteLength('😀'.repeat(18))).toBe(72);
+        expect(utf8ByteLength('a'.repeat(72) + ' ')).toBe(73);
+        expect(isNewPasswordValid('a'.repeat(72) + ' ')).toBe(false);
+        const decomposed = 'e\u0301'.repeat(24);
+        expect(utf8ByteLength(decomposed)).toBe(72);
+        expect(utf8ByteLength(decomposed + ' ')).toBe(73);
+        expect(isNewPasswordValid(decomposed)).toBe(true);
+        expect(isNewPasswordValid(decomposed + ' ')).toBe(false);
+        expect(decomposed).not.toBe(decomposed.normalize('NFC'));
+    });
+});
 
 describe('frontend identity destinations', () => {
     it('preserves owned path, query and fragment while normalizing dot segments', () => {

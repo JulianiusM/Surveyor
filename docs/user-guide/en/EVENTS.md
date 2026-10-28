@@ -9,7 +9,6 @@ verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: Creation and duplication permission instructions reconciled with the shared collapsed disclosure and exact localized labels; existing task guidance, anchors and image bytes retained. Source review only; no new full-article browser verification claimed.
 source-anchors: src/backend/controller/entityAdminController.ts; src/backend/modules/archive/policy.ts; src/backend/modules/database/services/EntityLifecycleService.ts; docs/user-guide/en/INVOICE_POOLS.md; src/backend/controller/eventController.ts; src/backend/modules/database/entities/event/; src/backend/modules/database/services/EventService.ts; src/backend/modules/lib/fileCommons.ts; src/backend/modules/lib/pdf.ts; src/backend/modules/lib/permissions.ts; src/backend/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/event/; src/frontend/components/EntitySettingsDialog.vue; src/common/locales/; src/frontend/components/permissions/CreationPermissions.vue; src/frontend/
 next-review: event-visible-UI-or-behavior-change
-production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
 -->
 
 Use an event to collect attendance dates, optional dietary information, and related packing, activity, and transport plans.

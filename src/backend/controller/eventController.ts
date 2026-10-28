@@ -18,6 +18,10 @@ import {readEntityDefaultsBaseline, updateEntityDefaults, readEntityAdministrato
 
 import {eventMethodPermission, mayPerformEventMethod} from '../modules/permissionEngine';
 import {validateCalendarDate} from '../modules/event/linkage';
+import {registerAttendance as registerEventAttendance, cancelRegistration, updateRegistrationDates,
+    eventCapacityReached, listDeadlineBypassLinks,
+    createDeadlineBypassLink, revokeDeadlineBypassLink} from '../modules/event/registration';
+
 
 
 // controllers/eventController.ts
@@ -37,8 +41,8 @@ import Joi from 'joi';
 import type {EntityManager} from 'typeorm';
 
 import {Event} from "../modules/database/entities/event/Event";
-import {EventRegistration} from "../modules/database/entities/event/EventRegistration";
-import {eventDietaryChoices, eventDietaryGroups} from '../../common/generated/domainChoices';
+import type {EventRegistration} from "../modules/database/entities/event/EventRegistration";
+import {eventDietaryChoices} from '../../common/generated/domainChoices';
 import * as invoiceService from "../modules/database/services/EventInvoiceService";
 import {invoicePresentation} from '../modules/invoice/presentation';
 import {isParticipantSubmissionPool} from '../modules/invoice/state';
@@ -64,8 +68,6 @@ import {
     ENTITIES,
     getResource,
     getHeaderImageVersion,
-    isWithinWindow,
-    normalizeToArray,
     rewriteISOToZone,
     uuidKey
 } from "../modules/lib/util";
@@ -295,161 +297,10 @@ async function deleteEntity(event: Event, _session: Request['session']) {
     return await (eventService as any).deleteEvent(event.id);
 }
 
-/** Validate and save current-profile attendance through the shared attendance lifecycle.
- * Stable causes let the versioned adapter localize known rejections while direct calls
- * callers retain their original literal messages, statuses and registration order. */
+/** Coordinate admitted attendance with its captured actor and explicit token context. */
 async function registerAttendance(event: Event, body: any, req: {session: SessionLike; resource?: Record<string, unknown>}) {
-    if (!event) throw new APIError('Event not found', body, 404);
-    const session = req.session;
-    if (!session.profile) throw new APIError('Authentication required', body, 401);
-
-    // Deny registration if not already registered (allow updates to registration)
-    const registration = await eventService.getRegistrationFor(session.profile.id, event.id);
-    if (!registration && await isEventFull(event.id)) {
-        throw new APIError('Event is full', body, 403, {cause: 'EVENT_FULL'});
-    }
-
-    const schema = Joi.object({
-        arrivalDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
-        departureDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
-        dietary: Joi.alternatives().try(
-            Joi.array().items(Joi.string().valid(...eventDietaryChoices).uppercase()),
-            Joi.string().valid(...eventDietaryChoices).uppercase() // handles single value form-post
-        ).optional(),
-        allergyNotes: Joi.string().max(4000).allow(''),
-        dietComment: Joi.string().max(4000).allow(''),
-    });
-    const {error, value} = schema.validate(body, {abortEarly: false, allowUnknown: true});
-    if (error) {
-        const msg = error.details.map(d => d.message).join(', ');
-        throw new APIError(msg, body, 400);
-    }
-
-    const dietary: DIETARY[] = normalizeToArray(value.dietary);
-
-    // Deny registration if past binding deadline
-    let bypass: { ok: boolean; linkId?: string } = {ok: false};
-    if (event.bindingDeadline && new Date(Date.parse(event.bindingDeadline)) < new Date()) {
-        if (registration) {
-            // Are date updates allowed?
-            if (!event.allowRegDateUpdatesAfterDeadline && (registration.arrivalDate !== value.arrivalDate || registration.departureDate !== value.departureDate)) {
-                throw new APIError('Date updates not allowed after deadline has passed', {}, 403, {cause: 'EVENT_DATE_UPDATES_CLOSED'});
-            }
-            // Are diet updates allowed?
-            if (!event.allowRegDietUpdateAfterDeadline && !isDietaryEqual(registration, dietary, value.allergyNotes, value.dietComment)) {
-                throw new APIError('Diet updates not allowed after deadline has passed', {}, 403, {cause: 'EVENT_DIET_UPDATES_CLOSED'});
-            }
-        } else {
-            bypass = await canBypassDeadlineWithToken(event.id, body.regToken ?? req.resource?.regToken ?? null);
-            if (!bypass.ok) {
-                // owners/co-organizers may bypass via permission in your middleware;
-                // if you still reach here, reject:
-                throw new APIError('Registration deadline has passed', {}, 403, {cause: 'EVENT_DEADLINE_PASSED'});
-            }
-        }
-    }
-
-    if (!isWithinWindow(event.startDate, event.endDate, value.arrivalDate, value.departureDate)) {
-        throw new APIError('Arrival/Departure must be within event dates', body, 400, {cause: 'EVENT_DATES_INVALID'});
-    }
-
-    const allergyNotes: string = value.allergyNotes || '';
-    const dietComment: string = value.dietComment || '';
-    checkMeals(dietary, allergyNotes, dietComment, body);
-
-
-    const profileId = session.profile.id;
-    await eventService.withEventTransaction(
-    /** Recheck/consume an admitted bypass link and save attendance on one manager,
-     * so a rejected registration cannot spend its token independently. */
-    async function saveRegistration(manager) {
-        // The earlier eligibility read is only a preview. Recheck the token while holding
-        // its row lock so simultaneous submissions cannot both spend its final use. The
-        // controller owns that policy; DBAL only reads/locks and records the decided write.
-        if (bypass.ok && bypass.linkId) {
-            const link = await eventService.lockDeadlineBypassLink(manager, event.id, bypass.linkId);
-            if (!link || bypassStatus(link) !== 'active') throw new APIError('This link has already been used', {}, 409, {cause: 'EVENT_TOKEN_USED'});
-            await eventService.consumeDeadlineBypassToken(link.id, profileId, manager);
-        }
-        // Consumption and attendance commit together. A failed attendance write also
-        // rolls back token usage, leaving the same link available for a corrected retry.
-        await eventService.register(event.id, value.arrivalDate, value.departureDate, profileId, dietary,
-            allergyNotes?.trim() || null, dietComment?.trim() || null, manager);
-    });
-    return 'Registration saved';
-}
-
-/** Compare saved dietary choices and authored notes without rewriting unchanged registration inputs. */
-function isDietaryEqual(reg: EventRegistration, dietary: DIETARY[], allergyNotes: string, dietComment: string) {
-    // Separate stored choices from special allergy/comment text before comparing the submitted set.
-    const localDiets: Set<DIETARY> = new Set();
-    let localAllergy;
-    let localComment;
-
-    for (const choice of reg.dietaryChoices) {
-        localDiets.add(choice.choice);
-        if (choice.choice === "ALLERGIES") {
-            localAllergy = choice.additionalInfo;
-        } else if (choice.choice === "COMMENT") {
-            localComment = choice.additionalInfo;
-        }
-    }
-
-    let ok = true;
-    for (const choice of dietary) {
-        if (!localDiets.delete(choice)) {
-            ok = false;
-            break;
-        }
-    }
-
-    return ok && localDiets.size === 0 && allergyNotes === localAllergy && dietComment === localComment;
-}
-
-/** Keep the dietary combinations and note requirements under one business owner. */
-function checkMeals(dietary: DIETARY[], allergyNotes: string, dietComment: string, body: any) {
-    // A selected supplementary category needs its own note before meal-combination checks.
-    if (dietary.includes("ALLERGIES") && !allergyNotes) {
-        throw new APIError('Allergies require additional information', body, 400, {cause: 'EVENT_ALLERGY_INFO_REQUIRED'});
-    }
-    if (dietary.includes("COMMENT") && !dietComment) {
-        throw new APIError('Comment requires additional information', body, 400, {cause: 'EVENT_COMMENT_REQUIRED'});
-    }
-
-    // Supplementary requirements do not substitute for a selected meal preference.
-    const meals = dietary.filter(d =>
-        eventDietaryGroups.meal.some(choice => choice === d)
-    );
-
-    if (dietary.length > 0 && meals.length === 0) {
-        throw new APIError('At least one meal preference must be selected.', body, 400, {cause: 'EVENT_MEAL_REQUIRED'});
-    }
-
-    if (meals.includes('VEGETARIAN')) {
-        if (meals.includes('MEAT') || meals.includes('FISH') || meals.includes('VEGAN')) {
-            throw new APIError('Vegetarian cannot be combined with meat, fish or vegan.', body, 400, {cause: 'EVENT_VEGETARIAN_CONFLICT'});
-        }
-    }
-
-    if (meals.includes('VEGAN')) {
-        if (meals.includes('MEAT') || meals.includes('FISH') || meals.includes('VEGETARIAN')) {
-            throw new APIError('Vegan cannot be combined with meat, fish or vegetarian.', body, 400, {cause: 'EVENT_VEGAN_CONFLICT'});
-        }
-    }
-}
-
-/** Cancel the active profile's attendance under its independent post-deadline rule. */
-async function cancelRegistration(event: Event, session: SessionLike) {
-    // Cancellation has its own event flag; date/diet update flags confer no cancellation right.
-    if (event.bindingDeadline && new Date(Date.parse(event.bindingDeadline)) < new Date() && !event.allowRegCancelationAfterDeadline) {
-        throw new APIError('Cancellation is not allowed after registration deadline has passed', {}, 403, {cause: 'EVENT_CANCELLATION_CLOSED'});
-    }
-    if (session.profile?.id) {
-        await eventService.deleteRegistrationFor(event.id, session.profile.id);
-    } else {
-        throw new APIError('Authentication required', {}, 401);
-    }
-    return 'Registration cancelled';
+    const regToken = body.regToken ?? req.resource?.regToken ?? null;
+    return registerEventAttendance(event, body, req.session, regToken);
 }
 
 /* ----------------------- API: Organizer edit ----------------------- */
@@ -536,98 +387,12 @@ async function updateSettings(id: string, body: any) {
     return 'Settings saved';
 }
 
-/** One capacity policy serves direct/versioned presentation and registration admission.
- * Missing limits remain unlimited, while a persisted zero still closes admission.
- * Callers supply their existing count so this rule introduces no read or lock. */
-function eventCapacityReached(limit: number | null | undefined, registrationCount: number): boolean {
-    return limit != null && registrationCount >= limit;
-}
-
-/** Capacity is policy over persisted event limits and registration counts. */
-export async function isEventFull(eventId: string): Promise<boolean> {
-    const event = await eventService.getEventById(eventId);
-    if (!event) throw new APIError('Event not found', {}, 404);
-    // Preserve the existing unlimited-event shortcut and separate count read;
-    // consolidating presentation policy does not strengthen its concurrency guarantee.
-    const registrationCount = event.maxParticipants == null ? 0 : await eventService.getEventRegistrationCount(eventId);
-    return eventCapacityReached(event.maxParticipants, registrationCount);
-}
-
-/** Keep display, preview and locked consumption aligned on the same eligibility rule. */
-function bypassStatus(link: import('../modules/database/entities/event/EventRegBypassLink').EventRegBypassLink) {
-    if (link.revokedAt) return 'revoked';
-    if (link.expiresAt && link.expiresAt < new Date()) return 'expired';
-    if (link.usedCount >= link.maxUses) return 'consumed';
-    return 'active';
-}
-
-/** Eligibility and display status share one controller rule; the service only returns rows. */
-export async function canBypassDeadlineWithToken(eventId: string, token?: string | null): Promise<{ok: boolean; linkId?: string}> {
-    if (!token) return {ok: false};
-    const link = await eventService.getDeadlineBypassToken(eventId, token);
-    return link && bypassStatus(link) === 'active' ? {ok: true, linkId: link.id} : {ok: false};
-}
-
-/** Present existing registration links with the shared lifecycle status, without changing token state. */
-async function listDeadlineBypassLinks(event: Event) {
-    // Load only this event links, then project existing usage/revocation/expiry evidence.
-    const links = await eventService.listDeadlineBypassLinks(event.id);
-    return links.map(function presentLink(link) {
-        return {id: link.id, token: link.token, createdAt: link.track.createdAt, expiresAt: link.expiresAt,
-            revokedAt: link.revokedAt, used: link.usedCount > 0 || !!link.usedAt, profileId: link.profileId, status: bypassStatus(link)};
-    });
-}
-
-/** Issue the existing single-use registration link for an admitted full-account organizer. */
-async function createDeadlineBypassLink(event: Event, body: any, session: SessionLike) {
-    if (!event) throw new APIError('Event not found', body, 404);
-    if (!session.auth?.user) throw new APIError('Must be logged in', body, 401, {cause: 'EVENT_LINK_ACCOUNT_REQUIRED'});
-
-    // Account-only issuance is an action rejection for a valid guest, never session expiry.
-    // Preserve the shared optional-expiry parser and fixed single-use persistence behavior.
-    const expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
-    return await eventService.createDeadlineBypassLink(
-        event.id,
-        session.auth.user.id,
-        {expiresAt, maxUses: 1}
-    );
-}
-
-async function revokeDeadlineBypassLink(event: Event, linkId: string) {
-    await eventService.revokeDeadlineBypassLink(event.id, linkId);
-}
-
 async function getParticipants(event: Event) {
     return await eventService.getEventParticipantRows(event.id).then(projectEventParticipants);
 }
 
 async function deleteRegistration(event: Event, registrationId: string) {
     return await eventService.deleteRegistration(event.id, registrationId);
-}
-
-/** Update one event-scoped registration within the Event's inclusive date window.
- * Document route middleware and the versioned method adapter independently enforce
- * MANAGE_REGISTRATIONS before calling this shared validation/persistence owner. */
-async function updateRegistrationDates(event: Event, registrationId: string, body: any, permData?: PermBundle) {
-    const schema = Joi.object({
-        arrivalDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
-        departureDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
-    });
-    const {error, value} = schema.validate(body, {abortEarly: false, allowUnknown: true});
-    if (error) {
-        const msg = error.details.map((d) => d.message).join(', ');
-        throw new APIError(msg, body, 400);
-    }
-
-    // Organizer edits retain the same date-window policy as self-registration,
-    // while removal and cancellation have their own separately admitted operations.
-    if (!isWithinWindow(event.startDate, event.endDate, value.arrivalDate, value.departureDate)) {
-        throw new APIError('Arrival/Departure must be within event dates', body, 400, {cause: 'EVENT_DATES_INVALID'});
-    }
-
-    const updated = await eventService.updateRegistrationDates(event.id, Number(registrationId), value.arrivalDate, value.departureDate);
-    if (!updated) throw new APIError('Registration not found', {}, 404);
-    return 'Registration updated';
 }
 
 /** Aggregate registered participants, dietary details and date totals for the existing export projection. */
@@ -988,7 +753,7 @@ export async function removeEventRegistration(id: string, registrationId: string
     return {changed};
 }
 
-/** Only registration managers may read bearer links; status comes from the existing controller rule. */
+/** Coordinate manager-only bearer-link reads with the shared registration lifecycle projection. */
 export async function readEventRegistrationLinks(id: string, session: SessionLike): Promise<components['schemas']['EventRegistrationLinks']> {
     const event = await requireEventMethod(id, session, 'manageRegistrations');
     const links = await listDeadlineBypassLinks(event);
@@ -997,7 +762,7 @@ export async function readEventRegistrationLinks(id: string, session: SessionLik
         profileId: link.profileId ?? null, status: link.status as components['schemas']['EventRegistrationLink']['status']}))};
 }
 
-/** Link creation retains the account-only, single-use command without a postcommit read. */
+/** Coordinate account-only link issuance with the requested bounded Uses count. */
 export async function addEventRegistrationLink(id: string, body: components['schemas']['EventRegistrationLinkInput'], session: SessionLike) {
     const event = await requireEventMethod(id, session, 'manageRegistrations');
     return createDeadlineBypassLink(event, body, session);
@@ -1222,17 +987,11 @@ export default {
     deleteEntity,
 
     registerAttendance,
-    cancelRegistration,
     updateEventSettings,
     updateSettings,
 
-    listDeadlineBypassLinks,
-    createDeadlineBypassLink,
-    revokeDeadlineBypassLink,
-
     getParticipants,
     deleteRegistration,
-    updateRegistrationDates,
     getParticipantsExtended,
 
     updateHeaderImg,

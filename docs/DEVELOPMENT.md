@@ -4,9 +4,9 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: developer-experience maintainers
 status: current
-last-verified: 2026-10-27
+last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved shared checkbox owner and native value channels reconciled; prior runtime choices, contract direction, Activity completion, proof maintenance and compiler boundaries retained; no deployment or exhaustive verification claim
+verification-scope: completed frontend cutover and controller/feature/DBAL ownership reconciled; existing contract, shared controls, compiler and proof guidance retained without deployment or exhaustive verification claim
 source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/check-development-policy.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: development-workflow-or-help-tooling-change
 -->
@@ -317,8 +317,8 @@ inside the module that owns them instead of exporting them merely to connect new
 ### Controllers and services
 
 - Controllers normalize request data, coordinate services, prepare render data, and choose redirects/messages.
-- Put business/authorization/validation checks and context-specific errors in the controller layer or its dedicated
-  feature modules. Controllers orchestrate these modules and the existing services. Services must not
+- Put shared business/authorization/validation implementation and business errors in feature modules.
+  Controllers coordinate admission, these modules, services and responses. Services must not
   throw `APIError`, `ExpectedError`, or other request/UI-specific errors: they are pure DBAL.
 - Database services are functional database service modules that export functions; they do not require a service class or dependency-injection container.
 - Extend an existing controller, service, or middleware module when the responsibility already belongs there. Keep cohesive operations together; a new module must have a distinct responsibility, not just forward calls to another module.
@@ -326,7 +326,7 @@ inside the module that owns them instead of exporting them merely to connect new
 - Expose operations that describe the domain workflow. Keep repository selection, query construction, and lock ordering private to the persistence boundary.
 - Use a TypeORM transaction for multi-record writes that must succeed or fail together.
 - For a rule requiring locked data, let the service own transaction creation and locking, then invoke a named
-  operation from the corresponding controller or its feature module with the locked rows and manager. Checks and
+  operation from the corresponding feature module with the locked rows and manager. Checks and
   writes remain inside that transaction; never weaken atomicity by moving the check before lock acquisition.
 - Preserve the distinction between account IDs, guest IDs, profile IDs, entity IDs, item IDs, and event-registration IDs.
 
@@ -501,11 +501,14 @@ Strict Ajv validation still rejects unknown schema vocabulary. Do not disable st
 default insertion or additional-field removal. Timezone existence and cross-field business checks remain named
 controller operations.
 
-Two implemented constraints preserve existing field behavior. Registration/reset author
-`x-surveyor-min-length-utf16: 8`, because native password validation counts UTF-16 units; ordinary JSON Schema string
-bounds count code points, and passwords acquire no maximum. Existing-item capacity admits the number/string/null
+Registration and reset share the approved `NewPassword` schema: at least 15 Unicode code points and at most 72 UTF-8
+bytes, with no composition requirement. The common credential helpers consume generated limits; standalone API
+validators use the same UTF-8 byte implementation. Business admission belongs to the identity feature, with hashing
+and persistence in DBAL. Preserve exact entered values and existing-password login; do not introduce trimming,
+normalization or prehashing. New-password controls must not substitute browser UTF-16 length bounds for these rules.
+Existing-item capacity admits the number/string/null
 primitive union and passes the raw scalar to the existing signed nullable SQL column. Database rounding/range/failure
-remain authoritative; creation/new-item validation stays separate. Do not generalize either extension into coercion
+remain authoritative; creation/new-item validation stays separate. Do not generalize this exception into coercion
 or a copied database-limit policy.
 
 The current HTTP adapter decodes single scalar path/query/header values, JSON and entity/Finance multipart, and
@@ -582,8 +585,7 @@ proxy. Readonly inputs that can still initiate Enter submission use the same for
 `InlineCell` checks `KeyboardEvent.isComposing` before preventing Enter's default action or committing input;
 the multiline shortcut retains Ctrl+Enter. Activity's role input uses the same ordering before its own select/create
 action. Composing Enter belongs to the browser; a later ordinary shortcut, mouse action and blur retain their
-existing behavior. Keep these guards in the actual shared inline and distinct role owners. This approved composition
-behavior supersedes the historical native reference.
+existing behavior. Keep these guards in the actual shared inline and distinct role owners.
 
 Matching Bootstrap command/filter buttons use `ActionButton` with their
 existing variant, size, form and disabled policy. Pass the initiating operation's actual `state` or `pending` even
@@ -657,10 +659,9 @@ remove controls may use the existing list's slot without copying list markup or 
 Overview and administrator disclosures. Features retain which panel is open, panel markup, contents and reads; pass
 their existing disabled condition and control target. A visual trigger never owns query admission or a draft.
 
-Judge interface parity by the information, actions and steps users experience. Explicit requirements and approved
-changes are exceptions by default: integrated Refresh, complete localization, usable responsive layout and common
-non-jumping SPA notifications supersede incompatible native details. Native IDs, field names used only by an old
-document POST, exact margins and copied overflow are not contracts. Keep meaningful label/control associations,
+Review the current interface by the information, actions and steps users experience. Integrated Refresh, complete
+localization, usable responsive layout and common non-jumping SPA notifications are current application behavior.
+No former-frontend comparison is required. Keep meaningful label/control associations,
 keyboard order, value parsing, focus return, disclosure state and reviewed inputs; do not weaken these to simplify
 a test. Shared styles own locale-neutral wrapping, while feature tables retain intentional horizontal scrolling.
 The shared Vue `table-responsive` viewport also provides a positioning boundary for clipped absolute controls;

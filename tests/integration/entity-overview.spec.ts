@@ -103,7 +103,7 @@ describe('bounded event-card overview', () => {
         const activity = await activityService.createActivityPlanTx(owner.id, 'Assigned activity', '', '2027-06-01', '2027-06-03', [createActivitySlotEntity()], eventId);
         const [slot] = await activityService.getActivitySlotsFlat(activity);
         await assignActivitySlot(slot.id, participant.id);
-        const drivers = await driverService.createDriversList(owner.id, 'Drivers require both relationships', '', eventId);
+        const drivers = await driverService.createDriversList(owner.id, 'Passenger membership', '', eventId);
         const driverItem = createDriversItemEntity();
         await driverService.createDriversItem(drivers, owner.id, driverItem);
         await assignDriversItem(driverItem.id, participant.id);
@@ -112,7 +112,7 @@ describe('bounded event-card overview', () => {
         await surveyService.saveResponse(survey, participant.id, combination.id, 'no');
 
         const beforeDriverOwnership = await readOverview(participant, {collection: 'participant'});
-        expect(new Set(beforeDriverOwnership.items.map(item => item.id))).toEqual(new Set([packing, activity, survey]));
+        expect(new Set(beforeDriverOwnership.items.map(item => item.id))).toEqual(new Set([packing, activity, drivers, survey]));
         await driverService.createDriversItem(drivers, participant.id, createDriversItemEntity());
         const afterDriverOwnership = await readOverview(participant, {collection: 'participant'});
         expect(new Set(afterDriverOwnership.items.map(item => item.id))).toEqual(new Set([packing, activity, drivers, survey]));
@@ -126,6 +126,38 @@ describe('bounded event-card overview', () => {
         expect(delegated.items.map(item => item.id)).toEqual([packing]);
         const ownerChildren = await readOverview(owner, {eventId});
         expect(ownerChildren.items.filter(item => item.id === packing)).toHaveLength(1);
+    });
+
+    it('discovers driver-only and passenger-only lists once and scopes personal visibility to the actual target', async () => {
+        const owner = await persistIntegrationProfile();
+        const participant = await persistIntegrationProfile();
+        const offered = await driverService.createDriversList(owner.id, 'Offered by participant', '');
+        const taken = await driverService.createDriversList(owner.id, 'Taken by participant', '');
+        const both = await driverService.createDriversList(owner.id, 'Both roles', '');
+        const unrelated = await driverService.createDriversList(owner.id, 'Neither role', '');
+        const offer = createDriversItemEntity();
+        await driverService.createDriversItem(offered, participant.id, offer);
+        await driverService.createDriversItem(offered, participant.id, createDriversItemEntity());
+        const passengerItem = createDriversItemEntity();
+        await driverService.createDriversItem(taken, owner.id, passengerItem);
+        await assignDriversItem(passengerItem.id, participant.id);
+        const sharedItem = createDriversItemEntity();
+        await driverService.createDriversItem(both, participant.id, sharedItem);
+        await assignDriversItem(sharedItem.id, participant.id);
+
+        expect(new Set((await driverService.getDriversListByParticipant(participant.id)).map(list => list.id)))
+            .toEqual(new Set([offered, taken, both]));
+        const overview = await readOverview(participant, {collection: 'participant', type: 'drivers'});
+        expect(new Set(overview.items.map(item => item.id))).toEqual(new Set([offered, taken, both]));
+        expect(overview.collectionTotal).toBe(3);
+        const session = {profile: participant, auth: {user: participant.user!}};
+        for (const id of [offered, taken, both]) {
+            expect(await userService.isOverviewMember(participant.id, {type: 'drivers', id}, AppDataSource.manager)).toBe(true);
+            await expect(userController.setPersonalVisibility('drivers', id, {visibility: 'hidden'}, session)).resolves.toBeTruthy();
+        }
+        expect(await userService.isOverviewMember(participant.id, {type: 'drivers', id: unrelated}, AppDataSource.manager)).toBe(false);
+        await expect(userController.setPersonalVisibility('drivers', unrelated, {visibility: 'hidden'}, session))
+            .rejects.toMatchObject({status: 403});
     });
 
     it('pages one mixed card set and independently bounds the selected event children', async () => {

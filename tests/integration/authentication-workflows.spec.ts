@@ -23,6 +23,17 @@ import type {AccountRegistrationTransactionOptions, GuestRegistrationTransaction
 import type {components} from '../../src/types/api/v1';
 import {persistIntegrationProfile, registerLocalAccount,} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
+import * as identity from '../../src/backend/modules/identity';
+import * as oidc from '../../src/backend/modules/oidc';
+import * as openid from 'openid-client';
+import settings from '../../src/backend/modules/settings';
+
+// openid-client is external ESM with immutable namespace exports. Wrap only its
+// actual discovery boundary so tests can control provider failure without HTTP.
+vi.mock('openid-client', async importOriginal => {
+    const original = await importOriginal<typeof import('openid-client')>();
+    return {...original, discovery: vi.fn(original.discovery)};
+});
 
 beforeAll(async () => {
     await initializeIntegrationDatabase();
@@ -30,6 +41,196 @@ beforeAll(async () => {
 
 afterAll(async () => {
     await closeIntegrationDatabase();
+});
+
+describe.each(['direct', 'prepared'] as const)('approved new-password admission through %s completion', completion => {
+    it('rejects short Unicode and over-limit byte inputs before registration writes or mail preparation', async () => {
+        const req = await initialIdentityRequest();
+        const originalSession = JSON.stringify(req.session);
+        const userCount = await AppDataSource.getRepository(User).count();
+        const profileCount = await AppDataSource.getRepository(Profile).count();
+        const directMail = vi.spyOn(email, 'sendActivationEmail').mockResolvedValue();
+        const {prepared, deliver} = activationDelivery(true);
+        // Fourteen astral characters exceed the old UTF-16 minimum but are still
+        // too short. Both ASCII and multibyte 73-byte inputs exceed bcrypt's bound.
+        const rejected = ['😀'.repeat(14), 'a'.repeat(73), '😀'.repeat(18) + 'a'];
+        try {
+            for (const password of rejected) {
+                const input = {...accountRegistrationInput(`rejected-password-${randomUUID().slice(0, 8)}`),
+                    password, password_repeat: password};
+                const operation = completion === 'direct' ? userController.registerUser(input)
+                    : userController.registerUserWithSession(input, req, atomicAccountOptions(req));
+                await expect(operation).rejects.toMatchObject({name: 'ValidationError', cause: 'VALIDATION_FAILED', data: {}});
+                await expect(operation).rejects.toHaveProperty('data', {});
+                expect(await AppDataSource.getRepository(User).count()).toBe(userCount);
+                expect(await AppDataSource.getRepository(Profile).count()).toBe(profileCount);
+            }
+            expect(directMail).not.toHaveBeenCalled();
+            expect(prepared).not.toHaveBeenCalled();
+            expect(deliver).not.toHaveBeenCalled();
+            expect(JSON.stringify(req.session)).toBe(originalSession);
+            expect(await readStoredSession(req.sessionStore, req.sessionID)).toBeUndefined();
+        } finally { directMail.mockRestore(); prepared.mockRestore(); }
+    });
+
+    it('rejects invalid replacement passwords without changing the hash, reset capability or stored session', async () => {
+        // Pure DBAL intentionally seeds an existing short credential; creation
+        // policy must not move into persistence or invalidate existing login.
+        const account = await registerLocalAccount('password-policy-reset');
+        const token = await userService.generatePasswordResetToken(account.username);
+        const before = await AppDataSource.getRepository(User).findOneByOrFail({id: account.id});
+        const req = await atomicGuestRequest();
+        const stored = await AppDataSource.getRepository(Session).findOneByOrFail({id: req.sessionID});
+        const originalSession = JSON.stringify(req.session);
+        const prepareResult = vi.fn(() => prepareValidatedJson(req, 'resetAccountPassword', 200, {changed: true}));
+        for (const password of ['😀'.repeat(14), 'a'.repeat(73), '😀'.repeat(18) + 'a']) {
+            const input = {password, confirmPassword: password};
+            const operation = completion === 'direct' ? userController.resetPassword(token, input)
+                : userController.resetPasswordWithSession(token, input, req, {context: req.apiActor!.context, prepareResult});
+            await expect(operation).rejects.toMatchObject({name: 'ValidationError', cause: 'VALIDATION_FAILED', data: {}});
+            await expect(operation).rejects.toHaveProperty('data', {});
+            const after = await AppDataSource.getRepository(User).findOneByOrFail({id: account.id});
+            expect(after.password).toBe(before.password);
+            expect(after.resetToken).toBe(before.resetToken);
+            expect(after.resetTokenExpiration).toEqual(before.resetTokenExpiration);
+            expect(await userService.verifyPasswordResetToken(token)).toMatchObject({id: account.id});
+        }
+        expect(prepareResult).not.toHaveBeenCalled();
+        expect(JSON.stringify(req.session)).toBe(originalSession);
+        expect((await AppDataSource.getRepository(Session).findOneByOrFail({id: req.sessionID})).json).toBe(stored.json);
+        expect(await userService.verifyPassword(account.id, 'initial-secret')).toBe(true);
+    });
+
+    it.each([
+        {label: '15 lowercase code points without a digit', password: 'a'.repeat(15)},
+        {label: '15 astral code points without ASCII categories', password: '😀'.repeat(15)},
+        {label: 'exactly 72 UTF-8 bytes', password: '😀'.repeat(18)},
+        {label: 'decomposed Unicode and surrounding spaces', password: '  cafe\u0301-not-normalized  '},
+    ])('registers and resets the exact $label input', async ({password}) => {
+        const username = `exact-password-${randomUUID().slice(0, 8)}`;
+        const input = {...accountRegistrationInput(username), password, password_repeat: password};
+        const directMail = vi.spyOn(email, 'sendActivationEmail').mockResolvedValue();
+        const {prepared} = activationDelivery(true);
+        try {
+            if (completion === 'direct') await userController.registerUser(input);
+            else {
+                const req = await initialIdentityRequest();
+                await userController.registerUserWithSession(input, req, atomicAccountOptions(req));
+            }
+        } finally { directMail.mockRestore(); prepared.mockRestore(); }
+
+        const registered = await AppDataSource.getRepository(User).findOneByOrFail({username});
+        expect(registered.password).not.toBe(password);
+        expect(await userService.verifyPassword(registered.id, password)).toBe(true);
+        // Byte admission does not authorize trimming or NFC conversion. Compare
+        // through the real hash owner before and after reset, using distinct inputs.
+        const changedInputs = [...new Set([password.trim(), password.normalize('NFC')])]
+            .filter(value => value !== password);
+        for (const changed of changedInputs) expect(await userService.verifyPassword(registered.id, changed)).toBe(false);
+
+        const token = await userService.generatePasswordResetToken(username);
+        const replacement = {password, confirmPassword: password};
+        if (completion === 'direct') await userController.resetPassword(token, replacement);
+        else {
+            const req = await atomicGuestRequest();
+            await userController.resetPasswordWithSession(token, replacement, req, {context: req.apiActor!.context,
+                prepareResult: () => prepareValidatedJson(req, 'resetAccountPassword', 200, {changed: true})});
+        }
+        const reset = await AppDataSource.getRepository(User).findOneByOrFail({id: registered.id});
+        expect(reset.password).not.toBe(registered.password);
+        expect(await userService.verifyPassword(registered.id, password)).toBe(true);
+        for (const changed of changedInputs) expect(await userService.verifyPassword(registered.id, changed)).toBe(false);
+        expect(await userService.verifyPasswordResetToken(token)).toBeNull();
+    });
+});
+
+describe('approved profile migration locking and completion', () => {
+    it('rejects former-owner issuance and rolls back capability replacement when its reply cannot prepare', async () => {
+        const guest = await userService.createGuest(`Migration source ${randomUUID().slice(0, 8)}`);
+        const actor = {auth: {guest}, profile: guest.profile};
+        const initial = await userController.requestProfileMigrationToken(actor);
+        await expect(userController.requestProfileMigrationToken(actor, () => { throw new Error('Rejected capability receipt'); }))
+            .rejects.toMatchObject({code: 'WORKFLOW_OUTCOME_UNKNOWN'});
+        expect((await userService.getProfileById(guest.profile.id))?.migrationToken).toBe(initial.token);
+
+        const recipient = await registerLocalAccount('issuance-recipient');
+        await userService.moveProfileToUserTx(guest.profile.id, recipient.id);
+        await expect(userController.requestProfileMigrationToken(actor)).rejects.toMatchObject({code: 'SESSION_CONTEXT_CHANGED'});
+        expect(await userService.getProfileById(guest.profile.id)).toMatchObject({userId: recipient.id, migrationToken: null});
+    });
+
+    it('allows only one competing transfer to consume the same current capability', async () => {
+        const guest = await userService.createGuest(`One consumption ${randomUUID().slice(0, 8)}`);
+        const recipient = await registerLocalAccount('first-recipient');
+        const contender = await registerLocalAccount('second-recipient');
+        const {token} = await userController.requestProfileMigrationToken({auth: {guest}, profile: guest.profile});
+        const entered = Promise.withResolvers<void>();
+        const release = Promise.withResolvers<void>();
+        const first = identity.migrateProfile(recipient.id, token, async cleanup => {
+            entered.resolve();
+            await release.promise;
+            return cleanup;
+        });
+        await entered.promise;
+        const second = identity.migrateProfile(contender.id, token, cleanup => cleanup);
+        // Both actual database operations are entered before releasing the first
+        // transaction; the capability check must be repeated after any lock wait.
+        release.resolve();
+        const results = await Promise.allSettled([first, second]);
+        expect(results[0]).toMatchObject({status: 'fulfilled', value: 'guest-deleted'});
+        expect(results[1]).toMatchObject({status: 'rejected', reason: {cause: 'TOKEN_INVALID'}});
+        expect(await userService.getProfileById(guest.profile.id)).toMatchObject({userId: recipient.id,
+            guestId: null, migrationToken: null, migrationTokenExpiration: null});
+        expect(await AppDataSource.getRepository(Guest).findOneBy({id: guest.id})).toBeNull();
+    });
+
+    it('rolls back transfer, token consumption and former-owner deletion when completion preparation fails', async () => {
+        const guest = await userService.createGuest(`Rollback transfer ${randomUUID().slice(0, 8)}`);
+        const recipient = await registerLocalAccount('rollback-recipient');
+        const {token} = await userController.requestProfileMigrationToken({auth: {guest}, profile: guest.profile});
+        await expect(identity.migrateProfile(recipient.id, token, () => { throw new Error('Rejected transfer receipt'); }))
+            .rejects.toThrow('Rejected transfer receipt');
+        expect(await userService.getProfileById(guest.profile.id)).toMatchObject({guestId: guest.id, userId: null, migrationToken: token});
+        expect(await AppDataSource.getRepository(Guest).findOneBy({id: guest.id})).not.toBeNull();
+    });
+
+    it('serializes reciprocal transfers through a consistent account lock order', async () => {
+        const first = await registerLocalAccount('reciprocal-first');
+        const second = await registerLocalAccount('reciprocal-second');
+        const firstProfile = (await userService.getProfilesForUser(first.id))[0];
+        const secondProfile = (await userService.getProfilesForUser(second.id))[0];
+        await userService.createProfile(first.id, 'Remaining first profile');
+        await userService.createProfile(second.id, 'Remaining second profile');
+        const {token: firstToken} = await userController.requestProfileMigrationToken({auth: {user: {id: first.id}}, profile: firstProfile});
+        const {token: secondToken} = await userController.requestProfileMigrationToken({auth: {user: {id: second.id}}, profile: secondProfile});
+        const render = emailOwner.prepareMigrationEmail;
+        const prepared = vi.spyOn(emailOwner, 'prepareMigrationEmail').mockImplementation((...args) => {
+            render(...args);
+            return {deliver: vi.fn().mockResolvedValue(true)};
+        });
+        try {
+            await expect(Promise.all([
+                identity.migrateProfile(second.id, firstToken, cleanup => cleanup),
+                identity.migrateProfile(first.id, secondToken, cleanup => cleanup),
+            ])).resolves.toEqual(['none', 'none']);
+        } finally { prepared.mockRestore(); }
+        expect(await userService.getProfileById(firstProfile.id)).toMatchObject({userId: second.id, migrationToken: null});
+        expect(await userService.getProfileById(secondProfile.id)).toMatchObject({userId: first.id, migrationToken: null});
+    });
+
+    it('rolls back ownership and capability when required former-owner database cleanup fails', async () => {
+        const guest = await userService.createGuest(`Cleanup failure ${randomUUID().slice(0, 8)}`);
+        const recipient = await registerLocalAccount('cleanup-recipient');
+        const {token} = await userController.requestProfileMigrationToken({auth: {guest}, profile: guest.profile});
+        // Only this guarded disposable suite schema receives the temporary failure
+        // trigger. Persistence and the complete production workflow stay real.
+        await AppDataSource.query("CREATE TRIGGER reject_migration_cleanup BEFORE DELETE ON guests FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Controlled owner cleanup failure'");
+        try {
+            await expect(identity.migrateProfile(recipient.id, token, cleanup => cleanup)).rejects.toThrow('Controlled owner cleanup failure');
+        } finally { await AppDataSource.query('DROP TRIGGER reject_migration_cleanup'); }
+        expect(await userService.getProfileById(guest.profile.id)).toMatchObject({guestId: guest.id, userId: null, migrationToken: token});
+        expect(await AppDataSource.getRepository(Guest).findOneBy({id: guest.id})).not.toBeNull();
+    });
 });
 
 /** Construct the ordinary library Session without persisting an anonymous visitor. */
@@ -84,7 +285,7 @@ function atomicAccountOptions(req: Request): AccountRegistrationTransactionOptio
 /** Keep valid credentials private to the production registration call and its real ORM fixture. */
 function accountRegistrationInput(username: string) {
     return {username, displayname: username, email: `${username}@example.test`,
-        password: 'initial-secret', password_repeat: 'initial-secret'};
+        password: 'registration-secret', password_repeat: 'registration-secret'};
 }
 
 /** Replace only SMTP; recipient validation and both actual activation templates still run. */
@@ -1168,7 +1369,7 @@ describe('authentication user stories', () => {
         try {
             const next = '/packing/example?locale=de#items';
             await userController.registerUser({username: 'frontend-link-account', displayname: 'Frontend Name',
-                email: 'frontend-links@example.test', password: 'initial-secret', password_repeat: 'initial-secret'},
+                email: 'frontend-links@example.test', password: 'registration-secret', password_repeat: 'registration-secret'},
                 undefined, {frontend: true, next});
             const activateUrl = new URL(activation.mock.calls[0][1]);
             expect(activateUrl.pathname).toMatch(/^\/users\/activate\/[^/]+$/);
@@ -1203,7 +1404,7 @@ describe('authentication user stories', () => {
         try {
             await userController.registerUser({
                 username, displayname, email: `${username}@example.test`,
-                password: 'test-password1', password_repeat: 'test-password1',
+                password: 'test-password-1', password_repeat: 'test-password-1',
             });
             const account = (await userService.getUserByUsername(username))!;
             expect(account.name).toBe(expectedName);
@@ -1231,7 +1432,7 @@ describe('authentication user stories', () => {
         try {
             await userController.registerUser({
                 username: 'named-email-account', displayname: 'Morgan Example', email: 'named-account@example.test',
-                password: 'test-password1', password_repeat: 'test-password1',
+                password: 'test-password-1', password_repeat: 'test-password-1',
             });
             expect(activation).toHaveBeenCalledWith(
                 {name: 'Morgan Example', address: 'named-account@example.test'}, expect.stringContaining('/users/activate/'),
@@ -1282,6 +1483,8 @@ describe('authentication user stories', () => {
     });
 
     it('logs in an active local account with its username and email in independent sessions', async () => {
+        // This existing 14-character credential is intentionally below the new
+        // registration/reset minimum. Login must keep accepting its saved hash.
         const {id: userId, username, email: accountEmail} = await registerLocalAccount('local-login');
         await userService.activateUser(userId);
         const session = {} as Request['session'];
@@ -1424,4 +1627,194 @@ describe('authentication user stories', () => {
         expect(oidc.profiles).toHaveLength(1);
     });
 
+});
+
+
+describe('approved local identity deletion and provider outcome', () => {
+    it('preserves deactivation partial failure without introducing a whole-operation transaction', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const user = req.session.auth!.user!;
+        const profile = req.session.profile!;
+        const delivery = vi.spyOn(email, 'sendDeletionEmail').mockRejectedValueOnce(new Error('Controlled deactivation mail failure'));
+        try {
+            await expect(userController.deactivateIdentityProfile(req, {name: profile.name}))
+                .rejects.toMatchObject({code: 'WORKFLOW_OUTCOME_UNKNOWN'});
+            expect(await userService.getUserById(user.id)).toBeNull();
+            expect(await userService.getProfileById(profile.id)).toMatchObject({userId: null});
+            expect(req.session.auth?.user?.id).toBe(user.id);
+        } finally { delivery.mockRestore(); }
+    });
+
+    it('leaves a token-free account and Session intact when mail preparation fails', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const original = req.session;
+        const user = original.auth!.user!;
+        const prepared = vi.spyOn(emailOwner, 'prepareDeletionEmail').mockImplementationOnce(() => { throw new Error('Controlled closure rendering failure'); });
+        try {
+            await expect(userController.deleteIdentityAccount(req, {username: user.username!}))
+                .rejects.toMatchObject({code: 'WORKFLOW_OUTCOME_UNKNOWN'});
+            expect(await userService.getUserById(user.id)).not.toBeNull();
+            expect(await userService.getProfileById(original.profile!.id)).toMatchObject({userId: user.id});
+            expect(req.session).toBe(original);
+            expect((await readStoredSession(req.sessionStore, req.sessionID))?.auth?.user?.id).toBe(user.id);
+        } finally { prepared.mockRestore(); }
+    });
+
+    it.each(['account', 'guest'] as const)('rolls back %s deletion and Session when its prepared response fails', async kind => {
+        const {req} = await ordinaryLogoutFixture(kind);
+        const original = req.session;
+        const originalJson = JSON.stringify(original);
+        const username = (original.auth?.user ?? original.auth?.guest)!.username!;
+        await expect(userController.deleteIdentityAccount(req, {username}, () => { throw new Error('Rejected deletion receipt'); }))
+            .rejects.toMatchObject({code: 'WORKFLOW_OUTCOME_UNKNOWN'});
+        expect(req.session).toBe(original);
+        expect(JSON.stringify(original)).toBe(originalJson);
+        expect(await userService.getProfileById(original.profile!.id)).toMatchObject(kind === 'account'
+            ? {userId: original.auth!.user!.id} : {guestId: original.auth!.guest!.id});
+        if (kind === 'account') expect(await userService.getUserById(original.auth!.user!.id)).not.toBeNull();
+        else expect(await userService.getGuestInternal(original.auth!.guest!.id)).not.toBeNull();
+        expect(await readStoredSession(req.sessionStore, req.sessionID)).toMatchObject({auth: original.auth,
+            frontendContext: original.frontendContext, frontendCsrfToken: original.frontendCsrfToken});
+    });
+
+    it('rolls back deletion and dependent database effects when the real Session write fails', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const original = req.session;
+        const user = original.auth!.user!;
+        // Inject a storage failure only in this suite's disposable schema. The
+        // transaction-bound TypeORM store still performs its actual SQL write.
+        await AppDataSource.query("CREATE TRIGGER reject_identity_session BEFORE UPDATE ON `session` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Controlled Session write failure'");
+        try {
+            await expect(userController.deleteIdentityAccount(req, {username: user.username!}))
+                .rejects.toMatchObject({code: 'WORKFLOW_OUTCOME_UNKNOWN'});
+        } finally { await AppDataSource.query('DROP TRIGGER reject_identity_session'); }
+        expect(req.session).toBe(original);
+        expect(await userService.getUserById(user.id)).not.toBeNull();
+        expect(await userService.getProfileById(original.profile!.id)).toMatchObject({userId: user.id});
+        expect((await readStoredSession(req.sessionStore, req.sessionID))?.auth?.user?.id).toBe(user.id);
+    });
+
+    it('retains committed deletion and anonymous authority after delivery rejects', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const user = req.session.auth!.user!;
+        const profileId = req.session.profile!.id;
+        const render = emailOwner.prepareDeletionEmail;
+        const deliver = vi.fn().mockRejectedValue(new Error('Controlled SMTP failure'));
+        const prepared = vi.spyOn(emailOwner, 'prepareDeletionEmail').mockImplementation((...args) => {
+            render(...args);
+            return {deliver};
+        });
+        try {
+            const completion = await userController.deleteIdentityAccount(req, {username: user.username!});
+            expect(completion).toMatchObject({destination: '/', redirect: null, notice: {messageKey: 'profile.accountDeleted'}});
+            expect(deliver).toHaveBeenCalledOnce();
+            expect(await userService.getUserById(user.id)).toBeNull();
+            expect(await userService.getProfileById(profileId)).toMatchObject({userId: null});
+            expect(req.session.auth).toBeUndefined();
+            expect((await readStoredSession(req.sessionStore, req.sessionID))?.auth).toBeUndefined();
+        } finally { prepared.mockRestore(); }
+    });
+
+    it('reports provider discovery failure only after real local sign-out is persisted', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        req.session.tokens = {id_token: 'private-provider-evidence', access_token: 'private-access', token_type: 'bearer'};
+        await persistSession(req.session);
+        const beforeContext = req.session.frontendContext;
+        const configuration = vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value, initialized: true,
+            oidcIssuerBaseUrl: 'https://identity.example.test', rootUrl: 'https://surveyor.example.test'});
+        const discovery = vi.spyOn(openid, 'discovery').mockImplementation(async () => {
+            // This is the first external boundary; the real store must already be anonymous.
+            const stored = await readStoredSession(req.sessionStore, req.sessionID);
+            expect(stored?.auth).toBeUndefined();
+            expect(stored?.tokens).toBeUndefined();
+            throw new Error('Controlled discovery failure');
+        });
+        try {
+            await expect(userController.logoutUserOidc(req.session, 'outcome')).resolves.toEqual({
+                redirect: 'https://surveyor.example.test', providerLogout: 'unconfirmed'});
+            expect(discovery).toHaveBeenCalledOnce();
+            expect(req.session.frontendContext).not.toBe(beforeContext);
+            expect((await readStoredSession(req.sessionStore, req.sessionID))?.profile).toBeUndefined();
+        } finally { discovery.mockRestore(); configuration.mockRestore(); }
+    });
+
+    it('keeps a failed local save outside the confirmed provider outcome', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        req.session.tokens = {} as NonNullable<Request['session']['tokens']>;
+        await persistSession(req.session);
+        const discovery = vi.spyOn(openid, 'discovery').mockRejectedValue(new Error('Unexpected provider access'));
+        await AppDataSource.query("CREATE TRIGGER reject_provider_local_session BEFORE UPDATE ON `session` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Controlled provider local save failure'");
+        try {
+            // The store may attempt its existing insert fallback after UPDATE
+            // rejection; either SQL error must remain an unconfirmed local failure.
+            await expect(userController.logoutUserOidc(req.session, 'outcome')).rejects.toBeInstanceOf(Error);
+            expect(discovery).not.toHaveBeenCalled();
+            expect((await readStoredSession(req.sessionStore, req.sessionID))?.auth?.user).toBeTruthy();
+        } finally {
+            await AppDataSource.query('DROP TRIGGER reject_provider_local_session');
+            discovery.mockRestore();
+        }
+    });
+
+    it.each(['metadata', 'URL'] as const)('separates provider %s failure while preserving the default error contract', async failure => {
+        const configuration = vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value, initialized: true,
+            oidcIssuerBaseUrl: 'https://identity.example.test'});
+        const discovery = vi.spyOn(openid, 'discovery').mockResolvedValue({serverMetadata() {
+            if (failure === 'metadata') throw new Error('Controlled metadata failure');
+            return {end_session_endpoint: 'not an absolute URL'};
+        }} as unknown as openid.Configuration);
+        try {
+            await oidc.initOIDC();
+            const {req} = await ordinaryLogoutFixture('account');
+            req.session.tokens = {} as NonNullable<Request['session']['tokens']>;
+            await persistSession(req.session);
+            await expect(userController.logoutUserOidc(req.session, 'outcome')).resolves.toMatchObject({providerLogout: 'unconfirmed'});
+            const preserved = await ordinaryLogoutFixture('account');
+            preserved.req.session.tokens = {} as NonNullable<Request['session']['tokens']>;
+            await persistSession(preserved.req.session);
+            await expect(userController.logoutUserOidc(preserved.req.session)).rejects.toThrow();
+            expect((await readStoredSession(preserved.req.sessionStore, preserved.req.sessionID))?.auth).toBeUndefined();
+        } finally { discovery.mockRestore(); configuration.mockRestore(); }
+    });
+
+    it('retains provider-bearing deletion uncertainty rather than applying token-free finality', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const user = req.session.auth!.user!;
+        req.session.tokens = {} as NonNullable<Request['session']['tokens']>;
+        await persistSession(req.session);
+        const configuration = vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value, initialized: true,
+            oidcIssuerBaseUrl: 'https://identity.example.test'});
+        const discovery = vi.spyOn(openid, 'discovery').mockResolvedValue({serverMetadata() {
+            throw new Error('Controlled provider-bearing deletion failure');
+        }} as unknown as openid.Configuration);
+        const delivery = vi.spyOn(email, 'sendDeletionEmail').mockResolvedValue();
+        try {
+            await oidc.initOIDC();
+            await expect(userController.deleteIdentityAccount(req, {username: user.username!}))
+                .rejects.toMatchObject({code: 'WORKFLOW_OUTCOME_UNKNOWN'});
+            expect(await userService.getUserById(user.id)).toBeNull();
+            expect((await readStoredSession(req.sessionStore, req.sessionID))?.auth).toBeUndefined();
+        } finally { discovery.mockRestore(); configuration.mockRestore(); delivery.mockRestore(); }
+    });
+
+    it('preserves a successful provider handoff after confirmed local sign-out', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        req.session.tokens = {id_token: 'provider-hint', access_token: 'private-access', token_type: 'bearer'};
+        await persistSession(req.session);
+        const configuration = vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value, initialized: true,
+            oidcIssuerBaseUrl: 'https://identity.example.test', rootUrl: 'https://surveyor.example.test'});
+        const discovery = vi.spyOn(openid, 'discovery').mockResolvedValue({serverMetadata() {
+            return {end_session_endpoint: 'https://identity.example.test/logout'};
+        }} as unknown as openid.Configuration);
+        try {
+            await oidc.initOIDC();
+            const outcome = await userController.logoutUserOidc(req.session, 'outcome');
+            const target = new URL(outcome.redirect);
+            expect(target.origin + target.pathname).toBe('https://identity.example.test/logout');
+            expect(target.searchParams.get('id_token_hint')).toBe('provider-hint');
+            expect(target.searchParams.get('post_logout_redirect_uri')).toBe('https://surveyor.example.test');
+            expect(outcome.providerLogout).toBeUndefined();
+            expect((await readStoredSession(req.sessionStore, req.sessionID))?.auth).toBeUndefined();
+        } finally { discovery.mockRestore(); configuration.mockRestore(); }
+    });
 });

@@ -59,7 +59,8 @@ router.get('/profile/migrate/request', asyncHandler(async function renderMigrati
     // Existing entry issues/replaces a token on GET. Invoke that existing operation
     // once per document, never from a refresh query, hydration or automatic retry.
     const actor = await captureApiActor(req);
-    state.profileWorkflow = {kind: 'token', token: await userController.getMigrationToken(actor.profile!.id)};
+    const issued = await userController.requestProfileMigrationToken(actor);
+    state.profileWorkflow = {kind: 'token', token: issued.token};
     await renderFrontend(res, req.originalUrl, state);
 }));
 
@@ -125,13 +126,15 @@ router.get('/oidc/callback', asyncHandler(async function completeOidc(req, res) 
 
 /** Existing logout bookmarks keep their explicit identity transition. */
 router.get('/logout', addNextQuery('/users/logout', '/users'), asyncHandler(async function logoutDocument(req, res) {
-    const destination = await userController.logoutUserOidc(req.session);
+    const result = await userController.logoutUserOidc(req.session, 'outcome');
     // Saved logout bookmarks keep the existing confirmation in the current
     // catalog-backed flash channel after the identity owner has completed.
-    req.flash('frontend-notice', JSON.stringify({kind: 'success', messageKey: 'auth.logoutDone'}));
+    req.flash('frontend-notice', JSON.stringify(result.providerLogout === 'unconfirmed'
+        ? {kind: 'info', messageKey: 'auth.providerLogoutUnconfirmed'}
+        : {kind: 'success', messageKey: 'auth.logoutDone'}));
     // Provider logout may leave the application; an explicit application return
     // still passes through the same bounded destination owner as SPA logout.
-    res.redirect(typeof req.query.next === 'string' ? safeFrontendReturn(req.query.next) : destination);
+    res.redirect(typeof req.query.next === 'string' ? safeFrontendReturn(req.query.next) : result.redirect);
 }));
 
 router.get('/reset-password/:token', asyncHandler(/** Read reset-token admission

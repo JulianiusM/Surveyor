@@ -4,14 +4,20 @@ documentation-metadata
 audience: maintainers; frontend developers
 owner: frontend maintainers
 status: current
-last-verified: 2026-10-26
+last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved local browser asset and responsiveness scope recorded; original framework/interface decisions, deferred targets, authorized P11 cutover scope and lasting amendments retained without final acceptance or deployment claim
+verification-scope: completed-cutover amendment and current-source review authority recorded; original framework decisions and dated amendments retained as decision history without deployment certification
 source-anchors: package.json; vite.config.mts; src/backend/app.ts; src/backend/modules/frontendDevelopment.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/backend/modules/api/transport.ts; src/common/localization/translator.ts; src/backend/routes/api/v1.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; src/backend/routes/api/v1/
 next-review: frontend-technology-or-rendering-boundary-change
 -->
 
 ## Decision and scope
+
+**Completed-cutover amendment (2026-10-28):** the maintainer confirms that the application is no longer in a frontend
+migration state. Review current code and tests without consulting past commits or preserving/comparing a former
+frontend. Earlier phase and comparison requirements below remain historical; they do not establish a second current
+behavior contract. [DEC-007](DEC-007-APPLICATION-ARCHITECTURE-REMEDIATION.md) records this correction and the separately
+approved current application remedies. The selected technology and explicit current feature requirements remain.
 
 Use Vue 3/TypeScript, Vite, Vue Router and TanStack Vue Query while Express retains HTTP/session/backend ownership.
 Keep Bootstrap-compatible appearance, native controls and suitable Reka UI primitives behind app-owned components.

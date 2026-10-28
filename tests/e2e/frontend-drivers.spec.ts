@@ -562,18 +562,17 @@ for (const width of [1280, 390]) {
             await expect(participant.locator('main form:has(input[readonly])')).toHaveCount(0);
             await expect(table.locator('td[data-edit]')).toHaveCount(0);
             await expect(table.getByRole('button', {name: 'Delete item', exact: true})).toHaveCount(0);
-            // Preserve the explicitly excluded native Take-control mismatch
-            // (IMP-028), while proving its actual command remains forbidden.
-            await expect(table.getByRole('button', {name: 'Take', exact: true})).toHaveCount(2);
+            // The shared control withholds unavailable personal commands while
+            // the server independently rejects a crafted request.
+            await expect(table.getByRole('button', {name: 'Take', exact: true})).toHaveCount(0);
             await presentation(participant, info, `vue-restricted-table`, table,
                 ['th', 'td', 'li', 'button']);
 
             const deniedPath = `/api/v1/drivers-lists/${resource.id}/items/${deniedView.items[0].id}/self-assignment`;
-            const rejected = participant.waitForResponse(function matchDeniedAssignment(response) {
-                return response.request().method() === 'PUT' && new URL(response.url()).pathname === deniedPath;
+            const rejected = await restricted.request.put(deniedPath, {
+                headers: await apiHeaders(restricted.request),
             });
-            await table.getByRole('button', {name: 'Take', exact: true}).first().click();
-            expect((await rejected).status()).toBe(403);
+            expect(rejected.status()).toBe(403);
             expect((await readDrivers(restricted.request, resource.id)).items[0].assignedCount).toBe(0);
 
             // One independently granted field must not reveal the owner-only

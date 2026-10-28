@@ -185,10 +185,10 @@ describe('complete versioned packing management', () => {
             editTitle: false, editDescription: false, editCapacity: false, editRequired: false, removeItem: false, removeAssignments: false});
         await adminService.addAdmin('packingItem', first.id, editor.id, PERM.EDIT_TITLE | PERM.EDIT_CAPACITY);
         view = (await packing.readPackingList(id, actor(editor))).data;
-        expect(view.items[0].capabilities).toMatchObject({showTitleEdit: true, showCapacityEdit: true,
+        expect(view.items[0].capabilities).toMatchObject({showTitleEdit: false, showCapacityEdit: false,
             editTitle: false, editCapacity: false, editDescription: false, editRequired: false});
-        // Native attr POST has always required EDIT_META, independently of the
-        // visible title/capacity controls. The API must preserve both contracts.
+        // Display-only grants expose readable values, while both editor
+        // availability and mutation retain the actual metadata method grant.
         await expect(packing.updatePackingItem(id, first.id, {title: 'Display grant only'}, view.items[0].editToken, actor(editor)))
             .rejects.toMatchObject({status: 403});
         await adminService.updateAdminPerms('packingItem', first.id, editor.id, PERM.EDIT_TITLE | PERM.EDIT_CAPACITY | PERM.EDIT_META);

@@ -138,10 +138,12 @@ test('mounted identity constraints retain the shared typed API problems', async 
         // Interactive controls exist only after the real built client initializes.
         await page.goto(`${path}?locale=en`);
         await waitForFrontendHydration(page);
-        await expect(page.locator('input[name="password"]')).toHaveAttribute('minlength', '8');
+        if (path.endsWith('/login')) await expect(page.locator('input[name="password"]')).toHaveAttribute('minlength', '8');
+        else await expect(page.locator('input[name="password"]')).not.toHaveAttribute('minlength');
         await expect(page.locator('input[name="password"]')).not.toHaveAttribute('maxlength');
         if (path.endsWith('/register')) {
             expect(renderedIdentityInput(html, 'password_repeat')).toBeUndefined();
+            await expect(page.locator('input[name="password_repeat"]')).not.toHaveAttribute('minlength');
             await expect(page.locator('input[name="password_repeat"]')).not.toHaveAttribute('maxlength');
         }
     }
@@ -221,13 +223,67 @@ test('mounted identity constraints retain the shared typed API problems', async 
     expect(await invalidInput.json()).toMatchObject({code: 'VALIDATION_FAILED'});
 });
 
+test('new registration shares Unicode and byte limits with its HTTP boundary without composition rules', async ({page}) => {
+    const username = `password-policy-${randomUUID().slice(0, 12)}`;
+    const input = {username, displayname: username, email: `${username}@example.invalid`};
+    const before = await session(page.request);
+    for (const password of ['a'.repeat(14), '😀'.repeat(14), 'a'.repeat(73), 'é'.repeat(37)]) {
+        const rejected = await page.request.post('/api/v1/auth/register', {headers: headers(before),
+            data: {...input, password, password_repeat: password}});
+        expect(rejected.status()).toBe(400);
+        expect(await rejected.json()).toMatchObject({code: 'VALIDATION_FAILED'});
+        expect(await rejected.text()).not.toContain(password);
+        expect(await readAccountRegistrationCountsForE2E([username])).toEqual({accounts: 0, profiles: 0, activationReady: 0});
+    }
+
+    await page.goto('/users/register?locale=en');
+    await waitForFrontendHydration(page);
+    await page.locator('#username').fill(username);
+    await page.locator('#displayname').fill(username);
+    await page.locator('#email').fill(input.email);
+    for (const password of ['😀'.repeat(14), '😀'.repeat(19)]) {
+        await page.locator('#password').fill(password);
+        await page.locator('#password-repeat').fill(password);
+        await expect(page.locator('form button[type="submit"]')).toBeDisabled();
+    }
+    const password = 'a'.repeat(15);
+    await page.locator('#password').fill(password);
+    await page.locator('#password-repeat').fill(password);
+    await expect(page.locator('form button[type="submit"]')).toBeEnabled();
+    const completed = page.waitForResponse(response => response.request().method() === 'POST'
+        && new URL(response.url()).pathname === '/api/v1/auth/register');
+    await page.locator('form button[type="submit"]').click();
+    const result = await completed;
+    expect(result.status()).toBe(200);
+    expect(await result.json()).toMatchObject({changed: true});
+    await expect(page.locator('#password')).toHaveCount(0);
+    expect(await readAccountRegistrationCountsForE2E([username])).toEqual({accounts: 1, profiles: 1, activationReady: 1});
+});
+
+test('existing Login keeps its current browser minimum and accepts a credential below the new-password limit', async ({page}) => {
+    await withPasswordResetAccountForE2E(async function loginExistingAccount(username, password) {
+        await page.goto('/users/login?locale=en');
+        await waitForFrontendHydration(page);
+        await expect(page.locator('#password')).toHaveAttribute('minlength', '8');
+        await expect(page.locator('#password')).not.toHaveAttribute('maxlength');
+        await page.locator('#username').fill(username);
+        await page.locator('#password').fill(password);
+        const completed = page.waitForResponse(response => response.request().method() === 'POST'
+            && new URL(response.url()).pathname === '/api/v1/auth/login');
+        await page.locator('form button[type="submit"]').first().click();
+        expect((await completed).status()).toBe(200);
+        await expect(page).toHaveURL(/\/users\/dashboard$/);
+        expect((await session(page.request)).kind).toBe('account');
+    }, 'oldpass1');
+});
+
 test('mounted recovery retains unbounded inputs and privacy-preserving API completion', async ({request, page}) => {
     const before = await session(request);
     const cases = [
         {path: '/users/forgot-password', entryPath: '/users/forgot-password', field: 'username',
             input: `no-existing-account-${'x'.repeat(100)}`, apiPath: '/api/v1/auth/forgot-password',
             message: 'A link has been sent to the email corresponding to this account (if present).'},
-        {path: '/guest/recovery', entryPath: '/users/login', field: 'email',
+        {path: '/guest/recovery', entryPath: '/guest/recovery', field: 'email',
             input: `no-existing-guest@${'subdomain.'.repeat(9)}example.invalid`, apiPath: '/api/v1/auth/guest-recovery',
             message: 'The link(s) to your guest account(s) have been sent to your email address.'},
     ];
@@ -589,8 +645,18 @@ for (const surface of ['api'] as const) {
                 expect(documentBootstrap(admissionHtml).passwordReset).toEqual({valid: true});
             }
 
-            const password = `Replacement-password!A1${'x'.repeat(1001)}`;
+            // Combining code points remain exact, without NFC normalization or
+            // an invented requirement for a letter/digit mixture.
+            const password = 'e\u0301'.repeat(8);
             const input = {password, confirmPassword: password};
+            for (const invalidPassword of ['a'.repeat(14), '😀'.repeat(14), 'a'.repeat(73), 'é'.repeat(37)]) {
+                const rejected = await request.post(commandPath, {headers: headers(before),
+                    data: {token, password: invalidPassword, confirmPassword: invalidPassword}});
+                expect(rejected.status()).toBe(400);
+                expect(await rejected.json()).toMatchObject({code: 'VALIDATION_FAILED'});
+                expect(await rejected.text()).not.toContain(invalidPassword);
+                expect((await request.get(pagePath)).status()).toBe(200);
+            }
             const mismatchInput = {...input, confirmPassword: 'Different-password!A1'};
             const mismatch = await request.post(commandPath, {data: {...mismatchInput, token}, headers: headers(before)});
             expect(mismatch.status()).toBe(400);
@@ -624,26 +690,34 @@ for (const surface of ['api'] as const) {
 }
 
 for (const surface of ['frontend'] as const) {
-    test(`${surface} browser reset accepts the native UTF-16 minimum and the complete credential subsequently logs in`, async ({page}) => {
+    test(`${surface} browser reset shares Unicode and byte admission and the exact credential subsequently logs in`, async ({page}) => {
         await withPasswordResetAccountForE2E(async function exerciseUnicodeReset(username, _previousPassword, token) {
             const path = `/users/reset-password/${token}?locale=en`;
             expect((await page.goto(path))?.status()).toBe(200);
             await waitForFrontendHydration(page);
             const passwordField = page.locator('input[name="password"]');
             const repetition = page.locator('input[name="confirmPassword"]');
-            const password = 'A1😀😀😀';
+            const password = '😀'.repeat(18);
 
-            // Use actual browser input, not programmatic value assignment: native
-            // minlength validity is user-input-sensitive and counts UTF-16 units.
-            await passwordField.fill('A1😀😀x');
+            // Native UTF-16 bounds cannot represent either policy. The shared
+            // criteria hold submission while exact Unicode input remains editable.
+            await expect(passwordField).not.toHaveAttribute('minlength');
+            await expect(passwordField).not.toHaveAttribute('maxlength');
+            await passwordField.fill('😀'.repeat(14));
+            await repetition.fill('😀'.repeat(14));
             expect(await passwordField.evaluate(passwordInputValidity))
-                .toEqual({length: 7, minimum: 8, tooShort: true, valid: false});
+                .toEqual({length: 28, minimum: -1, tooShort: false, valid: true});
+            await expect(page.locator('form button[type="submit"]')).toBeDisabled();
+            await passwordField.fill('😀'.repeat(19));
+            await repetition.fill('😀'.repeat(19));
+            await expect(page.locator('form button[type="submit"]')).toBeDisabled();
             await passwordField.fill(password);
             await repetition.fill(password);
             for (const field of [passwordField, repetition]) {
                 expect(await field.evaluate(passwordInputValidity))
-                    .toEqual({length: 8, minimum: 8, tooShort: false, valid: true});
+                    .toEqual({length: 36, minimum: -1, tooShort: false, valid: true});
             }
+            await expect(page.locator('form button[type="submit"]')).toBeEnabled();
 
             function isResetCommand(response: Response): boolean {
                 const expected = '/api/v1/auth/reset-password';
@@ -737,13 +811,13 @@ test('password-reset completion remains readable at desktop and mobile widths', 
     }
 });
 
-test('recovery GET redirects remain native while the declared API preserves privacy and rejects invalid controls', async ({request}) => {
-    const native = await request.get('/guest/recovery', {maxRedirects: 0});
-    expect(native.status()).toBe(302);
-    expect(native.headers().location).toBe('/users/login?locale=en');
-    const frontend = await request.get('/guest/recovery?locale=en', {maxRedirects: 0});
-    expect(frontend.status()).toBe(native.status());
-    expect(frontend.headers().location).toBe('/users/login?locale=en');
+test('recovery GET admits its own document while the API preserves privacy and rejects invalid controls', async ({request}) => {
+    for (const path of ['/guest/recovery', '/guest/recovery?locale=en']) {
+        const document = await request.get(path, {maxRedirects: 0});
+        expect(document.status()).toBe(200);
+        expect(document.headers().location).toBeUndefined();
+        expect(await document.text()).toContain('surveyor-frontend');
+    }
     const current = await session(request);
 
     // Native ignores the old recovery override on an ordinary credential request.
@@ -764,5 +838,5 @@ test('recovery GET redirects remain native while the declared API preserves priv
     expect(completion.status()).toBe(200);
     expect(await completion.json()).toEqual({changed: true});
     expect((await session(request)).context).toBe(current.context);
-    expect((await request.get('/guest/recovery', {maxRedirects: 0})).status()).toBe(302);
+    expect((await request.get('/guest/recovery', {maxRedirects: 0})).status()).toBe(200);
 });

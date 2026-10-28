@@ -252,11 +252,10 @@ const reorder = useListReorder({
                                     {{ item.assignedCount }} / {{ item.maxAssignees }}
                                 </InlineCell>
                                 <td class="text-center">
-                                    <!-- Admission displays these personal controls
-                                         even when the independent write grant is absent.
-                                         Preserve that presentation; the server rechecks
-                                         ACCESS_VIEW before every assignment command. -->
-                                    <EntityAssignmentActions :assigned="item.selfAssigned" :full="isFull(item)" :disabled="blocked"
+                                    <!-- Matching list controls share method availability;
+                                         server admission remains authoritative on command. -->
+                                    <EntityAssignmentActions :available="data.capabilities.selfAssign"
+                                        :assigned="item.selfAssigned" :full="isFull(item)" :disabled="blocked"
                                         :pending="command.pending.value && pendingControl?.kind === 'assign' && pendingControl.id === item.id"
                                         :assign-label="messages.t('drivers.take')" :remove-label="messages.t('drivers.remove')"
                                         :full-label="messages.t('packing.full')" @toggle="assign(item)" />

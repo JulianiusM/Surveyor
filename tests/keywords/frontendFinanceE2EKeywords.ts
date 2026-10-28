@@ -32,7 +32,7 @@ export async function submitFinanceInvoiceFixture(request: APIRequestContext, pa
     const response = await financeFixtureRequest(request, 'POST', path, {
         multipart: {data: JSON.stringify(input), ...(proof ? {proof} : {})},
     });
-    expect(response.status()).toBe(200);
+    expect(response.status(), await response.text()).toBe(200);
 }
 
 /** Create one uniquely named pool and obtain its ID from the actual organizer

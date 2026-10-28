@@ -15,7 +15,7 @@
  */
 
 // src/backend/modules/database/driversService.ts
-import {DeepPartial, EntityNotFoundError, type EntityManager} from "typeorm";
+import {Brackets, DeepPartial, EntityNotFoundError, type EntityManager} from "typeorm";
 import {getLockedListAssignment} from './ListService';
 import type {BasicEntityPropertyPatch} from '../../../../types/EntityPropertyTypes';
 import type {DriversItemAssignee, EnrichedDriversItem} from "../../../../types/DriversTypes";
@@ -92,22 +92,22 @@ export async function getDriversListByParticipant(profileId: string) {
 }
 
 /**
- * Reuse the drivers feature's established participation rule: the profile must own
- * an item AND have an assignment in this list. These are intentionally separate
- * EXISTS conditions, not the assignment-only rule used by packing/activity lists.
- * The optional manager lets a visibility write check membership in its transaction.
+ * A profile participates by offering a ride or holding a passenger assignment.
+ * Both alternatives share this one predicate for overview discovery and personal
+ * visibility admission. EXISTS preserves one list row even when both roles match.
  */
 export function getDriversParticipationQuery(profileId: string, manager: EntityManager = AppDataSource.manager) {
+    const passenger = manager.getRepository(DriversAssignment).createQueryBuilder('ass')
+        .select('1').where('ass.entity_id = list.id').andWhere('ass.profile_id = :userId');
+    const driver = manager.getRepository(DriversItem).createQueryBuilder('item')
+        .select('1').where('item.entity_id = list.id').andWhere('item.profile_id = :userId');
     return manager.getRepository(DriversList).createQueryBuilder('list')
-        .whereExists(manager.getRepository(DriversAssignment)
-            .createQueryBuilder("ass")
-            .where("ass.entity_id = list.id")
-            .andWhere("ass.profile_id = :userId", {userId: profileId})
-        ).andWhereExists(manager.getRepository(DriversItem)
-            .createQueryBuilder("item")
-            .where("item.entity_id = list.id")
-            .andWhere("item.profile_id = :userId", {userId: profileId})
-        );
+        .where(new Brackets(function participationRoles(query) {
+            // Group the alternatives so callers can add a target/search predicate
+            // without allowing the first role to bypass that additional scope.
+            // Values remain bound parameters on the root; only ORM-built SQL is composed.
+            query.where(`EXISTS (${passenger.getQuery()})`).orWhere(`EXISTS (${driver.getQuery()})`);
+        })).setParameter('userId', profileId);
 }
 
 // Drivers Items
