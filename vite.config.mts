@@ -6,7 +6,7 @@ import {brotliCompress, constants, gzip} from 'node:zlib';
 import {promisify} from 'node:util';
 import {defineConfig, type Plugin} from 'vite';
 import vue from '@vitejs/plugin-vue';
-import {frontendBoundary, frontendBrowserDependencies} from './src/backend/modules/frontendBoundary';
+import {frontendBoundary, frontendBrowserDependencies} from './src/backend/modules/frontendBoundary.js';
 
 const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 const compressBrotli = promisify(brotliCompress);

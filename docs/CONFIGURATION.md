@@ -5,10 +5,10 @@ documentation-metadata
 audience: operators; site reliability engineers; maintainers
 owner: application operators
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: archival defaults, coercion, inclusive UTC cutoff, startup validation, and pause behavior source review; D04 accepted from source review and deployment-practice confirmation for settings, precedence, authentication, SMTP, storage, and production safety; controlled execution tracked separately in D04V
-source-anchors: src/backend/modules/entityArchival.ts; src/backend/modules/archive/policy.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/modules/settings.ts; src/backend/server.ts; src/backend/app.ts; src/backend/modules/email.ts; src/backend/modules/oidc.ts; src/backend/modules/lib/fileCommons.ts; src/backend/modules/invoice/retention.ts; src/backend/modules/database/services/EventInvoiceService.ts; .github/workflows/ci.yml
+verification-scope: operator-controlled OIDC email linking and rebinding defaults reconciled with current settings and maintainer decisions; prior archival/settings reference retained; controlled deployment execution remains D04V
+source-anchors: src/backend/modules/entityArchival.ts; src/backend/modules/archive/policy.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/modules/settings.ts; src/backend/server.ts; src/backend/app.ts; src/backend/modules/email.ts; src/backend/modules/oidc.ts; src/backend/modules/identity.ts; src/backend/modules/lib/fileCommons.ts; src/backend/modules/invoice/retention.ts; src/backend/modules/database/services/EventInvoiceService.ts; .github/workflows/ci.yml
 next-review: D04V
 -->
 
@@ -112,6 +112,8 @@ EMAIL_ACCENT_COLOR,#6d5dfc
 
 LOCAL_LOGIN_ENABLED,true
 OIDC_ENABLED,false
+OIDC_LINK_BY_EMAIL,false
+OIDC_ALLOW_EMAIL_REBINDING,false
 OIDC_NAME,Organization sign-in
 OIDC_CLIENT_ID,replace-when-oidc-is-enabled
 OIDC_CLIENT_SECRET,replace-when-oidc-is-enabled
@@ -181,6 +183,8 @@ therefore does not prove that SMTP works. Complete the mail smoke tests in the [
 |---|---|---|---|---|
 | `LOCAL_LOGIN_ENABLED` | Boolean | `true` | Local registration, activation, username/password login, and password reset. | Keep enabled for local accounts or disable it only when OIDC is fully configured. |
 | `OIDC_ENABLED` | Boolean | `false` | OpenID Connect sign-in. | Enable only after registering the client and callback with the provider. |
+| `OIDC_LINK_BY_EMAIL` | Boolean | `false` | Allows a new provider identity to attach to an existing local account with the same email. | Enable only when the configured provider's email ownership and account-registration rules are trusted for this purpose. |
+| `OIDC_ALLOW_EMAIL_REBINDING` | Boolean | `false` | Allows email linking to replace a different stored provider identity. | Has effect only with `OIDC_LINK_BY_EMAIL=true`; enable only when this account-transfer behavior is intended. |
 | `OIDC_NAME` | String | `OIDC Provider` | Label shown on the organization sign-in button. | Use the provider or organization name users recognize. |
 | `OIDC_CLIENT_ID` | String | `CLIENT_ID` | OIDC client identifier. | Required when `OIDC_ENABLED=true`. |
 | `OIDC_CLIENT_SECRET` | Secret string | `CLIENT_SECRET` | OIDC confidential-client secret. | Required when `OIDC_ENABLED=true`; protect and rotate according to provider policy. |
@@ -199,6 +203,20 @@ Supported sign-in combinations:
 OIDC uses discovery, authorization code flow, PKCE, state validation, and the `openid email profile` scopes. The provider
 must return a stable `sub` claim. Supplying email and profile claims improves account linking and profile creation.
 Behind a proxy, preserve the public host and scheme as shown in the [reverse-proxy configuration](OPERATIONS.md#reverse-proxy-and-tls).
+
+Existing issuer/subject matches continue to sign in independently of both email settings. With email linking off,
+a new provider identity follows the separate-account provisioning path rather than adopting an existing account
+because its email matches. That existing off-mode provisioning path uses a subject-based synthetic email address
+even when the provider email is unused; mail is therefore not delivered to the provider address for such new accounts.
+With linking enabled, an unclaimed provider email is retained for a new account and a matching local account can be
+linked. A conflicting stored provider identity is rejected unless email rebinding is also enabled.
+
+These settings express an operator trust decision. Surveyor does not impose an additional `email_verified` check
+when the operator explicitly enables email linking. A provider that permits users to claim someone else's email
+can therefore grant access to that person's matching local account. Reassigned email addresses can also transfer
+access when rebinding is enabled. Review the provider's enrollment, email-verification and address-reuse policies
+before opting in. Both defaults are false, including for an existing settings file that omits the new keys.
+See the [operator sign-in checks](OPERATIONS.md#mail-and-sign-in-smoke-tests) before changing either setting.
 
 ### Persistent files and retention
 

@@ -8,6 +8,11 @@ schemas:
     type: string
     minLength: 15
     x-surveyor-max-utf8-bytes: 72
+  LocalRegistrationName:
+    description: Local account usernames and display names retain their exact entered spelling within the shared Unicode code-point bound.
+    type: string
+    minLength: 1
+    maxLength: 50
   ProfileWorkflowEntry:
     type: object
     additionalProperties: false
@@ -76,13 +81,9 @@ schemas:
       next:
         "$ref": "./auth.yaml#/schemas/FrontendReturn"
       username:
-        type: "string"
-        minLength: 1
-        maxLength: 100
+        $ref: '#/schemas/LocalRegistrationName'
       displayname:
-        type: "string"
-        minLength: 1
-        maxLength: 100
+        $ref: '#/schemas/LocalRegistrationName'
       email:
         type: "string"
         format: "email"

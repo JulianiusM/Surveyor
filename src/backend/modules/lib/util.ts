@@ -391,6 +391,7 @@ function maxDate(a: string, b: string) {
 /**
  * Pure helper that builds date totals from an event window and registrations.
  * Each registration contributes 1 to every day between arrival and departure (inclusive).
+ * Endpoint processing retains shared stepping errors without enumerating a later year.
  */
 export function buildDateTotals(
     eventStart: string,
@@ -402,7 +403,11 @@ export function buildDateTotals(
     let cur = eventStart;
     while (cur <= eventEnd) {
         totals[cur] = 0;
-        cur = addCivilDays(cur, 1);
+        // Validate the same final step as before, but do not compare its extended
+        // year with a four-digit endpoint after the last event day is included.
+        const nextDay = addCivilDays(cur, 1);
+        if (cur === eventEnd) break;
+        cur = nextDay;
     }
 
     // Tally each registration
@@ -419,7 +424,11 @@ export function buildDateTotals(
         let d = start;
         while (d <= end) {
             totals[d] = (totals[d] ?? 0) + 1;
-            d = addCivilDays(d, 1);
+            // Attendance has its own clamped endpoint. Keep its final step's error
+            // behavior while preventing a second traversal beyond that endpoint.
+            const nextDay = addCivilDays(d, 1);
+            if (d === end) break;
+            d = nextDay;
         }
     }
 

@@ -2,17 +2,18 @@ import type {CivilDateWeek} from '../../types/CivilDateTypes';
 
 /** Step an ISO calendar day in UTC for existing Event and Activity calculations.
  * Keep their historical ISO parsing and RangeError behavior; this primitive
- * does not apply the separate display-date validator or a viewer's timezone. */
+ * does not apply the separate display-date validator or a viewer's timezone.
+ * Pure arithmetic retains complete signed date keys outside four-digit years. */
 export function addCivilDays(value: string, days: number): string {
     // Calendar stepping preserves the saved day across month, leap-year and DST
     // boundaries without converting through a local clock or elapsed hours.
     const date = new Date(value + 'T00:00:00Z');
     date.setUTCDate(date.getUTCDate() + days);
-    return date.toISOString().slice(0, 10);
+    return civilDateKey(date);
 }
 
-/** Keep complete ISO date keys, including an extended year if a pure caller
- * asks for year zero's preceding Monday. Admitted plan dates start at year 1000. */
+/** Keep complete ISO date keys when pure stepping or a Monday projection crosses
+ * a four-digit year boundary. Admitted stored plan dates retain their own bounds. */
 function civilDateKey(date: Date): string {
     const iso = date.toISOString();
     return iso.slice(0, iso.indexOf('T'));

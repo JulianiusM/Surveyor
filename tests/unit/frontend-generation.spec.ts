@@ -267,7 +267,7 @@ describe('contract and catalog generation', () => {
         }
     }, 30_000);
 
-    it('derives new-password runtime limits and both validators from the same authored schema', async function projectsPasswordPolicy() {
+    it('derives local registration and new-password limits from their authored schemas', async function projectsIdentityPolicies() {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
         try {
             await prepareGenerationTree(temporary);
@@ -277,6 +277,7 @@ describe('contract and catalog generation', () => {
             // nor runtime metadata has independent copied acceptance thresholds.
             auth.setIn(['schemas', 'NewPassword', 'minLength'], 16);
             auth.setIn(['schemas', 'NewPassword', 'x-surveyor-max-utf8-bytes'], 80);
+            auth.setIn(['schemas', 'LocalRegistrationName', 'maxLength'], 48);
             await fs.writeFile(source, auth.toString());
             generate('generate-api.mjs', [], temporary);
             const policyUrl = pathToFileURL(path.join(temporary, 'src/common/generated/passwordPolicy.ts')).href;
@@ -295,8 +296,18 @@ describe('contract and catalog generation', () => {
                     if (validators.validateResetInput({token: 'current', password: '😀'.repeat(21), confirmPassword: '😀'.repeat(20)})) throw new Error('Updated UTF8 bound ignored');
                     if (validators.validateResetInput({token: 'current', password: 'a'.repeat(15), confirmPassword: 'a'.repeat(16)})) throw new Error('Updated Unicode bound ignored');
                     if (!validators.validateLoginInput({username: 'Existing', password: 'short'})) throw new Error('Existing login policy changed');
+                    if (!validators.validateLocalRegistrationName('😀'.repeat(48))) throw new Error('Shared registration code-point bound rejected');
+                    if (validators.validateLocalRegistrationName('😀'.repeat(49))) throw new Error('Shared registration code-point bound ignored');
+                    const input = {username: '😀'.repeat(48), displayname: '😀'.repeat(48), email: 'name@example.invalid',
+                        password: 'a'.repeat(16), password_repeat: 'a'.repeat(16)};
+                    if (!validators.validateRegistrationInput(input)) throw new Error('Registration did not adopt its shared name schema');
+                    for (const field of ['username', 'displayname']) {
+                        if (validators.validateRegistrationInput({...input, [field]: '😀'.repeat(49)})) throw new Error('Registration field bound drift');
+                    }
+                    if (!validators.validateLoginInput({username: 'a'.repeat(100), password: 'short'})) throw new Error('Registration changed existing login names');
                 }
                 if (registration.fieldAttributes?.password || registration.fieldAttributes?.password_repeat) throw new Error('Unicode/byte policy became a UTF16 HTML bound');
+                if (registration.fieldAttributes?.username.maxLength !== 48 || registration.fieldAttributes?.displayname.maxLength !== 48) throw new Error('Registration field metadata drift');
             `], {cwd: temporary, stdio: 'pipe'});
         } finally {
             await removeDependencyLink(temporary);

@@ -38,7 +38,7 @@ export async function isLoggedIn(req: Request, res: Response, next: NextFunction
     const actor = await captureApiActor(req);
     if (actor.auth && actor.profile) return next();
     req.flash("info", "You must be logged in to access this site.");
-    let nxt = "";
+    let nxt: string;
     if (typeof req.query.next === "string") {
         nxt = `?next=${req.query.next}`;
     } else {

@@ -3,6 +3,7 @@ import type {EntityManager} from 'typeorm';
 import type {SessionLike} from '../../types/PermissionTypes';
 import type {PreparedOwnerCleanup, ProfileOwnerCleanup} from '../../types/IdentityTypes';
 import type {PreparedIdentityEmail} from '../../types/EmailTypes';
+import type {OidcClaims} from '../../types/UserTypes';
 import {User} from './database/entities/user/User';
 import {Guest} from './database/entities/user/Guest';
 import {Profile} from './database/entities/user/Profile';
@@ -14,6 +15,21 @@ import {uuidKey} from './lib/util';
 import * as oidc from './oidc';
 import {isNewPasswordValid} from '../../common/lib/frontendIdentity';
 import {createTranslator} from '../../common/localization/translator';
+import {contractValidator} from './api/contracts';
+import settings from './settings';
+
+/** Apply the authored local-registration name rule before any identity writes.
+ * API/browser validation and direct business admission consume this same schema;
+ * this guard never trims, normalizes or substitutes either submitted value. */
+export function requireLocalRegistrationNames(username: unknown, displayName: unknown): void {
+    // Keep capability/token, guest, profile-editor and provider name policies
+    // outside this local account registration boundary.
+    const validateName = contractValidator('LocalRegistrationName');
+    if (!validateName(username) || !validateName(displayName)) {
+        throw new ValidationError('users/register', createTranslator('en').t('api:errors.VALIDATION_FAILED'),
+            {}, {cause: 'VALIDATION_FAILED'});
+    }
+}
 
 /** Enforce the same authored new-credential rule before registration or reset can write anything. */
 export function requireNewPassword(password: unknown, template: 'users/register' | 'users/reset-password'): asserts password is string {
@@ -181,4 +197,99 @@ export async function prepareAccountDeletion(body: {username?: unknown}, session
     if (owner instanceof User) await userService.deleteUser(owner.id, manager);
     else await userService.deleteGuest(owner.id, manager);
     return emails;
+}
+
+/** Preserve provider username normalization, sequential suffix selection and final clock-based fallback. */
+async function toUniqueUsername(base: string): Promise<string> {
+    // Normalize before any uniqueness query; all candidates share the original
+    // provider provisioning policy independently of email-link permissions.
+    const sanitized = base.toLowerCase().replace(/[^a-z0-9._-]/g, '').slice(0, 30) || 'user';
+    if (!(await userService.usernameExists(sanitized))) return sanitized;
+
+    // Retain sequential suffix selection and the existing final fallback.
+    for (let i = 1; i < 10_000; i++) {
+        const candidate = `${sanitized}-${i}`;
+        if (!(await userService.usernameExists(candidate))) return candidate;
+    }
+    return `${sanitized}-${Date.now()}`;
+}
+
+/** Resolve provider identity through its exact binding, operator-enabled email
+ * linking, or the unchanged JIT provisioning path. The operator owns provider
+ * email trust; this operation does not require an email_verified claim. */
+export async function findOrCreateUserFromOidc(oidcIssuer: string, claims: OidcClaims): Promise<User> {
+    const {sub, email, preferred_username, name} = claims;
+    const {oidcLinkByEmail: linkByEmail, oidcAllowEmailRebinding: allowEmailRebinding} = settings.value;
+
+    // An existing issuer/subject binding remains authoritative even if later
+    // provider email/name claims change or both optional linking switches are off.
+    let user = await userService.findOidcAccount(oidcIssuer, sub);
+    if (user) return user;
+
+    if (linkByEmail && email) {
+        /** Decide against the fresh account row while DBAL retains its write fence. */
+        async function linkExistingAccount(manager: EntityManager): Promise<User | null> {
+            const candidate = await userService.findOidcEmailAccount(email!, manager, true);
+            if (!candidate) return null;
+
+            // A partial or different binding is already identity evidence. Only
+            // the separate operator opt-in permits replacing it; reject before
+            // activation or binding writes, without exposing account details.
+            const hasBinding = Boolean(candidate.oidcIssuer || candidate.oidcSub);
+            const sameBinding = candidate.oidcIssuer === oidcIssuer && candidate.oidcSub === sub;
+            if (hasBinding && !sameBinding && !allowEmailRebinding) {
+                throw new ApiProblem('FORBIDDEN');
+            }
+            candidate.oidcIssuer = oidcIssuer;
+            candidate.oidcSub = sub;
+            if (candidate.isActive !== true) candidate.isActive = true;
+            return userService.saveOidcAccount(candidate, manager);
+        }
+        user = await userService.withUserTransaction(linkExistingAccount);
+        if (user) return user;
+    }
+
+    // Keep the existing new-account name, email fallback and profile/account
+    // save order. Disabled email linking does not attach a matching local user.
+    const baseUsername = preferred_username || (email ? email.split('@')[0] : `oidc_${sub.slice(0, 8)}`);
+    const uniqueUsername = await toUniqueUsername(baseUsername);
+    const displayName = name || baseUsername;
+    let emailToUse = email || `${sub}@no-email.local`;
+    if (email) {
+        const emailTaken = await userService.accountEmailExists(email);
+        if (!linkByEmail || emailTaken) emailToUse = `${sub}@no-email.local`;
+    }
+
+    /** Persist the original related records on the existing provisioning transaction. */
+    async function provisionAccount(manager: EntityManager): Promise<User> {
+        // Repository construction retains relation-copy semantics. No new
+        // provider-name normalization or additional profile writes are introduced.
+        const {user: newUser, profile: newProfile} = userService.prepareOidcRecords(manager, {
+            username: uniqueUsername, name: displayName, email: emailToUse,
+            password: null, isActive: true, oidcIssuer, oidcSub: sub,
+        }, {name: displayName, defaultForOwner: true});
+        const savedProfile = await userService.saveProvisionedProfile(newProfile, manager);
+        const savedUser = await handleUserSaving(newUser, sub, manager);
+        if (!savedUser.profiles || savedUser.profiles.length === 0) savedUser.profiles = [savedProfile];
+        return savedUser;
+    }
+    return userService.withUserTransaction(provisionAccount);
+}
+
+/** Retain the original duplicate-constraint email fallback on the provisioning transaction. */
+async function handleUserSaving(user: User, sub: string, manager?: EntityManager): Promise<User> {
+    // Only the original database constraint signals permit retrying with the
+    // existing synthetic address; other failures retain their original outcome.
+    try {
+        user = await userService.saveOidcAccount(user, manager);
+    } catch (error: any) {
+        const message = String(error?.message || '');
+        if (error?.code === 'ER_DUP_ENTRY' || error?.code === '23505' || message.includes('UNIQUE')) {
+            user.email = `${sub}@no-email.local`;
+            user = await userService.saveOidcAccount(user, manager);
+        } else {
+            throw error;
+        }
+    }
+    return user;
 }

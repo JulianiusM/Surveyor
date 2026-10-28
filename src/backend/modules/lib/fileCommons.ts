@@ -56,7 +56,7 @@ export function prepareFileUploader(dir: string, allowImg: boolean = true, allow
     });
 
     // File size and reported MIME still pass through Multer before any controller.
-    const proofUpload = multer({
+    return multer({
         storage: proofStorage,
         limits: {fileSize: 10 * 1024 * 1024},
         /** Admit the reported MIME independently of filename and byte limits. */
@@ -70,8 +70,6 @@ export function prepareFileUploader(dir: string, allowImg: boolean = true, allow
             }
         },
     });
-
-    return proofUpload;
 }
 
 /** Validate and replace an image through its owning persistence operation.

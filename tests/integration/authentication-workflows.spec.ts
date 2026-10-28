@@ -1,4 +1,4 @@
-import {findOrCreateUserFromOidc} from '../../src/backend/controller/userController';
+import {findOrCreateUserFromOidc} from '../../src/backend/modules/identity';
 import type {Request, Response} from 'express';
 import type {SessionData} from 'express-session';
 import {randomUUID} from 'node:crypto';
@@ -41,6 +41,53 @@ beforeAll(async () => {
 
 afterAll(async () => {
     await closeIntegrationDatabase();
+});
+
+describe.each(['direct', 'prepared'] as const)('local registration name bounds through %s completion', completion => {
+    it('rejects either overlength name before account/profile writes or mail preparation', async () => {
+        const req = await initialIdentityRequest();
+        const originalSession = JSON.stringify(req.session);
+        const userCount = await AppDataSource.getRepository(User).count();
+        const profileCount = await AppDataSource.getRepository(Profile).count();
+        const directMail = vi.spyOn(email, 'sendActivationEmail').mockResolvedValue();
+        const {prepared, deliver} = activationDelivery(true);
+        try {
+            for (const field of ['username', 'displayname']) {
+                const input = {...accountRegistrationInput(`name-limit-${randomUUID().slice(0, 8)}`), [field]: '😀'.repeat(51)};
+                const operation = completion === 'direct' ? userController.registerUser(input)
+                    : userController.registerUserWithSession(input, req, atomicAccountOptions(req));
+                await expect(operation).rejects.toMatchObject({name: 'ValidationError', cause: 'VALIDATION_FAILED', data: {}});
+                expect(await AppDataSource.getRepository(User).count()).toBe(userCount);
+                expect(await AppDataSource.getRepository(Profile).count()).toBe(profileCount);
+            }
+            expect(directMail).not.toHaveBeenCalled();
+            expect(prepared).not.toHaveBeenCalled();
+            expect(deliver).not.toHaveBeenCalled();
+            expect(JSON.stringify(req.session)).toBe(originalSession);
+        } finally { directMail.mockRestore(); prepared.mockRestore(); }
+    });
+
+    it('persists fifty Unicode code points exactly in the account and default profile', async () => {
+        const suffix = randomUUID().slice(0, 8);
+        const input = {...accountRegistrationInput('😀'.repeat(42) + suffix),
+            displayname: '😀'.repeat(50), email: `unicode-${suffix}@example.test`};
+        const directMail = vi.spyOn(email, 'sendActivationEmail').mockResolvedValue();
+        const {prepared} = activationDelivery(true);
+        try {
+            if (completion === 'direct') await userController.registerUser(input);
+            else {
+                const req = await initialIdentityRequest();
+                await userController.registerUserWithSession(input, req, atomicAccountOptions(req));
+            }
+            const account = await AppDataSource.getRepository(User).findOneOrFail({
+                where: {username: input.username}, relations: {profiles: true},
+            });
+            expect(account.username).toBe(input.username);
+            expect(account.name).toBe(input.displayname);
+            expect(account.profiles).toHaveLength(1);
+            expect(account.profiles[0].name).toBe(input.displayname);
+        } finally { directMail.mockRestore(); prepared.mockRestore(); }
+    });
 });
 
 describe.each(['direct', 'prepared'] as const)('approved new-password admission through %s completion', completion => {
@@ -1599,9 +1646,16 @@ describe('authentication user stories', () => {
         const profiles = await userService.getProfilesForUser(id);
         const usersBefore = await AppDataSource.getRepository(User).count();
 
-        const account = await findOrCreateUserFromOidc('https://identity.example', {
-            sub: 'email-policy-subject', email, preferred_username: 'unused-provider-name', name: 'Unused provider label',
-        }, {linkByEmail: true});
+        const configuration = vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value,
+            oidcLinkByEmail: true, oidcAllowEmailRebinding: false});
+        let account: User;
+        try {
+            // Explicit provider trust does not require its optional verification claim.
+            account = await findOrCreateUserFromOidc('https://identity.example', {
+                sub: 'email-policy-subject', email, email_verified: false,
+                preferred_username: 'unused-provider-name', name: 'Unused provider label',
+            });
+        } finally { configuration.mockRestore(); }
 
         // Email linking preserves the local identity and its profiles; only the
         // existing activation/link fields are selected by this policy branch.
@@ -1615,16 +1669,92 @@ describe('authentication user stories', () => {
         expect(Boolean(saved.isActive)).toBe(true);
     });
 
-    it('provisions an active OIDC account and profile just in time', async () => {
-        const oidc = await findOrCreateUserFromOidc('https://identity.example', {
-            sub: 'jit-provisioned-subject',
-            email: 'jit-user@example.com',
-            preferred_username: 'jit-user',
-            name: 'JIT User',
-        });
-        expect(oidc.oidcSub).toBe('jit-provisioned-subject');
-        expect(Boolean(oidc.isActive)).toBe(true);
-        expect(oidc.profiles).toHaveLength(1);
+    it.each([false, true])('provisions an unmatched OIDC subject with email linking set to %s', async linkByEmail => {
+        const configuration = vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value,
+            oidcLinkByEmail: linkByEmail, oidcAllowEmailRebinding: false});
+        const sub = `jit-provisioned-${linkByEmail}`;
+        const email = `jit-${linkByEmail}@example.com`;
+        try {
+            const account = await findOrCreateUserFromOidc('https://identity.example', {
+                sub, email, preferred_username: `jit-${linkByEmail}`, name: 'JIT User',
+            });
+            expect(account.oidcSub).toBe(sub);
+            expect(Boolean(account.isActive)).toBe(true);
+            expect(account.profiles).toHaveLength(1);
+            // Preserve the inherited disabled-linking branch even without a
+            // collision: only an enabled, unclaimed email retains its claim.
+            expect(account.email).toBe(linkByEmail ? email : `${sub}@no-email.local`);
+        } finally { configuration.mockRestore(); }
+    });
+
+    it('keeps a matching local account untouched when automatic email linking is disabled', async () => {
+        const local = await registerLocalAccount('oidc-disabled');
+        const configuration = vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value,
+            oidcLinkByEmail: false, oidcAllowEmailRebinding: true});
+        try {
+            const account = await findOrCreateUserFromOidc('https://identity.example', {
+                sub: 'disabled-link-subject', email: local.email, preferred_username: 'separate-oidc-user', name: 'Separate user',
+            });
+            expect(account.id).not.toBe(local.id);
+            expect(account.email).toBe('disabled-link-subject@no-email.local');
+            const saved = await AppDataSource.getRepository(User).findOneByOrFail({id: local.id});
+            expect(saved.oidcIssuer).toBeNull();
+            expect(saved.oidcSub).toBeNull();
+            expect(Boolean(saved.isActive)).toBe(false);
+        } finally { configuration.mockRestore(); }
+    });
+
+    it('rejects a conflicting binding before activation or replacement without its separate opt-in', async () => {
+        const local = await registerLocalAccount('oidc-conflict');
+        await userService.linkUserToOidc(local.id, 'https://original.example', 'original-subject');
+        const before = await AppDataSource.getRepository(User).findOneByOrFail({id: local.id});
+        const configuration = vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value,
+            oidcLinkByEmail: true, oidcAllowEmailRebinding: false});
+        try {
+            await expect(findOrCreateUserFromOidc('https://identity.example', {
+                sub: 'conflicting-subject', email: local.email, email_verified: true,
+            })).rejects.toMatchObject({code: 'FORBIDDEN', status: 403});
+            const saved = await AppDataSource.getRepository(User).findOneByOrFail({id: local.id});
+            expect(saved).toMatchObject({oidcIssuer: before.oidcIssuer, oidcSub: before.oidcSub,
+                isActive: before.isActive, password: before.password, email: before.email, name: before.name});
+        } finally { configuration.mockRestore(); }
+    });
+
+    it('replaces a binding only with both operator settings enabled while preserving local records', async () => {
+        const local = await registerLocalAccount('oidc-rebind');
+        await userService.linkUserToOidc(local.id, 'https://original.example', 'original-rebind-subject');
+        const profiles = await userService.getProfilesForUser(local.id);
+        const configuration = vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value,
+            oidcLinkByEmail: true, oidcAllowEmailRebinding: true});
+        try {
+            const account = await findOrCreateUserFromOidc('https://identity.example', {
+                sub: 'replacement-subject', email: local.email, name: 'Ignored replacement name',
+            });
+            expect(account).toMatchObject({id: local.id, oidcIssuer: 'https://identity.example', oidcSub: 'replacement-subject'});
+            expect(Boolean(account.isActive)).toBe(true);
+            expect(account.profiles.map(profile => profile.id)).toEqual(profiles.map(profile => profile.id));
+            await expect(userService.verifyPassword(local.id, 'initial-secret')).resolves.toBe(true);
+        } finally { configuration.mockRestore(); }
+    });
+
+    it('serializes competing first links so only one subject acquires the email account', async () => {
+        const local = await registerLocalAccount('oidc-concurrent');
+        const configuration = vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value,
+            oidcLinkByEmail: true, oidcAllowEmailRebinding: false});
+        try {
+            const subjects = ['concurrent-link-first', 'concurrent-link-second'];
+            const outcomes = await Promise.allSettled(subjects.map(sub =>
+                findOrCreateUserFromOidc('https://identity.example', {sub, email: local.email})));
+            const completed = outcomes.filter(outcome => outcome.status === 'fulfilled');
+            const rejected = outcomes.filter(outcome => outcome.status === 'rejected');
+            expect(completed).toHaveLength(1);
+            expect(rejected).toHaveLength(1);
+            expect(rejected[0]).toMatchObject({reason: {code: 'FORBIDDEN', status: 403}});
+            const saved = await AppDataSource.getRepository(User).findOneByOrFail({id: local.id});
+            const successful = completed[0] as PromiseFulfilledResult<User>;
+            expect(saved.oidcSub).toBe(successful.value.oidcSub);
+            expect(subjects).toContain(saved.oidcSub);
+        } finally { configuration.mockRestore(); }
     });
 
 });

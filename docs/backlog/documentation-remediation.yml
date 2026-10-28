@@ -7108,6 +7108,260 @@ implementation_defects:
         r21-test-types.log, r21-development.log and r21-documentation.json.
       limits: No backend/schema change, database reset, deployment or new
         whole-application certification is claimed.
+  - id: IMP-193
+    status: resolved
+    resolved_on: 2026-10-28
+    discovered_on: 2026-10-28
+    severity: high
+    owner: identity maintainers
+    package: production-readiness-review
+    title: OIDC email fallback can adopt an unverified email and replace an existing provider binding
+    reported_evidence:
+      - src/backend/controller/userController.ts loginUserWithOidcCallback enables linkByEmail;
+        findOrCreateUserFromOidc falls back from issuer/subject to matching email, replaces
+        oidcIssuer/oidcSub and activates the account without checking email_verified or an existing binding.
+      - src/types/UserTypes.d.ts declares email_verified, but the linking operation does not consume it.
+      - IMP-137 extracted persistence while deliberately preserving this identity policy; its closure
+        does not establish approval for a different linking policy.
+    evidence:
+      - src/backend/modules/settings.ts defaults both OIDC_LINK_BY_EMAIL and OIDC_ALLOW_EMAIL_REBINDING to false.
+      - src/backend/modules/identity.ts owns exact-identity lookup, operator-controlled email linking and
+        conflict decisions; the callback adopts it directly and UserService locks the candidate account before writes.
+      - docs/CONFIGURATION.md and docs/OPERATIONS.md describe provider email trust, separate rebinding opt-in
+        and the preserved synthetic-email provisioning behavior when email linking is off.
+    impact: Previously implicit provider-email trust could attach an authenticated provider subject to
+      another matching account or replace its provider binding. Explicit opt-ins now make those choices operator-owned.
+    closes_when:
+      - An explicitly approved linking policy defines verified email, conflicting bindings and rejected-link behavior.
+      - The existing identity owner enforces that policy at every automatic linking caller before account or activation writes.
+      - Unverified, absent-verification, conflicting-binding and legitimate exact-subject cases verify persisted identity effects.
+    resolution:
+      implementation: Both opt-ins default off; exact issuer/subject login is retained. Explicit linking
+        trusts the configured provider without imposing email_verified, while conflicting replacement needs
+        its separate opt-in. Business policy stays in the existing identity owner and DBAL retains the transaction.
+      verification: Focused settings/identity checks and real authentication integration cover defaults,
+        CSV/environment precedence, exact identity, first linking, rejected conflicts, explicit replacement,
+        preserved JIT behavior and concurrent competing links. No live provider or deployment certification is claimed.
+      decision_owner: docs/decisions/DEC-007-APPLICATION-ARCHITECTURE-REMEDIATION.md
+  - id: IMP-194
+    status: open
+    discovered_on: 2026-10-28
+    severity: high
+    owner: identity and HTTP admission maintainers
+    package: production-readiness-review
+    title: Authentication and recovery commands have no application abuse budgets
+    evidence:
+      - src/backend/routes/api/v1/auth.ts admits login, registration, forgot-password, guest recovery
+        and guest-email lookup without request throttling.
+      - src/backend/controller/userController.ts performs password verification, recovery token replacement
+        and recovery email delivery for admitted repeated calls.
+      - The only authored express-rate-limit adoption found is profile search in
+        src/backend/middleware/adminApiFactory.ts.
+    impact: Repeated requests can drive password guessing, hashing load, recovery mail and token churn.
+      Any protection supplied by a deployed proxy was not verified by this source review.
+    closes_when:
+      - A reviewed policy defines operation-specific client/account budgets, proxy identity and recovery response behavior.
+      - Matching routes adopt the existing admission owners without duplicate limiters or account-existence disclosure.
+      - Burst, expiry, proxy and independent-account cases verify enforcement before expensive work or email writes.
+    disposition: Record application-level exposure separately from the unverified deployment proxy; budget changes need approval.
+  - id: IMP-195
+    status: open
+    discovered_on: 2026-10-28
+    severity: medium
+    owner: identity contract maintainers
+    package: production-readiness-review
+    title: Identity name admission exceeds the guest, account and profile storage bounds
+    reported_evidence:
+      - Local registration originally admitted 100-character username/displayname values; the generated
+        validator accepted a 51-character reproduction against VARCHAR(50) destinations.
+    evidence:
+      - contracts/api/v1/auth.yaml now owns LocalRegistrationName once with a 50-code-point bound;
+        RegistrationInput, generated client/server validation and the existing identity guard consume it.
+      - src/backend/modules/database/entities/user/User.ts stores username and name in VARCHAR(50);
+        src/backend/modules/database/entities/user/Profile.ts stores name in VARCHAR(50).
+      - GuestRegistrationInput in contracts/api/v1/auth.yaml permits a 100-character username;
+        normalizeGuestContact and UserService.createGuest pass it to Guest.username and Profile.name,
+        which both use VARCHAR(50), across all five feature guest-registration routes.
+      - contracts/api/v1/profiles.yaml ProfileCreateInput and ProfileUpdateInput have no maximum;
+        the profile operations reject blank names but otherwise write them to Profile.name unchanged.
+      - OIDC provisioning in identity.findOrCreateUserFromOidc copies the provider display name
+        into User.name and Profile.name without a bound; its generated username has a separate bound.
+    impact: A name accepted by public contracts or provider provisioning can fail as an internal database error under strict
+      SQL mode or be truncated under permissive settings. No database write was needed to reproduce admission.
+    closes_when:
+      - Supported identity-field lengths are explicitly resolved for local and guest registration,
+        profile creation/rename and provider display-name provisioning against their persistence columns.
+      - Schema-derived client and server admission share the approved bound without silently trimming user input.
+      - Boundary cases verify rejection before writes or successful exact persistence; any storage expansion has a migration.
+    disposition: Local account registration is corrected within its approved scope; the remaining guest,
+      profile and provider-name channels need their own scoped decisions. DEC-007's exclusion of unrelated
+      profile creation/edit strengthening remains in effect. This record grants no further implementation authority.
+    partial_resolution:
+      local_account_registration: The approved local-account path rejects names above 50 Unicode code points
+        before writes using the one authored schema. Native registration controls do not impose a stricter UTF-16 cap;
+        existing Login constraints and earlier name normalization remain unchanged.
+      verification: Generated-rule mutation, frontend draft/dispatch, direct/prepared real persistence and
+        built-browser registration checks cover 50/51 boundaries, supplementary characters, rejection before writes
+        and successful account/profile/token persistence. Guest/profile/provider-name channels remain open.
+  - id: IMP-196
+    status: open
+    discovered_on: 2026-10-28
+    severity: medium
+    owner: backend feature maintainers
+    package: production-readiness-review
+    title: Packing and Drivers still repeat business membership decisions in controllers
+    evidence:
+      - src/backend/controller/packingController.ts setPackingSelfAssignment/applyPackingMembership and
+        src/backend/controller/driversController.ts setDriversSelfAssignment/applyDriversMembership repeat locked membership, capacity
+        and insertion decisions through their live API callers.
+      - src/backend/modules/database/services/ListService.ts already shares matching persistence and
+        transaction mechanics; it does not own the repeated domain decisions.
+      - docs/policies/DEVELOPMENT_POLICY.md assigns shared business implementation to feature modules
+        and request coordination to controllers; the current source still mixes these responsibilities.
+    impact: Similar live business implementations can drift while controller orchestration remains coupled to domain rules.
+    closes_when:
+      - Reviewed feature ownership adopts one matching business implementation at all equivalent live callers.
+      - Deliberate capacity, identity, query, lock, error and commit-order differences remain explicit and tested.
+      - The remedy avoids DBAL business rules, copied modules and forwarding-only facades.
+    disposition: Current-source architecture debt; this finding does not reopen completed extraction records or authorize a redesign.
+  - id: IMP-197
+    status: open
+    discovered_on: 2026-10-28
+    severity: high
+    owner: release maintainers
+    package: production-readiness-review
+    title: Release assembly can check out a different revision from the one CI tested
+    evidence:
+      - .github/workflows/ci.yml uses default checkout for the triggering revision.
+      - .github/workflows/release.yml waits for CI and then explicitly checks out mutable github.ref
+        instead of the immutable triggering commit.
+    impact: A branch advancing while CI runs can supply untested application source to the release build and tag.
+    closes_when:
+      - Verification and release assembly use the same immutable application revision, with the version-only bump accounted for.
+      - A branch change cannot silently replace tested source and is detected before publication.
+      - A controlled branch-advance case and independent workflow review verify the intended source identity.
+    disposition: Source-confirmed release-integrity gap; publication lifecycle changes require a separate decision.
+  - id: IMP-198
+    status: open
+    discovered_on: 2026-10-28
+    severity: medium
+    owner: release maintainers
+    package: production-readiness-review
+    title: Release commit and tag are published before build and packaging succeed
+    evidence:
+      - .github/workflows/release.yml pushes the version commit and tag before npm run build,
+        runtime bundle preparation and archive creation.
+      - The branch and tag are separate pushes, so one may succeed while the other fails.
+    impact: Build, packaging or partial publication failure can consume a public release version without its matching archive.
+    closes_when:
+      - The complete runtime archive is assembled and validated before public branch or tag publication.
+      - Coordinated branch/tag publication reports partial failures and the published source matches the archive.
+      - Controlled build and packaging failures prove that neither public reference is advanced prematurely.
+    disposition: Separate from the tested-revision defect and the existing operator rehearsal findings; publication-order approval is required.
+  - id: IMP-199
+    status: open
+    discovered_on: 2026-10-28
+    severity: high
+    owner: Activity feature and calendar maintainers
+    package: production-readiness-review
+    title: Accepted Activity date spans synchronously materialize very large calendars and requirements
+    evidence:
+      - contracts/api/v1/activity.yaml accepts Activity creation dates without a duration bound;
+        activityController validates real calendar dates from year 1000 without a maximum interval.
+      - src/common/lib/civilDate.ts civilDateWeeks enumerates each week/day synchronously for both
+        Activity creation and server presentation.
+      - src/frontend/features/activity/requirements.ts createRequirementDraft allocates one stay row per day.
+      - A bounded source probe of 1000-01-01 through 1100-01-01 creates 5219 weeks and 36525 day cells
+        before rendering; longer admitted spans scale that allocation further.
+    impact: Large valid ranges can block browser or server work and allocate very large projections.
+      This reproduction does not establish the cause of the separate reported hangs in IMP-117.
+    closes_when:
+      - An approved supported-duration or bounded-projection policy covers creation, saved plans and requirement editing.
+      - Shared calendar and requirement owners enforce the policy consistently without losing existing saved data or drafts.
+      - Large-range verification measures bounded work and checks existing-plan compatibility.
+    disposition: Reproduced availability exposure; maximum duration and pagination are distinct product choices requiring review.
+  - id: IMP-200
+    status: resolved
+    resolved_on: 2026-10-28
+    discovered_on: 2026-10-28
+    severity: high
+    owner: shared civil-date maintainers
+    package: production-readiness-review
+    title: Inclusive date loops can run forever at the accepted year-9999 boundary
+    reported_evidence:
+      - src/common/lib/civilDate.ts addCivilDays truncates ISO output to ten characters;
+        stepping beyond 9999-12-31 produces +010000-01 rather than a complete extended-year date.
+      - src/common/activity/requirements.ts countInclusiveDays advances after the inclusive endpoint
+        and compares strings; the malformed next value remains below a year-9999 end and does not progress.
+      - A bounded three-step probe yields 9999-12-31, +010000-01, +010000-01 while every loop condition remains true.
+      - src/backend/modules/lib/util.ts buildDateTotals uses the same stepping/comparison pattern;
+        Activity requirements invoke the count from both server and client owners.
+    evidence:
+      - addCivilDays reuses the existing complete civilDateKey formatter; countInclusiveDays and both
+        buildDateTotals loops stop after processing their supported inclusive endpoint.
+      - The loops still evaluate shared stepping before stopping, preserving RangeError for an equal invalid endpoint.
+    impact: The former upper-bound loop could block a browser/server event loop or hold a requirements transaction open.
+    closes_when:
+      - Inclusive date enumeration terminates at the supported endpoint across every affected live caller.
+      - Shared day stepping has a defined boundary result without duplicating date arithmetic or changing stored date semantics.
+      - Time-bounded upper-year tests cover counts, Event totals and Activity requirements as well as leap and reversed ranges.
+    resolution:
+      implementation: Complete UTC day keys and endpoint termination are shared by all existing Activity
+        requirements and Event totals callers. Stored date limits and duration policy are unchanged.
+      verification: A hard-timeout child regression completes upper-year counts, both Event totals loops and
+        participant requirement calculation; ordinary invalid, reversed, leap-day and complete-week cases pass.
+        Built calendar workflows pass. This does not establish the cause of IMP-117 or resolve IMP-199.
+  - id: IMP-201
+    status: open
+    discovered_on: 2026-10-28
+    severity: medium
+    owner: API transport and upload maintainers
+    package: production-readiness-review
+    title: Upload infrastructure failures become invalid-file responses without server diagnostics
+    evidence:
+      - src/backend/modules/api/transport.ts receiveApiUpload replaces every upload callback error
+        except LIMIT_FILE_SIZE with a new UPLOAD_INVALID problem and discards the original cause.
+      - Multer forwards native disk write errors through that callback; fileCommons.prepareFileUploader
+        also forwards allocation failures from the durable invoice proof owner.
+      - contracts/api/v1/common.yaml declares UPLOAD_INVALID as HTTP 400, while modules/api/problem.ts
+        emits its bounded server-failure diagnostic only for errors with status at least 500.
+      - Shared creation, header-image and both invoice-proof adapters all use this transport operation;
+        current frontend-contracts tests explicitly expect generic upload errors to become UPLOAD_INVALID.
+    impact: Filesystem or proof-allocation database failures can tell users their valid file is invalid
+      and leave operators only a 400 access-log entry without the original bounded failure category.
+      This is distinct from the corrected review runner's unsupported absolute upload-directory configuration.
+    closes_when:
+      - An approved error contract distinguishes expected multipart, size and media rejection from storage or allocation failure.
+      - Matching live upload callers share that classification and safe correlation/category diagnostics without exposing paths or SQL.
+      - Existing admission, media limits, proof ownership, cleanup timing and single-attempt delivery remain intact.
+      - Bounded tests cover native filesystem and allocation database failures, ordinary file rejection and private error details.
+    disposition: Source-confirmed error-contract and observability gap; changing HTTP classification requires a separate decision.
+  - id: IMP-202
+    status: open
+    discovered_on: 2026-10-28
+    severity: high
+    owner: identity and account persistence maintainers
+    package: production-readiness-review
+    title: Case-insensitive database collation can merge distinct OIDC identities before email policy runs
+    evidence:
+      - src/backend/modules/database/entities/user/User.ts gives oidcIssuer and oidcSub no explicit
+        collation, and UserService.findOidcAccount compares both with ordinary database equality.
+      - OpenID Connect Core section 2 requires case-sensitive issuer and subject identifiers;
+        https://openid.net/specs/openid-connect-core-1_0.html#IDToken is the protocol reference.
+      - A bounded compiled-production ORM probe on the isolated MariaDB 10.11 schema confirmed
+        utf8mb4_unicode_ci on both columns. Case-distinct subjects and issuer paths each selected the
+        same synthetic account, including through identity.findOrCreateUserFromOidc with both email flags false.
+      - The probe's exact synthetic User/Profile cleanup was verified. No real provider attack or
+        existing-installation account inspection was performed.
+    impact: On case-insensitive installations, distinct provider identities can resolve to the same local
+      account if the provider issues case-distinct subjects or a changed issuer differs only in case.
+      The primary lookup returns before either email-linking control, so this is separate from IMP-193.
+    closes_when:
+      - Reviewed issuer/subject lookup and any required existing-installation reconciliation preserve exact opaque identity.
+      - Both email settings remain independent of primary identity matching and cannot bypass its required distinction.
+      - Real persistence tests cover case-distinct subjects and issuer paths under the supported default database collation.
+      - Any persistent constraint or collation change includes its entity and reviewed migration without guessing account ownership.
+    disposition: Quick fallback analysis confirmed a separate identity-lookup defect; no remedy is authorized by the email-setting decisions.
 findings:
   - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
     status: closed
@@ -7512,6 +7766,10 @@ findings:
       - src/backend/controller/packingController.ts projects actual mutation capabilities and
         coordinates admitted commands; shared frontend controls consume those capabilities without
         granting authority.
+      - src/backend/controller/eventPoolController.ts admits Finance management before upload or pool-lock
+        waits, while src/backend/modules/invoice/invoiceOperations.ts persistOrganizerInvoice and
+        acceptSavedInvoice do not receive the actor or recheck the grant under that lock. Define whether
+        a revocation during the wait must reject the pending operation before changing this behavior.
     desired_outcome: Review actor, page, method, field and private-projection boundaries across current
       features; distinguish intentional public powers and feature exceptions from unintended access.
       Define any coherent rework through its existing owners and explicit decision before changing

@@ -5,10 +5,10 @@ documentation-metadata
 audience: operators; site reliability engineers; incident responders; maintainers
 owner: application operators
 status: current
-last-verified: 2026-10-27
+last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: approved durable proof retention and offline manifest reconciliation reconciled with source and disposable rehearsals; prior deployment guidance retained; no real-installation cleanup or deployment claim
-source-anchors: src/backend/modules/entityArchival.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/migrations/1789862400000-AddEntityArchival.ts; src/backend/migrations/1789689600000-AddInvoiceRetraction.ts; src/backend/migrations/1789603200000-AddOrganizerInvoices.ts; src/backend/migrations/1789516800000-AddInvoiceShareRounding.ts; src/backend/modules/invoice/settlementEmail.ts; src/backend/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/backend/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; src/backend/server.ts; src/backend/app.ts; src/backend/modules/settings.ts; src/backend/modules/database/dataSource.ts; src/backend/modules/invoice/retention.ts; src/backend/modules/database/services/EventInvoiceService.ts; src/backend/modules/lib/fileCommons.ts; src/backend/modules/lib/pdf.ts; src/backend/controller/helpController.ts; src/backend/controller/eventPoolController.ts; src/backend/modules/email.ts; src/backend/modules/oidc.ts; docs/UPGRADING.md; src/backend/modules/invoice/invoiceOperations.ts; src/backend/modules/invoice/calculation.ts; src/frontend/composables/command.ts; src/frontend/composables/feedback.ts; src/frontend/features/finance/
+verification-scope: operator OIDC linking/rebinding decisions and upgrade checks reconciled with current settings; prior proof-retention and deployment guidance retained; no live-provider or deployment certification
+source-anchors: src/backend/modules/entityArchival.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/migrations/1789862400000-AddEntityArchival.ts; src/backend/migrations/1789689600000-AddInvoiceRetraction.ts; src/backend/migrations/1789603200000-AddOrganizerInvoices.ts; src/backend/migrations/1789516800000-AddInvoiceShareRounding.ts; src/backend/modules/invoice/settlementEmail.ts; src/backend/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/backend/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; src/backend/server.ts; src/backend/app.ts; src/backend/modules/settings.ts; src/backend/modules/database/dataSource.ts; src/backend/modules/invoice/retention.ts; src/backend/modules/database/services/EventInvoiceService.ts; src/backend/modules/lib/fileCommons.ts; src/backend/modules/lib/pdf.ts; src/backend/controller/helpController.ts; src/backend/controller/eventPoolController.ts; src/backend/modules/email.ts; src/backend/modules/oidc.ts; src/backend/modules/identity.ts; docs/UPGRADING.md; src/backend/modules/invoice/invoiceOperations.ts; src/backend/modules/invoice/calculation.ts; src/frontend/composables/command.ts; src/frontend/composables/feedback.ts; src/frontend/features/finance/
 next-review: release-layout-or-operational-procedure-change
 -->
 
@@ -157,7 +157,7 @@ At minimum, review:
 - Public URL and listening port.
 - Stable session secret.
 - Database target and password.
-- Local/OIDC sign-in mode.
+- Local/OIDC sign-in mode and explicit OIDC email-linking/rebinding choices.
 - SMTP relay and sender.
 - Relative persistent paths and invoice retention.
 - Imprint and privacy-policy URLs.
@@ -517,6 +517,26 @@ For each enabled sign-in mode:
 - OIDC: start organization sign-in, complete the callback at `/users/oidc/callback`, open **Your overview**, sign out, and
   confirm the provider return path.
 - Mixed: confirm both choices remain visible and usable.
+
+### Operator-controlled OIDC email linking
+
+Review the [two email-linking settings](CONFIGURATION.md#authentication) whenever a provider is introduced or its
+email policy changes. Both default to false, including after an upgrade when the keys are absent. Existing exact
+provider-identity matches continue working; retaining the former automatic email fallback requires an explicit
+`OIDC_LINK_BY_EMAIL=true` choice and a service restart.
+
+The operator is responsible for deciding whether the provider proves email ownership and prevents unsafe enrollment
+or address reuse. An explicit email-linking choice is respected without an additional `email_verified` veto.
+Replacing an existing provider binding requires the separate `OIDC_ALLOW_EMAIL_REBINDING=true` choice as well;
+enabling it permits the same matching email to transfer that account to a different provider identity.
+
+Use controlled accounts to check the selected policy before admitting users:
+
+- With email linking off, confirm an established provider identity still signs in and an unknown identity does not
+  adopt a local account merely because its email matches. New accounts retain the existing synthetic-contact-email
+  provisioning behavior in this mode, so do not expect their mail at the provider address.
+- With linking on and rebinding off, confirm first linking works and a conflicting stored provider binding is rejected.
+- If rebinding is deliberately enabled, confirm the intended replacement and subsequent exact-identity login.
 
 Never perform production smoke tests with real participant addresses unless the notification is expected and approved.
 

@@ -1248,11 +1248,49 @@ describe('identity forms and packing overview navigation', () => {
         });
     });
 
+    describe.each(['username', 'displayname'] as const)('local registration %s admission', field => {
+        it.each([
+            {name: 'fifty ASCII code points', value: 'a'.repeat(50), valid: true},
+            {name: 'fifty-one ASCII code points', value: 'a'.repeat(51), valid: false},
+            {name: 'fifty supplementary code points', value: '😀'.repeat(50), valid: true},
+            {name: 'fifty-one supplementary code points', value: '😀'.repeat(51), valid: false},
+            {name: 'unchanged spaces and combining marks', value: ' ' + 'e\u0301'.repeat(24) + ' ', valid: true},
+        ])('uses the shared schema for $name without changing the draft', async ({value, valid}) => {
+            const {wrapper, request} = await mounted('/users/register', async req => json(req.method === 'POST'
+                ? {changed: true, emailDelivery: 'sent'} : session));
+            // Rendered controls must allow the schema's full code-point range.
+            // Admission remains in the production transport rather than a copied
+            // browser counter or a native UTF-16 restriction.
+            for (const name of ['username', 'displayname']) {
+                expect(wrapper.get('#' + name).attributes('maxlength')).toBeUndefined();
+                await wrapper.get('#' + name).setValue('Registration fixture');
+            }
+            await wrapper.get('#' + field).setValue(value);
+            await wrapper.get('#email').setValue('registration@example.test');
+            await wrapper.get('#password').setValue('Exact password1');
+            await wrapper.get('#password-repeat').setValue('Exact password1');
+            await wrapper.get('form').trigger('submit');
+            await flushPromises();
+
+            const commands = request.mock.calls.map(([req]) => req as Request).filter(req => req.method === 'POST');
+            expect(commands).toHaveLength(valid ? 1 : 0);
+            if (valid) {
+                expect(await commands[0]!.clone().json()).toMatchObject({[field]: value});
+                expect(wrapper.find('#' + field).exists()).toBe(false);
+            } else {
+                expect(wrapper.get('.alert-danger').text()).toContain('50');
+                expect(wrapper.get<HTMLInputElement>('#' + field).element.value).toBe(value);
+                expect(wrapper.get<HTMLInputElement>('#password').element.value).toBe('Exact password1');
+            }
+        });
+    });
+
     it.each(['oldpass1', 'é'.repeat(40)])('keeps existing-login admission separate for %s', async password => {
         const {wrapper, request} = await mounted('/users/login', async req => req.method === 'POST'
             ? json({session, personalLink: null, redirect: null}) : json(session));
         await wrapper.get('#username').setValue('Existing account');
         await wrapper.get('#password').setValue(password);
+        expect(wrapper.get('#username').attributes('maxlength')).toBe('100');
         expect(wrapper.get('#password').attributes('minlength')).toBe('8');
         expect(wrapper.get('#password').attributes('maxlength')).toBeUndefined();
         expect(wrapper.find('#password-info').exists()).toBe(false);

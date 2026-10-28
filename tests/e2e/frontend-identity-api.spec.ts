@@ -260,6 +260,85 @@ test('new registration shares Unicode and byte limits with its HTTP boundary wit
     expect(await readAccountRegistrationCountsForE2E([username])).toEqual({accounts: 1, profiles: 1, activationReady: 1});
 });
 
+/** Cross the actual built browser, API and ORM boundary with one isolated signup.
+ * Both rejected name fields retain their drafts; only the accepted exact Unicode
+ * boundary may create account/profile/activation rows or attempt controlled mail. */
+test('local registration preserves fifty Unicode code points through native controls and one persisted signup',
+    async function registrationNameBoundary({page}) {
+        const prefix = `r3-${randomUUID().slice(0, 12)}-`;
+        const username = prefix + '😀'.repeat(50 - prefix.length);
+        const overlong = username + '😀';
+        const names = [username, overlong];
+        const password = 'Registration-boundary!A1';
+        const input = {username, displayname: username, email: `${prefix}account@example.invalid`,
+            password, password_repeat: password};
+        const before = await session(page.request);
+        expect(before.kind).toBe('anonymous');
+        expect(Array.from(username)).toHaveLength(50);
+        expect(username.length).toBeGreaterThan(50);
+        expect(await readAccountRegistrationCountsForE2E(names)).toEqual({accounts: 0, profiles: 0, activationReady: 0});
+
+        // Direct requests must reject either oversized field before any write,
+        // independently of the real browser's separate generated-input guard.
+        for (const field of ['username', 'displayname']) {
+            const rejected = await page.request.post('/api/v1/auth/register', {
+                headers: {...headers(before), 'X-Surveyor-Locale': 'en'}, data: {...input, [field]: overlong},
+            });
+            expect(rejected.status()).toBe(400);
+            expect(await rejected.json()).toMatchObject({code: 'VALIDATION_FAILED'});
+        }
+        expect(await readAccountRegistrationCountsForE2E(names)).toEqual({accounts: 0, profiles: 0, activationReady: 0});
+
+        await page.goto('/users/register?locale=en');
+        await waitForFrontendHydration(page);
+        for (const field of ['username', 'displayname']) {
+            await expect(page.locator('#' + field)).not.toHaveAttribute('maxlength');
+            await page.locator('#' + field).fill(username);
+        }
+        await page.locator('#email').fill(input.email);
+        await page.locator('#password').fill(password);
+        await page.locator('#password-repeat').fill(password);
+        const submissions: Request[] = [];
+        page.on('request', observeRegistration);
+
+        /** Observe genuine browser dispatch without intercepting or replacing it. */
+        function observeRegistration(request: Request): void {
+            if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/auth/register') submissions.push(request);
+        }
+
+        try {
+            // Distinct field diagnostics prove each local rejection settled;
+            // native validity must not truncate supplementary characters first.
+            for (const {field, label} of [{field: 'username', label: 'Username'}, {field: 'displayname', label: 'Display name'}]) {
+                await page.locator('#' + field).fill(overlong);
+                await page.locator('form button[type="submit"]').click();
+                await expect(page.getByRole('alert')).toContainText(`${label}: Use no more than 50 characters.`);
+                await expect(page.locator('#' + field)).toHaveValue(overlong);
+                await expect(page.locator('#password')).toHaveValue(password);
+                expect(submissions).toHaveLength(0);
+                await page.locator('#' + field).fill(username);
+            }
+            expect(await readAccountRegistrationCountsForE2E(names)).toEqual({accounts: 0, profiles: 0, activationReady: 0});
+
+            // The managed server uses its real mailer against the refused local
+            // SMTP socket. Advisory mail failure preserves the completed signup
+            // and its anonymous actor without replaying the accepted command.
+            const completed = page.waitForResponse(response => response.request().method() === 'POST'
+                && new URL(response.url()).pathname === '/api/v1/auth/register');
+            await page.locator('form button[type="submit"]').click();
+            const result = await completed;
+            expect(result.status()).toBe(200);
+            expect(await result.json()).toEqual({changed: true, emailDelivery: 'failed'});
+            await expect(page.locator('#username')).toHaveCount(0);
+            expect(submissions).toHaveLength(1);
+            expect(submissions[0]!.postDataJSON()).toMatchObject({username, displayname: username});
+            expect(await readAccountRegistrationCountsForE2E(names)).toEqual({accounts: 1, profiles: 1, activationReady: 1});
+            expect(await session(page.request)).toMatchObject({kind: 'anonymous', context: before.context, csrfToken: before.csrfToken});
+        } finally {
+            page.off('request', observeRegistration);
+        }
+    });
+
 test('existing Login keeps its current browser minimum and accepts a credential below the new-password limit', async ({page}) => {
     await withPasswordResetAccountForE2E(async function loginExistingAccount(username, password) {
         await page.goto('/users/login?locale=en');

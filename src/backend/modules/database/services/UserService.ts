@@ -1018,9 +1018,17 @@ export function findOidcAccount(oidcIssuer: string, oidcSub: string): Promise<Us
     return AppDataSource.getRepository(User).findOne({where: {oidcIssuer, oidcSub}, relations: {profiles: true}});
 }
 
-/** Read an email candidate without deciding whether it may be linked or activated. */
-export function findOidcEmailAccount(email: string): Promise<User | null> {
-    return AppDataSource.getRepository(User).findOne({where: {email}, relations: {profiles: true}});
+/** Read the email candidate on the caller's transaction, optionally fencing its
+ * account row before loading the unchanged profile roster. Identity policy stays
+ * with the feature operation; locking never activates or replaces a binding. */
+export async function findOidcEmailAccount(email: string, manager: EntityManager = AppDataSource.manager,
+    lock = false): Promise<User | null> {
+    // Only the account row needs the write fence. Separate roster loading keeps
+    // profile rows out of the new linking lock while retaining their projection.
+    const user = await manager.getRepository(User).findOne({where: {email},
+        ...(lock ? {lock: {mode: 'pessimistic_write' as const}} : {relations: {profiles: true}})});
+    if (user && lock) user.profiles = await getProfilesForUser(user.id, manager);
+    return user;
 }
 
 /** Raw uniqueness evidence; the identity owner chooses any fallback address. */

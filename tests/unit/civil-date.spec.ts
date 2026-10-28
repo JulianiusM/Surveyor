@@ -1,5 +1,8 @@
+import {spawnSync} from 'node:child_process';
+import {resolve} from 'node:path';
 import {describe, expect, it} from 'vitest';
 import {addCivilDays, civilDateWeeks, formatCivilDate} from '../../src/common/lib/civilDate';
+import {countInclusiveDays} from '../../src/common/activity/requirements';
 import {formatEventCivilDate, formatEventDate, formatEventTimestamp} from '../../src/frontend/features/event/presentation';
 
 describe('shared civil calendar presentation', () => {
@@ -7,12 +10,55 @@ describe('shared civil calendar presentation', () => {
         ['2032-02-28', 1, '2032-02-29'], ['2032-02-29', 1, '2032-03-01'],
         ['2027-12-31', 1, '2028-01-01'], ['2027-03-28', 1, '2027-03-29'],
         ['2027-11-01', -1, '2027-10-31'], ['2027-02-29', 1, '2027-03-02'],
+        ['9999-12-31', 1, '+010000-01-01'], ['+010000-01-01', 1, '+010000-01-02'],
+        ['+010000-01-01', -1, '9999-12-31'], ['0000-01-01', -1, '-000001-12-31'],
     ] as const)('retains calculation-day stepping from %s by %s days', (day, days, expected) => {
         expect(addCivilDays(day, days)).toBe(expected);
     });
 
     it('retains the calculation primitive\'s invalid-date failure separately from display validation', () => {
         expect(() => addCivilDays('invalid', 1)).toThrow(RangeError);
+        expect(() => countInclusiveDays('invalid', 'invalid')).toThrow(RangeError);
+        expect(countInclusiveDays('2032-03-01', '2032-02-28')).toBe(0);
+        expect(countInclusiveDays('2032-02-28', '2032-03-01')).toBe(3);
+        expect(countInclusiveDays('2027-02-29', '2027-02-29')).toBe(1);
+    });
+
+    it('finishes upper-year Activity requirements and Event totals within a bounded process', () => {
+        // Keep the real production loops outside Vitest: a regression must fail
+        // at the child deadline instead of freezing the runner's event loop.
+        const script = `
+            const {countInclusiveDays, calculateParticipantRequirement} = require('./src/common/activity/requirements');
+            const {buildDateTotals} = require('./src/backend/modules/lib/util');
+            const plan = {startDate: '9999-12-30', endDate: '9999-12-31',
+                assignmentMode: 'REQUIRED', generalRequiredShifts: 4, roundingMode: 'CEIL'};
+            process.stdout.write(JSON.stringify({
+                singleDay: countInclusiveDays('9999-12-31', '9999-12-31'),
+                interval: countInclusiveDays('9999-12-29', '9999-12-31'),
+                singleTotals: buildDateTotals('9999-12-31', '9999-12-31', [{arrivalDate: null, departureDate: null}]),
+                totals: buildDateTotals('9999-12-29', '9999-12-31', [
+                    {arrivalDate: null, departureDate: null},
+                    {arrivalDate: '9999-12-30', departureDate: '9999-12-31'}]),
+                requirement: calculateParticipantRequirement(plan,
+                    {profileId: 'participant', arrivalDate: '9999-12-31', departureDate: '9999-12-31'},
+                    [], [], [{stayDays: 1, requiredShifts: 2}]),
+            }));
+        `;
+        // Load source owners without an application, database or generated build.
+        // Only the child receives the loader settings and hard termination limit.
+        const result = spawnSync(process.execPath, ['--require', 'ts-node/register/transpile-only', '-e', script], {
+            cwd: resolve('.'), encoding: 'utf8', timeout: 5_000, windowsHide: true,
+            env: {...process.env, TS_NODE_PROJECT: resolve('tsconfig.server.json'), TZ: 'UTC', DOTENV_CONFIG_QUIET: 'true'},
+        });
+        expect(result.error).toBeUndefined();
+        expect(result.status, result.stderr).toBe(0);
+        expect(JSON.parse(result.stdout)).toEqual({
+            singleDay: 1, interval: 3, singleTotals: {'9999-12-31': 1},
+            totals: {'9999-12-29': 1, '9999-12-30': 2, '9999-12-31': 2},
+            requirement: {participantKey: 'profile:participant', requiredShifts: 2, source: 'general',
+                breakdown: {attendanceDays: 1, planDays: 2, proportionalRequirement: 2,
+                    stayDurationRequirement: 2, appliedRounding: 'CEIL'}},
+        });
     });
 
     it.each([
@@ -28,6 +74,8 @@ describe('shared civil calendar presentation', () => {
             {start: '-000001-12-27', days: ['0000-01-01', '0000-01-02']}]},
         {start: '1000-01-01', end: '1000-01-02', weeks: [
             {start: '0999-12-30', days: ['1000-01-01', '1000-01-02']}]},
+        {start: '9999-12-30', end: '9999-12-31', weeks: [
+            {start: '9999-12-27', days: ['9999-12-30', '9999-12-31']}]},
     ])('clips $start through $end to their actual Monday weeks', ({start, end, weeks}) => {
         expect(civilDateWeeks(start, end)).toEqual(weeks);
     });

@@ -1,8 +1,19 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
-import {requireCurrentMigrationToken, requireCurrentProfileOwner} from '../../src/backend/modules/identity';
+import {requireCurrentMigrationToken, requireCurrentProfileOwner, requireLocalRegistrationNames} from '../../src/backend/modules/identity';
 
 afterEach(() => vi.useRealTimers());
+
+describe('local registration name admission', () => {
+    it('counts Unicode code points through the authored schema without changing entered text', () => {
+        expect(() => requireLocalRegistrationNames('u'.repeat(50), '😀'.repeat(50))).not.toThrow();
+        expect(() => requireLocalRegistrationNames('😀'.repeat(50), ' Name with spaces ')).not.toThrow();
+        for (const names of [['u'.repeat(51), 'Display name'], ['username', '😀'.repeat(51)]]) {
+            expect(() => requireLocalRegistrationNames(...names as [string, string]))
+                .toThrowError(expect.objectContaining({name: 'ValidationError', cause: 'VALIDATION_FAILED', data: {}}));
+        }
+    });
+});
 
 describe('current profile migration admission', () => {
     it('requires the captured principal to remain the persisted profile owner', () => {

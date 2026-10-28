@@ -82,3 +82,31 @@ change is authorized. Existing records remain intact.
 Broader session/flash redesign, provider-bearing deletion finality, unrelated profile edit/create strengthening,
 operational deployment rehearsals and other open backlog items retain their separate scope. Approval here does
 not certify implementation, tests, a hosted CI run or deployment; those require their own evidence.
+
+## Production-review decisions (2026-10-28)
+
+The maintainer's subsequent production-review reply resolves the R1–R5 requests from the immediately preceding
+production-check answer. Those identifiers are local to that answer and do not replace the earlier R1–R21 mapping.
+The original decisions above remain recorded.
+
+For R1, provider email trust remains an operator decision. Automatic email linking is explicitly controlled by
+`OIDC_LINK_BY_EMAIL`, default false. An operator's opt-in is respected without imposing an additional
+`email_verified` requirement. For R2, replacing an existing provider binding requires a separate
+`OIDC_ALLOW_EMAIL_REBINDING` setting, also default false and effective only when email linking is enabled. The existing
+identity feature owns the decision; the existing DBAL transaction serializes candidate binding checks and writes.
+Exact provider-identity login and unrelated session/provisioning behavior retain their scope. Operator guidance
+explains both choices and their consequences instead of making provider trust an application-wide prohibition.
+
+The maintainer approves R3's 50-Unicode-code-point maximum for the local account registration username and display
+name, without introducing trimming or changing storage. One authored registration-name schema owns the rule consumed by
+generated browser/server validation and the existing identity business guard. Native controls must not impose a
+stricter UTF-16-unit cap. Guest registration, profile creation/editing and provider display-name policy remain
+separately scoped; this approval does not lift the earlier exclusion for unrelated profile strengthening.
+
+The maintainer approves R4's shared civil-date boundary correction: complete date keys and terminating inclusive
+Activity/Event loops at the accepted upper-year endpoint. Preserve shared UTC ownership, ordinary invalid-date
+errors, reversed/leap-day behavior and stored date contracts. This does not approve a maximum Activity duration or
+calendar pagination policy.
+
+R5 authorizes this review's production-dependency vulnerability audit and its registry metadata export. It supplies
+no approval for dependency changes or a blanket future export permission.

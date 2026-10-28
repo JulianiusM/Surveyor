@@ -56,6 +56,10 @@ const defaults: Settings = {
     oidcClientSecret: "CLIENT_SECRET",
     oidcIssuerBaseUrl: "http://example.com",
     oidcRedirectUrl: "http://localhost:3000/users/oidc/callback",
+    // Email claims acquire local identity only when the operator explicitly trusts
+    // that provider's policy. Replacing an existing binding requires its own opt-in.
+    oidcLinkByEmail: false,
+    oidcAllowEmailRebinding: false,
 
     localLoginEnabled: true,
 
@@ -106,6 +110,8 @@ const keyMap: Record<string, keyof Settings> = {
     OIDC_CLIENT_SECRET: "oidcClientSecret",
     OIDC_ISSUER_BASE_URL: "oidcIssuerBaseUrl",
     OIDC_REDIRECT_URL: "oidcRedirectUrl",
+    OIDC_LINK_BY_EMAIL: "oidcLinkByEmail",
+    OIDC_ALLOW_EMAIL_REBINDING: "oidcAllowEmailRebinding",
     LOCAL_LOGIN_ENABLED: "localLoginEnabled",
     SESSION_SECRET: "sessionSecret",
     APP_PORT: "appPort",
@@ -131,6 +137,8 @@ const coerce: Partial<Record<keyof Settings, (v: string) => any>> = {
     smtpSecure: (v) => /^(1|true|yes|on)$/i.test(v),
     localLoginEnabled: (v) => /^(1|true|yes|on)$/i.test(v),
     oidcEnabled: (v) => /^(1|true|yes|on)$/i.test(v),
+    oidcLinkByEmail: (v) => /^(1|true|yes|on)$/i.test(v),
+    oidcAllowEmailRebinding: (v) => /^(1|true|yes|on)$/i.test(v),
     activityAvailabilityWeight: Number,
     activitySwapOptimizationIterations: Number,
     activityArrivalDeparturePenalty: Number,
@@ -161,8 +169,7 @@ function applyEnvOverrides(target: Settings): void {
         if (raw === undefined || raw === "") continue;
 
         const conv = coerce[settingsKey];
-        const v = conv ? conv(String(raw)) : String(raw);
-        (target as any)[settingsKey] = v;
+        (target as any)[settingsKey] = conv ? conv(String(raw)) : String(raw);
     }
 
     // Allow overriding the settings file location itself.
@@ -227,8 +234,7 @@ export class SettingsStore {
                 continue;
             }
             const conv = coerce[mapKey];
-            const v = (conv ? conv(vRaw) : vRaw) as any;
-            (this._settings as any)[mapKey] = v;
+            (this._settings as any)[mapKey] = conv ? conv(vRaw) : vRaw;
         }
 
         // Finally, apply env overrides on top.

@@ -815,6 +815,8 @@ components:
       $ref: ./auth.yaml#/schemas/FrontendReturn
     RegistrationInput:
       $ref: ./auth.yaml#/schemas/RegistrationInput
+    LocalRegistrationName:
+      $ref: ./auth.yaml#/schemas/LocalRegistrationName
     UsernameInput:
       $ref: ./auth.yaml#/schemas/UsernameInput
     EmailInput:

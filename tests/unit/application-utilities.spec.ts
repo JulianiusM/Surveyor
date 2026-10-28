@@ -204,6 +204,13 @@ describe('backend application behavior suite', () => {
     });
 
     describe('event registration date totals', () => {
+        it('retains reversed-window and invalid-step behavior before returning totals', () => {
+            expect(buildDateTotals('2032-03-01', '2032-02-28', [])).toEqual({});
+            expect(() => buildDateTotals('invalid', 'invalid', [])).toThrow(RangeError);
+            expect(buildDateTotals('2032-02-28', '2032-03-01', [{arrivalDate: null, departureDate: null}]))
+                .toEqual({'2032-02-28': 1, '2032-02-29': 1, '2032-03-01': 1});
+        });
+
         // Canary: protects a high-value production behavior while avoiding private implementation details.
         it('counts registrations on each date in the event window', () => {
             const testCase = createDateTotalsCase();

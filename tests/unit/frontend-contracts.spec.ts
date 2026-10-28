@@ -340,6 +340,27 @@ describe('generated v1 contract boundaries', () => {
         }
     });
 
+    it('shares the exact local registration name bound across server and browser contracts', () => {
+        const input = {username: 'Account', displayname: 'Account name', email: 'account@example.invalid',
+            password: 'a'.repeat(15), password_repeat: 'a'.repeat(15)};
+
+        // Exercise complete valid commands so another invalid field cannot hide
+        // a missing bound. Supplementary characters occupy two UTF-16 units but
+        // count once in the authored schema and shared business validator.
+        for (const validators of [server, browser]) {
+            for (const field of ['username', 'displayname']) {
+                for (const character of ['a', '😀']) {
+                    expect(validators.validateRegistrationInput({...input, [field]: character.repeat(50)})).toBe(true);
+                    expect(validators.validateRegistrationInput({...input, [field]: character.repeat(51)})).toBe(false);
+                }
+                expect(validators.validateRegistrationInput({...input, [field]: ''})).toBe(false);
+            }
+            expect(validators.validateLocalRegistrationName('😀'.repeat(50))).toBe(true);
+            expect(validators.validateLocalRegistrationName('😀'.repeat(51))).toBe(false);
+            expect(validators.validateLoginInput({username: 'a'.repeat(100), password: 'existing'})).toBe(true);
+        }
+    });
+
     it('keeps standalone recovery unbounded while retaining native account and guest form field bounds', () => {
         const username = `no-existing-account-${'x'.repeat(100)}`;
         const email = `no-existing-guest@${'subdomain.'.repeat(9)}example.invalid`;

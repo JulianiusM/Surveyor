@@ -41,6 +41,10 @@ export type Settings = {
     oidcClientId: string;
     oidcClientSecret: string;
     oidcRedirectUrl: string;
+    /** Trust configured provider email claims for automatic linking to local accounts. */
+    oidcLinkByEmail: boolean;
+    /** Permit email-based replacement only while automatic email linking is also enabled. */
+    oidcAllowEmailRebinding: boolean;
     invoiceDir: string;
     invoiceRetentionMonths: number;
     /**

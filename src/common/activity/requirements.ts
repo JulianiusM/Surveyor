@@ -31,7 +31,8 @@ interface DaysWindow {
     days: number;
 }
 
-/** Count an inclusive civil-date interval; a reversed interval contributes no days. */
+/** Count an inclusive civil-date interval without advancing past its endpoint.
+ * Reversed intervals contribute no days; stepping retains its existing invalid-date failure. */
 export function countInclusiveDays(start: string, end: string): number {
     if (start > end) return 0;
     // Advance calendar dates in UTC so a local daylight-saving transition cannot
@@ -40,7 +41,11 @@ export function countInclusiveDays(start: string, end: string): number {
     let days = 0;
     while (cursor <= end) {
         days += 1;
-        cursor = addCivilDays(cursor, 1);
+        // Preserve the primitive's RangeError even for an equal invalid endpoint,
+        // then stop before comparing an extended-year key with four-digit dates.
+        const nextDay = addCivilDays(cursor, 1);
+        if (cursor === end) break;
+        cursor = nextDay;
     }
     return days;
 }

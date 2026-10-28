@@ -37,7 +37,7 @@ import {ApiProblem} from '../modules/api/problem';
 import {buildGuestLink, ENTITIES, uuidKey} from "../modules/lib/util";
 import * as oidc from "../modules/oidc";
 import settings from "../modules/settings";
-import type {Entity, GuestLinkData, OidcClaims, OverviewCollection, OverviewPageView, OverviewQuery, OverviewReadResult, OverviewRegion, OverviewRegionView, PersonalVisibilityCompletion, PersonalVisibilityResult} from "../../types/UserTypes";
+import type {Entity, GuestLinkData, OverviewCollection, OverviewPageView, OverviewQuery, OverviewReadResult, OverviewRegion, OverviewRegionView, PersonalVisibilityCompletion, PersonalVisibilityResult} from "../../types/UserTypes";
 import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, LockedArchiveContext, PersonalVisibility} from "../../types/ArchiveTypes";
 import type {SessionLike} from "../../types/PermissionTypes";
 import {archiveKey, isHiddenInOverview} from "../modules/archive/policy";
@@ -102,6 +102,9 @@ function validateUserRegistration(body: any) {
     // New-credential admission follows the existing required/equality diagnostics,
     // before account lookups, hashing, tokens or notification preparation.
     identity.requireNewPassword(password, CREATE_TEMPLATE);
+    // The authored name schema also protects direct business callers. Retain
+    // the established omitted/empty display-name fallback without new trimming.
+    identity.requireLocalRegistrationNames(username, typeof displayname === 'string' && displayname ? displayname : name);
     return {username, name, password, email};
 }
 
@@ -760,9 +763,7 @@ export async function loginUserWithOidcCallback(req: Request) {
     // Protocol validation finishes before any local account or session authority changes.
     const {issuer, identityClaims, tokens} = await oidc.exchangeCallback(req);
     // Resolve the established linking/provisioning policy before changing session authority.
-    const user = await findOrCreateUserFromOidc(issuer, identityClaims, {
-        linkByEmail: true,
-    });
+    const user = await identity.findOrCreateUserFromOidc(issuer, identityClaims);
     applyAccountIdentity(req.session, user);
 
     // Provider tokens follow identity selection; no early save occurs through the shared synchronous helper.
@@ -1340,120 +1341,4 @@ export function getDefaultProfile(profiles: Profile[]) {
     profile ??= sortedProfiles[0];
 
     return profile;
-}
-
-/** Preserve provider username normalization, sequential suffix selection and final clock-based fallback. */
-async function toUniqueUsername(base: string): Promise<string> {
-    // Normalize before any uniqueness query; all candidates share the same original policy.
-    const sanitized = base
-        .toLowerCase()
-        .replace(/[^a-z0-9._-]/g, '')
-        .slice(0, 30) || 'user';
-    if (!(await userService.usernameExists(sanitized))) return sanitized;
-
-    // add numeric suffix
-    for (let i = 1; i < 10_000; i++) {
-        const candidate = `${sanitized}-${i}`;
-        if (!(await userService.usernameExists(candidate))) return candidate;
-    }
-    // fallback (should never happen)
-    return `${sanitized}-${Date.now()}`;
-}
-
-/**
- * Find or create a user from OIDC claims.
- * - Primary key: (issuer, sub)
- * - Optional fallback: email match (link existing local account)
- * - JIT-provisions a new user when needed.
- */
-export async function findOrCreateUserFromOidc(
-    oidcIssuer: string,
-    claims: OidcClaims,
-    {linkByEmail = true} = {}
-) {
-    const {sub, email, preferred_username, name} = claims;
-
-    // 1) Try exact OIDC match first
-    let user = await userService.findOidcAccount(oidcIssuer, sub);
-
-    // 2) If not found: try link-by-email (optional)
-    if (!user && linkByEmail && email) {
-        user = await userService.findOidcEmailAccount(email);
-        if (user) {
-            user.oidcIssuer = oidcIssuer;
-            user.oidcSub = sub;
-            if (user.isActive !== true) user.isActive = true;
-            await userService.saveOidcAccount(user);
-        }
-    }
-
-    // 3) If still not found: create a new local user (JIT provisioning)
-    if (!user) {
-        const baseUsername =
-            preferred_username ||
-            (email ? email.split('@')[0] : `oidc_${sub.slice(0, 8)}`);
-        const uniqueUsername = await toUniqueUsername(baseUsername);
-        const displayName = name || baseUsername;
-
-        // Ensure we don't violate unique(email)
-        let emailToUse = email || `${sub}@no-email.local`;
-
-        // If linkByEmail is disabled OR the email is already taken, use a synthetic email
-        if (email) {
-            const emailTaken = await userService.accountEmailExists(email);
-            if (!linkByEmail || emailTaken) {
-                emailToUse = `${sub}@no-email.local`;
-            }
-        }
-
-        return await userService.withUserTransaction(
-        /** Prepare the existing ORM records and save profile then account on their original transaction. */
-        async function provisionAccount(manager) {
-            // Repository construction preserves relation-copy semantics; the business owner chooses every value.
-            const {user: newUsr, profile: newProfile} = userService.prepareOidcRecords(manager, {
-                username: uniqueUsername,
-                name: displayName,
-                email: emailToUse,
-                password: null,
-                isActive: true,
-                oidcIssuer,
-                oidcSub: sub,
-            }, {
-                name: displayName,
-                defaultForOwner: true,
-            });
-            // Keep the inherited write order and returned profile fallback without repairing provisioning behavior.
-            const savedProfile = await userService.saveProvisionedProfile(newProfile, manager);
-            user = await handleUserSaving(newUsr, sub, manager);
-            if (!user.profiles || user.profiles.length === 0) {
-                user.profiles = [savedProfile];
-            }
-
-            return user;
-        });
-    }
-
-    return user;
-}
-
-/** Keep the existing duplicate-constraint email fallback inside the caller's provisioning transaction. */
-async function handleUserSaving(user: User, sub: string, manager?: EntityManager) {
-    // Try the selected values first. Only the original database constraint signals permit the fallback save.
-    try {
-        user = await userService.saveOidcAccount(user, manager);
-    } catch (err: any) {
-        // Last-chance fallback for race conditions (MySQL/PG/SQLite)
-        const message = String(err?.message || '');
-        if (
-            err?.code === 'ER_DUP_ENTRY' || // MySQL/MariaDB
-            err?.code === '23505' ||        // Postgres
-            message.includes('UNIQUE')      // SQLite/others
-        ) {
-            user.email = `${sub}@no-email.local`;
-            user = await userService.saveOidcAccount(user, manager);
-        } else {
-            throw err;
-        }
-    }
-    return user;
 }

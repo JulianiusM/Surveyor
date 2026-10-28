@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {fieldAttributes as registrationFields} from "../../../../.generated/api/v1/browser/validateRegistrationInput.mjs";
+import {fieldAttributes as loginFields} from "../../../../.generated/api/v1/browser/validateLoginInput.mjs";
 import {computed, onMounted, reactive, ref, shallowRef, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
 import type {WatchCallback} from 'vue';
@@ -443,6 +444,10 @@ onMounted(() => {
                 <form v-if="mode !== 'recovery' && !needsOidc && (mode !== 'reset' || resetAllowed)" class="row gy-3 justify-content-center"
                     @submit.prevent="submit">
                     <template v-if="context.session.value?.shell.localLoginEnabled || mode === 'guest-login'">
+                        <!-- Registration name limits count Unicode code points in the
+                             shared generated validator. Native maxlength counts UTF-16
+                             units and would reject valid supplementary characters;
+                             Login retains its separate existing native bound. -->
                         <FormField
                             v-if="['login', 'register', 'forgot'].includes(mode)"
                             id="username"
@@ -452,7 +457,7 @@ onMounted(() => {
                             label-icon="bi-person-circle"
                             :placeholder="messages.t(mode === 'register' ? 'auth.chooseUsername' : mode === 'forgot' ? 'auth.forgotUsernamePlaceholder' : 'auth.usernamePlaceholder')"
                             required
-                            :max-length="mode === 'forgot' ? undefined : registrationFields.username.maxLength"
+                            :max-length="mode === 'login' ? loginFields.username.maxLength : undefined"
                             autocomplete="username"
                             :disabled="blocked"
                             :pending="submittingIdentity"
@@ -466,7 +471,6 @@ onMounted(() => {
                             label-icon="bi-person-circle"
                             :placeholder="messages.t('auth.chooseDisplayName')"
                             required
-                            :max-length="registrationFields.displayname.maxLength"
                             autocomplete="nickname"
                             :disabled="blocked"
                             :pending="submittingIdentity"

@@ -354,8 +354,11 @@ OIDC protocol exchange lives in `src/backend/modules/oidc.ts`; the user controll
 6. Persist the normal Surveyor session identity and tokens needed for provider logout.
 
 Both local and OIDC users therefore enter the same local account/profile model after authentication.
-The existing user controller selects linking, activation, name/address fallback and provisioning policy;
-`UserService` supplies queries, ORM construction and persistence. The user controller applies account/default-profile
+The existing identity feature module selects linking, activation, name/address fallback and provisioning policy;
+`UserService` supplies queries, ORM construction and persistence. Email fallback is disabled by default and follows
+the operator's explicit linking choice. Replacing a conflicting provider binding requires its separate opt-in;
+the identity decision runs against the locked email candidate inside the existing service-managed transaction.
+Exact provider-identity lookup remains independent of those options. The user controller applies account/default-profile
 selection through one synchronous operation for local and provider login, while each journey retains its own save
 and token order. Provider protocol code has no dependency on that controller.
 
