@@ -288,6 +288,13 @@ if (passwordSchema?.type !== 'string' || !Number.isInteger(passwordSchema.minLen
     throw new Error('NewPassword must author its Unicode minimum and UTF-8 byte maximum');
 }
 const newPasswordPolicy = {minLength: passwordSchema.minLength, maxUtf8Bytes: passwordSchema['x-surveyor-max-utf8-bytes']};
+// Identity fields and provider display projection consume this same authored
+// code-point bound; neither DBAL nor UI components own another length policy.
+const identityNameSchema = authoredDocuments.get(path.join(sourceDirectory, 'auth.yaml')).schemas.IdentityName;
+if (identityNameSchema?.type !== 'string' || !Number.isInteger(identityNameSchema.maxLength) || identityNameSchema.maxLength < 1) {
+    throw new Error('IdentityName must author its Unicode code-point maximum');
+}
+const identityNamePolicy = {maxLength: identityNameSchema.maxLength};
 
 // The measurement helper has no generated inputs: a clean checkout can compile
 // it before publishing policy metadata, without a generator/runtime dependency cycle.
@@ -527,8 +534,11 @@ for (const [name, value] of runtimeChoices) {
         ([group, choices]) => `[${JSON.stringify(group)}]: Object.freeze(${JSON.stringify(choices)} as const)`).join(',')}});\n`;
 }
 output.set('src/common/generated/domainChoices.ts', choiceSource);
+// Preserve the existing shared identity-policy module and browser boundary;
+// credential limits and stored-name bounds both derive from their authored schema.
 output.set('src/common/generated/passwordPolicy.ts', banner
-    + `export const newPasswordPolicy = Object.freeze(${JSON.stringify(newPasswordPolicy)} as const);\n`);
+    + `export const newPasswordPolicy = Object.freeze(${JSON.stringify(newPasswordPolicy)} as const);\n`
+    + `export const identityNamePolicy = Object.freeze(${JSON.stringify(identityNamePolicy)} as const);\n`);
 const headerValidatorNames = new Map();
 // Every dispatch uses the strict request graph, even when the bundler selected
 // an explicitly response-only alias as the body's canonical exported name.

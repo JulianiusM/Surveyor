@@ -62,9 +62,9 @@ const source: FrontendListCreationSource<components['schemas']['PackingDuplicate
         created="packing.created" leave-unknown="packing.leaveUnknown" creation-unknown="packing.creationUnknown" :source="source">
         <template #default="{pending}">
             <div class="mb-3">
-                <label class="form-label"
+                <span class="form-label d-inline-block"
                     ><i class="bi bi-list-ul me-1" aria-hidden="true"></i
-                    >{{ messages.t('packing.itemsToPack') }}</label
+                    >{{ messages.t('packing.itemsToPack') }}</span
                 >
                 <div class="table-responsive">
                     <table class="table table-dark table-striped table-bordered align-middle packing-creation-items">

@@ -14,32 +14,41 @@
  * limitations under the License.
  */
 
-import {projectEntityEventOption, readAuthorizedEventUrl} from '../modules/event/linkage';
-import {withListRootLock, getLockedListAssignment, insertListAssignment, withListCreationTransaction} from '../modules/database/services/ListService';
-import {readListItemEditBaseline, readListHeaderBaseline, readListHeaderPath, listHeaderToken, readListMetadata, readListDescription, readListOrderBaseline, readListSettings, listMetadataResult, listPermissions, authorizeListRead, listItemPermissions, listHeaderProjection, mayOpenListSettings, listSettingsToken, assertListContext} from './entityAdminController';
-import {readEntityDefaultsBaseline, updateEntityDefaults, readEntityAdministratorBaseline, updateEntityAdministrator} from './entityAdminController';
-import {updateListItem, deleteListItem, reorderListItems, requireListAssignmentHandle, deleteListAssignment} from './entityAdminController';
-import type {ListItemCommandOperations} from '../../types/EntityPropertyTypes';
-
-import {authorizeEventLink, readEventLinkSelection} from '../modules/event/linkage';
-
+import {
+    projectEntityEventOption, readAuthorizedEventUrl, authorizeEventLink, readEventLinkSelection,
+    changeEntityEvent, getEntityViewAdmission,
+} from '../modules/event/linkage';
+import {withListRootLock, getLockedListAssignment, withListCreationTransaction} from '../modules/database/services/ListService';
+import {applyListMembership} from '../modules/lists/membership';
+import {saveListMetadata, listMetadataResult, listPermissions, assertListContext,
+    listDescriptionBaseline, mayEditListMetadataField} from '../modules/lists/metadata';
+import {
+    readListItemEditBaseline, readListHeaderBaseline, readListHeaderPath, listHeaderToken,
+    readListMetadata, readListDescription, readListOrderBaseline, readListSettings,
+    authorizeListRead, listItemPermissions,
+    listHeaderProjection, mayOpenListSettings, listSettingsToken,
+    readEntityDefaultsBaseline, updateEntityDefaults, readEntityAdministratorBaseline, updateEntityAdministrator,
+    updateListItem, deleteListItem, reorderListItems, requireListAssignmentHandle, deleteListAssignment,
+    searchEntityProfiles, completeDefaults, normalizeBasicProperties, entityCreationPermissionContext,
+} from './entityAdminController';
+import type {
+    ListItemCommandOperations, EntityMutationOutcome, ListReadOperations,
+} from '../../types/EntityPropertyTypes';
 
 import {hasAccountProfile} from './userController';
 import {Request} from "express";
 import type {EntityManager} from 'typeorm';
 import {comparisonToken, comparisonActor, requireFieldComparison, entityTag} from '../modules/api/transport';
-import {searchEntityProfiles, completeDefaults, normalizeBasicProperties, entityCreationPermissionContext} from './entityAdminController';
-import {assertEntityPropertyContext, changeEntityEvent, getEntityViewAdmission} from '../modules/event/linkage';
 import {classifyArchiveCommandError, archiveEntity, restoreEntity} from '../modules/entityArchival';
-import {entityPropertyPermission, entityMethodPermission} from '../modules/permissionEngine';
+import {
+    entityMethodPermission, saveDefaultPermsFromBody, evaluateSubject, isOwner,
+} from '../modules/permissionEngine';
 
 import type {components} from '../../types/api/v1';
-import type {PermissionFieldRule, PermEngineCaches, PermView} from '../../types/PermissionTypes';
+import type {PermissionFieldRule, PermEngineCaches, PermView, SessionLike} from '../../types/PermissionTypes';
 import type {LockedArchiveContext} from '../../types/ArchiveTypes';
 
 import type {Event} from '../modules/database/entities/event/Event';
-import type {DriversAssignment} from '../modules/database/entities/drivers/DriversAssignment';
-import type {BasicEntityPropertyPatch, EntityMutationOutcome, ListReadOperations} from '../../types/EntityPropertyTypes';
 import Joi from 'joi';
 import {DriversItem} from "../modules/database/entities/drivers/DriversItem";
 import {DriversList} from "../modules/database/entities/drivers/DriversList";
@@ -50,11 +59,8 @@ import * as adminService from '../modules/database/services/EntityAdminService';
 
 import {ApiProblem} from '../modules/api/problem';
 import {APIError, ValidationError} from '../modules/lib/errors';
-import {performImageSwap} from "../modules/lib/fileCommons";
-import {checkNewImage, removeImage} from '../modules/lib/fileCommons';
+import {performImageSwap, checkNewImage, removeImage} from "../modules/lib/fileCommons";
 import {ENTITIES, generateUniqueId, sameUuid, uuidKey, groupByUuid, countListItems} from '../modules/lib/util';
-import {saveDefaultPermsFromBody, evaluateSubject, isOwner} from "../modules/permissionEngine";
-import {SessionLike} from "../../types/PermissionTypes";
 import type {EntityBase} from "../../types/UserTypes";
 import type {DriversCommandPreparation, DriversMethod} from '../../types/DriversTypes';
 
@@ -143,7 +149,7 @@ async function deleteEntity(list: DriversList, session: SessionLike, manager?: E
 // ---------- API ----------
 // API-specific controllers
 async function updateDescription(id: string, body: any, expectedEventId?: string | null) {
-    await saveDriversMetadata(id, normalizeBasicProperties({description: body.description}), {kind: 'direct', expectedEventId});
+    await saveListMetadata('drivers', id, normalizeBasicProperties({description: body.description}), {kind: 'direct', expectedEventId});
     return 'Description updated';
 }
 
@@ -228,24 +234,24 @@ function getAssignmentAccessMapping() {
 
 /** Direct removal retains its original unlocked desired-membership deletion. */
 async function unassignItem(body: any, profileId: string): Promise<void> {
-    await applyDriversMembership(body.itemId, profileId, false);
+    await applyListMembership('drivers', body.itemId, profileId, false);
 }
 
 /**
- * Assignment policy belongs to the controller. Check the locked DB snapshot in this order:
+ * Admit the direct item before its shared feature operation checks the locked snapshot:
  * absence is a 404, an existing assignment is an idempotent retry, then capacity constrains
  * a new assignment. The DBAL keeps the item lock until the approved insertion commits.
  */
 async function assignItem(itemId: string, profileId: string): Promise<void> {
     await driverService.withDriversAssignmentLock(itemId, profileId, async function assignLocked(manager, item, existing, count) {
         if (!item) throw new APIError('Drivers item not found', {itemId}, 404);
-        await applyDriversMembership(itemId, profileId, true, {manager, item, existing, count});
+        await applyListMembership('drivers', itemId, profileId, true, {manager, item, existing, count});
     });
 }
 
 /** Normalize all submitted fields before acquiring a lock; omitted fields remain unchanged. */
 async function updateProperties(entity: EntityBase, body: unknown) {
-    await saveDriversMetadata(entity.id, normalizeBasicProperties(body), {kind: 'direct', expectedEventId: entity.eventId ?? null});
+    await saveListMetadata('drivers', entity.id, normalizeBasicProperties(body), {kind: 'direct', expectedEventId: entity.eventId ?? null});
     return 'Properties updated';
 }
 
@@ -322,12 +328,6 @@ function mayEditItemField(permissions: PermView, field: keyof components['schema
     return mayPerformDriversMethod(permissions, itemFieldMethods[field]);
 }
 
-/** Root property fields retain the existing entity-property policy; an item
- * grant or description-only method never broadens the mixed property adapter. */
-function mayEditMetadataField(permissions: PermView, field: keyof components['schemas']['DriversMetadataPatch']): boolean {
-    return permissions.has(entityPropertyPermission('drivers', field)!);
-}
-
 /** Require the already admitted actor; this module never re-reads a mutable Express session. */
 function actorId(session: SessionLike): string {
     if (!session.profile?.id) throw new ApiProblem('AUTH_REQUIRED');
@@ -400,8 +400,8 @@ export async function readDriversList(id: string, session: SessionLike) {
             inheritedArchived: Boolean(list.event?.archivedAt),
 
             capabilities: {
-                editTitle: mayEditMetadataField(permissions, 'title'),
-                editDescription: mayEditMetadataField(permissions, 'description'),
+                editTitle: mayEditListMetadataField('drivers', permissions, 'title'),
+                editDescription: mayEditListMetadataField('drivers', permissions, 'description'),
                 selfAssign: mayPerformDriversMethod(permissions, 'selfAssignment'),
                 addItem: mayPerformDriversMethod(permissions, 'addItem'),
                 reorder: mayPerformDriversMethod(permissions, 'reorderItems'),
@@ -417,12 +417,12 @@ export async function readDriversList(id: string, session: SessionLike) {
 }
 
 /** Supply only the feature's existing snapshot, method and comparison owners. */
-const driversListReadOperations: ListReadOperations<DriversList, DriversItem, ReturnType<typeof descriptionBaseline>> = {
+const driversListReadOperations: ListReadOperations<DriversList, DriversItem, components['schemas']['EntityDescriptionBaseline']> = {
     withSnapshot: driverService.withDriversReadSnapshot,
     requireRoot: requireList,
     requireProfile: actorId,
     mayPerform: mayPerformDriversMethod,
-    descriptionBaseline,
+    descriptionBaseline: (list, session) => listDescriptionBaseline('drivers', list, session),
     items: driverService.getDriversSnapshotItems,
     orderToken: orderEditToken,
 };
@@ -458,14 +458,7 @@ export async function readDriversItemOrderBaseline(id: string, session: SessionL
 export async function patchDriversMetadata(id: string, patch: components['schemas']['DriversMetadataPatch'], ifMatch: string | undefined, session: SessionLike,
     prepare?: DriversCommandPreparation<ReturnType<typeof listMetadataResult<'drivers'>>>) {
     actorId(session);
-    return saveDriversMetadata(id, patch, {kind: 'versioned', ifMatch, session, prepare});
-}
-
-/** The description method has its own EDIT_DESC grant, independent of
- * principal-only root properties. Its baseline discloses that field alone. */
-function descriptionBaseline(list: DriversList, session: SessionLike): components['schemas']['DriversDescriptionBaseline'] {
-    const description = list.description ?? null;
-    return {description, editToken: comparisonToken('drivers-meta', list.id, session, {description})};
+    return saveListMetadata('drivers', id, patch, {kind: 'versioned', ifMatch, session, prepare});
 }
 
 /** Read only the independently granted description in a coherent snapshot.
@@ -479,111 +472,7 @@ export async function readDriversDescription(id: string, session: SessionLike): 
  * forward another root property when a future caller supplies a wider object. */
 export async function patchDriversDescription(id: string, patch: components['schemas']['DriversDescriptionPatch'], ifMatch: string | undefined, session: SessionLike,
     prepare?: DriversCommandPreparation<components['schemas']['DriversDescriptionBaseline']>) {
-    return saveDriversMetadata(id, {description: patch.description}, {kind: 'description', ifMatch, session, prepare});
-}
-
-// These adapter contexts stay private to the metadata owner. Naming each branch
-// keeps overloads readable without exposing persistence/admission details as a shared contract.
-type DirectMetadataContext = {
-    kind: 'direct';
-    expectedEventId?: string | null;
-};
-
-type VersionedMetadataContext = {
-    kind: 'versioned';
-    ifMatch?: string;
-    session: SessionLike;
-    prepare?: DriversCommandPreparation<ReturnType<typeof listMetadataResult<'drivers'>>>;
-};
-
-type DescriptionMetadataContext = {
-    kind: 'description';
-    ifMatch?: string;
-    session: SessionLike;
-    prepare?: DriversCommandPreparation<components['schemas']['DriversDescriptionBaseline']>;
-};
-
-type MetadataContext = DirectMetadataContext | VersionedMetadataContext | DescriptionMetadataContext;
-
-/**
- * One metadata operation serves both adapters. Direct entry points already apply the shared
- * property/method policy and retain their captured-parent check and root-only lock.
- * Versioned JSON adds current field grants, reviewed values and parent locks. Neither
- * adapter owns an independent property write or changes the other's wire contract.
- */
-async function saveDriversMetadata(
-    id: string,
-    patch: BasicEntityPropertyPatch,
-    context: DirectMetadataContext
-): Promise<void>;
-async function saveDriversMetadata(
-    id: string,
-    patch: components['schemas']['DriversMetadataPatch'],
-    context: VersionedMetadataContext
-): Promise<ReturnType<typeof listMetadataResult<'drivers'>>>;
-async function saveDriversMetadata(
-    id: string,
-    patch: components['schemas']['DriversDescriptionPatch'],
-    context: DescriptionMetadataContext
-): Promise<components['schemas']['DriversDescriptionBaseline']>;
-/** Retain direct root-only context checks and versioned parent/root admission.
- * Sparse writes follow current field comparisons; requested versioned receipts are prepared
- * on this transaction before its commit, including description-only responses. */
-async function saveDriversMetadata(
-    id: string,
-    patch: BasicEntityPropertyPatch,
-    context: MetadataContext
-): Promise<void | ReturnType<typeof listMetadataResult<'drivers'>> | components['schemas']['DriversDescriptionBaseline']> {
-    /** Interpret the caller's locked root once, then persist only its normalized
-     * sparse command. Each adapter retains its own admission/diagnostic boundary. */
-    async function persistMetadata(manager: EntityManager, row: DriversList | null) {
-        let permissions: PermView | undefined;
-        if (context.kind === 'direct') {
-            assertEntityPropertyContext(row, context.expectedEventId);
-        } else {
-            const list = requireList(row);
-            // Independently granted actions never require detail-page admission.
-            // Field grants bound metadata projections; the description adapter
-            // carries only its single independently authorized method field.
-            permissions = await listPermissions('drivers', manager, list, context.session);
-            if (context.kind === 'description') {
-                if (!mayPerformDriversMethod(permissions, 'editDescription')) throw new ApiProblem('FORBIDDEN');
-                requireFieldComparison(context.ifMatch, descriptionBaseline(list, context.session).editToken, ['description']);
-            } else {
-                for (const field of Object.keys(patch) as (keyof typeof patch)[]) {
-                    if (!mayEditMetadataField(permissions, field)) throw new ApiProblem('FORBIDDEN');
-                }
-                requireFieldComparison(context.ifMatch, listMetadataResult('drivers', list, permissions, context.session).etag, Object.keys(patch));
-            }
-        }
-
-        // All selected checks precede this write. Versioned responses reload on
-        // the same manager and run their fallible transport preparer before commit.
-        await driverService.updateDriversListProperties(id, patch, manager);
-        if (context.kind !== 'direct') {
-            const saved = requireList(await driverService.getDriversSnapshotRoot(manager, id));
-            if (context.kind === 'description') {
-                const result = descriptionBaseline(saved, context.session);
-                context.prepare?.(result);
-                return result;
-            }
-            const result = listMetadataResult('drivers', saved, permissions!, context.session);
-            context.prepare?.(result);
-            return result;
-        }
-    }
-
-    // Keep direct root-only coordination distinct from the versioned parent/root
-    // path; neither adapter gains the other's admission contract.
-    if (context.kind === 'direct') return withListRootLock('drivers', id, persistMetadata);
-
-    /** The DBAL acquired parents before the root. Reject a changed relationship
-     * before passing that same transaction into the shared metadata operation. */
-    async function updateLocked(manager: EntityManager, locked: LockedArchiveContext) {
-        assertListContext(locked);
-        return persistMetadata(manager, await driverService.getDriversSnapshotRoot(manager, id));
-    }
-    return lifecycleService.withLockedArchiveTarget({type: 'drivers', id}, updateLocked);
+    return saveListMetadata('drivers', id, {description: patch.description}, {kind: 'description', ifMatch, session, prepare, mayPerform: mayPerformDriversMethod});
 }
 
 /**
@@ -605,38 +494,12 @@ export async function setDriversSelfAssignment(listId: string, itemId: string, a
         // shared idempotency/capacity policy to that same assignment snapshot.
         const {item, existing, count} = await getLockedListAssignment('drivers', manager, itemId, profileId);
         if (!item || !sameUuid(item.entityId, list.id)) throw new ApiProblem('NOT_FOUND');
-        const assignedCount = await applyDriversMembership(item.id, profileId, assigned, {manager, item, existing, count}, 'versioned');
+        const assignedCount = await applyListMembership('drivers', item.id, profileId, assigned, {manager, item, existing, count}, 'versioned');
         const result = {listId: list.id, itemId: item.id, selfAssigned: assigned, assignedCount, maxAssignees: item.maxAssignees ?? null};
         prepare?.(result);
         return result;
     }
     return lifecycleService.withLockedArchiveTarget({type: 'drivers', id: listId}, assignLocked);
-}
-
-/**
- * Both assignment adapters apply the same membership/capacity decision under their
- * actual item lock. Direct unassignment retains its original unlocked DELETE.
- * Existing membership is checked before capacity so a successful retry stays valid when full.
- * Historical nullable capacity remains unrestricted, matching the original offer policy.
- */
-async function applyDriversMembership(itemId: string, profileId: string, assigned: boolean,
-    snapshot?: {manager: EntityManager; item: DriversItem; existing: DriversAssignment | null; count: number},
-    transport: 'direct' | 'versioned' = 'direct'): Promise<number> {
-    if (!assigned) {
-        // DELETE removes every historical duplicate membership. The direct adapter
-        // ignores the count; v1 projects the count from its current locked snapshot.
-        const removed = await driverService.unassignDriversItem(itemId, profileId, snapshot?.manager);
-        return (snapshot?.count ?? removed) - removed;
-    }
-
-    const {manager, item, existing, count} = snapshot!;
-    if (existing) return count;
-    if (typeof item.maxAssignees === 'number' && count >= item.maxAssignees) {
-        if (transport === 'versioned') throw new ApiProblem('DRIVERS_ITEM_FULL', {itemId});
-        throw new APIError('This driver offer is already full', {itemId}, 409);
-    }
-    await insertListAssignment('drivers', itemId, profileId, manager);
-    return count + 1;
 }
 
 /**
@@ -990,7 +853,7 @@ export async function changeDriversEvent(
          * compare only this actor's reviewed association inside those same locks. */
         async function validateContext(manager: EntityManager): Promise<void> {
             const current = requireList(await driverService.getDriversSnapshotRoot(manager, id));
-            const permissions = await listPermissions('drivers', manager, current, session);
+            await listPermissions('drivers', manager, current, session);
             requireFieldComparison(token, await listSettingsToken('drivers', manager, current, session), ['eventId']);
         }
 

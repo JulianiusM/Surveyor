@@ -85,6 +85,27 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
 }
 
 describe('profile administration consumers', () => {
+    it.each(['create', 'edit'] as const)('retains overlong %s drafts and admits the shared code-point boundary', async mode => {
+        const {wrapper, request} = await mounted(mode === 'create' ? '/users/profile/create' : '/users/profile', async input => {
+            if (input.method === 'POST' || input.method === 'PATCH') return json({changed: true});
+            if (new URL(input.url).pathname === '/api/v1/session') return json(session);
+            return json(mode === 'create' ? {profiles: [profile], activeProfileId: profileId} : profile);
+        });
+        const field = wrapper.get<HTMLInputElement>('#name');
+        expect(field.attributes('maxlength')).toBeUndefined();
+        await field.setValue('😀'.repeat(51));
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(request.mock.calls.map(([input]) => input as Request).filter(input => input.method !== 'GET')).toHaveLength(0);
+        expect(field.element.value).toBe('😀'.repeat(51));
+        await field.setValue('😀'.repeat(50));
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        const writes = request.mock.calls.map(([input]) => input as Request).filter(input => input.method === 'POST' || input.method === 'PATCH');
+        expect(writes).toHaveLength(1);
+        expect(await writes[0].clone().json()).toMatchObject({name: '😀'.repeat(50)});
+    });
+
     it.each(['account', 'guest'] as const)('offers profile deactivation only to its account owner (%s)', async kind => {
         const {wrapper, request} = await mounted('/users/profile', async () => json(profile), {kind: 'render'}, {...session, kind});
         expect(wrapper.find('a[href="/users/profile/delete"]').exists()).toBe(kind === 'account');

@@ -1,8 +1,8 @@
-import {searchEntityEvents} from '../modules/event/linkage';
+import {
+    searchEntityEvents, readEventLinkSelection, getEntityViewAdmission,
+} from '../modules/event/linkage';
 
-import {readEventLinkSelection} from '../modules/event/linkage';
 import * as controller from '../controller/driversController';
-import {getEntityViewAdmission} from '../modules/event/linkage';
 
 import * as service from '../modules/database/services/DriverService';
 import type {DriversList} from '../modules/database/entities/drivers/DriversList';

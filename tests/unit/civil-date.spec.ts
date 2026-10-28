@@ -1,11 +1,25 @@
 import {spawnSync} from 'node:child_process';
 import {resolve} from 'node:path';
 import {describe, expect, it} from 'vitest';
-import {addCivilDays, civilDateWeeks, formatCivilDate} from '../../src/common/lib/civilDate';
+import {addCivilDays, civilDateWeeks, civilDateWindow, formatCivilDate} from '../../src/common/lib/civilDate';
+import {activityCreationWeeks} from '../../src/frontend/features/activity/presentation';
 import {countInclusiveDays} from '../../src/common/activity/requirements';
 import {formatEventCivilDate, formatEventDate, formatEventTimestamp} from '../../src/frontend/features/event/presentation';
 
 describe('shared civil calendar presentation', () => {
+    it('bounds a centuries-long saved calendar before day allocation and rejects oversized creation previews', () => {
+        const first = civilDateWindow('1000-01-01', '9999-12-31', 366);
+        expect(first).toMatchObject({startDate: '1000-01-01', endDate: '1000-02-11', previous: null,
+            next: '1000-02-12', oversized: true, maxDurationDays: 366});
+        expect(civilDateWeeks(first.startDate, first.endDate).flatMap(week => week.days)).toHaveLength(42);
+        const final = civilDateWindow('1000-01-01', '9999-12-31', 366, '9999-12-31');
+        expect(final).toMatchObject({startDate: '9999-12-31', endDate: '9999-12-31', next: null});
+        expect(civilDateWindow('1000-01-01', '9999-12-31', 366, 'invalid')).toEqual(first);
+        expect(activityCreationWeeks('1000-01-01', '9999-12-31', 366)).toEqual([]);
+        expect(activityCreationWeeks('2032-01-01', '2032-12-31', 366).flat()).toHaveLength(366);
+        expect(activityCreationWeeks('2032-01-01', '2032-12-31', 100)).toEqual([]);
+        expect(countInclusiveDays('1000-01-01', '9999-12-31')).toBe(3_287_182);
+    });
     it.each([
         ['2032-02-28', 1, '2032-02-29'], ['2032-02-29', 1, '2032-03-01'],
         ['2027-12-31', 1, '2028-01-01'], ['2027-03-28', 1, '2027-03-29'],

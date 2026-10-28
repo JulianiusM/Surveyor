@@ -193,3 +193,5 @@ export interface BaselineSlotInput {
     maxAssignees?: number | null;
     roles?: HypotheticalRoleCapacity[];
 }
+/** Read-only requirement collections use independent, bounded pages on oversized plans. */
+export type RequirementPageSection = 'stays' | 'roles' | 'overrides';

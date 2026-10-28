@@ -3,7 +3,6 @@ import {computed, onBeforeUnmount, ref, shallowRef, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
 import {useActionState, useFrontend} from '../../app/context';
 import {identityAdministrationKeys} from '../../app/queryKeys';
-import {ObsoleteRequestError} from '../../app/transport';
 import {useCommand} from '../../composables/command';
 import {completeIdentityEntry, useConfirmedNavigation, usePageEntry} from '../../composables/pageEntry';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';

@@ -18,8 +18,10 @@ import {Request} from "express";
 import crypto from 'node:crypto';
 import {v4 as uuidv4} from 'uuid';
 import type {DashboardEntities, Entity, EntityBase} from "../../../types/UserTypes";
-import type {EntityItemType, EntityType} from "../../../types/UtilTypes";
-import type {InvoiceCostInput, InvoiceAdjustmentInput, InvoiceCostTotals, ListCounterItem, ListCounterAssignee} from '../../../types/UtilTypes';
+import type {
+    EntityItemType, EntityType, InvoiceCostInput, InvoiceAdjustmentInput, InvoiceCostTotals, ListCounterItem,
+    ListCounterAssignee,
+} from "../../../types/UtilTypes";
 import settings from "../settings";
 import {addCivilDays} from '../../../common/lib/civilDate';
 import type {EventRegistration} from '../database/entities/event/EventRegistration';

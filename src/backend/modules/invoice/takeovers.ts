@@ -19,11 +19,12 @@ import type {EntityManager} from 'typeorm';
 import type {EventInvoicePool} from '../database/entities/event/EventInvoicePool';
 import * as invoiceService from '../database/services/EventInvoiceService';
 import {APIError} from '../lib/errors';
-import {requireLockedPool, assertLockedParticipant, savePoolChange} from './state';
-import type {InvoiceTakeoverChange, InvoiceTakeoverSaveResult} from '../../../types/InvoicePoolTypes';
+import {requireLockedPool, assertLockedParticipant, savePoolChange, withInvoicePoolOperation} from './state';
+import type {InvoiceTakeoverChange, InvoiceTakeoverSaveResult, InvoiceManagementContext} from '../../../types/InvoicePoolTypes';
 
 /** Serialize coverage decisions so concurrent requests cannot assign the same beneficiary twice. */
-export async function savePoolTakeovers(poolId: string, payerRegistrationId: number, beneficiaryIds: number[], allowReassign: boolean): Promise<InvoiceTakeoverSaveResult> {
+export async function savePoolTakeovers(poolId: string, payerRegistrationId: number, beneficiaryIds: number[],
+    allowReassign: boolean, management?: InvoiceManagementContext): Promise<InvoiceTakeoverSaveResult> {
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
     async function updateLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<InvoiceTakeoverSaveResult> {
         // Read current coverage under the root lock so competing edits cannot claim the same beneficiary.
@@ -75,5 +76,5 @@ export async function savePoolTakeovers(poolId: string, payerRegistrationId: num
         if (added.length || removed.length) await savePoolChange(manager, pool);
         return {added, removed, applied: pool.status !== 'CLOSED'};
     }
-    return invoiceService.withLockedPool(poolId, updateLocked);
+    return withInvoicePoolOperation(poolId, updateLocked, management);
 }

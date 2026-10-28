@@ -248,8 +248,8 @@ export function createFrontendContext(bootstrap: FrontendBootstrap, browser: boo
      * read's terminal rejection policy through session checks; explicit Retry uses
      * mayRead instead and can deliberately recover the same observed query. */
     function mayObserve(key: readonly unknown[], firstRead = false): boolean {
-        // QueryClient remains the source of this endpoint's current failure state.
-        queryStateRevision.value;
+        // Track cache changes without mirroring QueryClient's current failure state.
+        void queryStateRevision.value;
         const state = queryClient.getQueryState(key);
         return mayRead() && (firstRead || state?.fetchStatus === 'fetching' || !isTerminalReadFailure(state?.error));
     }

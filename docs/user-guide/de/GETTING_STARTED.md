@@ -6,8 +6,8 @@ owner: identity feature maintainers
 status: current
 last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved registration/reset password requirements and standalone guest recovery reconciled with current source; other article topics retain their prior review scope
-source-anchors: src/backend/controller/userController.ts; src/common/locales/de.json; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/identity/; src/frontend/components/CommandFeedback.vue; src/common/locales/; src/frontend/; src/backend/controller/helpController.ts
+verification-scope: approved shared name bounds, temporary identity-request waits and provider-account deletion completion reconciled with current German forms and messages; prior password/recovery guidance retained
+source-anchors: src/backend/controller/userController.ts; src/backend/modules/identity.ts; contracts/api/v1/auth.yaml; src/backend/middleware/identityAdmission.ts; src/common/locales/de.json; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/identity/; src/frontend/components/CommandFeedback.vue; src/common/locales/; src/frontend/; src/backend/controller/helpController.ts
 heading-anchors: 1:getting-started-with-surveyor; 2:find-your-task; 2:choose-how-to-enter-surveyor; 2:create-and-activate-a-local-account; 3:activation-link-problems; 2:sign-in-with-an-organization-account; 2:log-in-to-a-local-account; 3:reset-a-local-password; 2:join-an-invitation-as-a-guest; 3:when-the-email-already-has-guest-accounts; 3:what-a-guest-account-can-do; 2:recover-guest-access-by-email; 2:understand-accounts-and-profiles; 2:edit-the-active-profile; 2:create-or-switch-profiles-on-a-full-account; 3:create-another-profile; 3:switch-profiles; 2:move-a-profile-to-another-full-account; 3:obtain-the-token-from-the-profile-being-moved; 3:complete-the-migration-in-the-receiving-account; 2:deactivate-a-profile-or-delete-an-account; 3:deactivate-one-profile-on-a-full-account; 3:delete-a-full-or-guest-account; 2:troubleshooting; 3:i-do-not-see-local-registration-or-password-fields; 3:local-login-says-the-account-is-not-activated; 3:i-requested-a-password-reset-but-received-no-email; 3:i-requested-guest-access-but-received-no-email; 3:my-overview-does-not-show-the-item-i-expected; 3:a-migration-token-is-rejected; 2:next-steps
 next-review: identity-or-authentication-visible-behavior-change
 -->
@@ -44,6 +44,11 @@ Du kannst einer Einladung auch als **Gast** folgen. Gäste setzen kein Passwort 
 
 Die angezeigten Seiten hängen von der Konfiguration dieser Installation ab. **Anmelden** oder **Registrieren** kann lokale Kontofelder, eine Schaltfläche zur Organisationsanmeldung, beides oder sofort die Anmeldeseite der Organisation öffnen.
 
+Namen für die lokale Registrierung, den Gastzugang sowie neue oder umbenannte Profile dürfen höchstens 50
+Unicode-Codepunkte enthalten. Ein Buchstabe und ein separat eingegebener kombinierender Akzent zählen als zwei;
+ein mehrteiliges Emoji kann mehrere zählen. Kürze einen zu langen Namen vor dem Absenden im Formular. Surveyor kürzt
+diese eingegebenen Namen nicht stillschweigend.
+
 ## Lokales Konto erstellen und aktivieren
 
 Diese Schritte gelten, wenn **Registrieren** Felder für Benutzername, E-Mail und Passwort zeigt.
@@ -79,6 +84,9 @@ Diese Schritte gelten, wenn Surveyor **Mit _Anbietername_ anmelden** zeigt oder 
 4. Nach der Rückkehr öffnet Surveyor **Deine Übersicht** mit dem aktiven Profil.
 
 Die erste erfolgreiche Anmeldung beim Anbieter erstellt ein aktives Surveyor-Konto und Profil, falls noch keines vorhanden ist. Liefert der Anbieter eine E-Mail-Adresse, die bereits ein Surveyor-Konto verwendet, kann Surveyor die Anbieteridentität stattdessen mit diesem Konto verbinden.
+
+Bei einem neu erstellten Konto wird ein langer Anzeigename des Anbieters auf die ersten 50 Unicode-Codepunkte gekürzt.
+Spätere Anmeldungen beim Anbieter ersetzen keinen bestehenden Konto- oder Profilnamen.
 
 Die Zugangsdaten dieser Methode verwaltet der externe Anbieter. Nutze dessen Kontowiederherstellung statt **Passwort vergessen?** in Surveyor.
 
@@ -254,9 +262,19 @@ Ein Gastkonto enthält nur ein Profil und verwendet diesen Mehrprofil-Deaktivier
 
 Das Löschen eines vollständigen Kontos schließt es und deaktiviert alle zugehörigen Profile. Das Löschen eines Gastkontos schließt diese Gastidentität und deaktiviert ihr einziges Profil. Surveyor kann dies nicht rückgängig machen. Bisherige Teilnahmen können sichtbar bleiben, soweit gemeinsame Gruppendatensätze sie benötigen.
 
+Warte auf die Löschbestätigung. Bestätigt sie die Löschung, meldet aber eine unbestätigte Bestätigungs-E-Mail oder
+Abmeldung beim Organisationsanbieter, sind die Löschung und lokale Abmeldung in Surveyor trotzdem abgeschlossen.
+Wiederhole die Löschung nicht; melde dich bei Bedarf beim Anbieter separat ab. Folge den Wiederherstellungshinweisen
+der Seite, wenn das Ergebnis unklar bleibt.
+
 Das Löschen eines Surveyor-Kontos mit Organisationsanmeldung löscht nicht das Konto beim externen Identitätsanbieter. Eine erneute Anmeldung erstellt oder verbindet ein Surveyor-Konto, stellt aber keine zuvor deaktivierten Profile wieder her.
 
 ## Probleme lösen
+
+Nach wiederholten Anmelde-, Registrierungs-, Gastzugangs- oder Wiederherstellungsanfragen kann Surveyor dich vorübergehend
+zum Warten auffordern. Warte bis zum angegebenen Zeitpunkt und versuche es dann bewusst erneut; die Anfrage wird nicht
+für später vorgemerkt. Ein anderer Benutzername, eine andere E-Mail oder ein anderes Passwort setzt eine gemeinsame
+Anmeldewartezeit nicht zurück. Auch andere Personen im selben Netzwerk können zu dieser vorübergehenden Grenze beitragen.
 
 ### Ich sehe keine lokale Registrierung oder Passwortfelder
 

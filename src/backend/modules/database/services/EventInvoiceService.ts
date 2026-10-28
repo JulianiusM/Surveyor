@@ -29,6 +29,7 @@ import {EventRegistration} from "../entities/event/EventRegistration";
 import {Profile} from "../entities/user/Profile";
 import {InvoiceProofFile} from '../entities/event/InvoiceProofFile';
 import type {InvoiceProofOperation} from '../../../../types/InvoiceProofTypes';
+import {lockEvent} from './EventService';
 
 /** Load the pool and its relation collections from one repeatable-read database snapshot. */
 async function loadPool(poolId: string) {
@@ -59,9 +60,14 @@ async function loadPool(poolId: string) {
 export async function withLockedPool<T>(
     poolId: string,
     operation: (manager: EntityManager, pool: EventInvoicePool | null) => Promise<T>,
+    eventId?: string,
 ): Promise<T> {
     /** Retain the root lock throughout the caller's checks and writes. */
     async function runLocked(manager: EntityManager): Promise<T> {
+        // Management callers retain the Event fence before waiting for the pool.
+        // Matching ACL/default writers use that same row until this commit;
+        // the feature callback still owns absence, scope and grant decisions.
+        if (eventId) await lockEvent(manager, eventId);
         // Missing rows remain raw data: only the owning feature operation decides the context-specific error.
         const pool = await lockPool(manager, poolId);
         return operation(manager, pool);
@@ -357,6 +363,7 @@ export async function createPool(
     sendCalculationEmails = true,
     roundUpShares = true,
     status: InvoicePoolSubmissionState = 'OPEN',
+    manager?: EntityManager,
 ) {
     /** Insert the root before its explicit assignment rows; either both are saved or neither is. */
     async function persistCreation(manager: EntityManager) {
@@ -395,7 +402,7 @@ export async function createPool(
         return saved.id;
     }
     // The returned identifier belongs to a fully committed creation, including its assignment collection.
-    return AppDataSource.transaction("READ COMMITTED", persistCreation);
+    return manager ? persistCreation(manager) : AppDataSource.transaction("READ COMMITTED", persistCreation);
 }
 
 export async function getTakeovers(poolId: string, manager: EntityManager = AppDataSource.manager) {

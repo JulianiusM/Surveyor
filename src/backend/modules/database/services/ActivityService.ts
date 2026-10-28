@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-import type {AssignmentCandidate} from '../../../../types/ActivityTypes';
+import type {
+    AssignmentCandidate, ActivityCreationCompletion, ActivityPropertyPatch,
+} from '../../../../types/ActivityTypes';
+import type {CivilDateWindow} from '../../../../types/CivilDateTypes';
 
 
-import {EntityManager, In, Not} from "typeorm";
-import type {ActivityCreationCompletion, ActivityPropertyPatch} from "../../../../types/ActivityTypes";
+import {Between, EntityManager, In, Not} from "typeorm";
 
 import {toParticipantKey} from "../../../../common/activity/requirements";
 import {generateUniqueId, sameUuid, uuidKey} from "../../lib/util";
@@ -483,11 +485,12 @@ export async function addActivitySlots(planId: string, slots: Partial<ActivitySl
 }
 
 /** Read this plan's deterministically ordered slots and correlated assignment counts on the supplied manager. */
-export async function getActivitySlotsFlat(planId: string, manager: EntityManager = AppDataSource.manager) {
+export async function getActivitySlotsFlat(planId: string, manager: EntityManager = AppDataSource.manager,
+    window?: Pick<CivilDateWindow, 'startDate' | 'endDate'>) {
     const repo = manager.getRepository(ActivitySlot);
 
     // The scalar count avoids multiplying slot rows through an assignment join.
-    const {entities: slots, raw} = await repo
+    const query = repo
         .createQueryBuilder("s")
         .addSelect((qb) =>
                 qb.select("COUNT(*)")
@@ -499,8 +502,10 @@ export async function getActivitySlotsFlat(planId: string, manager: EntityManage
         .orderBy("s.day", "ASC")
         .addOrderBy("s.start_time IS NULL", "ASC")
         .addOrderBy("s.start_time", "ASC")
-        .addOrderBy("s.pos", "ASC")
-        .getRawAndEntities();
+        .addOrderBy("s.pos", "ASC");
+    // Restrict SQL before hydration; never load a multi-year schedule just to slice its projection.
+    if (window) query.andWhere('s.day BETWEEN :windowStart AND :windowEnd', {windowStart: window.startDate, windowEnd: window.endDate});
+    const {entities: slots, raw} = await query.getRawAndEntities();
 
     // Raw counts align with the ordered hydrated entities. MariaDB scalar
     // counts arrive as strings; this projection exposes their numeric value.
@@ -510,10 +515,10 @@ export async function getActivitySlotsFlat(planId: string, manager: EntityManage
     })) as (ActivitySlot & { assignedCount: number })[];
 }
 
-export async function getActivitySlots(planId: string) {
+export async function getActivitySlots(planId: string, window?: Pick<CivilDateWindow, 'startDate' | 'endDate'>) {
     // Type hint: (ActivitySlot & { assignedCount: number })[]
     // Group slots by day using reduce (Object.groupBy not available in Node.js 24)
-    const typedSlots = await getActivitySlotsFlat(planId);
+    const typedSlots = await getActivitySlotsFlat(planId, AppDataSource.manager, window);
     const grouped: Record<string, (ActivitySlot & { assignedCount: number })[]> = {};
 
     for (const slot of typedSlots) {
@@ -585,12 +590,14 @@ export async function getLastActivitySlotNumber(planId: string, date: string) {
 // Role-based assignment wrappers
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getActivitySlotAssignments(planId: string, profileId: string) {
+export async function getActivitySlotAssignments(planId: string, profileId: string,
+    window?: Pick<CivilDateWindow, 'startDate' | 'endDate'>) {
     const assignments = await AppDataSource.getRepository(ActivityAssignment).find({
         select: {
             item: true
         },
-        where: {entity: {id: planId}, profile: {id: profileId}},
+        where: {entity: {id: planId}, profile: {id: profileId},
+            ...(window ? {item: {day: Between(window.startDate, window.endDate)}} : {})},
         relations: {
             item: true
         }
@@ -644,16 +651,18 @@ export async function getActivitySlotAssignmentById(assignId: number) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Read this plan's raw assignment/profile/role rows on the caller's manager for business projections. */
-export async function getActivitySlotAssigneeRows(planId: string, manager: EntityManager = AppDataSource.manager): Promise<ActivityAssignment[]> {
+export async function getActivitySlotAssigneeRows(planId: string, manager: EntityManager = AppDataSource.manager,
+    window?: Pick<CivilDateWindow, 'startDate' | 'endDate'>): Promise<ActivityAssignment[]> {
     // Use QueryBuilder to avoid DISTINCT alias issues in MySQL/MariaDB when loading nested relations.
-    const assignments = await manager.getRepository(ActivityAssignment)
+    const query = manager.getRepository(ActivityAssignment)
         .createQueryBuilder('aa')
         .innerJoinAndSelect('aa.item', 'slot')
         .leftJoinAndSelect('aa.profile', 'profile')
         .leftJoinAndSelect('aa.activityAssignmentRoles', 'aar')
         .leftJoinAndSelect('aar.role', 'role')
-        .where('aa.entity_id = :planId', {planId})
-        .getMany();
+        .where('aa.entity_id = :planId', {planId});
+    if (window) query.andWhere('slot.day BETWEEN :windowStart AND :windowEnd', {windowStart: window.startDate, windowEnd: window.endDate});
+    const assignments = await query.getMany();
 
     return assignments;
 }
@@ -691,7 +700,8 @@ export async function countActivityPlanParticipants(planId: string, eventId: str
 /** Collect each stored participant's distinct nondefault role identifiers.
  * The caller's manager retains its snapshot; rows without a profile contribute
  * no identity, and eligibility rules remain outside this projection. */
-export async function getParticipantRolesForPlan(planId: string, manager: EntityManager = AppDataSource.manager): Promise<{
+export async function getParticipantRolesForPlan(planId: string, manager: EntityManager = AppDataSource.manager,
+    window?: Pick<CivilDateWindow, 'startDate' | 'endDate'>): Promise<{
     participantKey: string;
     roleIds: number[]
 }[]> {
@@ -699,7 +709,7 @@ export async function getParticipantRolesForPlan(planId: string, manager: Entity
     const assignments = await manager
         .getRepository(ActivityAssignment)
         .find({
-            where: {entity: {id: planId}},
+            where: {entity: {id: planId}, ...(window ? {item: {day: Between(window.startDate, window.endDate)}} : {})},
             relations: {
                 profile: true,
 
@@ -744,7 +754,7 @@ export async function deleteActivitySlotAssignment(assignId: number, manager: En
 /** Read configured slot-role quotas and their distinct named-role assignment counts.
  * The two queries retain their independent read scope; returned rows preserve the
  * quota query's order and the existing zero fallback for absent quantities/counts. */
-export async function getActivitySlotRoles(planId: string) {
+export async function getActivitySlotRoles(planId: string, window?: Pick<CivilDateWindow, 'startDate' | 'endDate'>) {
     // Avoid TypeORM's DISTINCT subquery on MySQL/MariaDB that can mis-alias primary keys
     // when using Repository.find with nested relations. Use an explicit QueryBuilder instead.
     const qb = AppDataSource.getRepository(ActivitySlotRole)
@@ -754,11 +764,12 @@ export async function getActivitySlotRoles(planId: string) {
         .innerJoin('slot.entity', 'plan')
         .where('plan.id = :planId', {planId});
 
+    if (window) qb.andWhere('slot.day BETWEEN :windowStart AND :windowEnd', {windowStart: window.startDate, windowEnd: window.endDate});
     const slotRoles = await qb.getMany();
 
     // Count distinct assignments per slot/nondefault role separately from quota
     // rows, so repeated role links do not multiply a slot's displayed occupancy.
-    const assignedRows: Array<{slotId: string; roleId: string; assignedQty: string}> = await AppDataSource
+    const assignmentQuery = AppDataSource
         .getRepository(ActivityAssignmentRole)
         .createQueryBuilder('assignmentRole')
         .innerJoin('assignmentRole.assignment', 'assignment')
@@ -770,8 +781,9 @@ export async function getActivitySlotRoles(planId: string) {
         .addSelect('assignedRole.id', 'roleId')
         .addSelect('COUNT(DISTINCT assignment.id)', 'assignedQty')
         .groupBy('slot.id')
-        .addGroupBy('assignedRole.id')
-        .getRawMany();
+        .addGroupBy('assignedRole.id');
+    if (window) assignmentQuery.andWhere('slot.day BETWEEN :windowStart AND :windowEnd', {windowStart: window.startDate, windowEnd: window.endDate});
+    const assignedRows: Array<{slotId: string; roleId: string; assignedQty: string}> = await assignmentQuery.getRawMany();
     // MariaDB counts arrive as text. Key both identifiers before joining these
     // counts to the configured quota rows without loading assignment profiles.
     const assignedBySlotRole = new Map(

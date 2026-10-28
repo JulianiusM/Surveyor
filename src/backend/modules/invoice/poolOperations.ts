@@ -23,15 +23,19 @@ import type {EventInvoice} from '../database/entities/event/EventInvoice';
 import * as invoiceService from '../database/services/EventInvoiceService';
 import {APIError} from '../lib/errors';
 import {resolveInvoiceAmount, toAmount} from '../lib/util';
-import type {InvoicePoolDistribution, InvoiceCalculationExplanation, InvoicePoolCalculationSnapshot, InvoiceSharePayload, InvoicePoolCalculationCommit, InvoicePoolSubmissionState, InvoiceSettledShareImpact} from '../../../types/InvoicePoolTypes';
-import {requireLockedPool, assertLockedParticipant, savePoolChange} from './state';
+import type {
+    InvoicePoolDistribution, InvoiceCalculationExplanation, InvoicePoolCalculationSnapshot, InvoiceSharePayload,
+    InvoicePoolCalculationCommit, InvoicePoolSubmissionState, InvoiceSettledShareImpact, InvoiceManagementContext,
+} from '../../../types/InvoicePoolTypes';
+import {requireLockedPool, assertLockedParticipant, savePoolChange, withInvoicePoolOperation} from './state';
 import {invoiceCents} from './validation';
 import {validateInvoiceFactor} from './distribution';
 import {collectSettledRegistrationIds, projectInvoiceShares} from './settlements';
 import {comparePoolTakeovers, invoiceAppliedTakeovers, invoiceHasAppliedTakeoverEvidence, invoiceSettledShareImpact} from './coverage';
 
 /** Update allocation settings under the pool lock, distinguishing notification-only changes. */
-export async function saveInvoicePoolSettings(poolId: string, distribution: InvoicePoolDistribution, description?: string, sendCalculationEmails?: boolean, roundUpShares?: boolean): Promise<void> {
+export async function saveInvoicePoolSettings(poolId: string, distribution: InvoicePoolDistribution, description?: string,
+    sendCalculationEmails?: boolean, roundUpShares?: boolean, management?: InvoiceManagementContext): Promise<void> {
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
     async function updateLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<void> {
         // The DBAL holds the root lock; decisions below use the current persisted pool state.
@@ -47,11 +51,12 @@ export async function saveInvoicePoolSettings(poolId: string, distribution: Invo
         if (roundUpShares !== undefined) pool.roundUpShares = roundUpShares;
         await savePoolChange(manager, pool, inputsChanged);
     }
-    await invoiceService.withLockedPool(poolId, updateLocked);
+    await withInvoicePoolOperation(poolId, updateLocked, management);
 }
 
 /** Change an uncalculated pool's independent submission-access state without replacing costs or allocations. */
-export async function savePoolSubmissionState(poolId: string, status: InvoicePoolSubmissionState, expectedRevision: number): Promise<void> {
+export async function savePoolSubmissionState(poolId: string, status: InvoicePoolSubmissionState, expectedRevision: number,
+    management?: InvoiceManagementContext): Promise<void> {
     /** Evaluate the submission transition while DBAL holds the same root lock used by invoice creation. */
     async function changeLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<void> {
         const pool = requireLockedPool(row);
@@ -63,12 +68,13 @@ export async function savePoolSubmissionState(poolId: string, status: InvoicePoo
         pool.status = status;
         await savePoolChange(manager, pool, false);
     }
-    await invoiceService.withLockedPool(poolId, changeLocked);
+    await withInvoicePoolOperation(poolId, changeLocked, management);
 }
 
 /** Validate current membership, retain factors, and prune only removed members’ allocation inputs. */
 export async function saveInvoicePoolAssignments(poolId: string, isDefault: boolean, assignAll: boolean, subtractPersonalInvoices: boolean,
-    allowedRegistrationIds: number[], exemptRegistrationIds: number[], participantFactors: Record<number, number> = {}): Promise<void> {
+    allowedRegistrationIds: number[], exemptRegistrationIds: number[], participantFactors: Record<number, number> = {},
+    management?: InvoiceManagementContext): Promise<void> {
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
     async function updateLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<void> {
         // The DBAL holds the root lock; decisions below use the current persisted pool state.
@@ -108,7 +114,7 @@ export async function saveInvoicePoolAssignments(poolId: string, isDefault: bool
         pool.subtractPersonalInvoices = subtractPersonalInvoices;
         await savePoolChange(manager, pool);
     }
-    await invoiceService.withLockedPool(poolId, updateLocked);
+    await withInvoicePoolOperation(poolId, updateLocked, management);
 }
 
 /** Identify newly restricted recorded payers from old and new applied evidence, never staged edits. */
@@ -134,7 +140,8 @@ function appliedSettledShareChanges(pool: EventInvoicePool, snapshot: InvoicePoo
 
 /** Save shares, active carried-settlement identity and provenance atomically, returning only actually applied changes. */
 export async function commitPoolCalculation(poolId: string, _approvedInvoiceIds: number[], sharePayloads: InvoiceSharePayload[],
-    recalculate = false, expectedRevision?: number, explanation?: InvoiceCalculationExplanation): Promise<InvoicePoolCalculationCommit> {
+    recalculate = false, expectedRevision?: number, explanation?: InvoiceCalculationExplanation,
+    management?: InvoiceManagementContext): Promise<InvoicePoolCalculationCommit> {
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
     async function calculateLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<InvoicePoolCalculationCommit> {
         // The DBAL holds the root lock; decisions below use the current persisted pool state.
@@ -173,11 +180,12 @@ export async function commitPoolCalculation(poolId: string, _approvedInvoiceIds:
         // applied delta without relying on its earlier, potentially stale pool read.
         return {shares: saved, takeoverChanges, settledShareImpacts, calculationSnapshot: snapshot};
     }
-    return invoiceService.withLockedPool(poolId, calculateLocked);
+    return withInvoicePoolOperation(poolId, calculateLocked, management);
 }
 
 /** Restore pool-local inputs without undoing attendance, invoice edits, or recorded settlements. */
-export async function restorePoolCalculationInputs(poolId: string, expectedRevision?: number): Promise<{needsRecalculation: boolean; externalChanges: boolean}> {
+export async function restorePoolCalculationInputs(poolId: string, expectedRevision?: number,
+    management?: InvoiceManagementContext): Promise<{needsRecalculation: boolean; externalChanges: boolean}> {
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
     async function restoreLocked(manager: EntityManager, row: EventInvoicePool | null) {
         // The DBAL holds the root lock; decisions below use the current persisted pool state.
@@ -220,11 +228,12 @@ export async function restorePoolCalculationInputs(poolId: string, expectedRevis
         await savePoolChange(manager, pool, false);
         return {needsRecalculation, externalChanges};
     }
-    return invoiceService.withLockedPool(poolId, restoreLocked);
+    return withInvoicePoolOperation(poolId, restoreLocked, management);
 }
 
 /** Persist a bounded signed adjustment after checking current locked pool membership. */
-export async function savePoolSurcharge(poolId: string, registrationId: number, amount: number, note: string, subtractFromPool: boolean) {
+export async function savePoolSurcharge(poolId: string, registrationId: number, amount: number, note: string,
+    subtractFromPool: boolean, management?: InvoiceManagementContext) {
     // Signed adjustments must be finite, nonzero, and fit the existing money-column bounds.
     if (!Number.isFinite(amount) || amount === 0 || Math.abs(amount) > 99999999.99) throw new APIError(invoiceText('enterANonZeroSurchargeOrRebateWithinThe'), {}, 400, {cause: invoiceRejectionCause('enterANonZeroSurchargeOrRebateWithinThe')});
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
@@ -237,11 +246,12 @@ export async function savePoolSurcharge(poolId: string, registrationId: number, 
         await savePoolChange(manager, pool);
         return saved;
     }
-    return invoiceService.withLockedPool(poolId, addLocked);
+    return withInvoicePoolOperation(poolId, addLocked, management);
 }
 
 /** Delete an existing adjustment idempotently and invalidate allocation inputs atomically. */
-export async function deletePoolSurcharge(poolId: string, surchargeId: number): Promise<void> {
+export async function deletePoolSurcharge(poolId: string, surchargeId: number,
+    management?: InvoiceManagementContext): Promise<void> {
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
     async function removeLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<void> {
         // The DBAL holds the root lock; decisions below use the current persisted pool state.
@@ -252,11 +262,12 @@ export async function deletePoolSurcharge(poolId: string, surchargeId: number): 
         await invoiceService.deleteSurcharge(poolId, surchargeId, manager);
         await savePoolChange(manager, pool);
     }
-    await invoiceService.withLockedPool(poolId, removeLocked);
+    await withInvoicePoolOperation(poolId, removeLocked, management);
 }
 
 /** No new API confirmation/revision fields: the approved confirmation gate belongs to the frontend. */
-export async function recordShareSettlement(poolId: string, shareId: number, isPaid: boolean): Promise<void> {
+export async function recordShareSettlement(poolId: string, shareId: number, isPaid: boolean,
+    management?: InvoiceManagementContext): Promise<void> {
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
     async function settleLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<void> {
         // The DBAL holds the root lock; decisions below use the current persisted pool state.
@@ -271,7 +282,7 @@ export async function recordShareSettlement(poolId: string, shareId: number, isP
         await invoiceService.saveShare(share, manager);
         await savePoolChange(manager, pool, false);
     }
-    await invoiceService.withLockedPool(poolId, settleLocked);
+    await withInvoicePoolOperation(poolId, settleLocked, management);
 }
 
 type CalculationRecords = Awaited<ReturnType<typeof invoiceService.getCalculationRows>>;

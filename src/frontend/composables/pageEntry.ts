@@ -332,7 +332,7 @@ function createConfirmedNavigation(context: FrontendContext, router: Router) {
     function retryError(): Error | null {
         // Subscribe reactive consumers to actual cache changes before reading
         // the existing query-owned errors through this nonreactive cache API.
-        readRevision.value;
+        void readRevision.value;
         const confirmed = receipt.value;
         if (!confirmed) return null;
         const sessionFailure = confirmed.refreshSession ? context.sessionRead.value.error : null;

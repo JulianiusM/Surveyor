@@ -14,20 +14,40 @@
  * limitations under the License.
  */
 
-import {defaultPermissionValues as activityDefaultValues, readEntityDefaultsBaseline, updateEntityDefaults, readEntityAdministratorBaseline, updateEntityAdministrator} from './entityAdminController';
-import type {RequirementOverrideInput} from '../../types/ActivityRequirementTypes';
+import {
+    defaultPermissionValues as activityDefaultValues, readEntityDefaultsBaseline, updateEntityDefaults,
+    readEntityAdministratorBaseline, updateEntityAdministrator, searchEntityProfiles, completeDefaults,
+    getEntityPropertyPresentation, readEntitySettingsAccess, entityCreationPermissionContext,
+} from './entityAdminController';
+import type {RequirementOverrideInput, RequirementPageSection} from '../../types/ActivityRequirementTypes';
 import * as requirementService from '../modules/database/services/ActivityRequirementService';
-import {calculateRequirementAnalysis, calculateBaselineRequirementForPlan, countInclusiveDays, toParticipantKey, toParticipantName} from '../../common/activity/requirements';
-import {projectActivityAssignees, prepareActivityRequirementContext} from '../modules/activity/autoAssignment';
-import type {ActivityPrintDay, ActivityPrintWeek, SlotAssignmentMap} from '../../types/ActivityTypes';
-import {getRecommendations, getRecommendationWarningPreview, applyRecommendations} from '../modules/activity/recommendations';
-import {invalidateEventContext, queueAutoGenerateRecommendations, getAutoRecommendationJob} from '../modules/activity/autoAssignment';
+import {
+    calculateRequirementAnalysis, calculateBaselineRequirementForPlan, countInclusiveDays, toParticipantKey,
+    toParticipantName, calculateParticipantRequirement,
+} from '../../common/activity/requirements';
+import {
+    projectActivityAssignees, prepareActivityRequirementContext, isActivityOversized,
+    requireActivityDuration, requireActivityRequirementWork, invalidateEventContext,
+    queueAutoGenerateRecommendations, getAutoRecommendationJob, requireRequirementConfiguration,
+    requireRecommendationContext,
+} from '../modules/activity/autoAssignment';
+import settings from '../modules/settings';
+import type {CivilDateWindow} from '../../types/CivilDateTypes';
+import type {
+    ActivityPrintDay, ActivityPrintWeek, SlotAssignmentMap, RecommendationJobView,
+    ActivityCreationCompletion, ActivityPropertyPatch, AssignmentWarningPreview, RecommendationWarningResult,
+    RecommendationGenerationOutcome, RecommendationApplicationSummary,
+} from '../../types/ActivityTypes';
+import {
+    getRecommendations, getRecommendationWarningPreview, applyRecommendations, overlapConfirmation,
+    requireOverlapConfirmation, getAssignmentWarningPreview, collectManualAssignmentWarnings,
+} from '../modules/activity/recommendations';
 
-import {overlapConfirmation, requireOverlapConfirmation, getAssignmentWarningPreview, collectManualAssignmentWarnings} from '../modules/activity/recommendations';
 
-import {authorizeEventLink, getEventLinkOptions, readEventLinkSelection} from '../modules/event/linkage';
-import {requireRequirementConfiguration, requireRecommendationContext} from '../modules/activity/autoAssignment';
-import type {RecommendationJobView} from '../../types/ActivityTypes';
+import {
+    authorizeEventLink, getEventLinkOptions, readEventLinkSelection, assertEntityPropertyContext,
+    readAuthorizedEventUrl, getEntityViewAdmission, changeEntityEvent, projectEntitySettingsEvent,
+} from '../modules/event/linkage';
 
 
 // controllers/activityController.js
@@ -37,16 +57,22 @@ import {Request} from "express";
 import type {EntityManager} from "typeorm";
 import type {ActivityAssignment} from "../modules/database/entities/activity/ActivityAssignment";
 import {comparisonToken, entityTag, requireFieldComparison} from '../modules/api/transport';
-import {searchEntityProfiles, completeDefaults, getEntityPropertyPresentation, readEntitySettingsAccess, entityCreationPermissionContext} from './entityAdminController';
-import {assertEntityPropertyContext, readAuthorizedEventUrl, getEntityViewAdmission, changeEntityEvent, projectEntitySettingsEvent} from '../modules/event/linkage';
 import {archiveEntity, getArchivePresentations, restoreEntity, setAutomaticArchival} from '../modules/entityArchival';
-import {entityMethodPermission, entityPropertyPermission} from '../modules/permissionEngine';
+import {
+    entityMethodPermission, entityPropertyPermission, buildPermBundle, evaluateSubject, isOwner,
+    saveDefaultPermsFromBody,
+} from '../modules/permissionEngine';
 
 import {ApiProblem} from '../modules/api/problem';
-import {checkNewImage, removeImage} from '../modules/lib/fileCommons';
+import {
+    checkNewImage, removeImage, performImageSwap,
+} from '../modules/lib/fileCommons';
 import * as adminService from '../modules/database/services/EntityAdminService';
-import {getHeaderImageVersion, projectEventParticipants, uuidKey, sameUuid, indexByUuid, resolveUuidReferences} from '../modules/lib/util';
-import {civilDateWeeks, parseCivilDate} from '../../common/lib/civilDate';
+import {
+    getHeaderImageVersion, projectEventParticipants, uuidKey, sameUuid, indexByUuid, resolveUuidReferences,
+    ENTITIES, fromISOtoLocal, generateUniqueId,
+} from '../modules/lib/util';
+import {civilDateWeeks, civilDateWindow, parseCivilDate} from '../../common/lib/civilDate';
 import {archiveKey} from '../modules/archive/policy';
 import type {components} from '../../types/api/v1';
 import type {ActivityCommandPreparation, ActivityPropertyTransportContext, ActivitySlotAdmission} from '../../types/ActivityV1Types';
@@ -54,7 +80,6 @@ import type {ActivityCommandPreparation, ActivityPropertyTransportContext, Activ
 import Joi from 'joi';
 
 
-import {calculateParticipantRequirement} from '../../common/activity/requirements';
 
 import {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
 import {ActivitySlot} from "../modules/database/entities/activity/ActivitySlot";
@@ -65,12 +90,7 @@ import * as activityService from "../modules/database/services/ActivityService";
 import * as eventService from "../modules/database/services/EventService";
 
 import {APIError, ValidationError} from '../modules/lib/errors';
-import {performImageSwap} from "../modules/lib/fileCommons";
 
-import {ENTITIES, fromISOtoLocal, generateUniqueId} from '../modules/lib/util';
-import {buildPermBundle, evaluateSubject, isOwner, saveDefaultPermsFromBody} from "../modules/permissionEngine";
-import type {ActivityCreationCompletion, ActivityPropertyPatch, AssignmentWarningPreview, RecommendationWarningResult,
-    RecommendationGenerationOutcome, RecommendationApplicationSummary} from '../../types/ActivityTypes';
 import type {PermBundle, PermView, PermType, PermissionFieldRule, SessionLike} from "../../types/PermissionTypes";
 import type {EntityBase} from "../../types/UserTypes";
 
@@ -95,6 +115,11 @@ const activitySlotFieldPermissions: Record<keyof components['schemas']['Activity
  */
 
 function preprocessCreate(body: any): Partial<ActivityPlan> & { slots: Partial<ActivitySlot>[] } {
+    // Enforce the effective server policy before parsing or materializing slot drafts.
+    if (typeof body.startDate === 'string' && typeof body.endDate === 'string'
+        && parseCivilDate(body.startDate) && parseCivilDate(body.endDate)) {
+        requireActivityDuration(body.startDate, body.endDate);
+    }
     // Parse JSON slots object
     let slotsByDate = {};
     try {
@@ -211,10 +236,12 @@ const afterCreateItems = async (id: string, data: any) => {
  * established fields and English fallbacks without additional reads or effects.
  */
 
-async function fetchForView(plan: ActivityPlan, req: Request, includeNameProvenance = false) {
+async function fetchForView(plan: ActivityPlan, req: Request, includeNameProvenance = false, window?: CivilDateWindow) {
     // Load the same schedule and independent participant/configuration inputs for
     // both renderers; name provenance never changes authority or membership.
-    const slotsByDate = await activityService.getActivitySlots(plan.id);
+    const selected = window?.oversized ? window : undefined;
+    const oversized = Boolean(selected);
+    const slotsByDate = await activityService.getActivitySlots(plan.id, selected);
     const session = req.session;
 
     const slotList = Object.values(slotsByDate).flat();
@@ -228,13 +255,14 @@ async function fetchForView(plan: ActivityPlan, req: Request, includeNameProvena
         eventParticipants,
         participantRoles,
     ] = await Promise.all([
-        activityService.getActivitySlotAssignments(plan.id, session.profile!.id),
-        activityService.getActivitySlotAssigneeRows(plan.id).then(projectActivityAssignees),
+        activityService.getActivitySlotAssignments(plan.id, session.profile!.id, selected),
+        activityService.getActivitySlotAssigneeRows(plan.id, undefined, selected).then(projectActivityAssignees),
         activityService.getAllRoles(plan.id),
-        activityService.getActivitySlotRoles(plan.id),
-        requireRequirementConfiguration(plan.id),
+        activityService.getActivitySlotRoles(plan.id, selected),
+        oversized ? Promise.resolve({plan, roleRequirements: [], overrides: [], stayRequirements: []})
+            : requireRequirementConfiguration(plan.id),
         plan.event?.id ? eventService.getEventParticipantRows(plan.event.id).then(projectEventParticipants) : Promise.resolve([]),
-        activityService.getParticipantRolesForPlan(plan.id),
+        activityService.getParticipantRolesForPlan(plan.id, undefined, selected),
     ]);
     const textFields = await activityService.getActivityPlanTextFields(plan.id);
 
@@ -252,7 +280,7 @@ async function fetchForView(plan: ActivityPlan, req: Request, includeNameProvena
     const currentRoleIds = participantRoles.find(
         (participant) => participant.participantKey === `profile:${currentProfileId}`,
     )?.roleIds;
-    const shouldShowRequirementProgress = canSelfAssign && (
+    const shouldShowRequirementProgress = !oversized && canSelfAssign && (
         requirementConfig.plan.assignmentMode === "REQUIRED" || assignments.length > 0
     );
 
@@ -415,18 +443,19 @@ async function fetchForView(plan: ActivityPlan, req: Request, includeNameProvena
  * dates, assignments or admission. Participants are distinct assigned profiles
  * plus registrations in this plan's linked event, as in the detail projection.
  */
-async function getScheduleExport(plan: ActivityPlan) {
+async function getScheduleExport(plan: ActivityPlan, requestedStart?: unknown) {
+    const window = civilDateWindow(plan.startDate, plan.endDate, settings.value.activityMaxDurationDays, requestedStart);
     // Select the same participant sources as the detail owner; the DBAL counts
     // their UUID union without loading names or a second participant roster.
     const [slotsByDate, assigneeLists, slotRoles, textFields, participantCount] = await Promise.all([
-        activityService.getActivitySlots(plan.id),
-        activityService.getActivitySlotAssigneeRows(plan.id).then(projectActivityAssignees),
-        activityService.getActivitySlotRoles(plan.id),
+        activityService.getActivitySlots(plan.id, window.oversized ? window : undefined),
+        activityService.getActivitySlotAssigneeRows(plan.id, undefined, window.oversized ? window : undefined).then(projectActivityAssignees),
+        activityService.getActivitySlotRoles(plan.id, window.oversized ? window : undefined),
         activityService.getActivityPlanTextFields(plan.id),
         activityService.countActivityPlanParticipants(plan.id, plan.event?.id ?? null),
     ]);
 
-    return presentActivitySchedule(plan, slotsByDate, assigneeLists, slotRoles, textFields, participantCount);
+    return presentActivitySchedule(plan, slotsByDate, assigneeLists, slotRoles, textFields, participantCount, window);
 }
 
 /**
@@ -515,6 +544,7 @@ async function saveActivityProperties(planId: string, patch: ActivityPropertyPat
         const startDate = patch.startDate ?? plan.startDate;
         const endDate = patch.endDate ?? plan.endDate;
         if (startDate > endDate) throw new APIError('Start date must be before end date', {}, 400, {cause: 'ACTIVITY_DATE_RANGE_INVALID'});
+        requireActivityDuration(startDate, endDate, plan);
         if (startDate !== plan.startDate || endDate !== plan.endDate) {
             if (await activityService.hasActivitySlotsOutsideRange(manager, planId, startDate, endDate)) {
                 throw new APIError('The activity date range must include every saved slot', {}, 409, {cause: 'ACTIVITY_DATE_RANGE_EXCLUDES_ACTIVITIES'});
@@ -1138,7 +1168,7 @@ function activityMetadataToken(plan: ActivityPlan, data: components['schemas']['
 
 /** Public creation definitions preserve the audience matrix without disclosing an existing plan. */
 export function activityFormContext(): components['schemas']['ActivityCreateContext'] {
-    return entityCreationPermissionContext('activity');
+    return {...entityCreationPermissionContext('activity'), maxDurationDays: settings.value.activityMaxDurationDays};
 }
 
 /** Initial creation retains account-only admission; duplicate GET has its own method grant. */
@@ -1187,14 +1217,15 @@ export function projectActivityScheduleWeeks(startDate: string, endDate: string)
 }
 
 /** Assemble ACT-01–07 through the existing view/requirements owners, then explicitly redact the wire projection. */
-export async function readActivityPlan(id: string, session: SessionLike) {
+export async function readActivityPlan(id: string, session: SessionLike, _view?: 'detail' | 'admin', query?: Readonly<Record<string, unknown>>) {
     const profileId = activityActorId(session);
     const plan = await requireActivityPlan(id);
     const permissions = await activityPermissions(plan, session);
     if (await getEntityViewAdmission('activity', plan, session, undefined, permissions) !== 'render') throw new ApiProblem('FORBIDDEN');
     // Existing production owners calculate counts, attendance and saved requirement progress.
     // The transport never spreads an ORM root, assignment, profile or event into its response.
-    const source = await fetchForView(plan, {session} as Request, true);
+    const window = civilDateWindow(plan.startDate, plan.endDate, settings.value.activityMaxDurationDays, query?.windowStart);
+    const source = await fetchForView(plan, {session} as Request, true, window);
     const bundle = await activityPermissionBundle(plan, session);
     const slots: components['schemas']['ActivitySlotView'][] = [];
     for (const slot of Object.values(source.slots).flat()) {
@@ -1242,7 +1273,8 @@ export async function readActivityPlan(id: string, session: SessionLike) {
         currentEventId: plan.eventId ?? null, currentEventUrl, archived: Boolean(plan.archivedAt),
         inheritedArchived: Boolean(plan.event?.archivedAt), assignmentMode: plan.assignmentMode, canSelfAssign: source.canSelfAssign,
         allowOverfillAfterFull: Boolean(plan.allowOverfillAfterFull), bindingDeadline: plan.bindingDeadline?.toISOString() ?? null,
-        requirementProgress: source.requirementProgress ?? null, slots, weeks: projectActivityScheduleWeeks(plan.startDate, plan.endDate),
+        requirementProgress: source.requirementProgress ?? null, slots, window,
+        weeks: projectActivityScheduleWeeks(window.startDate, window.endDate),
         allRoles: source.roles.allRoles.map(role => ({id: String(role.id), title: role.title, description: role.description ?? null})),
         textFields: source.textFields.map(field => ({id: field.id, title: field.title, text: field.text ?? '',
             editToken: comparisonToken('activity-text', uuidKey(field.id), session, {text: field.text ?? '',
@@ -1506,16 +1538,19 @@ export async function removeActivitySlot(id: string, slotId: string, session: Se
 }
 
 /** Ordering baseline discloses only slot identifiers/positions to current reorder callers. */
-export async function readActivityOrderBaseline(id: string, session: SessionLike): Promise<components['schemas']['ActivityOrderBaseline']> {
+export async function readActivityOrderBaseline(id: string, session: SessionLike, requestedStart?: unknown): Promise<components['schemas']['ActivityOrderBaseline']> {
     const {plan} = await requireActivityMethod(id, 'ITEM_EDIT', session);
-    const order = (await activityService.getActivitySlotsFlat(id)).map(slot => ({slotId: slot.id, position: slot.pos}));
+    const window = civilDateWindow(plan.startDate, plan.endDate, settings.value.activityMaxDurationDays, requestedStart);
+    const order = (await activityService.getActivitySlotsFlat(id, undefined, window.oversized ? window : undefined))
+        .map(slot => ({slotId: slot.id, position: slot.pos}));
     return {order, editToken: comparisonToken('activity-order', uuidKey(plan.id), session, {order})};
 }
 
 /** Direct ordering persists only submitted positions and leaves saved assignments intact. */
 export async function setActivityOrder(id: string, body: components['schemas']['ActivityOrderInput'], session: SessionLike, token?: string): Promise<void> {
     const {plan} = await requireActivityMethod(id, 'ITEM_EDIT', session);
-    const current = await activityService.getActivitySlotsFlat(id);
+    const window = civilDateWindow(plan.startDate, plan.endDate, settings.value.activityMaxDurationDays, body.windowStart);
+    const current = await activityService.getActivitySlotsFlat(id, undefined, window.oversized ? window : undefined);
     const order = current.map(slot => ({slotId: slot.id, position: slot.pos}));
     requireFieldComparison(token, comparisonToken('activity-order', uuidKey(plan.id), session, {order}), ['order']);
     const slots = resolveUuidReferences(body.order.map(row => row.slotId), current, slot => slot.id);
@@ -1604,16 +1639,28 @@ export async function removeActivityTextField(id: string, fieldId: string, sessi
 
 /** Project private requirement inputs explicitly, retaining the shared pure engine's
  * saved analysis and calculation inputs without sending ORM relations or profile records. */
-export async function readActivityRequirements(id: string, session: SessionLike): Promise<components['schemas']['ActivityRequirements']> {
+export async function readActivityRequirements(id: string, session: SessionLike, page = 1,
+    section: RequirementPageSection = 'stays'): Promise<components['schemas']['ActivityRequirements']> {
     // Requirement management has its own method grant, separate from page admission.
-    await requireActivityMethod(id, 'MANAGE_REQUIREMENTS', session);
-    const [data, allRoles] = await Promise.all([getRequirements(id, true), activityService.getAllRoles(id)]);
+    const {plan: currentPlan} = await requireActivityMethod(id, 'MANAGE_REQUIREMENTS', session);
+    const oversized = isActivityOversized(currentPlan);
+    // Oversized reads must not call the complete configuration loader or engine.
+    // The selected SQL page retains every other saved row without reading it.
+    const storedPage = oversized ? await requirementService.getRequirementPage(id, section, page) : null;
+    const data = storedPage ? {...storedPage, plan: currentPlan, participants: [],
+        capacitySummary: {availableSlots: 0, requiredSlots: 0, difference: 0, configurationComplete: false},
+        calculationContext: {participants: [], assignedShiftCounts: {}, slots: []}, overrideTargets: []}
+        : await getRequirements(id, true);
+    const allRoles = storedPage ? [...storedPage.roleRequirements, ...storedPage.overrides].flatMap(row => row.role ? [row.role] : [])
+        : await activityService.getAllRoles(id);
     const plan = data.plan;
 
     // Select scalars from each persistence result before it crosses the versioned
     // boundary. Numeric database handles become strings here; the shared
     // controller, persistence and requirement engines keep their numeric contract.
     return {
+        ...(storedPage ? {paging: {readOnly: true, section, page: storedPage.page, pages: storedPage.pages,
+            total: storedPage.total, pageSize: 100 as const, maxDurationDays: settings.value.activityMaxDurationDays}} : {}),
         plan: {id: plan.id, assignmentMode: plan.assignmentMode, generalRequiredShifts: plan.generalRequiredShifts ?? null,
             roundingMode: plan.roundingMode ?? null, bindingDeadline: plan.bindingDeadline?.toISOString() ?? null,
             startDate: plan.startDate, endDate: plan.endDate, allowOverfillAfterFull: Boolean(plan.allowOverfillAfterFull),
@@ -1674,6 +1721,7 @@ function activityRecommendationWarnings(results: RecommendationWarningResult[]):
         itemId: result.recommendation.itemId, profileId: result.recommendation.profileId ?? undefined,
         status: result.recommendation.status, operation: result.recommendation.operation,
         sourceItemId: result.recommendation.sourceItemId, manual: result.recommendation.manual,
+        ...(result.recommendation.swapGroup === undefined ? {} : {swapGroup: result.recommendation.swapGroup}),
     }, warnings: result.warnings}));
 }
 
@@ -1688,7 +1736,8 @@ export async function readActivityRecommendations(id: string, session: SessionLi
     return {
         recommendations: data.recommendations.map(row => ({id: row.id, item: activityRecommendationSlot(row.item),
             profile: {id: row.profile.id, name: row.profile.name}, sourceItem: row.sourceItem ? activityRecommendationSlot(row.sourceItem) : null,
-            status: row.status, operation: row.operation, manual: row.manual})),
+            status: row.status, operation: row.operation, manual: row.manual,
+            ...(row.pairingKnown ? {swapGroup: row.swapGroup ?? null} : {})})),
         participantOptions: data.participantOptions.map(row => ({key: row.key, profileId: row.profileId, label: row.label,
             nameIsFallback: row.nameIsFallback === true, arrivalDate: row.arrivalDate, departureDate: row.departureDate})),
         slots: data.slots.map(activityRecommendationSlot),
@@ -1750,12 +1799,12 @@ export async function readActivityRecommendationJob(id: string, jobId: string, s
 function presentActivitySchedule(plan: ActivityPlan,
     slotsByDate: Awaited<ReturnType<typeof activityService.getActivitySlots>>, assigneeLists: SlotAssignmentMap,
     slotRoles: Awaited<ReturnType<typeof activityService.getActivitySlotRoles>>,
-    textFields: Awaited<ReturnType<typeof activityService.getActivityPlanTextFields>>, participantCount: number) {
+    textFields: Awaited<ReturnType<typeof activityService.getActivityPlanTextFields>>, participantCount: number, window: CivilDateWindow) {
     // Stored plan dates already passed feature admission. Reuse the same civil
     // Monday-week enumeration as creation and versioned schedule presentation.
     const dayMap = new Map<string, ActivityPrintDay>();
     const weeks: ActivityPrintWeek[] = [];
-    for (const week of civilDateWeeks(plan.startDate, plan.endDate)) {
+    for (const week of civilDateWeeks(window.startDate, window.endDate)) {
         const days: ActivityPrintDay[] = [];
         for (const dayKey of week.days) {
             const weekday = (new Date(dayKey + 'T00:00:00Z').getUTCDay() + 6) % 7;
@@ -1783,6 +1832,7 @@ function presentActivitySchedule(plan: ActivityPlan,
 
     return {
         plan,
+        window,
         event: plan.event,
         days: Array.from(dayMap.values()),
         weeks,
@@ -1866,6 +1916,9 @@ function preprocessRequirementUpdate(body: any) {
  * The versioned projection may retain missing-name origin for reactive client
  * localization; direct callers keep the exact existing response shape. */
 export async function getRequirements(planId: string, includeNameProvenance = false) {
+    const current = await activityService.getActivityPlanById(planId);
+    if (!current) throw new APIError('Activity plan not found', {planId}, 404);
+    requireActivityRequirementWork(current);
     // Reuse the admitted plan's existing configuration, participants and slots.
     const [plan, requirementConfig, assignments, slots, allRoles, slotRoles] = await Promise.all([
         activityService.getActivityPlanById(planId),
@@ -1918,6 +1971,9 @@ export async function getRequirements(planId: string, includeNameProvenance = fa
 
 /** Calculate the existing requirement baseline from saved configuration, attendance and slot capacity. */
 export async function calculateBaselineRequirement(planId: string) {
+    const current = await activityService.getActivityPlanById(planId);
+    if (!current) throw new APIError('Activity plan not found', {planId}, 404);
+    requireActivityRequirementWork(current);
     // Preserve the existing independent reads; this analysis does not start a write transaction.
     const [plan, requirementConfig, slots, assignments, slotRoles] = await Promise.all([
         activityService.getActivityPlanById(planId),
@@ -2016,6 +2072,7 @@ export async function updateRequirements(planId: string, body: any, removedOverr
     async function saveRequirements(manager: EntityManager): Promise<void> {
         // An unlocked editor baseline cannot authorize saving after a relink.
         const plan = await requireRecommendationContext(manager, planId);
+        requireActivityRequirementWork(plan);
         if (expectedPlan && (expectedPlan.eventId ?? null) !== (plan.eventId ?? null) && !sameUuid(expectedPlan.eventId, plan.eventId)) {
             throw new APIError('Activity plan event changed; reload the requirements', {}, 409, {cause: 'ACTIVITY_CONTEXT_CHANGED'});
         }
@@ -2091,7 +2148,7 @@ export async function updateRequirements(planId: string, body: any, removedOverr
         // Merge explicit removals with retained history only after all shared
         // configuration checks pass, then persist the coherent replacement once.
         const retainedOverrides = await mergeRequirementOverrides(manager, plan, overrides, removedOverrideIds);
-        await requirementService.replaceRequirements(planId, roleRequirements, retainedOverrides, normalizedSettings, stayRequirements, manager);
+        await requirementService.replaceRequirements(planId, roleRequirements, retainedOverrides, normalizedSettings, stayRequirements, manager, planDays);
     }
     await activityService.withActivityTransaction(saveRequirements);
     return 'Requirements updated';

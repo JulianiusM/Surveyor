@@ -18,7 +18,6 @@ import cookieParser from 'cookie-parser';
 import express, {NextFunction, Request, Response} from 'express';
 import flash from 'express-flash';
 import session from 'express-session';
-import logger from 'morgan';
 import path from 'node:path';
 import {handleGenericError} from './middleware/genericErrorHandler';
 import {AppDataSource} from "./modules/database/dataSource";
@@ -39,6 +38,7 @@ import helpRouter from './routes/help';
 import guestsRouter from './routes/guests';
 import {admitFrontendDocument, renderFrontendError} from './middleware/frontendDocuments';
 import {APIError} from './modules/lib/errors';
+import {createAccessLogger} from './modules/lib/http';
 
 const app = express();
 app.disable("x-powered-by");
@@ -47,7 +47,9 @@ app.disable("x-powered-by");
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'pug');
 
-app.use(logger('dev'));
+// Keep the full existing access-log format. Only secret values in the original
+// URL are projected away; routing, harmless query spelling and timing stay intact.
+app.use(createAccessLogger());
 // Allow long descriptions and item collections, including URL-encoded Unicode text.
 app.use(express.json({limit: '1mb'}));
 app.use(express.urlencoded({extended: true, limit: '1mb'}));

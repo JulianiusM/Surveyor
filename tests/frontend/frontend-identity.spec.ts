@@ -701,6 +701,30 @@ describe('identity forms and packing overview navigation', () => {
         expect(context.personalLink.value).toBe('https://example.test/guest/edit');
     });
 
+    it.each([50, 51])('shares Unicode guest-name admission for %i supplementary code points', async length => {
+        const anonymous: components['schemas']['SessionView'] = {...session, kind: 'anonymous',
+            activeProfile: null, profiles: [], logoutUrl: null};
+        const guest = {...session, kind: 'guest' as const, context: 'unicode-guest-context-1234567890'};
+        let registered = false;
+        const {wrapper, request} = await mounted(`/packing/${eventId}/guest`, async input => {
+            if (input.method === 'POST') {
+                registered = true;
+                return json({session: guest, personalLink: 'https://example.test/private-guest-link', redirect: null}, 200, guest.context);
+            }
+            if (new URL(input.url).pathname === '/api/v1/session') return json(guest, 200, guest.context);
+            return json({id: eventId, title: 'Unicode guest'}, 200, registered ? guest.context : anonymous.context);
+        }, {session: anonymous});
+        const name = '😀'.repeat(length);
+        expect(wrapper.get('#guest-name').attributes('maxlength')).toBeUndefined();
+        await wrapper.get('#guest-name').setValue(name);
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        const writes = request.mock.calls.map(([input]) => input as Request).filter(input => input.method === 'POST');
+        expect(writes).toHaveLength(length === 50 ? 1 : 0);
+        if (length === 50) expect(await writes[0].clone().json()).toMatchObject({username: name});
+        else expect(wrapper.get<HTMLInputElement>('#guest-name').element.value).toBe(name);
+    });
+
     it.each([false, true])('retains committed guest identity and warns about failed mail without replay (bootstrap failure=%s)', async function retainCommittedIdentity(failBootstrap) {
         const anonymous: components['schemas']['SessionView'] = {...session, kind: 'anonymous',
             activeProfile: null, profiles: [], logoutUrl: null};

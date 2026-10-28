@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {fieldAttributes as adjustmentFields} from '../../../../.generated/api/v1/browser/validateFinanceAdjustmentInput.mjs';
-import {computed, nextTick, reactive, ref, shallowRef, useId} from 'vue';
+import {computed, nextTick, reactive, shallowRef, useId} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {FinanceAdjustmentRemovalReview} from '../../../types/FrontendFinanceReviewTypes';
 import {useActionState, useFrontend} from '../../app/context';

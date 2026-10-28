@@ -172,11 +172,11 @@ async function cancel(): Promise<void> {
             <!-- Saved dates remain visible above the independently editable draft. -->
             <div v-if="event.registration" class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label">{{ messages.t('event.registration.currentArrival') }}</label>
+                    <span class="form-label d-inline-block">{{ messages.t('event.registration.currentArrival') }}</span>
                     <p id="arrival">{{ formatEventCivilDate(event.registration.arrivalDate, messages.locale) }}</p>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">{{ messages.t('event.registration.currentDeparture') }}</label>
+                    <span class="form-label d-inline-block">{{ messages.t('event.registration.currentDeparture') }}</span>
                     <p id="departure">{{ formatEventCivilDate(event.registration.departureDate, messages.locale) }}</p>
                 </div>
             </div>
@@ -199,7 +199,7 @@ async function cancel(): Promise<void> {
                 <!-- Dietary sections exist only when this Event requires them.
                      Their selections remain local until one deliberate save. -->
                 <div v-if="event.requireDietaryInfo" class="col-12">
-                    <label class="form-label"><i class="bi bi-egg-fried me-1" aria-hidden="true"></i>{{ messages.t('event.registration.meals') }}</label>
+                    <span class="form-label d-inline-block"><i class="bi bi-egg-fried me-1" aria-hidden="true"></i>{{ messages.t('event.registration.meals') }}</span>
                     <ChoiceCheckboxes :choices="dietaryOptions.meal" :selected="fields.dietary" id-prefix="diet"
                         name="dietary" :disabled="blocked" @change="selectDiet" />
                     <div class="form-text">{{ messages.t('event.registration.chooseMeal') }}</div>
@@ -207,7 +207,7 @@ async function cancel(): Promise<void> {
 
                     <!-- The form uses a different requirements icon before the first
                          registration; retain that visible distinction on updates. -->
-                    <label class="form-label"><i class="bi me-1" :class="event.registration ? 'bi-exclamation-circle' : 'bi-egg-fried'" aria-hidden="true"></i>{{ messages.t('event.registration.requirements') }}</label>
+                    <span class="form-label d-inline-block"><i class="bi me-1" :class="event.registration ? 'bi-exclamation-circle' : 'bi-egg-fried'" aria-hidden="true"></i>{{ messages.t('event.registration.requirements') }}</span>
                     <ChoiceCheckboxes :choices="dietaryOptions.requirement" :selected="fields.dietary" id-prefix="diet"
                         name="dietary" :disabled="blocked" @change="selectDiet" />
                     <FormField id="allergyNotes" name="allergyNotes" v-model="fields.allergyNotes" class="mt-2"
@@ -219,7 +219,7 @@ async function cancel(): Promise<void> {
 
                     <template v-if="event.allowDietComment">
                         <hr />
-                        <label class="form-label"><i class="bi bi-chat-dots me-1" aria-hidden="true"></i>{{ messages.t('event.registration.comments') }}</label>
+                        <span class="form-label d-inline-block"><i class="bi bi-chat-dots me-1" aria-hidden="true"></i>{{ messages.t('event.registration.comments') }}</span>
                         <ChoiceCheckboxes :choices="dietaryOptions.text" :selected="fields.dietary" id-prefix="diet"
                             name="dietary" :disabled="blocked" @change="selectDiet" />
                         <div class="form-text">{{ messages.t('event.registration.commentHint') }}</div>

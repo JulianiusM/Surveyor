@@ -17,7 +17,9 @@
 import {Request} from "express";
 import type {EntityManager} from 'typeorm';
 import * as lifecycleService from '../modules/database/services/EntityLifecycleService';
-import {requireLockedArchiveRoot} from '../modules/entityArchival';
+import {
+    requireLockedArchiveRoot, getArchivePresentations,
+} from '../modules/entityArchival';
 import Joi from 'joi';
 import {Guest} from "../modules/database/entities/user/Guest";
 import type {Session} from '../modules/database/entities/session/Session';
@@ -41,7 +43,6 @@ import type {Entity, GuestLinkData, OverviewCollection, OverviewPageView, Overvi
 import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, LockedArchiveContext, PersonalVisibility} from "../../types/ArchiveTypes";
 import type {SessionLike} from "../../types/PermissionTypes";
 import {archiveKey, isHiddenInOverview} from "../modules/archive/policy";
-import {getArchivePresentations} from '../modules/entityArchival';
 import {evaluateEntities, entityPermissionKey} from "../modules/permissionEngine";
 import type {components, operations} from '../../types/api/v1';
 
@@ -190,6 +191,7 @@ async function resolveLoginUser(body: any, options?: IdentityLinkOptions) {
     // Preserve username-first resolution and indistinguishable missing-user /
     // invalid-password errors.
     const user = await resolveNamedAccount(username);
+    await options?.credentialAdmission?.account(user?.id ?? null);
     if (!user) {
         throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
     }
@@ -198,6 +200,7 @@ async function resolveLoginUser(body: any, options?: IdentityLinkOptions) {
     if (!isValidPassword) {
         throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
     }
+    await options?.credentialAdmission?.verified();
 
     // An inactive account is not a session transition. Refresh expired activation
     // mail first, then report the precise inactive/resend cause to either adapter.
@@ -205,6 +208,7 @@ async function resolveLoginUser(body: any, options?: IdentityLinkOptions) {
         let errorMsg = 'User not activated.';
         let cause: 'ACCOUNT_INACTIVE' | 'ACTIVATION_RESENT' = 'ACCOUNT_INACTIVE';
         if ((user.activationTokenExpiration ?? new Date(0)) < new Date()) {
+            await options?.beforeIdentityMail?.(user.email);
             // Generiere den Aktivierungs-Token und sende ihn per E-Mail
             const token = await userService.generateActivationToken(user.id);
             const activationLink = identityLink(`/users/activate/${encodeURIComponent(token)}`, options);
@@ -593,6 +597,7 @@ async function personalVisibilityResult(reference: ArchiveReference, visibility:
  * no-op. Only the trusted link option selects the destination frontend route. */
 export async function sendPasswordForgotMail(username: string, options?: IdentityLinkOptions) {
     const user = await resolveNamedAccount(username);
+    await options?.beforeIdentityMail?.(user?.email ?? username);
     if (!user) {
         return;
     }
@@ -624,6 +629,7 @@ export async function requestPasswordResetWithSession<Result>(username: string, 
     /** Reuse username-first discovery without another connection or an account-found result. */
     async function prepareRecovery(manager: EntityManager, session: Request['session']) {
         const user = await resolveNamedAccount(username, manager);
+        await options.beforeIdentityMail?.(user?.email ?? username);
         let emailReceipt: PreparedIdentityEmail | null = null;
         if (user) {
             // Token persistence, recipient/templates and cached sender setup can
@@ -851,9 +857,11 @@ export async function loginGuestWithSession<Result>(guestId: string, token: stri
     return commitIdentityCompletion(req, options.context, prepareGuestLogin, true);
 }
 
-/** Normalize the common registration input without changing name/email acceptance. */
+/** Admit the shared stored-name rule before guest creation, preserving the
+ * existing required-name diagnostic and email normalization. */
 function normalizeGuestContact(username: string, email: string | undefined): string | undefined {
     if (!username) throw new ValidationError('users/register-guest', 'Username required', {username, email});
+    identity.requireIdentityName(username);
     return email?.trim().toLowerCase();
 }
 
@@ -1005,6 +1013,7 @@ export async function recoverGuestAccount(email: string, options?: IdentityLinkO
     // Resolve persisted matches once, then build each private link through its
     // established destination owner. The email owns those links, not an API DTO.
     const guests = await userService.getGuestByEmail(email);
+    await options?.beforeIdentityMail?.(guests[0]?.email ?? email);
     const guestLinkData: GuestLinkData[] = [];
     for (let guest of guests) {
         const link = options?.frontend
@@ -1107,6 +1116,9 @@ export async function updateProfile(body: any, session: Request['session']) {
     if (name?.trim()?.length === 0) {
         throw new ValidationError("users/profile/view", "Invalid profile name", {}, {cause: 'PROFILE_NAME_REQUIRED'});
     }
+    // Omission retains the existing name; a supplied name must fit the same
+    // authored code-point bound before either profile/default persistence starts.
+    if (name !== undefined) identity.requireIdentityName(name);
     // An omitted name keeps its old value; default selection still saves next.
     if (name) {
         await userService.updateProfileName(profileId, name);
@@ -1131,6 +1143,7 @@ export async function createProfile(body: any, userId: number) {
     if (name?.trim()?.length === 0) {
         throw new ValidationError("users/profile/create", "Invalid profile name", body, {cause: 'PROFILE_NAME_REQUIRED'});
     }
+    identity.requireIdentityName(name);
     return await userService.createProfile(userId, name);
 }
 
@@ -1303,31 +1316,58 @@ export async function deactivateIdentityProfile(req: Request, body: components['
 export function deleteIdentityAccount(req: Request, body: components['schemas']['AccountDeletionInput']): Promise<components['schemas']['ProfileWorkflowCompletion']>;
 export function deleteIdentityAccount<Result>(req: Request, body: components['schemas']['AccountDeletionInput'],
     prepareResult: ProfileWorkflowPreparation<Result>): Promise<Result>;
-/** Coordinate token-free deletion/session/receipt finality; preserve the provider-bearing operation's separate outcome. */
+/** Commit account deletion and local anonymous authority once, preparing every
+ * local receipt before commit. Provider discovery and optional URL serialization
+ * are guarded delivery work with a prepared warning fallback, never a second
+ * business rejection, Session write or automatic replay. */
 export async function deleteIdentityAccount<Result>(req: Request, body: components['schemas']['AccountDeletionInput'],
     prepareResult?: ProfileWorkflowPreparation<Result>): Promise<Result | components['schemas']['ProfileWorkflowCompletion']> {
     requireProfileWorkflow(req.apiActor!, false);
     try {
-        if (!req.session.tokens) {
-            /** Stage deletion, anonymous authority and serialized receipt on the same locked connection. */
-            async function prepareDeletion(manager: EntityManager, session: Request['session']) {
-                const emails = await identity.prepareAccountDeletion(body, session, manager);
-                await oidc.logoutLocal(session);
-                const completion = profileWorkflowCompletion(req, '/', 'profile.accountDeleted', null, session);
-                const result = prepareResult ? await prepareResult(completion) : completion;
-                return {result, emails};
-            }
-            const committed = await commitIdentityCompletion(req, req.apiActor!.context, prepareDeletion, true);
-            req.session = committed.session;
-            await identity.deliverPreparedIdentityEmails(committed.result.emails);
-            return committed.result.result;
+        /** Actual adapters only validate/serialize this scalar receipt; they do
+         * not query, persist or change authority. Precommit failures still roll back. */
+        async function prepareCompletion(completion: components['schemas']['ProfileWorkflowCompletion']) {
+            return prepareResult ? await prepareResult(completion) : completion;
         }
-        // Provider-bearing deletion is deliberately not strengthened by the
-        // token-free decision, and retains its current partial/unknown failures.
-        const redirect = await deleteAccount(body, req.session);
-        const completion = profileWorkflowCompletion(req, '/', 'profile.accountDeleted',
-            redirect === settings.value.rootUrl ? null : redirect);
-        return prepareResult ? await prepareResult(completion) : completion;
+
+        /** Prepare deletion, mail content, anonymous authority and fallbacks on
+         * the original identity owner's locked Session/database connection. */
+        async function prepareDeletion(manager: EntityManager, session: Request['session']) {
+            // Fresh stored tokens choose external delivery only. They never bypass
+            // deletion confirmation or select another account/profile to remove.
+            const providerEvidence = session.tokens ? {idTokenHint: session.tokens.id_token} : null;
+            const emails = await identity.prepareAccountDeletion(body, session, manager);
+            await oidc.logoutLocal(session);
+            const completion = profileWorkflowCompletion(req, '/', 'profile.accountDeleted', null, session);
+            const result = await prepareCompletion(completion);
+
+            // Token-free completion retains its established delivery semantics.
+            // Provider-bearing completion additionally prepares both warnings
+            // before any irreversible local write becomes durable.
+            const providerWarning = providerEvidence ? await prepareCompletion({...completion,
+                notice: {kind: 'info', messageKey: 'profile.accountDeletedProviderUnconfirmed'}}) : result;
+            const deliveryWarning = providerEvidence ? await prepareCompletion({...completion,
+                notice: {kind: 'info', messageKey: 'profile.accountDeletedDeliveryUnconfirmed'}}) : result;
+            return {result, completion, providerWarning, deliveryWarning, emails, providerEvidence};
+        }
+        const committed = await commitIdentityCompletion(req, req.apiActor!.context, prepareDeletion, true);
+        req.session = committed.session;
+        const delivered = await identity.deliverPreparedIdentityEmails(committed.result.emails);
+        if (!committed.result.providerEvidence) return committed.result.result;
+        // Keep failed-mail confirmation visible locally, including the fact that
+        // no external provider termination has occurred. Never replay deletion.
+        if (!delivered) return committed.result.deliveryWarning;
+
+        try {
+            // Discovery follows committed local sign-out. A dynamic provider URL
+            // is delivery data, so all preparation failures select the already
+            // validated local warning without changing business confirmation.
+            const provider = await oidc.prepareProviderLogout(committed.result.providerEvidence);
+            if (provider.providerLogout) return committed.result.providerWarning;
+            return await prepareCompletion({...committed.result.completion, redirect: provider.redirect});
+        } catch {
+            return committed.result.providerWarning;
+        }
     } catch (error) {
         if (error instanceof ValidationError || error instanceof ApiProblem) throw error;
         throw new ApiProblem('WORKFLOW_OUTCOME_UNKNOWN');

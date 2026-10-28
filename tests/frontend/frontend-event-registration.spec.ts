@@ -109,7 +109,7 @@ describe('Event participant registration', () => {
         const mounted = await mountFrontendEvent(EventRegistration, async () => json({changed: true}),
             {event, refresh: async () => {}});
         cleanups.push(mounted.dispose);
-        const label = mounted.wrapper.findAll('label').find(control => control.text() === 'Dietary requirements (optional)')!;
+        const label = mounted.wrapper.findAll('.form-label').find(control => control.text() === 'Dietary requirements (optional)')!;
         expect(label.get('i').classes()).toContain(registered ? 'bi-exclamation-circle' : 'bi-egg-fried');
     });
 

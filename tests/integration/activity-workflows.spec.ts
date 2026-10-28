@@ -888,6 +888,7 @@ describe('automatic activity assignment user stories', () => {
                 status: 'PENDING',
                 operation: 'REASSIGN',
                 manual: true,
+                swapGroup: 'rejected-manual-swap',
             },
             {
                 itemId: dinner.id,
@@ -896,6 +897,7 @@ describe('automatic activity assignment user stories', () => {
                 status: 'PENDING',
                 operation: 'REASSIGN',
                 manual: true,
+                swapGroup: 'rejected-manual-swap',
             },
         ]});
         const staged = (await getRecommendations(planId)).recommendations;
@@ -995,6 +997,7 @@ describe('automatic activity assignment user stories', () => {
                 profileId: participant.id,
                 status: 'APPROVED',
                 operation: 'REASSIGN',
+                swapGroup: 'atomic-reviewed-swap',
             },
             {
                 itemId: dinner.id,
@@ -1002,6 +1005,7 @@ describe('automatic activity assignment user stories', () => {
                 profileId: secondParticipant.id,
                 status: 'APPROVED',
                 operation: 'REASSIGN',
+                swapGroup: 'atomic-reviewed-swap',
             },
         ]});
 

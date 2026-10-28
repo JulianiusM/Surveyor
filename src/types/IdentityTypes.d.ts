@@ -4,6 +4,7 @@ import type {components} from './api/v1';
 import type {TokenEndpointResponse} from 'openid-client';
 import type {OidcClaims} from './UserTypes';
 import type {PreparedIdentityEmail} from './EmailTypes';
+import type {IdentityCredentialAdmission} from './IdentityAdmissionTypes';
 
 /** Verified provider evidence; local account selection and session completion remain controller-owned. */
 export interface OidcLoginEvidence {
@@ -22,7 +23,15 @@ export interface ProviderLogoutOutcome {
     providerLogout?: 'unconfirmed';
 }
 
-/** Validate/serialize completion while its business transaction may still roll back. */
+/** Private provider handoff evidence captured before committed local deletion.
+ * It is never included in a public local-completion or diagnostic projection. */
+export interface ProviderLogoutEvidence {
+    readonly idTokenHint?: string;
+}
+
+/** Validate/serialize scalar completion without queries, writes or authority
+ * changes. Business receipts are prepared before commit; a provider delivery
+ * URL may be prepared afterward only with an already prepared local fallback. */
 export type ProfileWorkflowPreparation<Result> = (completion: components['schemas']['ProfileWorkflowCompletion']) => Result | Promise<Result>;
 
 /** Required former-owner persistence and notification preparation have completed on the supplied manager. */
@@ -35,6 +44,8 @@ export interface PreparedOwnerCleanup {
 export interface IdentityLinkOptions {
     frontend?: boolean;
     next?: string;
+    credentialAdmission?: IdentityCredentialAdmission;
+    beforeIdentityMail?: (recipient: string) => Promise<void>;
 }
 
 /** Optional transport admission check immediately before an asynchronous identity operation commits. */

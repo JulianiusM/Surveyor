@@ -10,6 +10,7 @@ import {activityDateLabel, activityDayLabel, activityCreationWeeks} from './pres
 import ActionButton from '../../components/ActionButton.vue';
 import EntityListCreation from '../../components/EntityListCreation.vue';
 import FormField from '../../components/FormField.vue';
+import {countInclusiveDays} from '../../../common/activity/requirements';
 
 // Root admission, file, event, access and confirmed navigation are shared. This
 // feature owns only the dated slot draft, including hidden out-of-range days.
@@ -21,8 +22,9 @@ const endDate = ref('');
 const slots = ref<ActivitySlotDraft[]>([]);
 const calendarStart = ref('');
 const calendarEnd = ref('');
-const weeks = computed(() => activityCreationWeeks(calendarStart.value, calendarEnd.value));
-watch([startDate, endDate, context.locale], synchronizeDates, {flush: 'post'});
+const maxDurationDays = ref(context.bootstrap.activityCreateContext?.maxDurationDays ?? 366);
+const weeks = computed(() => activityCreationWeeks(calendarStart.value, calendarEnd.value, maxDurationDays.value));
+watch([startDate, endDate, maxDurationDays, context.locale], synchronizeDates, {flush: 'post'});
 
 /** Preserve one-day defaulting and invalid-range recovery. Date controls
  * own the submitted values; the last valid calendar keeps its mounted slot drafts. */
@@ -30,19 +32,22 @@ function synchronizeDates(): void {
     if (!startDate.value) return;
     if (!endDate.value) endDate.value = startDate.value;
     const invalid = endDate.value < startDate.value;
+    const oversized = !invalid && countInclusiveDays(startDate.value, endDate.value) > maxDurationDays.value;
     if (typeof document !== 'undefined') {
         // The field keeps its native HTML validity hook without another value
         // mirror. This message is cleared as soon as the range becomes valid.
         const input = document.getElementById('endDate') as HTMLInputElement | null;
-        input?.setCustomValidity(invalid ? messages.value.t('activity.endBeforeStart') : '');
+        input?.setCustomValidity(invalid ? messages.value.t('activity.endBeforeStart')
+            : oversized ? messages.value.t('activity.durationLimit', {days: maxDurationDays.value}) : '');
     }
-    if (invalid) return;
+    if (invalid || oversized) return;
     calendarStart.value = startDate.value;
     calendarEnd.value = endDate.value;
 }
 
 /** Copy only creation values, never assignments, administrator grants or history. */
 function initialize(copy?: components['schemas']['ActivityDuplicate']): void {
+    if (copy?.formContext.maxDurationDays) maxDurationDays.value = copy.formContext.maxDurationDays;
     startDate.value = copy?.startDate ?? '';
     endDate.value = copy?.endDate ?? '';
     slots.value = (copy?.slots ?? []).map(slot => ({...slot, description: slot.description ?? '',
@@ -71,7 +76,14 @@ const source: FrontendListCreationSource<components['schemas']['ActivityDuplicat
     creationKey: activityKeys.creation, duplicateKey: activityKeys.duplicate, eventPicker: api.eventPicker,
     initialContext: context.bootstrap.activityCreateContext, initialSelectedEvent: context.bootstrap.activitySelectedEvent,
     initialDuplicate: context.bootstrap.activityDuplicate,
-    createEntry: api.createEntry.bind(api), duplicate: api.duplicate.bind(api), initialize, reset,
+    async createEntry(scope, signal, returnTo, eventId) {
+        const entry = await api.createEntry(scope, signal, returnTo, eventId);
+        // The shared creation query still owns admission and lifetime. Retain
+        // only its public display limit; server admission always reads settings.
+        if (entry.context?.maxDurationDays) maxDurationDays.value = entry.context.maxDurationDays;
+        return entry;
+    },
+    duplicate: api.duplicate.bind(api), initialize, reset,
     draft: () => ({startDate: startDate.value, endDate: endDate.value, slots: slots.value}),
     destination: result => '/activity/' + result.id,
     /** Capture only in-range slots in stable per-day order for this submission.
@@ -112,7 +124,7 @@ const source: FrontendListCreationSource<components['schemas']['ActivityDuplicat
         resource-param="planId"
         description-name="description"
         header-name="headerImg">
-        <template #root-fields="{title, updateTitle, disabled, pending}">
+        <template #root-fields="{title, updateTitle, disabled, pending, context: formContext}">
             <!-- The shared fieldset contains the row's negative gutter margin.
             Keep form-relative top spacing without moving other consumers. -->
             <div class="row g-3 mb-3 mt-0">
@@ -150,6 +162,7 @@ const source: FrontendListCreationSource<components['schemas']['ActivityDuplicat
                     :disabled="disabled"
                     :pending="pending" />
             </div>
+            <p class="small text-secondary">{{ messages.t('activity.durationLimit', {days: formContext?.maxDurationDays ?? maxDurationDays}) }}</p>
         </template>
         <template #default="{disabled, pending}">
             <hr />

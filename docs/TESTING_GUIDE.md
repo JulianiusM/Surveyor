@@ -4,10 +4,10 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: test maintainers
 status: current
-last-verified: 2026-10-27
+last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: installed SSR native Node loading in Vitest reconciled; prior mock-history, fork worker, P11, browser and guarded database boundaries retained; no deployment or exhaustive verification claim
-source-anchors: package.json; src/backend/app.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
+verification-scope: release-publication local-origin regressions and explicit system-fixture identity budgets reconciled; prior installed SSR, fork worker, browser and guarded database boundaries retained; no deployment or exhaustive verification claim
+source-anchors: package.json; src/backend/app.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; scripts/release-publication.mjs; scripts/tests/release-publication.test.mjs; .github/workflows/ci.yml; .github/workflows/release.yml; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: test-layout-command-or-help-validation-change
 -->
 
@@ -127,6 +127,11 @@ The normal Vitest package scripts have pre-hooks that run `npm run generate`, in
 commands. Generation prepares `src/backend/modules/database/__index__.ts` and authored API/localization consumers without
 connecting to a database. Direct runner invocations bypass package hooks; prepare current inputs after checkout or an
 authored input change. The scripts in `package.json` own the exact preparation sequence.
+
+Release-publication regressions use Node's test runner: `node --test scripts/tests/release-publication.test.mjs`.
+They create disposable local Git origins and archives to verify tested-source identity, version-only commits,
+archive validation, atomic branch/tag publication and failure diagnostics with credentials redacted. The existing CI
+database-free stage executes this suite separately from Vitest; it publishes no hosted release.
 
 ## Vitest configuration
 
@@ -347,6 +352,10 @@ npm run e2e
 Playwright starts and stops its managed built server through `playwright.config.ts`, after configured E2E database
 preparation. `reuseExistingServer: false` applies locally and in CI. Stop any existing process on the selected port
 before E2E so the runner owns the compiled application and prepared database.
+
+The managed system server receives explicit larger identity-admission limits because its independent actors share
+one loopback address and seeded account. The runner configuration owns those fixture budgets; focused admission
+checks exercise exhaustion, expiry, shared identifiers and retry feedback using small limits.
 
 Windows defaults to one system worker after native worker exits were observed in parallel runs. Other platforms
 retain Playwright's default selection; Linux CI explicitly selects two workers, and CLI overrides remain available.

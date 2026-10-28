@@ -25,11 +25,13 @@ import type {EntityEventChangeResult, EntityMutationCompletion, EntityPropertyPr
 import type {EntityBase, EntityViewAdmission} from '../../../types/UserTypes';
 import type {EntityType} from '../../../types/UtilTypes';
 import type {LockedArchiveContext} from '../../../types/ArchiveTypes';
-import {eventMethodCandidatePermission, eventMethodPermission, mayPerformEventMethod, entityPermissionKey} from '../permissionEngine';
+import {
+    eventMethodCandidatePermission, eventMethodPermission, mayPerformEventMethod, entityPermissionKey, can,
+    entityMethodPermission, evaluateEntities, evaluateSubject, getEntityPermissionQueryScope,
+} from '../permissionEngine';
 import {sameUuid, uuidKey} from '../lib/util';
 import {requireSessionProfileId} from '../lib/session';
 import {APIError} from '../lib/errors';
-import {can, entityMethodPermission, evaluateEntities, evaluateSubject, getEntityPermissionQueryScope} from '../permissionEngine';
 import * as eventService from '../database/services/EventService';
 import * as lifecycleService from '../database/services/EntityLifecycleService';
 import {invalidateGeneratedRecommendations} from '../database/services/ActivityRecommendationService';

@@ -17,18 +17,46 @@ import {isNewPasswordValid} from '../../common/lib/frontendIdentity';
 import {createTranslator} from '../../common/localization/translator';
 import {contractValidator} from './api/contracts';
 import settings from './settings';
+import {identityNamePolicy} from '../../common/generated/passwordPolicy';
 
-/** Apply the authored local-registration name rule before any identity writes.
- * API/browser validation and direct business admission consume this same schema;
- * this guard never trims, normalizes or substitutes either submitted value. */
+/** Admit one stored identity name through the same authored code-point rule used
+ * by generated account, guest and profile request validators. Preserve its exact
+ * spelling; each workflow retains its own blank-name and fallback behavior. */
+export function requireIdentityName(name: unknown): void {
+    // No submitted identity value enters the rejection diagnostic. The single
+    // schema remains authoritative for both direct business and HTTP admission.
+    if (!contractValidator('IdentityName')(name)) throw new ApiProblem('VALIDATION_FAILED');
+}
+
+/** Preserve local registration's existing form diagnostic while sharing the
+ * identity-name admission used by guest registration and profile editing. */
 export function requireLocalRegistrationNames(username: unknown, displayName: unknown): void {
-    // Keep capability/token, guest, profile-editor and provider name policies
-    // outside this local account registration boundary.
-    const validateName = contractValidator('LocalRegistrationName');
-    if (!validateName(username) || !validateName(displayName)) {
+    // Local callers retain their existing validation error/template boundary;
+    // the business rule itself has one owner for all stored identity names.
+    try {
+        requireIdentityName(username);
+        requireIdentityName(displayName);
+    } catch (error) {
+        if (!(error instanceof ApiProblem) || error.code !== 'VALIDATION_FAILED') throw error;
         throw new ValidationError('users/register', createTranslator('en').t('api:errors.VALIDATION_FAILED'),
             {}, {cause: 'VALIDATION_FAILED'});
     }
+}
+
+/** Fit only a newly provisioned provider's display value to the shared authored
+ * storage bound. Unicode iteration preserves whole supplementary characters;
+ * issuer, subject, email and username are never passed through this projection. */
+export function projectProviderDisplayName(name: string): string {
+    let projected = '';
+    let length = 0;
+    // Stop at the bound without first allocating every code point of a large
+    // provider claim. Ordinary names keep their original exact spelling.
+    for (const character of name) {
+        if (length === identityNamePolicy.maxLength) break;
+        projected += character;
+        length++;
+    }
+    return projected;
 }
 
 /** Enforce the same authored new-credential rule before registration or reset can write anything. */
@@ -146,12 +174,14 @@ export async function deactivateProfile(body: {name?: unknown}, session: Request
 }
 
 /** SMTP delivery cannot reject a committed transfer or deletion or cause an automatic replay. */
-export async function deliverPreparedIdentityEmails(emails: PreparedIdentityEmail[]): Promise<void> {
+export async function deliverPreparedIdentityEmails(emails: PreparedIdentityEmail[]): Promise<boolean> {
     // All recipient/template/result work already completed. Each external delivery is independent.
+    let delivered = true;
     for (const email of emails) {
-        try { await email.deliver(); }
-        catch { /* Delivery uncertainty does not reopen committed identity persistence. */ }
+        try { if (!await email.deliver()) delivered = false; }
+        catch { delivered = false; }
     }
+    return delivered;
 }
 
 /** Consume a current capability, clean up its former owner and prepare completion before one commit. */
@@ -184,12 +214,13 @@ export async function migrateProfile<Result>(userId: number, token: string,
     return committed.result;
 }
 
-/** Delete a token-free principal on the identity completion's existing transaction; Session preparation stays with its owner. */
+/** Delete the captured principal on the identity completion's existing
+ * transaction; notification preparation precedes deletion and Session completion
+ * stays with its owner, independently of a later external provider handoff. */
 export async function prepareAccountDeletion(body: {username?: unknown}, session: Request['session'],
     manager: EntityManager): Promise<PreparedIdentityEmail[]> {
-    // The session lock rechecks token classification; provider-bearing deletion
-    // remains outside this operation even if the earlier request saw no tokens.
-    if (session.tokens) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
+    // The caller supplies fresh locked Session evidence. Provider tokens neither
+    // weaken deletion confirmation nor create a second persistence boundary.
     requireAccountDeletion(body, session);
     const owner = await userService.lockIdentityOwner({userId: session.auth?.user?.id, guestId: session.auth?.guest?.id}, manager);
     if (!owner) throw new ApiProblem('AUTH_REQUIRED');
@@ -253,7 +284,7 @@ export async function findOrCreateUserFromOidc(oidcIssuer: string, claims: OidcC
     // save order. Disabled email linking does not attach a matching local user.
     const baseUsername = preferred_username || (email ? email.split('@')[0] : `oidc_${sub.slice(0, 8)}`);
     const uniqueUsername = await toUniqueUsername(baseUsername);
-    const displayName = name || baseUsername;
+    const displayName = projectProviderDisplayName(name || baseUsername);
     let emailToUse = email || `${sub}@no-email.local`;
     if (email) {
         const emailTaken = await userService.accountEmailExists(email);

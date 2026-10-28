@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
-import {invoiceText, invoiceRejectionCause} from './wording';
+import {
+    invoiceText, invoiceRejectionCause, invoiceLabels,
+} from './wording';
 import {differenceInCalendarDays} from 'date-fns';
 import type {EventInvoicePool} from '../database/entities/event/EventInvoicePool';
 import type {EventInvoice} from '../database/entities/event/EventInvoice';
@@ -24,7 +26,6 @@ import type {InvoiceCalculationExplanation} from '../../../types/InvoicePoolType
 import {APIError} from '../lib/errors';
 import {formatAmount, resolveInvoiceAmount, toAmount, acceptedInvoiceCosts, invoiceCostTotals} from '../lib/util';
 import {collectSettledRegistrationIds, projectInvoiceShares} from './settlements';
-import {invoiceLabels} from './wording';
 import {invoiceCalculationLines, invoicePoolCalculation, invoicePayerCalculation, sumInvoiceAdjustments} from './presentation';
 import {explainInvoiceDistribution} from './distribution';
 

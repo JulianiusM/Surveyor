@@ -145,6 +145,20 @@ async function stageMove(root: ReturnType<typeof mount>, profile: string, counte
 }
 
 describe('Activity recommendation review production frontend', () => {
+    it('disables whole-plan generation on oversized plans while retaining manual review', async () => {
+        const {root, currentView, requests} = await mounted(async request => path(request).endsWith('/warnings')
+            ? json({warnings: []}) : json(workspace()));
+        currentView.value = {...currentView.value, startDate: '1000-01-01', endDate: '9999-12-31',
+            window: {startDate: '1000-01-01', endDate: '1000-02-11', previous: null, next: '1000-02-12', oversized: true, maxDurationDays: 366}};
+        await flushPromises();
+        expect(root.get<HTMLButtonElement>('[data-recommendations-auto]').element.disabled).toBe(true);
+        await root.get('[data-recommendations-auto]').trigger('click');
+        await button(root, 'Approve').trigger('click');
+        await flushPromises();
+        expect(reviewStatus(root, recommendationId)).toBe('Approved');
+        expect(requests.some(request => path(request).endsWith('/auto'))).toBe(false);
+    });
+
     it('attaches calculated warnings to stored uppercase UUID rows and the manual preview dialog', async () => {
         const saved = workspace();
         const storedProfile = 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA';
@@ -565,7 +579,8 @@ describe('Activity recommendation review production frontend', () => {
         await third.get('button[title="Remove manual operation"]').trigger('click');
         await flushPromises();
         expect(root.findAll('[data-rec-id]').map(row => row.attributes('data-profile-id')).sort()).toEqual([profileId, otherId].sort());
-        expect(JSON.stringify(previews)).not.toMatch(/swapGroup|rowIdentity|rowVersion|"key"/u);
+        expect(JSON.stringify(previews)).not.toMatch(/rowIdentity|rowVersion|"key"/u);
+        expect(previews.at(-1)?.recommendations.every(row => typeof row.swapGroup === 'string')).toBe(true);
         expect(previews.at(-1)?.recommendations.map(row => row.profileId).sort()).toEqual([profileId, otherId].sort());
     });
 
@@ -621,7 +636,7 @@ describe('Activity recommendation review production frontend', () => {
         await flushPromises();
         expect(root.findAll('[data-rec-id]').map(row => row.attributes('data-rec-id')).sort()).toEqual([recommendationId, jobId].sort());
         expect(document.querySelector('#recommendationPairDialog')).toBeNull();
-        expect(JSON.stringify(previews)).not.toMatch(/swapGroup|rowIdentity|rowVersion|"key"/u);
+        expect(JSON.stringify(previews)).not.toMatch(/rowIdentity|rowVersion|"key"/u);
         expect(requests.some(request => path(request).endsWith('/apply'))).toBe(false);
     });
 
@@ -761,7 +776,7 @@ describe('Activity recommendation review production frontend', () => {
         expect(recommendationRelationship(singles, singles[0]!).kind).toBe('single');
         expect(recommendationPartners(singles, singles[1]!)).toEqual([singles[1]]);
         const restored = singles.map(row => ({key: row.key, value: row.value}));
-        expect(recommendationRelationship(restored, restored[0]!).kind).toBe('paired');
+        expect(recommendationRelationship(restored, restored[0]!).kind).toBe('ambiguous');
         const ambiguous = previous.map(row => ({key: row.key, value: row.value}));
         expect(recommendationRelationship(ambiguous, ambiguous[0]!).kind).toBe('ambiguous');
     });

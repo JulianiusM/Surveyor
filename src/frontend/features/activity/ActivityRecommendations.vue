@@ -89,6 +89,7 @@ const job = useQuery({queryKey: jobKey, ...jobAdmission, queryFn: readJob, refet
 const retryJob = useReadRetry(() => job.error.value);
 const running = computed(() => !!jobId.value && !jobTimedOut.value && !job.error.value
     && (!job.data.value || isRunning(job.data.value)));
+const generationBlocked = computed(() => blocked.value || running.value || assignmentMode.value === 'FREE' || props.view.window?.oversized === true);
 const counts = computed(() => ({PENDING: rows.value.filter(row => row.value.status === 'PENDING').length,
     APPROVED: rows.value.filter(row => row.value.status === 'APPROVED').length,
     REJECTED: rows.value.filter(row => row.value.status === 'REJECTED').length}));
@@ -296,7 +297,7 @@ watch([job.data, command.pending, command.uncertain], finishObservedJob);
 /** Dispatch deliberately once and consume only an explicitly accepted discard.
  * New edits made while the accepted calculation runs remain independent. */
 async function generate(): Promise<void> {
-    if (blocked.value || running.value || assignmentMode.value === 'FREE') return;
+    if (generationBlocked.value) return;
     if (dirty.value && !window.confirm(messages.value.t('draft.discard'))) return;
     pendingControl.value = 'generate';
     try {
@@ -408,8 +409,7 @@ function requestReviewAction(row: ActivityRecommendationDraftRow, action: Activi
                 ({identity: recommendationIdentity(candidate.value), version: pairVersion(candidate)}))};
         return;
     }
-    // Remember a mutually unique restored pair once the user acts on it. Future
-    // harmless reads preserve that relationship even if other moves are added.
+    // Preserve an already explicit pair through status changes and fresh reads.
     if (relationship.kind === 'paired') pairRecommendationRows(row, relationship.partners.find(partner => partner !== row)!);
     applyReviewAction(row, action);
 }
@@ -420,7 +420,7 @@ function applyReviewAction(row: ActivityRecommendationDraftRow, action: Activity
     const partners = recommendationPartners(rows.value, row);
     if (action.kind === 'status') {
         for (const partner of partners) partner.value.status = action.status;
-    } else {
+    } else if (action.kind === 'remove') {
         // Object identity selects this current draft's exact legs; no first
         // reverse-slot match can delete a participant from another swap.
         rows.value = rows.value.filter(candidate => !partners.includes(candidate));
@@ -444,6 +444,18 @@ function confirmPairChoice(): void {
     // Resolve again against current draft and authority. A former option's
     // identity alone cannot confirm a changed saved status or endpoint.
     const row = rows.value.find(value => recommendationIdentity(value.value) === choice.rowIdentity);
+    if (pairSelection.value === '__independent__') {
+        if (!row || !currentSavedOperation(row) || pairVersion(row) !== choice.rowVersion) {
+            pairSelection.value = '';
+            pairStale.value = true;
+            return;
+        }
+        row.swapGroup = null;
+        const action = choice.action;
+        cancelPairChoice();
+        applyReviewAction(row, action);
+        return;
+    }
     const partner = pairOptions.value.find(value => recommendationIdentity(value.value) === pairSelection.value);
     if (!row || !partner || pairVersion(row) !== choice.rowVersion || !pairRecommendationRows(row, partner)) {
         pairSelection.value = '';
@@ -469,10 +481,12 @@ function reconcilePairChoice(): void {
     }
     // Losing one candidate clears only that selection; losing the requested
     // operation or all evidence retires the intent instead of guessing a partner.
-    if (!pairOptions.value.length) {
+    const row = rows.value.find(value => recommendationIdentity(value.value) === choice.rowIdentity);
+    if (!row || !currentSavedOperation(row) || pairVersion(row) !== choice.rowVersion) {
         cancelPairChoice();
         command.setError('activity.recommendations.pairStale');
-    } else if (pairSelection.value && !pairOptions.value.some(row => recommendationIdentity(row.value) === pairSelection.value)) {
+    } else if (pairSelection.value && pairSelection.value !== '__independent__'
+        && !pairOptions.value.some(row => recommendationIdentity(row.value) === pairSelection.value)) {
         pairSelection.value = '';
         pairStale.value = true;
     }
@@ -492,7 +506,8 @@ function stage(values: ActivityRecommendationRow[]): void {
     if (blocked.value) return;
     // Construction supplies both swap legs together. A single staged move is
     // explicitly independent, even if a later separate move has reverse endpoints.
-    const staged: ActivityRecommendationDraftRow[] = values.map(value => ({key: nextRecommendationKey(), value, swapGroup: null}));
+    const staged: ActivityRecommendationDraftRow[] = values.map(value => ({key: nextRecommendationKey(), value,
+        swapGroup: value.swapGroup === undefined ? null : value.swapGroup}));
     if (staged.length === 2) pairRecommendationRows(staged[0]!, staged[1]!);
     rows.value.push(...staged);
     manualSlot.value = null;
@@ -524,6 +539,11 @@ async function manualPreview(values: ActivityRecommendationRow[]): Promise<compo
  * and its exact overlap digest; no mutable current draft is substituted later. */
 async function save(): Promise<void> {
     if (blocked.value || !workspace.value) return;
+    // Resolve one legacy intent per deliberate action. Saving is never resumed
+    // automatically after the chooser; the organizer reviews and selects Save again.
+    const unresolved = rows.value.find(row => row.value.operation === 'REASSIGN'
+        && row.value.status === 'APPROVED' && row.swapGroup === undefined && row.value.swapGroup === undefined);
+    if (unresolved) { requestReviewAction(unresolved, {kind: 'resolve'}); return; }
     pendingControl.value = 'save';
     // Retire speculative warning reads before capturing this complete batch;
     // only its own current actor's preview may open the confirmation gate.
@@ -598,6 +618,9 @@ function statusLabel(status: typeof statuses[number]): string {
 
 <template>
     <hr />
+    <StatusNotice v-if="view.window?.oversized" kind="info" :role="null">
+        {{ messages.t('activity.requirements.oversized', {days: view.window.maxDurationDays}) }}
+    </StatusNotice>
     <div class="mb-3">
         <span class="badge bg-light text-dark me-2">{{ messages.t('activity.recommendations.step') }}</span><span class="fw-semibold">{{ messages.t('activity.recommendations.stepTitle') }}</span>
     </div>
@@ -619,8 +642,9 @@ function statusLabel(status: typeof statuses[number]): string {
                     class="btn-sm" variant="outline-primary"
                     data-recommendations-auto
                     :pending="pendingControl === 'generate'"
-                    :disabled="blocked || running || assignmentMode === 'FREE'"
-                    :title="assignmentMode === 'FREE' ? messages.t('activity.recommendations.freeHint') : ''"
+                    :disabled="generationBlocked"
+                    :title="view.window?.oversized ? messages.t('activity.requirements.oversized', {days: view.window.maxDurationDays})
+                        : assignmentMode === 'FREE' ? messages.t('activity.recommendations.freeHint') : ''"
                     @click="generate"><i class="bi bi-stars me-1" aria-hidden="true"></i>{{ messages.t('activity.recommendations.auto') }}</ActionButton>
                 <ActionButton
                     type="button"
@@ -705,7 +729,7 @@ function statusLabel(status: typeof statuses[number]): string {
         @close="manualSlot = null"
         @stage="stage"
     />
-    <!-- Saved wire rows contain no swap identity. This shared dialog asks for
+    <!-- Legacy wire rows have unknown swap identity. This shared dialog asks for
          the missing relationship before changing status or removing either leg. -->
     <AppDialog id="recommendationPairDialog" :open="pairChoice !== null"
         :title="messages.t('activity.recommendations.pairTitle')" standard :fullscreen-on-small="false"
@@ -715,6 +739,7 @@ function statusLabel(status: typeof statuses[number]): string {
             <template #control>
                 <select id="recommendationPairCounterpart" v-model="pairSelection" class="form-select text-bg-dark" :disabled="reviewBlocked">
                     <option value="">{{ messages.t('activity.recommendations.pairChoose') }}</option>
+                    <option value="__independent__">{{ messages.t('activity.recommendations.independent') }}</option>
                     <option v-for="candidate in pairOptions" :key="candidate.key" :value="recommendationIdentity(candidate.value)">{{ pairOptionLabel(candidate) }}</option>
                 </select>
             </template>

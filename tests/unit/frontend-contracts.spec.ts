@@ -11,6 +11,7 @@ import type {components} from '../../src/types/api/v1';
 import {isNewPasswordValid} from '../../src/common/lib/frontendIdentity';
 import {fieldDiagnostic} from '../../src/common/localization/inputValidation';
 import type {Request, RequestHandler, Response} from 'express';
+import {MulterError} from 'multer';
 import {FrontendApi} from '../../src/frontend/app/api';
 import {createMultipartForm, InvalidInputError, ObsoleteRequestError} from '../../src/frontend/app/transport';
 import {DriversApi} from '../../src/frontend/features/drivers/api';
@@ -261,8 +262,9 @@ describe('generated v1 contract boundaries', () => {
         };
         await receiveApiUpload(req, res, upload);
         expect(req.file?.originalname).toBe('camp.png');
-        for (const [code, expected] of [['LIMIT_FILE_SIZE', 'PAYLOAD_TOO_LARGE'], ['PRIVATE_PARSER_CODE', 'UPLOAD_INVALID']]) {
-            const rejected: RequestHandler = (_request, _response, next) => next(Object.assign(new Error('Private upload path'), {code}));
+        for (const [error, expected] of [[new MulterError('LIMIT_FILE_SIZE'), 'PAYLOAD_TOO_LARGE'],
+            [Object.assign(new Error('Private upload path'), {code: 'EACCES'}), 'INTERNAL_ERROR']] as const) {
+            const rejected: RequestHandler = (_request, _response, next) => next(error);
             await expect(receiveApiUpload(req, res, rejected)).rejects.toMatchObject({code: expected});
             await expect(receiveApiUpload(req, res, rejected)).rejects.not.toHaveProperty('message', 'Private upload path');
         }

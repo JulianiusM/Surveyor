@@ -4,14 +4,16 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  */
 
-import type {AutoAssignmentContext, RecommendationInput, RecommendationJobStatus, RecommendationJobView, RecommendationJobCoordinatorOptions} from '../../../types/ActivityTypes';
+import type {
+    AutoAssignmentContext, RecommendationInput, RecommendationJobStatus, RecommendationJobView,
+    RecommendationJobCoordinatorOptions, ActivityRecommendationPersistenceContext,
+} from '../../../types/ActivityTypes';
 
 
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {Worker} from "node:worker_threads";
-import type {ActivityRecommendationPersistenceContext} from "../../../types/ActivityTypes";
 
 import {generateFairRecommendations} from "./fairAssignment";
 

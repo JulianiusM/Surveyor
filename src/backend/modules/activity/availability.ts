@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
-import type {SlotTimeboxCandidate, AttendanceCheck, AttendancePolicy} from '../../../types/ActivityTypes';
-import type {RecommendationWarningOptions, RecommendationInput, RecommendationWarningResult} from '../../../types/ActivityTypes';
+import type {
+    SlotTimeboxCandidate, AttendanceCheck, AttendancePolicy, RecommendationWarningOptions,
+    RecommendationInput, RecommendationWarningResult, AssignmentCandidate, AssignmentWarning,
+} from '../../../types/ActivityTypes';
 import {toParticipantKey} from '../../../common/activity/requirements';
 import {uuidKey, sameUuid, indexByUuid} from '../lib/util';
 
 import type {ParticipantAttendance} from "../../../types/ActivityRequirementTypes";
 import {parseTimeToMinutes, slotsOverlap} from './timebox';
-import type {AssignmentCandidate, AssignmentWarning} from '../../../types/ActivityTypes';
 
 function isBefore(a: string, b: string): boolean {
     return a < b;
@@ -176,6 +177,7 @@ export function normalizeRecommendationInput(input: RecommendationInput, referen
             : null,
         manual: Boolean(input.manual),
         hidden: Boolean(input.hidden),
+        ...(input.swapGroup === undefined ? {} : {swapGroup: input.swapGroup}),
     };
 }
 

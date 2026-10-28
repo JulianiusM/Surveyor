@@ -22,8 +22,9 @@ import * as invoiceService from '../database/services/EventInvoiceService';
 import {APIError} from '../lib/errors';
 import {formatAmount} from '../lib/util';
 import {resolveEmailRecipientName} from '../email';
-import type {InvoiceProof, InvoiceCorrections, InvoiceRevision, ConfirmedInvoiceChange} from '../../../types/InvoicePoolTypes';
-import {requireLockedPool, assertLockedParticipant, savePoolChange} from './state';
+import type {InvoiceProof, InvoiceCorrections, InvoiceRevision, ConfirmedInvoiceChange,
+    InvoiceManagementContext} from '../../../types/InvoicePoolTypes';
+import {requireLockedPool, assertLockedParticipant, savePoolChange, withInvoicePoolOperation} from './state';
 import {assertPositiveInvoiceAmount, assertConfirmedInvoiceChange} from './validation';
 import {attachInvoiceProof, withInvoiceProofUpload} from './proofs';
 
@@ -56,7 +57,7 @@ export async function persistSubmittedInvoice(poolId: string, registrationId: nu
 
 /** Record an accepted organizer invoice, optionally attributing its payment to an eligible participant. */
 export async function persistOrganizerInvoice(poolId: string, profileId: string, amount: number, description: string,
-    proof: InvoiceProof = null, registrationId?: number): Promise<number> {
+    proof: InvoiceProof = null, registrationId?: number, management?: InvoiceManagementContext): Promise<number> {
     /** Retain upload ownership through all admission, persistence and receipt work. */
     return withInvoiceProofUpload(proof, async function persistOwnedProof() {
         // Organizer costs are already accepted, but still obey the shared money and description constraints.
@@ -94,12 +95,13 @@ export async function persistOrganizerInvoice(poolId: string, profileId: string,
             await savePoolChange(manager, pool);
             return invoice.id;
         }
-        return invoiceService.withLockedPool(poolId, submitLocked);
+        return withInvoicePoolOperation(poolId, submitLocked, management);
     }, proof?.path);
 }
 
 /** Review decisions are checked again under the pool lock, so only the winning decision is notified. */
-export async function acceptSavedInvoice(poolId: string, invoiceId: number, corrections: InvoiceCorrections = {}): Promise<boolean> {
+export async function acceptSavedInvoice(poolId: string, invoiceId: number, corrections: InvoiceCorrections = {},
+    management?: InvoiceManagementContext): Promise<boolean> {
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
     async function acceptLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<boolean> {
         // The DBAL holds the pool lock throughout policy checks and dependent writes.
@@ -118,11 +120,12 @@ export async function acceptSavedInvoice(poolId: string, invoiceId: number, corr
         await savePoolChange(manager, pool);
         return true;
     }
-    return invoiceService.withLockedPool(poolId, acceptLocked);
+    return withInvoicePoolOperation(poolId, acceptLocked, management);
 }
 
 /** Close an accepted invoice idempotently without replacing calculated share rows. */
-export async function closeSavedInvoice(poolId: string, invoiceId: number): Promise<boolean> {
+export async function closeSavedInvoice(poolId: string, invoiceId: number,
+    management?: InvoiceManagementContext): Promise<boolean> {
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
     async function closeLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<boolean> {
         // The DBAL holds the pool lock throughout policy checks and dependent writes.
@@ -138,11 +141,12 @@ export async function closeSavedInvoice(poolId: string, invoiceId: number): Prom
         await invoiceService.refreshPoolTotals(manager, poolId);
         return true;
     }
-    return invoiceService.withLockedPool(poolId, closeLocked);
+    return withInvoicePoolOperation(poolId, closeLocked, management);
 }
 
 /** Reject an unreviewed invoice while retaining its submitted evidence and review history. */
-export async function rejectSavedInvoice(poolId: string, invoiceId: number, rejectionReason: string): Promise<boolean> {
+export async function rejectSavedInvoice(poolId: string, invoiceId: number, rejectionReason: string,
+    management?: InvoiceManagementContext): Promise<boolean> {
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
     async function rejectLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<boolean> {
         // The DBAL holds the pool lock throughout policy checks and dependent writes.
@@ -161,11 +165,12 @@ export async function rejectSavedInvoice(poolId: string, invoiceId: number, reje
         await savePoolChange(manager, pool);
         return true;
     }
-    return invoiceService.withLockedPool(poolId, rejectLocked);
+    return withInvoicePoolOperation(poolId, rejectLocked, management);
 }
 
 /** Apply validated effective corrections only against the matching locked pool revision. */
-export async function reviseSavedInvoice(poolId: string, invoiceId: number, corrections: InvoiceRevision, confirmation: ConfirmedInvoiceChange): Promise<EventInvoice> {
+export async function reviseSavedInvoice(poolId: string, invoiceId: number, corrections: InvoiceRevision,
+    confirmation: ConfirmedInvoiceChange, management?: InvoiceManagementContext): Promise<EventInvoice> {
     // Validate correction values before the transaction; original amount, description, and proof remain untouched.
     if (corrections?.correctedAmount !== null) assertPositiveInvoiceAmount(corrections?.correctedAmount);
     if (corrections?.correctedDescription !== null && (typeof corrections?.correctedDescription !== 'string'
@@ -189,11 +194,12 @@ export async function reviseSavedInvoice(poolId: string, invoiceId: number, corr
         await savePoolChange(manager, pool);
         return saved;
     }
-    return invoiceService.withLockedPool(poolId, reviseLocked);
+    return withInvoicePoolOperation(poolId, reviseLocked, management);
 }
 
 /** Exclude a counted invoice from future calculation without deleting its original evidence. */
-export async function rejectAcceptedSavedInvoice(poolId: string, invoiceId: number, reason: string, confirmation: ConfirmedInvoiceChange): Promise<EventInvoice> {
+export async function rejectAcceptedSavedInvoice(poolId: string, invoiceId: number, reason: string,
+    confirmation: ConfirmedInvoiceChange, management?: InvoiceManagementContext): Promise<EventInvoice> {
     // Reject an accepted cost only with a meaningful bounded reason; retain all original evidence.
     if (typeof reason !== 'string' || !reason.trim() || reason.trim().length > 4000) throw new APIError(invoiceText('rejectionReasonRequired'), {}, 400, {cause: invoiceRejectionCause('rejectionReasonRequired')});
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
@@ -213,7 +219,7 @@ export async function rejectAcceptedSavedInvoice(poolId: string, invoiceId: numb
         await savePoolChange(manager, pool);
         return saved;
     }
-    return invoiceService.withLockedPool(poolId, rejectLocked);
+    return withInvoicePoolOperation(poolId, rejectLocked, management);
 }
 
 /** Allow only an invoice’s authenticated submitter to withdraw it before organizer review. */

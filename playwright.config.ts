@@ -54,6 +54,13 @@ export default defineConfig({
             // Exercise production delivery failure against a refused local socket.
             // System fixtures must never send activation/recovery mail externally.
             E2E_SMTP_HOST: '127.0.0.1', E2E_SMTP_PORT: '1', E2E_SMTP_SECURE: 'false', E2E_SMTP_POOL: 'false',
+            // Independent workflow actors share one loopback client and seeded
+            // account. Keep admission active with explicit fixture-sized budgets;
+            // focused admission checks exercise exhaustion with small limits.
+            E2E_AUTH_LOGIN_CLIENT_LIMIT: '10000', E2E_AUTH_LOGIN_FAILURE_CLIENT_LIMIT: '10000',
+            E2E_AUTH_LOGIN_ACCOUNT_LIMIT: '10000', E2E_AUTH_SIGNUP_CLIENT_LIMIT: '10000',
+            E2E_AUTH_GUEST_CREATION_CLIENT_LIMIT: '10000', E2E_AUTH_MAIL_CLIENT_LIMIT: '10000',
+            E2E_AUTH_MAIL_RECIPIENT_LIMIT: '10000', E2E_AUTH_GUEST_LOOKUP_CLIENT_LIMIT: '10000',
         },
         url: `${BASE_URL}/healthz`,
         // Reusing an arbitrary local process would lose proof of the system-test

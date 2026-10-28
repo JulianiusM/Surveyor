@@ -88,6 +88,59 @@ async function mounted(component: Component, handler: (request: Request) => Prom
 }
 
 describe('Activity production frontend consumers', () => {
+    it('reads selected oversized windows, fences inline drafts and retains independent shared text', async () => {
+        const {wrapper, request} = await mounted(ActivityPage, async input => {
+            const next = new URL(input.url).searchParams.get('windowStart') === '2030-07-13';
+            const startDate = next ? '2030-07-13' : '2030-06-01';
+            return json({...view, endDate: '2032-06-01',
+                window: {startDate, endDate: next ? '2030-08-23' : '2030-07-12', previous: next ? '2030-06-01' : null,
+                    next: next ? '2030-08-24' : '2030-07-13', oversized: true, maxDurationDays: 366},
+                weeks: [{start: startDate, days: [startDate]}],
+                slots: [{...slot, id: next ? otherId : slotId, day: startDate, title: next ? 'Later duty' : 'First duty'}],
+                textFields: [{id: planId, title: 'Shared note', text: 'Saved note', editToken: '"text-fixture"',
+                    capabilities: {edit: true, editTitle: true, delete: true}}]});
+        });
+        const inline = wrapper.get(`[data-slotid="${slotId}"] small[tabindex="0"]`);
+        await inline.trigger('dblclick');
+        const inlineDraft = inline.get<HTMLInputElement>('input');
+        await inlineDraft.setValue('Keep this row until canceled');
+        const next = wrapper.findAll('button').find(button => button.text() === 'Next window')!;
+        expect((next.element as HTMLButtonElement).disabled).toBe(true);
+        await inlineDraft.trigger('keydown', {key: 'Escape'});
+        await flushPromises();
+        await wrapper.get('.text-field-content').trigger('dblclick');
+        const sharedDraft = wrapper.get<HTMLTextAreaElement>('.text-field-content textarea');
+        await sharedDraft.setValue('Keep this independent note');
+        await next.trigger('click');
+        await flushPromises();
+        expect(wrapper.text()).toContain('Later duty');
+        expect(wrapper.get<HTMLInputElement>('#activity-window-start').element.value).toBe('2030-07-13');
+        expect(wrapper.get('.text-field-content textarea').element).toBe(sharedDraft.element);
+        expect(sharedDraft.element.value).toBe('Keep this independent note');
+        expect(request.mock.calls.some(([input]) => new URL((input as Request).url).searchParams.get('windowStart') === '2030-07-13')).toBe(true);
+        expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+    });
+
+    it('uses the admitted configurable maximum before enumerating creation drafts', async () => {
+        const {wrapper} = await mounted(ActivityCreatePage, async request => new URL(request.url).pathname.endsWith('/events')
+            ? json({items: [], nextCursor: null, previousCursor: null})
+            : json({entry: {kind: 'render'}, context: {...definitions, maxDurationDays: 3}, selectedEvent: null}), '/activity/create');
+        await wrapper.get('#startDate').setValue('2030-06-01');
+        await wrapper.get('#endDate').setValue('2030-06-04');
+        await flushPromises();
+        expect(wrapper.get<HTMLInputElement>('#endDate').element.validationMessage).toContain('3');
+        expect(wrapper.findAll('.add-slot')).toHaveLength(1);
+        await wrapper.get('#startDate').setValue('1000-01-01');
+        await wrapper.get('#endDate').setValue('9999-12-31');
+        await flushPromises();
+        expect(wrapper.findAll('.add-slot')).toHaveLength(1);
+        await wrapper.get('#startDate').setValue('2030-06-01');
+        await wrapper.get('#endDate').setValue('2030-06-03');
+        await flushPromises();
+        expect(wrapper.get<HTMLInputElement>('#endDate').element.validationMessage).toBe('');
+        expect(wrapper.findAll('.add-slot')).toHaveLength(3);
+    });
+
     it('refreshes a deleted slot after confirmation focus starts a session check', async () => {
         let current = {...view, slots: [slot]};
         let finishSession!: (response: Response) => void;

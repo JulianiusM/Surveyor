@@ -24,8 +24,15 @@ import {
     dropColumnIfExists,
     dropFkConstraintIfExists,
     dropIndexIfExists,
+    getMigrationColumnStorage,
+    prepareMigrationReferences,
+    applyMigrationReferences,
+    assertMigrationColumnCanBeRetired,
+    assertMigrationForeignKeyNameAvailable,
+    sameMigrationColumnStorage,
     tableExists
 } from "../modules/database/utils/migration-helper";
+import type {MigrationColumnStorage} from '../../types/MigrationTypes';
 
 interface ForeignKeyDef {
     table: string;
@@ -47,8 +54,395 @@ interface RelationMapping {
     item?: { old: string; type: string; };
 }
 
+interface ProfileOwnershipMigrationPlan {
+    table: string;
+    kind: 'profile' | 'user';
+    protectedForeignKeys: readonly string[];
+}
+
 export class AddProfiles1785610467095 implements MigrationInterface {
     name = 'AddProfiles1785610467095';
+
+    /** Quote schema-owned identifiers without accepting executable SQL fragments. */
+    private identifier(value: string): string {
+        return `\`${value.replaceAll('`', '``')}\``;
+    }
+
+    /** Reject a loss condition without selecting or printing private record values. */
+    private async refuseRows(queryRunner: QueryRunner, sql: string, reason: string, parameters: unknown[] = []): Promise<void> {
+        if ((await queryRunner.query(sql, parameters)).length) throw new Error(`Profile migration refused: ${reason}`);
+    }
+
+    /** Check actual non-NULL values before interpreting an optional legacy column. */
+    private async populated(queryRunner: QueryRunner, table: string, column: string): Promise<boolean> {
+        if (!await columnExists(queryRunner, table, column)) return false;
+        return (await queryRunner.query(`SELECT 1 FROM ${this.identifier(table)} WHERE ${this.identifier(column)} IS NOT NULL LIMIT 1`)).length > 0;
+    }
+
+    /** Preserve every actual automatic-update column during a migration backfill. */
+    private async timestampAssignments(queryRunner: QueryRunner, table: string, alias = '', assigned: string[] = []): Promise<string> {
+        // Explicit self-assignment prevents MariaDB ON UPDATE from replacing historical audit time.
+        const columns: {name: string}[] = await queryRunner.query(`SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND LOWER(EXTRA) LIKE '%on update%'`, [table]);
+        const prefix = alias ? `${alias}.` : '';
+        return columns.filter(column => !assigned.includes(column.name))
+            .map(column => `, ${prefix}${this.identifier(column.name)} = ${prefix}${this.identifier(column.name)}`).join('');
+    }
+
+    /** Read the actual charset/collation inherited by this migration's authored VARCHAR DDL. */
+    private async tableCharacterStorage(queryRunner: QueryRunner, table: string, allowCreation = false) {
+        const [existing] = await queryRunner.query(`SELECT t.TABLE_COLLATION AS collation, c.CHARACTER_SET_NAME AS charset
+            FROM information_schema.TABLES t JOIN information_schema.COLLATIONS c ON c.COLLATION_NAME = t.TABLE_COLLATION
+            WHERE t.TABLE_SCHEMA = DATABASE() AND t.TABLE_NAME = ?`, [table]);
+        if (existing) return existing as {charset: string; collation: string};
+        // Only a not-yet-created profiles table inherits DATABASE defaults.
+        if (allowCreation && table === 'profiles') {
+            const [defaults] = await queryRunner.query(`SELECT DEFAULT_CHARACTER_SET_NAME AS charset, DEFAULT_COLLATION_NAME AS collation
+                FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = DATABASE()`);
+            if (defaults) return defaults as {charset: string; collation: string};
+        }
+        throw new Error(`Profile migration refused: missing ${table} character storage`);
+    }
+
+    /** Prove a legacy account reference and its unique existing or planned profile. */
+    private async identityProjection(queryRunner: QueryRunner, table: string, column: string,
+        account: 'user' | 'guest', hasProfiles: boolean): Promise<string> {
+        if (!await this.populated(queryRunner, table, column)) return 'NULL';
+        const source = `${account}s`;
+        // A populated legacy ID must already match its actual account storage; no cast may invent a match.
+        await prepareMigrationReferences(queryRunner, [{table, column, referencedTable: source, referencedColumn: 'id'}]);
+        if (hasProfiles) {
+            await this.refuseRows(queryRunner, `SELECT 1 FROM ${this.identifier(table)} t WHERE t.${this.identifier(column)} IS NOT NULL
+                AND (SELECT COUNT(*) FROM profiles p WHERE p.${account}_id = t.${this.identifier(column)}) > 1 LIMIT 1`,
+            `multiple profiles for ${table}.${column}`);
+        }
+        // A planned profile key identifies its retained account, not a guessed future UUID.
+        const planned = `CONCAT('${account}:', HEX(t.${this.identifier(column)}))`;
+        return hasProfiles ? `COALESCE((SELECT CONCAT('profile:', HEX(p.id)) FROM profiles p
+            WHERE p.${account}_id = t.${this.identifier(column)}), ${planned})` : planned;
+    }
+
+    /** Validate current Profile references before using them as provenance. */
+    private async profileProjection(queryRunner: QueryRunner, table: string, column: string, hasProfiles: boolean): Promise<string> {
+        if (!await this.populated(queryRunner, table, column)) return 'NULL';
+        if (!hasProfiles) throw new Error(`Profile migration refused: ${table}.${column} has no profiles table`);
+        await prepareMigrationReferences(queryRunner, [{table, column, referencedTable: 'profiles', referencedColumn: 'id'}]);
+        return `(SELECT CONCAT('profile:', HEX(p.id)) FROM profiles p WHERE p.id = t.${this.identifier(column)})`;
+    }
+
+    /** Classify all five owners before any FK, index, schema or data statement. */
+    private async preflightOwners(queryRunner: QueryRunner, hasProfiles: boolean): Promise<ProfileOwnershipMigrationPlan[]> {
+        const owners: ProfileOwnershipMigrationPlan[] = [];
+        const profileId = hasProfiles ? await getMigrationColumnStorage(queryRunner, 'profiles', 'id') : null;
+        const userId = await getMigrationColumnStorage(queryRunner, 'users', 'id');
+        const [context] = await queryRunner.query('SELECT DATABASE() AS selectedDatabase');
+        for (const table of ['drivers_lists', 'packing_lists', 'events', 'activity_plans', 'surveys']) {
+            const metadata = await queryRunner.getTable(table);
+            const owner = await getMigrationColumnStorage(queryRunner, table, 'owner_id');
+            if (!metadata || !owner) throw new Error(`Profile migration refused: missing ${table} ownership evidence`);
+            const keys = metadata.foreignKeys.filter(key => key.columnNames.includes('owner_id'));
+            const numeric = /^(?:tinyint|smallint|mediumint|int|bigint)(?:\(| |$)/u.test(owner.columnType);
+            const target = numeric ? 'users' : 'profiles';
+            // Existing owner constraints are proof, and remain installed until a verified replacement is ready.
+            for (const key of keys) {
+                if (!key.name || key.columnNames.length !== 1 || key.referencedColumnNames.length !== 1 || key.referencedColumnNames[0] !== 'id'
+                    || ![target, `${context.selectedDatabase}.${target}`].includes(key.referencedTableName)
+                    || key.referencedDatabase && key.referencedDatabase !== context.selectedDatabase) {
+                    throw new Error(`Profile migration refused: conflicting ${table} ownership constraint`);
+                }
+            }
+            if (!numeric) {
+                if (!profileId || !sameMigrationColumnStorage(owner, profileId)) throw new Error(`Profile migration refused: unsupported ${table} profile ownership`);
+                await this.profileProjection(queryRunner, table, 'owner_id', hasProfiles);
+            } else {
+                if (!userId || !sameMigrationColumnStorage(owner, userId)
+                    || await this.populated(queryRunner, table, 'owner_id') && keys.length === 0) {
+                    throw new Error(`Profile migration refused: unproven ${table} numeric user ownership`);
+                }
+                await this.identityProjection(queryRunner, table, 'owner_id', 'user', hasProfiles);
+                await assertMigrationColumnCanBeRetired(queryRunner, table, 'owner_id');
+            }
+            if (await columnExists(queryRunner, table, 'owner_profile_id')) {
+                // Every populated temporary value must agree with the still-present original source.
+                if (numeric) {
+                    await assertMigrationColumnCanBeRetired(queryRunner, table, 'owner_profile_id');
+                    if (!hasProfiles && await this.populated(queryRunner, table, 'owner_profile_id')) throw new Error('Profile migration refused: unproven temporary owner');
+                    if (hasProfiles) {
+                        await prepareMigrationReferences(queryRunner, [{table, column: 'owner_profile_id', referencedTable: 'profiles', referencedColumn: 'id'}]);
+                        await this.verifyTemporaryOwner(queryRunner, table);
+                    }
+                } else {
+                    await this.profileProjection(queryRunner, table, 'owner_profile_id', hasProfiles);
+                    await this.refuseRows(queryRunner, `SELECT 1 FROM ${this.identifier(table)} WHERE owner_profile_id IS NOT NULL
+                        AND NOT (BINARY owner_profile_id <=> BINARY owner_id) LIMIT 1`, `conflicting ${table} temporary owner`);
+                }
+            }
+            owners.push({table, kind: numeric ? 'user' : 'profile', protectedForeignKeys: keys.map(key => key.name!)});
+        }
+        return owners;
+    }
+
+    /** A populated temporary owner may only be the uniquely proven profile of its original User. */
+    private async verifyTemporaryOwner(queryRunner: QueryRunner, table: string, complete = false): Promise<void> {
+        await this.refuseRows(queryRunner, `SELECT 1 FROM ${this.identifier(table)} t WHERE
+            (t.owner_profile_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = t.owner_id
+                AND BINARY p.id = BINARY t.owner_profile_id))
+            ${complete ? 'OR (t.owner_id IS NOT NULL AND t.owner_profile_id IS NULL)' : ''} LIMIT 1`,
+        `conflicting or incomplete ${table} temporary owner`);
+    }
+
+    /** Retire a duplicate source only when its stored value is retained exactly. */
+    private async requireAgreeingColumns(queryRunner: QueryRunner, table: string, source: string, destination: string): Promise<void> {
+        if (!await columnExists(queryRunner, table, source) || !await columnExists(queryRunner, table, destination)) return;
+        await this.refuseRows(queryRunner, `SELECT 1 FROM ${this.identifier(table)} WHERE ${this.identifier(source)} IS NOT NULL
+            AND ${this.identifier(destination)} IS NOT NULL AND NOT (BINARY ${this.identifier(source)} <=> BINARY ${this.identifier(destination)}) LIMIT 1`,
+        `conflicting ${table}.${source}/${destination}`);
+    }
+
+    /** Project a direct retained parent identity after checking its physical reference and rows. */
+    private async directProjection(queryRunner: QueryRunner, table: string, column: string, parent: string): Promise<string> {
+        if (!await this.populated(queryRunner, table, column)) return 'NULL';
+        await prepareMigrationReferences(queryRunner, [{table, column, referencedTable: parent, referencedColumn: 'id'}]);
+        return `(SELECT HEX(parent.id) FROM ${this.identifier(parent)} parent WHERE parent.id = t.${this.identifier(column)})`;
+    }
+
+    /** Inspect sibling COALESCE/drop paths without changing their conversion policy. */
+    private async preflightRelations(queryRunner: QueryRunner, mappings: RelationMapping[], foreignKeys: ForeignKeyDef[], hasProfiles: boolean) {
+        const projections = new Map<string, Map<string, string>>();
+        for (const mapping of mappings) {
+            const expressions = new Map<string, string>();
+            if (mapping.profile) {
+                const current = await this.profileProjection(queryRunner, mapping.table, 'profile_id', hasProfiles);
+                const user = mapping.profile.oldUser ? await this.identityProjection(queryRunner, mapping.table, mapping.profile.oldUser, 'user', hasProfiles) : 'NULL';
+                const guest = mapping.profile.oldGuest ? await this.identityProjection(queryRunner, mapping.table, mapping.profile.oldGuest, 'guest', hasProfiles) : 'NULL';
+                // A source that disagrees with another source or destination cannot be dropped.
+                await this.refuseRows(queryRunner, `SELECT 1 FROM ${this.identifier(mapping.table)} t WHERE
+                    (${user} IS NOT NULL AND ${guest} IS NOT NULL AND NOT (BINARY (${user}) <=> BINARY (${guest})))
+                    OR (${current} IS NOT NULL AND ${user} IS NOT NULL AND NOT (BINARY (${current}) <=> BINARY (${user})))
+                    OR (${current} IS NOT NULL AND ${guest} IS NOT NULL AND NOT (BINARY (${current}) <=> BINARY (${guest}))) LIMIT 1`,
+                `conflicting ${mapping.table} identity sources`);
+                expressions.set('profile_id', `COALESCE(${current}, ${user}, ${guest})`);
+            }
+            for (const [column, relation] of [['entity_id', mapping.entity], ['item_id', mapping.item]] as const) {
+                if (!relation) continue;
+                const definition = foreignKeys.find(key => key.table === mapping.table && key.definition.startsWith(`FOREIGN KEY (\`${column}\`)`));
+                const parent = definition && /REFERENCES `([^`]+)`/u.exec(definition.definition)?.[1];
+                if (!parent) throw new Error(`Profile migration refused: missing ${mapping.table}.${column} reference definition`);
+                await this.requireAgreeingColumns(queryRunner, mapping.table, relation.old, column);
+                const current = await this.directProjection(queryRunner, mapping.table, column, parent);
+                const legacy = await this.directProjection(queryRunner, mapping.table, relation.old, parent);
+                expressions.set(column, `COALESCE(${current}, ${legacy})`);
+            }
+            projections.set(mapping.table, expressions);
+        }
+        // Administrator assignments have the same loss risks but a separate historical branch.
+        const admin = new Map<string, string>();
+        if (await columnExists(queryRunner, 'entity_admin_assignments', 'user_id')) {
+            const current = await this.profileProjection(queryRunner, 'entity_admin_assignments', 'profile_id', hasProfiles);
+            const user = await this.identityProjection(queryRunner, 'entity_admin_assignments', 'user_id', 'user', hasProfiles);
+            await this.refuseRows(queryRunner, `SELECT 1 FROM entity_admin_assignments t WHERE ${current} IS NOT NULL AND ${user} IS NOT NULL
+                AND NOT (BINARY (${current}) <=> BINARY (${user})) LIMIT 1`, 'conflicting administrator identity');
+            admin.set('profile_id', `COALESCE(${current}, ${user})`);
+        } else {
+            const type = await this.getColumnType(queryRunner, 'entity_admin_assignments', 'profile_id');
+            if (!type && await columnExists(queryRunner, 'entity_admin_assignments', 'profile_uuid')) {
+                throw new Error('Profile migration refused: original administrator identity evidence is missing');
+            }
+            if (type && ['int', 'bigint', 'smallint'].includes(type)) {
+                const user = await this.identityProjection(queryRunner, 'entity_admin_assignments', 'profile_id', 'user', hasProfiles);
+                if (await columnExists(queryRunner, 'entity_admin_assignments', 'profile_uuid')) {
+                    const stagedStorage = await getMigrationColumnStorage(queryRunner, 'entity_admin_assignments', 'profile_uuid');
+                    const target = hasProfiles ? await getMigrationColumnStorage(queryRunner, 'profiles', 'id') : null;
+                    const planned = !hasProfiles ? await this.tableCharacterStorage(queryRunner, 'profiles', true) : null;
+                    if (!stagedStorage || (target ? !sameMigrationColumnStorage(stagedStorage, target)
+                        : stagedStorage.columnType !== 'varchar(36)' || stagedStorage.characterSet !== planned?.charset || stagedStorage.collation !== planned?.collation)) {
+                        throw new Error('Profile migration refused: unsupported temporary administrator identity storage');
+                    }
+                    await assertMigrationColumnCanBeRetired(queryRunner, 'entity_admin_assignments', 'profile_uuid');
+                    const staged = await this.profileProjection(queryRunner, 'entity_admin_assignments', 'profile_uuid', hasProfiles);
+                    await this.refuseRows(queryRunner, `SELECT 1 FROM entity_admin_assignments t WHERE ${staged} IS NOT NULL
+                        AND NOT (BINARY (${staged}) <=> BINARY (${user})) LIMIT 1`, 'conflicting temporary administrator identity');
+                }
+                admin.set('profile_id', user);
+            }
+        }
+        projections.set('entity_admin_assignments', admin);
+        return projections;
+    }
+
+    /** Admit profile creation only when its existing UUID() representation is lossless. */
+    private async preflightProfileCreation(queryRunner: QueryRunner, hasProfiles: boolean): Promise<void> {
+        if (!hasProfiles) {
+            const guest = await getMigrationColumnStorage(queryRunner, 'guests', 'id');
+            const user = await getMigrationColumnStorage(queryRunner, 'users', 'id');
+            const defaults = await this.tableCharacterStorage(queryRunner, 'profiles', true);
+            if (!guest || guest.columnType !== 'varchar(36)' || guest.characterSet !== defaults?.charset || guest.collation !== defaults?.collation
+                || !user || !/^int(?:\([0-9]+\))?$/u.test(user.columnType)) {
+                throw new Error('Profile migration refused: legacy profile creation requires a separately reviewed account reference conversion');
+            }
+            return;
+        }
+        for (const column of ['id', 'name', 'migration_token', 'migration_token_expiration', 'default_for_owner',
+            'user_id', 'guest_id', 'created_at', 'updated_at']) {
+            if (!await columnExists(queryRunner, 'profiles', column)) throw new Error('Profile migration refused: incomplete existing profiles table');
+        }
+        const id = await getMigrationColumnStorage(queryRunner, 'profiles', 'id');
+        if (!id || !/^(?:uuid|(?:var)?char\(|(?:var)?binary\()/u.test(id.columnType)) throw new Error('Profile migration refused: unsupported Profile identifier');
+        const missing = await queryRunner.query(`SELECT 1 FROM users a LEFT JOIN profiles p ON p.user_id = a.id WHERE p.user_id IS NULL
+            UNION ALL SELECT 1 FROM guests a LEFT JOIN profiles p ON p.guest_id = a.id WHERE p.guest_id IS NULL LIMIT 1`);
+        if (missing.length) {
+            if (/binary/u.test(id.columnType)) throw new Error('Profile migration refused: binary profile creation has no approved UUID encoding');
+            const capacity = /char\(([0-9]+)\)/u.exec(id.columnType)?.[1];
+            if (capacity && Number(capacity) < 36) throw new Error('Profile migration refused: UUID() exceeds existing profile identifier capacity');
+        }
+        await this.refuseRows(queryRunner, `SELECT 1 FROM profiles WHERE guest_id IS NOT NULL GROUP BY guest_id HAVING COUNT(*) > 1 LIMIT 1`,
+        'multiple profiles for one guest');
+    }
+
+    /** Compare the complete physical shape of an unchanged authored sibling reference. */
+    private async originalReferenceFits(queryRunner: QueryRunner, table: string, parent: string, storage: MigrationColumnStorage): Promise<boolean> {
+        // The historical definitions are signed INT or VARCHAR(36), never an inferred binary UUID.
+        if (parent === 'users' || parent === 'survey_combinations') return /^int(?:\([0-9]+\))?$/u.test(storage.columnType);
+        if (storage.columnType !== 'varchar(36)') return false;
+        const defaults = await this.tableCharacterStorage(queryRunner, table, table === 'profiles');
+        return storage.characterSet === defaults.charset && storage.collation === defaults.collation;
+    }
+
+    /** Unknown write triggers can alter unrelated rows or timestamps; no such repair is authorized. */
+    private async preflightTriggers(queryRunner: QueryRunner, mappings: RelationMapping[], owners: ProfileOwnershipMigrationPlan[]): Promise<void> {
+        const updates = [...new Set([...mappings.map(mapping => mapping.table), 'entity_admin_assignments', 'activity_roles',
+            'activity_assignments', 'survey_combinations', ...owners.filter(owner => owner.kind === 'user').map(owner => owner.table)])];
+        // The canonical assignment-role BEFORE INSERT trigger is not on this write inventory.
+        await this.refuseRows(queryRunner, `SELECT 1 FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE()
+            AND ((EVENT_OBJECT_TABLE = 'profiles' AND EVENT_MANIPULATION = 'INSERT')
+            OR (EVENT_MANIPULATION = 'UPDATE' AND EVENT_OBJECT_TABLE IN (${updates.map(() => '?').join(', ')}))) LIMIT 1`,
+        'write triggers require separate preservation review', updates);
+    }
+
+    /** Refuse audit-time coercion or precision loss before retiring the legacy tracking column. */
+    private async preflightTracking(queryRunner: QueryRunner): Promise<void> {
+        if (!await columnExists(queryRunner, 'activity_assignments', 'updatedAt')) return;
+        const columns: {name: string; type: string; precision: number | null}[] = await queryRunner.query(`SELECT COLUMN_NAME AS name,
+            DATA_TYPE AS type, DATETIME_PRECISION AS precision FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'activity_assignments' AND COLUMN_NAME IN ('updatedAt', 'updated_at')`);
+        const source = columns.find(column => column.name === 'updatedAt');
+        const destination = columns.find(column => column.name === 'updated_at');
+        // The unchanged absent-column definition is TIMESTAMP(6). DATETIME carries
+        // different range/timezone semantics and needs a separately reviewed conversion.
+        if (!source || source.type !== 'timestamp' || source.precision === null
+            || destination && (destination.type !== 'timestamp' || destination.precision === null)
+            || Number(source.precision) > Number(destination?.precision ?? 6)) {
+            throw new Error('Profile migration refused: audit-time storage conversion could lose precision or range');
+        }
+        await this.requireAgreeingColumns(queryRunner, 'activity_assignments', 'updatedAt', 'updated_at');
+    }
+
+    /** Refuse existing or projected dangling final references before FK checks are changed. */
+    private async preflightFinalReferences(queryRunner: QueryRunner, definitions: ForeignKeyDef[], owners: ProfileOwnershipMigrationPlan[], hasProfiles: boolean): Promise<void> {
+        for (const definition of definitions) {
+            const match = /^FOREIGN KEY \(`([^`]+)`\) REFERENCES `([^`]+)` \(`id`\)/u.exec(definition.definition);
+            if (!match) throw new Error('Profile migration refused: unsupported reference inventory');
+            const [, column, parent] = match;
+            await assertMigrationForeignKeyNameAvailable(queryRunner, definition.table, definition.name);
+            if (owners.some(owner => owner.table === definition.table && column === 'owner_id' && owner.kind === 'user')) continue;
+            if (definition.table === 'profiles' && !hasProfiles) continue;
+            const adminConversion = definition.table === 'entity_admin_assignments' && column === 'profile_id'
+                && ['int', 'bigint', 'smallint'].includes(await this.getColumnType(queryRunner, definition.table, column!) ?? '');
+            const child = adminConversion ? null : await getMigrationColumnStorage(queryRunner, definition.table, column!);
+            const storage = parent === 'profiles' && !hasProfiles ? null : await getMigrationColumnStorage(queryRunner, parent!, 'id');
+            if (!child || adminConversion) {
+                // These sibling branches still author varchar(36) or int. Refuse,
+                // rather than silently widening A23 into their physical conversion.
+                if (storage && !await this.originalReferenceFits(queryRunner, definition.table, parent!, storage)) {
+                    throw new Error(`Profile migration refused: unreviewed ${definition.table}.${column} storage conversion`);
+                }
+                continue;
+            }
+            if (!storage || !sameMigrationColumnStorage(child, storage)) throw new Error(`Profile migration refused: incompatible final ${definition.table}.${column}`);
+            await prepareMigrationReferences(queryRunner, [{table: definition.table, column: column!, referencedTable: parent!, referencedColumn: 'id'}]);
+        }
+    }
+
+    /** Validate every projected unique key while all original columns and values still exist. */
+    private async preflightUniqueIndexes(queryRunner: QueryRunner, definitions: IndexDef[], projections: Map<string, Map<string, string>>): Promise<void> {
+        for (const definition of definitions) {
+            if (!definition.unique) continue;
+            const columns = [...definition.columns.matchAll(/`([^`]+)`/gu)].map(match => match[1]!);
+            const values: string[] = [];
+            for (const column of columns) {
+                let expression = projections.get(definition.table)?.get(column);
+                if (!expression && column === 'title' && definition.table === 'activity_roles') {
+                    const title = await columnExists(queryRunner, definition.table, 'title') ? 't.title' : 'NULL';
+                    const name = await columnExists(queryRunner, definition.table, 'name') ? 't.name' : 'NULL';
+                    expression = `COALESCE(${title}, ${name}, CONCAT(t.id, ':role'))`;
+                }
+                if (!expression) {
+                    if (!await columnExists(queryRunner, definition.table, column)) throw new Error(`Profile migration refused: missing unique-key evidence ${definition.table}.${column}`);
+                    expression = `t.${this.identifier(column)}`;
+                }
+                values.push(expression);
+            }
+            // SQL unique indexes permit repeated rows containing NULL. Compare only complete keys.
+            const names = values.map((_, index) => `v${index}`);
+            await this.refuseRows(queryRunner, `SELECT 1 FROM (SELECT ${values.map((value, index) => `${value} AS ${names[index]}`).join(', ')}
+                FROM ${this.identifier(definition.table)} t) projected WHERE ${names.map(name => `${name} IS NOT NULL`).join(' AND ')}
+                GROUP BY ${names.join(', ')} HAVING COUNT(*) > 1 LIMIT 1`, `projected duplicate ${definition.name}`);
+        }
+    }
+
+    /** Complete the no-loss admission before even changing FOREIGN_KEY_CHECKS. */
+    private async preflightUp(queryRunner: QueryRunner, mappings: RelationMapping[], indexes: IndexDef[], foreignKeys: ForeignKeyDef[]) {
+        const [checks] = await queryRunner.query('SELECT @@FOREIGN_KEY_CHECKS AS enabled');
+        if (Number(checks?.enabled) !== 1) throw new Error('Profile migration refused: foreign-key checking must already be enabled');
+        const hasProfiles = await tableExists(queryRunner, 'profiles');
+        await this.preflightProfileCreation(queryRunner, hasProfiles);
+        const owners = await this.preflightOwners(queryRunner, hasProfiles);
+        await this.preflightTriggers(queryRunner, mappings, owners);
+        const projections = await this.preflightRelations(queryRunner, mappings, foreignKeys, hasProfiles);
+        // Retired sibling fields may have custom checks/generated/incoming dependencies.
+        // Such schemas require their own recovery decision, not silent constraint loss.
+        const retirements = mappings.flatMap(mapping => [mapping.profile?.oldUser, mapping.profile?.oldGuest,
+            mapping.entity?.old, mapping.item?.old].filter((column): column is string => !!column).map(column => ({table: mapping.table, column})));
+        retirements.push({table: 'entity_admin_assignments', column: 'user_id'}, {table: 'activity_roles', column: 'name'},
+            {table: 'activity_assignments', column: 'updatedAt'});
+        if (['int', 'bigint', 'smallint'].includes(await this.getColumnType(queryRunner, 'entity_admin_assignments', 'profile_id') ?? '')) {
+            retirements.push({table: 'entity_admin_assignments', column: 'profile_id'});
+        }
+        for (const {table, column} of retirements) {
+            if (await columnExists(queryRunner, table, column)) await assertMigrationColumnCanBeRetired(queryRunner, table, column);
+        }
+        await this.requireAgreeingColumns(queryRunner, 'activity_roles', 'name', 'title');
+        await this.preflightTracking(queryRunner);
+        for (const [table, column] of [['activity_slots', 'description'], ['activity_roles', 'description'],
+            ['activity_roles', 'name'], ['activity_roles', 'title'], ['survey_combinations', 'title']]) {
+            if (await columnExists(queryRunner, table!, column!)) {
+                await this.refuseRows(queryRunner, `SELECT 1 FROM ${this.identifier(table!)} WHERE CHAR_LENGTH(${this.identifier(column!)}) > 255 LIMIT 1`,
+                `text narrowing would lose ${table}.${column}`);
+                const storage = await queryRunner.query(`SELECT CHARACTER_SET_NAME AS charset, COLLATION_NAME AS collation FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`, [table, column]);
+                const defaults = await this.tableCharacterStorage(queryRunner, table!);
+                if (storage[0]?.charset !== defaults?.charset || storage[0]?.collation !== defaults?.collation) {
+                    throw new Error(`Profile migration refused: unreviewed text storage conversion ${table}.${column}`);
+                }
+            }
+        }
+        await this.preflightFinalReferences(queryRunner, foreignKeys, owners, hasProfiles);
+        await this.preflightUniqueIndexes(queryRunner, indexes, projections);
+        return owners;
+    }
+
+    /** Empty-schema reversal only: populated profile/relationship payloads cannot be represented losslessly. */
+    private async preflightDown(queryRunner: QueryRunner, tables: readonly string[]): Promise<void> {
+        const [checks] = await queryRunner.query('SELECT @@FOREIGN_KEY_CHECKS AS enabled');
+        if (Number(checks?.enabled) !== 1) throw new Error('Profile migration refused: foreign-key checking must already be enabled');
+        for (const table of new Set([...tables, 'profiles', 'entity_admin_assignments', 'activity_roles', 'activity_assignments',
+            'survey_combinations', 'drivers_lists', 'packing_lists', 'events', 'activity_plans', 'surveys'])) {
+            if (await tableExists(queryRunner, table)) {
+                await this.refuseRows(queryRunner, `SELECT 1 FROM ${this.identifier(table)} LIMIT 1`,
+                `populated ${table} requires the paired database/file backup for rollback`);
+            }
+        }
+    }
 
     private async getColumnType(queryRunner: QueryRunner, table: string, column: string): Promise<string | null> {
         const result = await queryRunner.query(
@@ -63,33 +457,31 @@ export class AddProfiles1785610467095 implements MigrationInterface {
         return result[0]?.dataType?.toLowerCase() ?? null;
     }
 
-    /** Convert an existing numeric owner reference to its corresponding profile UUID. */
-    private async migrateOwnerToProfile(queryRunner: QueryRunner, table: string): Promise<void> {
-        // Missing or already textual owner columns require no conversion; this
-        // permits the same migration to encounter partially prepared schemas.
-        if (!await columnExists(queryRunner, table, 'owner_id')) {
-            return;
-        }
-
-        const ownerType = await this.getColumnType(queryRunner, table, 'owner_id');
-        if (ownerType === 'varchar' || ownerType === 'char') {
-            return;
-        }
-
-        // Backfill a temporary column while the old numeric reference is available,
-        // then replace that column only after the profile join has completed.
-        await addColumnIfNotExists(queryRunner, table, 'owner_profile_id', 'varchar(36)', 'NULL');
+    /** Replace only a preflight-proven numeric User owner, retaining source proof until verified. */
+    private async migrateOwnerToProfile(queryRunner: QueryRunner, plan: ProfileOwnershipMigrationPlan): Promise<void> {
+        if (plan.kind === 'profile') return;
+        const {table} = plan;
+        const references = await prepareMigrationReferences(queryRunner,
+            [{table, column: 'owner_profile_id', referencedTable: 'profiles', referencedColumn: 'id'}]);
+        await this.identityProjection(queryRunner, table, 'owner_id', 'user', true);
+        await applyMigrationReferences(queryRunner, references);
+        await this.verifyTemporaryOwner(queryRunner, table);
+        const timestamps = await this.timestampAssignments(queryRunner, table, 't');
+        // Retain original owner and audit values while the exact replacement is populated.
         await queryRunner.query(
             `UPDATE \`${table}\` t
-                LEFT JOIN \`profiles\` p ON p.user_id = t.owner_id
-             SET t.owner_profile_id = p.id
+                INNER JOIN \`profiles\` p ON p.user_id = t.owner_id
+             SET t.owner_profile_id = p.id${timestamps}
              WHERE t.owner_profile_id IS NULL
                AND t.owner_id IS NOT NULL`
         );
-
-        await dropColumnIfExists(queryRunner, table, 'owner_id');
-        await queryRunner.query(`ALTER TABLE \`${table}\`
-            CHANGE \`owner_profile_id\` \`owner_id\` varchar(36) NULL`);
+        await this.verifyTemporaryOwner(queryRunner, table, true);
+        const storage = references[0]!.storage;
+        // One ALTER retires the validated old column and renames its replacement;
+        // a separate DROP must never leave a populated table without its owner.
+        const drops = plan.protectedForeignKeys.map(name => `DROP FOREIGN KEY ${this.identifier(name)}`);
+        await queryRunner.query(`ALTER TABLE ${this.identifier(table)} ${[...drops, 'DROP COLUMN `owner_id`',
+            `CHANGE COLUMN \`owner_profile_id\` \`owner_id\` ${storage.definition} NULL`].join(', ')}`);
     }
 
     /** Recover numeric user ownership from profile references during rollback. */
@@ -164,7 +556,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
                 await queryRunner.query(
                     `UPDATE \`${mapping.table}\` t
                          ${joins.join('\n                     ')}
-                    SET t.profile_id = COALESCE(${sources.join(', ')}) WHERE t.profile_id IS NULL`
+                    SET t.profile_id = COALESCE(${sources.join(', ')})${await this.timestampAssignments(queryRunner, mapping.table, 't')} WHERE t.profile_id IS NULL`
                 );
             }
         }
@@ -176,7 +568,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             if (await columnExists(queryRunner, mapping.table, mapping.entity.old)) {
                 await queryRunner.query(
                     `UPDATE \`${mapping.table}\`
-                     SET \`entity_id\` = COALESCE(\`entity_id\`, \`${mapping.entity.old}\`)
+                     SET \`entity_id\` = COALESCE(\`entity_id\`, \`${mapping.entity.old}\`)${await this.timestampAssignments(queryRunner, mapping.table)}
                      WHERE \`entity_id\` IS NULL`
                 );
             }
@@ -187,7 +579,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             if (await columnExists(queryRunner, mapping.table, mapping.item.old)) {
                 await queryRunner.query(
                     `UPDATE \`${mapping.table}\`
-                     SET \`item_id\` = COALESCE(\`item_id\`, \`${mapping.item.old}\`)
+                     SET \`item_id\` = COALESCE(\`item_id\`, \`${mapping.item.old}\`)${await this.timestampAssignments(queryRunner, mapping.table)}
                      WHERE \`item_id\` IS NULL`
                 );
             }
@@ -638,11 +1030,15 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             }
         ];
 
+        const owners = await this.preflightUp(queryRunner, mappings, [...prioNewIndexes, ...newIndexes], newForeignKeys);
+        // MariaDB constraint names compare without case; retain the actual spelling for DDL.
+        const protectedOwnerKeys = new Set(owners.flatMap(owner => owner.protectedForeignKeys.map(name => `${owner.table}.${name}`.toLowerCase())));
         // Temporarily release old references, create profiles and migrate their
         // consumers before installing the replacement indexes and foreign keys.
         await queryRunner.query('SET FOREIGN_KEY_CHECKS = 0');
         try {
             for (const [table, fk] of oldForeignKeys) {
+                if (protectedOwnerKeys.has(`${table}.${fk}`.toLowerCase())) continue;
                 await dropFkConstraintIfExists(queryRunner, table, fk);
             }
 
@@ -694,17 +1090,13 @@ export class AddProfiles1785610467095 implements MigrationInterface {
                                               LEFT JOIN \`profiles\` p ON p.guest_id = g.id
                                      WHERE p.guest_id IS NULL`);
 
-            await this.migrateOwnerToProfile(queryRunner, 'drivers_lists');
-            await this.migrateOwnerToProfile(queryRunner, 'packing_lists');
-            await this.migrateOwnerToProfile(queryRunner, 'events');
-            await this.migrateOwnerToProfile(queryRunner, 'activity_plans');
-            await this.migrateOwnerToProfile(queryRunner, 'surveys');
+            for (const owner of owners) await this.migrateOwnerToProfile(queryRunner, owner);
 
             await addColumnIfNotExists(queryRunner, 'entity_admin_assignments', 'profile_id', 'varchar(36)', 'NULL');
             if (await columnExists(queryRunner, 'entity_admin_assignments', 'user_id')) {
                 await queryRunner.query(`UPDATE \`entity_admin_assignments\` e
                     LEFT JOIN \`profiles\` p ON p.user_id = e.user_id
-                                         SET e.profile_id = COALESCE(e.profile_id, p.id)
+                                         SET e.profile_id = COALESCE(e.profile_id, p.id)${await this.timestampAssignments(queryRunner, 'entity_admin_assignments', 'e')}
                                          WHERE e.profile_id IS NULL`);
                 await dropColumnIfExists(queryRunner, 'entity_admin_assignments', 'user_id');
             } else {
@@ -713,7 +1105,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
                     await addColumnIfNotExists(queryRunner, 'entity_admin_assignments', 'profile_uuid', 'varchar(36)', 'NULL');
                     await queryRunner.query(`UPDATE \`entity_admin_assignments\` e
                         LEFT JOIN \`profiles\` p ON p.user_id = e.profile_id
-                                             SET e.profile_uuid = COALESCE(e.profile_uuid, p.id)
+                                             SET e.profile_uuid = COALESCE(e.profile_uuid, p.id)${await this.timestampAssignments(queryRunner, 'entity_admin_assignments', 'e')}
                                              WHERE e.profile_id IS NOT NULL`);
                     await dropColumnIfExists(queryRunner, 'entity_admin_assignments', 'profile_id');
                     await queryRunner.query('ALTER TABLE `entity_admin_assignments` CHANGE `profile_uuid` `profile_id` varchar(36) NULL');
@@ -726,17 +1118,17 @@ export class AddProfiles1785610467095 implements MigrationInterface {
 
             await addColumnIfNotExists(queryRunner, 'activity_roles', 'title', 'varchar(255)', 'NULL');
             if (await columnExists(queryRunner, 'activity_roles', 'name')) {
-                await queryRunner.query('UPDATE `activity_roles` SET `title` = COALESCE(`title`, `name`) WHERE `title` IS NULL');
+                await queryRunner.query(`UPDATE \`activity_roles\` SET \`title\` = COALESCE(\`title\`, \`name\`)${await this.timestampAssignments(queryRunner, 'activity_roles')} WHERE \`title\` IS NULL`);
                 await dropColumnIfExists(queryRunner, 'activity_roles', 'name');
             }
-            await queryRunner.query('UPDATE `activity_roles` SET `title` = COALESCE(`title`, CONCAT(`id`, \':role\')) WHERE `title` IS NULL');
+            await queryRunner.query(`UPDATE \`activity_roles\` SET \`title\` = COALESCE(\`title\`, CONCAT(\`id\`, ':role'))${await this.timestampAssignments(queryRunner, 'activity_roles')} WHERE \`title\` IS NULL`);
             await queryRunner.query('ALTER TABLE `activity_roles` CHANGE `title` `title` varchar(255) NOT NULL');
 
             await addColumnIfNotExists(queryRunner, 'survey_combinations', 'title', 'varchar(255)', 'NULL');
             await addColumnIfNotExists(queryRunner, 'survey_combinations', 'description', 'varchar(255)', 'NULL');
             await addColumnIfNotExists(queryRunner, 'survey_combinations', 'profile_id', 'varchar(36)', 'NULL');
             await queryRunner.query(`UPDATE \`survey_combinations\`
-                                     SET \`title\` = COALESCE(\`title\`, CONCAT(\`WEEKDAY\`, ' ', \`nth_week\`))
+                                     SET \`title\` = COALESCE(\`title\`, CONCAT(\`WEEKDAY\`, ' ', \`nth_week\`))${await this.timestampAssignments(queryRunner, 'survey_combinations')}
                                      WHERE \`title\` IS NULL`);
             await queryRunner.query('ALTER TABLE `survey_combinations` CHANGE `title` `title` varchar(255) NOT NULL');
 
@@ -749,7 +1141,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
 
             if (await columnExists(queryRunner, 'activity_assignments', 'updatedAt')) {
                 await addColumnIfNotExists(queryRunner, 'activity_assignments', 'updated_at', 'timestamp(6)', 'NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)');
-                await queryRunner.query('UPDATE `activity_assignments` SET `updated_at` = `updatedAt` WHERE `updatedAt` IS NOT NULL');
+                await queryRunner.query(`UPDATE \`activity_assignments\` SET \`updated_at\` = \`updatedAt\`${await this.timestampAssignments(queryRunner, 'activity_assignments', '', ['updated_at'])} WHERE \`updatedAt\` IS NOT NULL`);
                 await dropColumnIfExists(queryRunner, 'activity_assignments', 'updatedAt');
             }
 
@@ -762,6 +1154,8 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             }
 
             for (const fk of newForeignKeys) {
+                if (fk.definition.startsWith('FOREIGN KEY (`owner_id`)')
+                    && owners.some(owner => owner.table === fk.table && owner.kind === 'profile' && owner.protectedForeignKeys.length > 0)) continue;
                 await createConstraintIfNotExists(queryRunner, fk.table, fk.name, fk.definition);
             }
         } finally {
@@ -1179,6 +1573,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             }
         ];
 
+        await this.preflightDown(queryRunner, mappings.map(mapping => mapping.table));
         await queryRunner.query('SET FOREIGN_KEY_CHECKS = 0');
         try {
             for (const [table, fk] of newForeignKeys) {

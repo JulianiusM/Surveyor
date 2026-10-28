@@ -1,6 +1,6 @@
 import {createFeatureApiResolver} from '../../app/api';
 import type {components} from '../../../types/api/v1';
-import type {FrontendContext, FrontendEventPickerQuery, FrontendEventPickerSource, FrontendRead, FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import type {FrontendEventPickerQuery, FrontendEventPickerSource, FrontendRead, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {FrontendApi} from '../../app/api';
 import type {FrontendInputField} from '../../../types/FrontendFeedbackTypes';
 import {activityKeys} from '../../app/queryKeys';
@@ -43,14 +43,15 @@ export class ActivityApi {
     constructor(private transport: FrontendApi) {}
 
     /** Requirements are independently private; reads preserve cancellation and shared cooldowns. */
-    async requirements(planId: string, scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['ActivityRequirements']> {
+    async requirements(planId: string, scope: FrontendRequestScope, signal?: AbortSignal,
+        page = 1, section: 'stays' | 'roles' | 'overrides' = 'stays'): Promise<components['schemas']['ActivityRequirements']> {
         const transport = this.transport;
         function readRequirements() {
             return transport.client.GET('/activity-plans/{planId}/requirements', {
-                params: {path: {planId}, header: transport.headers(scope)}, signal, cache: 'no-store',
+                params: {path: {planId}, header: transport.headers(scope), query: {page, section}}, signal, cache: 'no-store',
             });
         }
-        return (await transport.readJson(`activity/${planId}/requirements`, scope, readRequirements, 'getActivityRequirements', validateActivityRequirements, signal)).data;
+        return (await transport.readJson(`activity/${planId}/requirements/${section}/${page}`, scope, readRequirements, 'getActivityRequirements', validateActivityRequirements, signal)).data;
     }
 
     /** Submit the generated flat settings draft once through the existing business owner. */
@@ -145,9 +146,10 @@ export class ActivityApi {
         }), validateMutationResult, scope).data;
     }
 
-    async reorder(planId: string, order: components['schemas']['ActivityOrderInput']['order'], token: string, scope: FrontendRequestScope) {
+    async reorder(planId: string, order: components['schemas']['ActivityOrderInput']['order'], token: string, scope: FrontendRequestScope, windowStart?: string) {
         return this.transport.read('updateActivityOrder', await this.transport.client.PUT('/activity-plans/{planId}/slot-order', {
-            params: {path: {planId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: {order}, cache: 'no-store',
+            params: {path: {planId}, header: {...this.transport.headers(scope), 'If-Match': token}},
+            body: {order, ...(windowStart ? {windowStart} : {})}, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
@@ -225,14 +227,16 @@ export class ActivityApi {
      * The transport validates actor scope before accepting a 304; the feature
      * query owner ensures that previous belongs to this same resource family. */
     async activity(planId: string, scope: FrontendRequestScope, signal?: AbortSignal,
-                  previous?: FrontendRead<List>): Promise<FrontendRead<List>> {
+                  previous?: FrontendRead<List>, windowStart?: string): Promise<FrontendRead<List>> {
         const transport = this.transport;
         function readActivity() {
             return transport.client.GET('/activity-plans/{planId}', {
-                params: {path: {planId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
+                params: {path: {planId}, header: transport.headers(scope, previous?.etag),
+                    ...(windowStart ? {query: {windowStart}} : {})}, signal, cache: 'no-store',
             });
         }
-        return transport.readJson(`activity/${planId}`, scope, readActivity, 'getActivityPlan', validateActivityView, signal, previous);
+        return transport.readJson(`activity/${planId}${windowStart ? '/' + windowStart : ''}`, scope,
+            readActivity, 'getActivityPlan', validateActivityView, signal, previous);
     }
 
     /** Obtain permitted root fields and usable comparison evidence together.

@@ -267,6 +267,9 @@ function requestRecovery(scope: FrontendRequestScope): Promise<components['schem
                 </div>
             </StatusNotice>
             <form class="row gx-3 gy-3 justify-content-center" autocomplete="on" @submit.prevent="submit">
+                <!-- Name admission shares the generated code-point rule with
+                     account/profile names. Native maxlength counts UTF-16 units
+                     and would incorrectly prevent valid supplementary characters. -->
                 <FormField
                     id="guest-name"
                     name="username"
@@ -278,7 +281,6 @@ function requestRecovery(scope: FrontendRequestScope): Promise<components['schem
                     large-group
                     :placeholder="messages.t('auth.yourName')"
                     required
-                    :max-length="guestFields.username.maxLength"
                     autocomplete="nickname"
                     :disabled="blocked"
                     :pending="submittingGuest"

@@ -666,58 +666,51 @@ implementation_defects:
       - the participant takeover route does not add a separate closed-pool guard
     resolved_on: 2026-10-28
   - id: IMP-015
-    status: open
+    status: resolved
     severity: medium
     owner: application maintainers
     out_of_scope_for_documentation_migration: true
     title: "Verification gap: pool assignment cleanup lacks seeded stale and retained adjustment cases"
     second_pass_review:
       date: 2026-10-04
-      finding: Current assignment operation retains an empty valid-ID set and prunes
-        out-of-scope takeovers and surcharges. The previous empty-set bypass is
-        not the current implementation.
-      source_evidence: src/backend/modules/invoice/poolOperations.ts;
-        tests/integration/invoice-workflows.spec.ts
-      remaining_verification: Reviewed empty-allocation tests do not explicitly seed
-        and assert removal of stale takeovers and adjustments; retain open
-        status for that exact acceptance check.
+      finding: Current assignment operation retains an empty valid-ID set and prunes out-of-scope takeovers and
+        surcharges. The previous empty-set bypass is not the current implementation.
+      source_evidence: src/backend/modules/invoice/poolOperations.ts; tests/integration/invoice-workflows.spec.ts
+      remaining_verification: Both fixtures pass in the full 52-case invoice-workflows suite on Node.js 24.15.0
+        and disposable MariaDB 10.11.14; that suite also passes in the subsequent broad run.
     evidence:
-      - src/backend/modules/invoice/poolOperations.ts retains an empty effective eligible-ID set and
-        prunes out-of-scope takeover/surcharge rows before replacing assignments.
-      - tests/integration/finance-api.spec.ts checks empty allocation but does not seed both stale and
-        retained takeover/surcharge records for pruning assertions.
-    impact: Without a seeded stale-and-retained-record regression, later cleanup changes could lose the
-      verified empty-assignment and retained-adjustment behavior. No current stale-record retention
-      defect is established.
-    documentation_contract: D06 states the coherent working contract in which
-      removing a participant also removes adjustment records that are
-      incompatible with the remaining assignment scope.
+      - tests/integration/invoice-workflows.spec.ts covers final explicit-assignment removal, retained
+        eligibility, preserved adjustment rows and unchanged invoices/attendance.
+    impact: Without a seeded stale-and-retained-record regression, later cleanup changes could lose the verified
+      empty-assignment and retained-adjustment behavior. No current stale-record retention defect is
+      established.
+    documentation_contract: D06 states the coherent working contract in which removing a participant also
+      removes adjustment records that are incompatible with the remaining assignment scope.
     closes_when:
-      - A real-ORM fixture seeds stale takeover/surcharge records, clears the final explicit assignment
-        and verifies correct pruning.
+      - A real-ORM fixture seeds stale takeover/surcharge records, clears the final explicit assignment and
+        verifies correct pruning.
       - A companion fixture retains eligible assignments and verifies their valid adjustments remain.
     current_review:
       reviewed_on: 2026-10-28
-      finding: Current assignment cleanup derives effective eligible IDs even when the last explicit
-        assignment is removed. A real-ORM regression for final-assignment pruning and retained
-        adjustments remains an evidence follow-up.
-      source_anchors:
-        - src/backend/modules/invoice/poolOperations.ts:79 validIds remains empty for empty explicit
-          selection
-        - src/backend/modules/invoice/poolOperations.ts:100-105 deletes dropped takeovers/surcharges
-          before replacing assignments
-      test_definitions:
-        - tests/integration/finance-api.spec.ts:274-302 checks empty allocation but does not seed stale
-          takeover/surcharge rows
-      evidence_limit: Source and existing test definitions are evidence of implementation/coverage only;
-        executed checks are stated separately in resolution.
+      finding: The existing locked assignment operation prunes stale takeovers/surcharges while retaining eligible
+        adjustment identity and content. Both previously missing real-ORM fixtures now execute.
+      evidence_limit: This closes a verification gap; no new financial rule or retention policy is introduced.
     reported_evidence:
       - src/backend/modules/database/services/EventInvoiceService.ts updateAssignments replaces explicit
         assignment rows with the submitted registration IDs
-      - when the submitted registration list is empty, the cleanup variable validIds falls back to every
-        event registration instead of the empty effective assignment scope
-      - takeover and surcharge cleanup therefore retains rows for registrations that are no longer
-        assigned when the final assignment is cleared
+      - when the submitted registration list is empty, the cleanup variable validIds falls back to every event
+        registration instead of the empty effective assignment scope
+      - "takeover and surcharge cleanup therefore retains rows for registrations that are no longer assigned
+        when the final assignment is cleared\r"
+    resolved_on: 2026-10-28
+    disposition: Completed within the recorded approved scope; current implementation and executed verification
+      are stated below.
+    resolution:
+      implementation: The existing locked assignment operation prunes stale takeovers/surcharges while retaining
+        eligible adjustment identity and content. Both previously missing real-ORM fixtures now execute.
+      verification: Both fixtures pass in the full 52-case invoice-workflows suite on Node.js 24.15.0 and
+        disposable MariaDB 10.11.14; that suite also passes in the subsequent broad run.
+      remaining_scope: This closes a verification gap; no new financial rule or retention policy is introduced.
   - id: IMP-016
     status: closed
     closed_on: 2026-10-27
@@ -1101,7 +1094,9 @@ implementation_defects:
       - subsequent reads and reorder operations use the pos column
     resolved_on: 2026-10-28
   - id: IMP-024
-    status: needs-review
+    status: closed
+    closed_on: 2026-10-28
+    closed_in: current-source-production-review
     severity: high
     owner: application maintainers
     out_of_scope_for_documentation_migration: true
@@ -1123,8 +1118,8 @@ implementation_defects:
       - Everyone rows preserve the group-wide obligation presentation without adding named assignees.
       - No cleanup, deactivation, counter/discovery change or new assignment restriction is inferred
         from the presentation decision.
-    resolution: No actual defect is established under the current Everyone obligation meaning. Named
-      assignee display is withheld, and stored commitments and existing backend semantics are retained.
+    resolution: No actual defect is established under the current Everyone obligation meaning. DEC-007
+      explicitly rejects named assignee display; stored commitments and existing backend semantics are retained.
       No runtime change was made for this item; any future mode-policy concern requires its own concrete
       evidence.
     current_review:
@@ -2604,68 +2599,53 @@ implementation_defects:
       evidence_limit: Source and existing test definitions are evidence of implementation/coverage only;
         executed checks are stated separately in resolution.
   - id: IMP-060
-    status: open
+    status: resolved
     severity: high
     owner: application maintainers
     out_of_scope_for_documentation_migration: true
     out_of_scope_for_frontend_migration: true
     title: Provider-bearing account deletion retains a post-delete completion gap
     evidence:
-      - "src/backend/modules/identity.ts deleteAccount is the provider-bearing path:
-        UserService.deleteUser/deleteGuest completes before sendDeletionEmail and oidc.logout."
-      - Required later mail preparation and local-session persistence occur outside that domain deletion
-        transaction and can leave a partial completion outcome.
-      - Token-free deletion instead uses prepareAccountDeletion through the existing identity Session
-        transaction and prepared completion; that completed subset is recorded in resolution.
-    impact: Preparation or stored-session failure can reject after permanent
-      deletion, leaving the request's previous identity or a missing completion
-      despite an irreversible account outcome.
-    disposition: The token-free subset is implemented and verified; provider-bearing deletion remains a
-      separate open residual.
-    documentation_contract: Permanent account deletion requires a coherent committed
-      account/session outcome and prepared completion, with delivery and
-      provider termination distinguished from business rejection.
+      - src/backend/controller/userController.ts uses the existing identity completion owner for both
+        provider-bearing and token-free deletion.
+      - src/backend/modules/oidc.ts computes the post-local provider handoff; no later failure rewrites the
+        committed account outcome.
+    impact: Preparation or stored-session failure can reject after permanent deletion, leaving the request's
+      previous identity or a missing completion despite an irreversible account outcome.
+    disposition: Completed within the recorded approved scope; current implementation and executed verification
+      are stated below.
+    documentation_contract: Permanent account deletion requires a coherent committed account/session outcome and
+      prepared completion, with delivery and provider termination distinguished from business rejection.
     closes_when:
       - The separately scoped provider-bearing deletion contract defines required database/session,
         mail-preparation and provider-outcome boundaries through the current identity owner.
       - Real workflow checks cover the selected precommit and postcommit failure outcomes; the already
         completed token-free deletion subset remains protected.
-    evidence_limit: Failure consequences are source-inferred, not runtime
-      reproduced; no live SMTP/provider outcome or native behavior change is
-      established. This does not duplicate the final-profile deactivation defect
-      IMP-006.
-
+    evidence_limit: No live external provider logout or SMTP delivery certification is claimed.
     resolution:
-      implementation: Token-free User/Guest deletion, required local session persistence and prepared
-        receipt use the existing atomic identity completion owner. Provider-bearing deletion remains an
-        excluded, open residual.
-      verification: Root reports 92 focused authentication/integration, 23 real HTTP and 23 database-free
-        identity cases passing, plus final server/test compilation and full application build. All 16
-        unique selected built system cases pass across focused reruns. The broad current Vitest
-        invocation passes 2812 of 2813 with one obsolete icon expectation; the corrected 64-case file
-        passes its focused rerun. No clean full-invocation rerun, complete E2E inventory or
-        external-provider result is claimed.
-      remaining_scope: Provider-bearing deletion finality remains open and is not closed by token-free
-        atomic completion.
+      implementation: "All account deletion uses commitIdentityCompletion: domain deletion, local session
+        clearing, mail-content preparation and immutable receipts share the existing transaction. Only
+        external delivery/provider work follows commit. Provider-bearing failures select prepared warnings
+        without rejection or replay; token-free delivery retains its original receipt behavior."
+      verification: Real profile workflow integration passes on Node.js 24.15.0 and disposable MariaDB 10.11.14,
+        including precommit mail/session failures, postcommit mail/provider construction failures,
+        token-bearing and token-free outcomes. The complete file passes in the broad run.
+      remaining_scope: No live external provider logout or SMTP delivery certification is claimed.
     current_review:
       reviewed_on: 2026-10-28
-      finding: Token-free User/Guest deletion, required local session persistence and prepared receipt now
-        share the existing identity completion operation. Provider-bearing deletion remains a separate
-        open residual.
-      source_anchors:
-        - src/backend/controller/userController.ts
-        - src/backend/modules/lib/session.ts
-      test_definitions:
-        - tests/integration/frontend-profile-workflows.spec.ts
-      evidence_limit: Source and existing test definitions are evidence of implementation/coverage only;
-        executed checks are stated separately in resolution.
+      finding: "All account deletion uses commitIdentityCompletion: domain deletion, local session clearing,
+        mail-content preparation and immutable receipts share the existing transaction. Only external
+        delivery/provider work follows commit. Provider-bearing failures select prepared warnings without
+        rejection or replay; token-free delivery retains its original receipt behavior."
+      evidence_limit: No live external provider logout or SMTP delivery certification is claimed.
     reported_evidence:
-      - src/backend/controller/userController.ts deleteUser and deleteGuest call their UserService
-        deletion before deletion mail and logoutUserOidc. The DBAL delete is not atomic with the
-        following stored-session transition.
-      - src/backend/modules/email.ts mail preparation/native sender initialization and
-        src/backend/modules/oidc.ts persistSession remain fallible after account deletion; ordinary
-        caught SMTP delivery errors are not propagated.
+      - src/backend/controller/userController.ts deleteUser and deleteGuest call their UserService deletion
+        before deletion mail and logoutUserOidc. The DBAL delete is not atomic with the following
+        stored-session transition.
+      - "src/backend/modules/email.ts mail preparation/native sender initialization and
+        src/backend/modules/oidc.ts persistSession remain fallible after account deletion; ordinary caught
+        SMTP delivery errors are not propagated.\r"
+    resolved_on: 2026-10-28
   - id: IMP-061
     status: closed
     closed_on: 2026-10-15
@@ -3559,76 +3539,64 @@ implementation_defects:
       Native authored frontend sources remain unchanged; IMP-080 stays open
       until actual cutover.
   - id: IMP-083
-    status: open
+    status: resolved
     discovered_on: 2026-10-20
     severity: medium
     priority: P2
     owner: application maintainers
     out_of_scope_for_documentation_migration: true
     out_of_scope_for_frontend_migration: true
-    title: Recommendation blocking infers swap partners from reciprocal slots
-      without pair provenance
+    title: Recommendation blocking infers swap partners from reciprocal slots without pair provenance
     evidence:
-      - src/backend/controller/activityController.ts includeBlockedSwapLegs
-        selects the first reciprocal REASSIGN by source and target slot IDs
-        without participant identity or an explicit swap relationship.
-      - prepareRecommendationApplication invokes that helper while removing
-        blocked approved operations, so its pairing decision can change the
-        remaining applicable set and reported skipped count.
-      - The frontend review independently reproduced the analogous wrong-partner
-        selection in recommendationDraft.ts with multiple manual moves between
-        the same two slots. That reproduction does not establish a persisted
-        backend failure; this backend finding is a source-based inference and
-        needs a dedicated reproduction.
-    impact: With several reciprocal moves, blocking one operation can also block an
-      unrelated participant's move rather than its intended swap partner,
-      changing applied/skipped outcomes. The possibility affects organizer
-      review correctness; the existing warning review and result counts remain
-      available.
-    documentation_contract: Local review actions preserve the explicitly selected
-      swap pair; the shared controller remains authoritative for warnings,
-      blocking, application and actual applied/skipped results.
-    disposition: The Vue correction retains local pair identity and requires an
-      explicit counterpart when saved rows are ambiguous. It does not repair or
-      replace includeBlockedSwapLegs. Backend remediation remains a separately
-      authorized effort, distinct from IMP-029's warning/result presentation
-      coverage.
+      - ActivityAssignmentRecommendation owns pairing_known and binary-collated swap_group; the additive
+        migration preserves legacy rows as unknown.
+      - tests/integration/activity-production-boundaries.spec.ts covers independent moves, genuine pairs,
+        invalid pairing, legacy handling and migration reversal safeguards.
+    impact: With several reciprocal moves, blocking one operation can also block an unrelated participant's move
+      rather than its intended swap partner, changing applied/skipped outcomes. The possibility affects
+      organizer review correctness; the existing warning review and result counts remain available.
+    documentation_contract: Local review actions preserve the explicitly selected swap pair; the shared
+      controller remains authoritative for warnings, blocking, application and actual applied/skipped results.
+    disposition: Completed within the recorded approved scope; current implementation and executed verification
+      are stated below.
     closes_when:
-      - A production-shaped backend regression reproduces multiple independent
-        reciprocal moves and demonstrates the incorrect blocking relationship or
-        establishes a narrower verified condition.
-      - An explicit maintainer decision defines reliable swap provenance and
-        compatibility for saved rows before any dependent controller, wire or
-        persistence change.
-      - The shared controller propagates blocking only across the intended swap
-        while retaining eligibility, overlap acknowledgement, exact reviewed
-        inputs and truthful applied/skipped results.
-      - Focused persistence coverage protects independent moves, both true swap
-        legs, payload ordering and repeated slot directions without silently
-        broadening native or versioned behavior.
-
+      - A production-shaped backend regression reproduces multiple independent reciprocal moves and
+        demonstrates the incorrect blocking relationship or establishes a narrower verified condition.
+      - An explicit maintainer decision defines reliable swap provenance and compatibility for saved rows
+        before any dependent controller, wire or persistence change.
+      - The shared controller propagates blocking only across the intended swap while retaining eligibility,
+        overlap acknowledgement, exact reviewed inputs and truthful applied/skipped results.
+      - Focused persistence coverage protects independent moves, both true swap legs, payload ordering and
+        repeated slot directions without silently broadening native or versioned behavior.
     current_review:
       reviewed_on: 2026-10-28
-      finding: Backend includeBlockedSwapLegs still selects a reciprocal slot row without pair provenance.
-        Current frontend preserves explicit local pairs and asks for a saved ambiguous counterpart. A
-        production-shaped ambiguous backend reproduction remains outstanding; no new
-        wire/storage/rejection contract is selected.
-      source_anchors:
-        - src/backend/modules/activity/recommendations.ts:364-383
-        - src/backend/modules/activity/recommendations.ts:411
-        - src/frontend/features/activity/ActivityRecommendations.vue:708
-      test_definitions:
-        - reference: tests/frontend/frontend-activity-recommendations.spec.ts:545-646
-          covers: Two independent staged swaps, explicit saved ambiguous counterpart, independent opposite
-            moves.
-        - reference: tests/frontend/frontend-activity-recommendations.spec.ts:648-708
-          covers: Stale/permission/actor retirement of pending pair choice without hidden status changes.
-        - reference: tests/integration/activity-workflows.spec.ts:867;
-            tests/integration/activity-workflows.spec.ts:974
-          covers: Existing simple swap rejection and atomic swap persistence; not multiple ambiguous
-            same-direction backend provenance.
-      evidence_limit: Source and existing test definitions are evidence of implementation/coverage only;
-        executed checks are stated separately in resolution.
+      finding: Shared recommendation generation, wire validation, review and persistence distinguish unknown
+        legacy provenance, explicit independent moves and exact reciprocal swap pairs. Blocking propagates
+        only inside the explicit pair.
+      evidence_limit: Legacy rows require an explicit pair or independent choice. Migration rollback refuses to
+        discard recorded provenance. The complete released bootstrap remains blocked separately by
+        IMP-205/IMP-206.
+    reported_evidence:
+      - src/backend/controller/activityController.ts includeBlockedSwapLegs selects the first reciprocal
+        REASSIGN by source and target slot IDs without participant identity or an explicit swap relationship.
+      - prepareRecommendationApplication invokes that helper while removing blocked approved operations, so
+        its pairing decision can change the remaining applicable set and reported skipped count.
+      - The frontend review independently reproduced the analogous wrong-partner selection in
+        recommendationDraft.ts with multiple manual moves between the same two slots. That reproduction does
+        not establish a persisted backend failure; this backend finding is a source-based inference and needs
+        a dedicated reproduction.
+    resolved_on: 2026-10-28
+    resolution:
+      implementation: Shared recommendation generation, wire validation, review and persistence distinguish
+        unknown legacy provenance, explicit independent moves and exact reciprocal swap pairs. Blocking
+        propagates only inside the explicit pair.
+      verification: A narrow old-backend reproduction applied zero despite one eligible independent move. The
+        refined four-move fixtures keep expected independent 3/1 and true-pair 2/2 counts; all seven Activity
+        production-boundary database cases pass on Node.js 24.15.0 and disposable MariaDB 10.11.14. Focused
+        frontend and broad integration checks pass.
+      remaining_scope: Legacy rows require an explicit pair or independent choice. Migration rollback refuses to
+        discard recorded provenance. The complete released bootstrap remains blocked separately by
+        IMP-205/IMP-206.
   - id: IMP-084
     status: closed
     closed_on: 2026-10-20
@@ -4527,31 +4495,26 @@ implementation_defects:
     severity: high
     owner: frontend migration maintainers
     package: frontend-visual-regression-review
-    title: Reported repeated application hangs lack a reproduced root cause and
-      correction evidence
-    evidence: The maintainer reports that the app repeatedly becomes unresponsive.
-      Renewed built-app profiling through polling, expanded Finance, overlapping
-      warm navigation and failed-read recovery does not reproduce the persistent
-      hang. The 36.3-second idle sample is 97.8 percent idle with stable
-      observer/DOM counts; these bounded negative samples do not disprove the
-      report or identify its cause. The approved continuation also exercises
-      dirty profile/history/language and modal-dismissal cycles with stable
-      DOM/observer counts and sampled heartbeat delays below 32ms. Its
-      reproduced workflow retry false-failure is tracked separately as IMP-130;
-      that visible recovery defect is not evidence of the reported persistent
-      freeze's cause.
-    disposition: Profile ordinary and error-recovery interactions, warm navigation
-      and the actual development path; retain raw failures and identify the
-      responsible owner before selecting a remedy.
+    title: Reported repeated application hangs lack a reproduced root cause and correction evidence
+    evidence: The maintainer reports that the app repeatedly becomes unresponsive. Renewed built-app profiling
+      through polling, expanded Finance, overlapping warm navigation and failed-read recovery does not
+      reproduce the persistent hang. The 36.3-second idle sample is 97.8 percent idle with stable observer/DOM
+      counts; these bounded negative samples do not disprove the report or identify its cause. The approved
+      continuation also exercises dirty profile/history/language and modal-dismissal cycles with stable
+      DOM/observer counts and sampled heartbeat delays below 32ms. Its reproduced workflow retry false-failure
+      is tracked separately as IMP-130; that visible recovery defect is not evidence of the reported
+      persistent freeze's cause.
+    disposition: Profile ordinary and error-recovery interactions, warm navigation and the actual development
+      path; retain raw failures and identify the responsible owner before selecting a remedy.
     closes_when:
-      - A reproduced cause is corrected and independently verified, or an
-        explicit evidence limitation remains open.
-
+      - A reproduced cause is corrected and independently verified, or an explicit evidence limitation remains
+        open.
     current_review:
       reviewed_on: 2026-10-28
-      finding: The reported persistent hang remains unreproduced. Existing finite negative profiles and
-        IMP-130 correction do not identify or disprove its cause; diagnosis remains open in current
-        query/command/update owners.
+      finding: The reported persistent hang remains unreproduced. Existing finite negative profiles and IMP-130
+        correction do not identify or disprove its cause; diagnosis remains open in current
+        query/command/update owners. Current constant-time day counts and bounded Activity projections correct
+        separately reproduced availability defects, but do not establish the cause of this report.
       source_anchors:
         - src/frontend/app/updateCoordinator.ts
         - src/frontend/app/queryCache.ts
@@ -4559,8 +4522,8 @@ implementation_defects:
         - reference: tests/frontend/frontend-update-coordinator.spec.ts
           covers: Shared release detection, pending/dirty guards and reload coordination; not proof that an
             unreproduced freeze is resolved.
-      evidence_limit: Source and existing test definitions are evidence of implementation/coverage only;
-        executed checks are stated separately in resolution.
+      evidence_limit: "Source and existing test definitions are evidence of implementation/coverage only; executed
+        checks are stated separately in resolution.\r"
   - id: IMP-118
     status: closed
     closed_on: 2026-10-24
@@ -4938,54 +4901,56 @@ implementation_defects:
       evidence_limit: Source and existing test definitions are evidence of implementation/coverage only;
         executed checks are stated separately in resolution.
   - id: IMP-132
-    status: open
+    status: resolved
     discovered_on: 2026-10-26
     severity: medium
     owner: application maintainers
     package: general-session-store-remediation
     out_of_scope_for_documentation_migration: true
-    title: Third-party session destruction callback does not await its database
-      deletion
+    title: Third-party session destruction callback does not await its database deletion
     evidence:
-      - connect-typeorm remains version 2.0.0 before and after the dependency
-        upgrade. Its installed out/app/TypeormStore/TypeormStore.js destroy
-        implementation starts repository.softDelete inside a map callback
-        without returning the promise. Promise.all therefore receives undefined
-        entries rather than deletion promises.
-      - The outer completion callback can run before those database operations
-        settle, and their later rejected promises do not enter the attached
-        catch handler.
-      - src/backend/modules/lib/session.ts constructs this unmodified
-        TypeormStore, and src/backend/app.ts installs it in express-session.
-        Express's Session.destroy and Store.regenerate delegate completion to
-        the store callback.
-    impact: A caller relying on store destruction completion can proceed before
-      deletion settles, and a later SQL rejection can escape that callback's
-      error handling.
-    evidence_limit: This is a static promise-chain finding. No production, HTTP or
-      database failure was reproduced, and the review does not establish that
-      Surveyor's ordinary logout uses Session.destroy or regeneration.
-    documentation_contract: Product guidance describes completed session lifecycle
-      operations without exposing this implementation defect or promising
-      behavior established only by static review.
+      - src/backend/modules/lib/session.ts remains the sole store construction owner; no installed dependency
+        is modified.
+      - tests/unit/session-store-completion.spec.ts and tests/integration/authentication-workflows.spec.ts
+        cover callback completion, rejection and persisted soft deletion.
+    impact: A caller relying on store destruction completion can proceed before deletion settles, and a later
+      SQL rejection can escape that callback's error handling.
+    evidence_limit: Ordinary clear-and-save logout, expiry, touch, retrieval and session ownership are
+      unchanged. This is not a whole-session/flash redesign.
+    documentation_contract: Product guidance describes completed session lifecycle operations without exposing
+      this implementation defect or promising behavior established only by static review.
     closes_when:
-      - A separately authorized change preserves the shared session owner and
-        confirms destruction callback completion and errors against delayed and
-        rejected database deletion.
-
+      - A separately authorized change preserves the shared session owner and confirms destruction callback
+        completion and errors against delayed and rejected database deletion.
     current_review:
       reviewed_on: 2026-10-28
-      finding: The installed TypeormStore destroy callback can finish before its soft-delete promise.
-        Ordinary application logout saves cleared state rather than calling destroy/regenerate;
-        delayed/rejected callback reproduction and live reachability remain unverified.
-      source_anchors:
-        - implementation_defects IMP-132 recorded2026-10-26
-        - docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md October13–15 Session ownership
-      test_definitions:
-        - tests/integration/frontend-session-admission.spec.ts stored-session removal fixture
-        - no current delayed/rejected-destruction execution performed
-      evidence_limit: Source and existing test definitions are evidence of implementation/coverage only;
-        executed checks are stated separately in resolution.
+      finding: createSessionStore corrects the installed store destruction adapter once, returning actual
+        soft-delete promises and invoking the callback once. Success follows all deletions; a failure is
+        reported through the callback.
+      evidence_limit: Ordinary clear-and-save logout, expiry, touch, retrieval and session ownership are
+        unchanged. This is not a whole-session/flash redesign.
+    reported_evidence:
+      - connect-typeorm remains version 2.0.0 before and after the dependency upgrade. Its installed
+        out/app/TypeormStore/TypeormStore.js destroy implementation starts repository.softDelete inside a map
+        callback without returning the promise. Promise.all therefore receives undefined entries rather than
+        deletion promises.
+      - The outer completion callback can run before those database operations settle, and their later
+        rejected promises do not enter the attached catch handler.
+      - src/backend/modules/lib/session.ts constructs this unmodified TypeormStore, and src/backend/app.ts
+        installs it in express-session. Express's Session.destroy and Store.regenerate delegate completion to
+        the store callback.
+    resolved_on: 2026-10-28
+    disposition: Completed within the recorded approved scope; current implementation and executed verification
+      are stated below.
+    resolution:
+      implementation: createSessionStore corrects the installed store destruction adapter once, returning actual
+        soft-delete promises and invoking the callback once. Success follows all deletions; a failure is
+        reported through the callback.
+      verification: The installed dependency reproduction confirms premature success and lost rejection.
+        Delayed/rejected adapter regressions and real soft-delete integration pass; the subsequent broad run
+        passes their complete files on Node.js 24.15.0 and disposable MariaDB 10.11.14.
+      remaining_scope: Ordinary clear-and-save logout, expiry, touch, retrieval and session ownership are
+        unchanged. This is not a whole-session/flash redesign.
   - id: IMP-133
     status: resolved
     discovered_on: 2026-10-26
@@ -7144,28 +7109,55 @@ implementation_defects:
         preserved JIT behavior and concurrent competing links. No live provider or deployment certification is claimed.
       decision_owner: docs/decisions/DEC-007-APPLICATION-ARCHITECTURE-REMEDIATION.md
   - id: IMP-194
-    status: open
+    status: resolved
     discovered_on: 2026-10-28
     severity: high
     owner: identity and HTTP admission maintainers
     package: production-readiness-review
     title: Authentication and recovery commands have no application abuse budgets
     evidence:
-      - src/backend/routes/api/v1/auth.ts admits login, registration, forgot-password, guest recovery
-        and guest-email lookup without request throttling.
+      - src/backend/middleware/identityAdmission.ts owns expiring client-address counters and HMAC-keyed
+        account/recipient counters; settings.ts owns all fourteen configurable keys.
+      - Existing auth routes, guestFlowFactory and identity business callbacks apply admission before
+        protected work and return shared 429/Retry-After responses.
+    impact: Repeated requests can drive password guessing, hashing load, recovery mail and token churn. Any
+      protection supplied by a deployed proxy was not verified by this source review.
+    closes_when:
+      - A reviewed policy defines operation-specific client/account budgets, proxy identity and recovery
+        response behavior.
+      - Matching routes adopt the existing admission owners without duplicate limiters or account-existence
+        disclosure.
+      - Burst, expiry, proxy and independent-account cases verify enforcement before expensive work or email
+        writes.
+    disposition: Completed within the recorded approved scope; current implementation and executed verification
+      are stated below.
+    reported_evidence:
+      - src/backend/routes/api/v1/auth.ts admits login, registration, forgot-password, guest recovery and
+        guest-email lookup without request throttling.
       - src/backend/controller/userController.ts performs password verification, recovery token replacement
         and recovery email delivery for admitted repeated calls.
       - The only authored express-rate-limit adoption found is profile search in
         src/backend/middleware/adminApiFactory.ts.
-    impact: Repeated requests can drive password guessing, hashing load, recovery mail and token churn.
-      Any protection supplied by a deployed proxy was not verified by this source review.
-    closes_when:
-      - A reviewed policy defines operation-specific client/account budgets, proxy identity and recovery response behavior.
-      - Matching routes adopt the existing admission owners without duplicate limiters or account-existence disclosure.
-      - Burst, expiry, proxy and independent-account cases verify enforcement before expensive work or email writes.
-    disposition: Record application-level exposure separately from the unverified deployment proxy; budget changes need approval.
+    resolved_on: 2026-10-28
+    resolution:
+      implementation: One configured identity-admission owner applies client attempts, shared client credential
+        failures, resolved account failures, signup, all-five-flow guest creation, identity-mail and lookup
+        budgets. Passwords are never keys; changing username/email cannot reset client failures.
+      verification: Focused installed-store burst, alias, expiry, reservation and privacy checks pass; auth/guest
+        routing adoption was independently reviewed. The complete relevant suites pass in the broad run. A
+        built-server smoke also verifies shared username/email failures across sessions/password changes,
+        independent-client login and lookup exhaustion.
+      remaining_scope: Single-process counters reset on restart. Deployed proxy enforcement and multi-replica
+        budgets remain outside this scope; broader built-system verification is recorded separately.
+    current_review:
+      reviewed_on: 2026-10-28
+      finding: One configured identity-admission owner applies client attempts, shared client credential failures,
+        resolved account failures, signup, all-five-flow guest creation, identity-mail and lookup budgets.
+        Passwords are never keys; changing username/email cannot reset client failures.
+      evidence_limit: Single-process counters reset on restart. Deployed proxy enforcement and multi-replica
+        budgets remain outside this scope; broader built-system verification is recorded separately.
   - id: IMP-195
-    status: open
+    status: resolved
     discovered_on: 2026-10-28
     severity: medium
     owner: identity contract maintainers
@@ -7175,111 +7167,202 @@ implementation_defects:
       - Local registration originally admitted 100-character username/displayname values; the generated
         validator accepted a 51-character reproduction against VARCHAR(50) destinations.
     evidence:
-      - contracts/api/v1/auth.yaml now owns LocalRegistrationName once with a 50-code-point bound;
-        RegistrationInput, generated client/server validation and the existing identity guard consume it.
-      - src/backend/modules/database/entities/user/User.ts stores username and name in VARCHAR(50);
-        src/backend/modules/database/entities/user/Profile.ts stores name in VARCHAR(50).
-      - GuestRegistrationInput in contracts/api/v1/auth.yaml permits a 100-character username;
-        normalizeGuestContact and UserService.createGuest pass it to Guest.username and Profile.name,
-        which both use VARCHAR(50), across all five feature guest-registration routes.
-      - contracts/api/v1/profiles.yaml ProfileCreateInput and ProfileUpdateInput have no maximum;
-        the profile operations reject blank names but otherwise write them to Profile.name unchanged.
-      - OIDC provisioning in identity.findOrCreateUserFromOidc copies the provider display name
-        into User.name and Profile.name without a bound; its generated username has a separate bound.
-    impact: A name accepted by public contracts or provider provisioning can fail as an internal database error under strict
-      SQL mode or be truncated under permissive settings. No database write was needed to reproduce admission.
+      - contracts/api/v1/auth.yaml owns IdentityName; guest and profile contracts reference it.
+      - The existing metadata generator and FormField controls supply one shared bound; identity.ts applies
+        the same generated rule at business entry.
+    impact: A name accepted by public contracts or provider provisioning can fail as an internal database error
+      under strict SQL mode or be truncated under permissive settings. No database write was needed to
+      reproduce admission.
     closes_when:
-      - Supported identity-field lengths are explicitly resolved for local and guest registration,
-        profile creation/rename and provider display-name provisioning against their persistence columns.
-      - Schema-derived client and server admission share the approved bound without silently trimming user input.
-      - Boundary cases verify rejection before writes or successful exact persistence; any storage expansion has a migration.
-    disposition: Local account registration is corrected within its approved scope; the remaining guest,
-      profile and provider-name channels need their own scoped decisions. DEC-007's exclusion of unrelated
-      profile creation/edit strengthening remains in effect. This record grants no further implementation authority.
-    partial_resolution:
-      local_account_registration: The approved local-account path rejects names above 50 Unicode code points
-        before writes using the one authored schema. Native registration controls do not impose a stricter UTF-16 cap;
-        existing Login constraints and earlier name normalization remain unchanged.
-      verification: Generated-rule mutation, frontend draft/dispatch, direct/prepared real persistence and
-        built-browser registration checks cover 50/51 boundaries, supplementary characters, rejection before writes
-        and successful account/profile/token persistence. Guest/profile/provider-name channels remain open.
+      - Supported identity-field lengths are explicitly resolved for local and guest registration, profile
+        creation/rename and provider display-name provisioning against their persistence columns.
+      - Schema-derived client and server admission share the approved bound without silently trimming user
+        input.
+      - Boundary cases verify rejection before writes or successful exact persistence; any storage expansion
+        has a migration.
+    disposition: Completed within the recorded approved scope; current implementation and executed verification
+      are stated below.
+    resolved_on: 2026-10-28
+    resolution:
+      implementation: IdentityName is the single authored 50-Unicode-code-point contract for local/guest/profile
+        names. Generated browser/server admission and the existing identity guard reject overlong submitted
+        names; new provider display names take the first fifty code points.
+      verification: Name mutation/boundary and frontend checks pass; full authentication and profile persistence
+        suites pass on Node.js 24.15.0 and disposable MariaDB 10.11.14, including supplementary characters and
+        no writes on rejection.
+      remaining_scope: Existing records/storage and login credential admission are preserved. Provider projection
+        is display-only; no issuer, subject, email or account ownership is normalized.
+    current_review:
+      reviewed_on: 2026-10-28
+      finding: IdentityName is the single authored 50-Unicode-code-point contract for local/guest/profile names.
+        Generated browser/server admission and the existing identity guard reject overlong submitted names;
+        new provider display names take the first fifty code points.
+      evidence_limit: Existing records/storage and login credential admission are preserved. Provider projection
+        is display-only; no issuer, subject, email or account ownership is normalized.
   - id: IMP-196
-    status: open
+    status: resolved
     discovered_on: 2026-10-28
     severity: medium
     owner: backend feature maintainers
     package: production-readiness-review
-    title: Packing and Drivers still repeat business membership decisions in controllers
+    title: Verify adoption of shared Packing and Drivers membership business decisions
     evidence:
-      - src/backend/controller/packingController.ts setPackingSelfAssignment/applyPackingMembership and
-        src/backend/controller/driversController.ts setDriversSelfAssignment/applyDriversMembership repeat locked membership, capacity
-        and insertion decisions through their live API callers.
-      - src/backend/modules/database/services/ListService.ts already shares matching persistence and
-        transaction mechanics; it does not own the repeated domain decisions.
-      - docs/policies/DEVELOPMENT_POLICY.md assigns shared business implementation to feature modules
-        and request coordination to controllers; the current source still mixes these responsibilities.
-    impact: Similar live business implementations can drift while controller orchestration remains coupled to domain rules.
+      - src/backend/modules/lists/membership.ts is the live shared business owner.
+      - src/types/ListMembershipTypes.d.ts owns shared declarations; ListService retains pure
+        persistence/transaction mechanics.
+    impact: Shared membership decisions remove duplicated rules; the supported-database regressions protect the
+      deliberate caller-specific identity, capacity, lock and completion boundaries.
     closes_when:
       - Reviewed feature ownership adopts one matching business implementation at all equivalent live callers.
-      - Deliberate capacity, identity, query, lock, error and commit-order differences remain explicit and tested.
+      - Deliberate capacity, identity, query, lock, error and commit-order differences remain explicit and
+        tested.
       - The remedy avoids DBAL business rules, copied modules and forwarding-only facades.
-    disposition: Current-source architecture debt; this finding does not reopen completed extraction records or authorize a redesign.
+    disposition: Completed within the recorded approved scope; current implementation and executed verification
+      are stated below.
+    reported_evidence:
+      - src/backend/modules/lists/membership.ts now owns matching desired-membership, idempotency, capacity
+        and insertion decisions adopted by all six direct/versioned Packing/Drivers callers.
+      - src/backend/modules/database/services/ListService.ts already shares matching persistence and
+        transaction mechanics; it does not own the repeated domain decisions.
+      - Shared snapshot declarations live in src/types/ListMembershipTypes.d.ts; controllers retain admission
+        and completion, and feature services retain queries, transactions and lock order.
+    resolved_on: 2026-10-28
+    resolution:
+      implementation: All six direct/versioned Packing/Drivers membership callers adopt the same feature-owned
+        desired-membership, idempotency, capacity and insertion decisions. Controllers and DBAL retain their
+        existing admission, locks and completion order.
+      verification: Packing and Drivers persistence suites pass on Node.js 24.15.0 and disposable MariaDB
+        10.11.14, including membership and versioned command behavior, and pass again in the broad run.
+        Independent source reviews verify actual six-caller adoption.
+      remaining_scope: No permission, query, identity, capacity or lock-order redesign is introduced.
+    current_review:
+      reviewed_on: 2026-10-28
+      finding: All six direct/versioned Packing/Drivers membership callers adopt the same feature-owned
+        desired-membership, idempotency, capacity and insertion decisions. Controllers and DBAL retain their
+        existing admission, locks and completion order.
+      evidence_limit: No permission, query, identity, capacity or lock-order redesign is introduced.
   - id: IMP-197
-    status: open
+    status: resolved
     discovered_on: 2026-10-28
     severity: high
     owner: release maintainers
     package: production-readiness-review
     title: Release assembly can check out a different revision from the one CI tested
     evidence:
-      - .github/workflows/ci.yml uses default checkout for the triggering revision.
-      - .github/workflows/release.yml waits for CI and then explicitly checks out mutable github.ref
-        instead of the immutable triggering commit.
+      - .github/workflows/release.yml checks out github.sha and invokes scripts/release-publication.mjs.
+      - Detached checkout, branch movement, version-only semantics and archived source identity are exercised
+        against disposable local bare origins.
     impact: A branch advancing while CI runs can supply untested application source to the release build and tag.
     closes_when:
-      - Verification and release assembly use the same immutable application revision, with the version-only bump accounted for.
+      - Verification and release assembly use the same immutable application revision, with the version-only
+        bump accounted for.
       - A branch change cannot silently replace tested source and is detected before publication.
       - A controlled branch-advance case and independent workflow review verify the intended source identity.
-    disposition: Source-confirmed release-integrity gap; publication lifecycle changes require a separate decision.
+    disposition: Completed within the recorded approved scope; current implementation and executed verification
+      are stated below.
+    reported_evidence:
+      - .github/workflows/ci.yml uses default checkout for the triggering revision.
+      - .github/workflows/release.yml waits for CI and then explicitly checks out mutable github.ref instead
+        of the immutable triggering commit.
+    resolved_on: 2026-10-28
+    resolution:
+      implementation: The release workflow checks out the immutable tested revision. Its shared publication
+        operation rejects branch advancement, unexpected commits and non-version package changes, and verifies
+        the actual archived source receipt.
+      verification: Seven real local-remote/workflow tests pass; strengthened branch/version checks pass on rerun.
+        Nonauthor and root review verify live workflow adoption.
+      remaining_scope: No real remote release, hosted CI or deployment was executed.
+    current_review:
+      reviewed_on: 2026-10-28
+      finding: The release workflow checks out the immutable tested revision. Its shared publication operation
+        rejects branch advancement, unexpected commits and non-version package changes, and verifies the
+        actual archived source receipt.
+      evidence_limit: No real remote release, hosted CI or deployment was executed.
   - id: IMP-198
-    status: open
+    status: resolved
     discovered_on: 2026-10-28
     severity: medium
     owner: release maintainers
     package: production-readiness-review
     title: Release commit and tag are published before build and packaging succeed
     evidence:
-      - .github/workflows/release.yml pushes the version commit and tag before npm run build,
-        runtime bundle preparation and archive creation.
-      - The branch and tag are separate pushes, so one may succeed while the other fails.
-    impact: Build, packaging or partial publication failure can consume a public release version without its matching archive.
+      - The actual workflow orders build, archive/source-receipt validation and shared atomic publication.
+      - The actual local Git conflict proves that neither the branch nor the preexisting remote tag is
+        advanced.
+    impact: Build, packaging or partial publication failure can consume a public release version without its
+      matching archive.
     closes_when:
       - The complete runtime archive is assembled and validated before public branch or tag publication.
-      - Coordinated branch/tag publication reports partial failures and the published source matches the archive.
+      - Coordinated branch/tag publication reports partial failures and the published source matches the
+        archive.
       - Controlled build and packaging failures prove that neither public reference is advanced prematurely.
-    disposition: Separate from the tested-revision defect and the existing operator rehearsal findings; publication-order approval is required.
+    disposition: Completed within the recorded approved scope; current implementation and executed verification
+      are stated below.
+    reported_evidence:
+      - .github/workflows/release.yml pushes the version commit and tag before npm run build, runtime bundle
+        preparation and archive creation.
+      - The branch and tag are separate pushes, so one may succeed while the other fails.
+    resolved_on: 2026-10-28
+    resolution:
+      implementation: Release assembly creates and validates the complete archive before one atomic leased
+        branch/tag push. A packaging failure leaves both public references untouched; later asset-upload
+        failure remains a distinct recovery outcome.
+      verification: Seven local-remote/workflow cases pass, including missing/stale archives and atomic tag
+        conflict; strengthened conflict/diagnostic assertions also pass.
+      remaining_scope: The real hosted release and later release-asset delivery were not executed.
+    current_review:
+      reviewed_on: 2026-10-28
+      finding: Release assembly creates and validates the complete archive before one atomic leased branch/tag
+        push. A packaging failure leaves both public references untouched; later asset-upload failure remains
+        a distinct recovery outcome.
+      evidence_limit: The real hosted release and later release-asset delivery were not executed.
   - id: IMP-199
-    status: open
+    status: resolved
     discovered_on: 2026-10-28
     severity: high
     owner: Activity feature and calendar maintainers
     package: production-readiness-review
     title: Accepted Activity date spans synchronously materialize very large calendars and requirements
     evidence:
+      - Activity controllers/features/services bound actual reads and allocations rather than slicing complete
+        projections.
+      - Existing long plans may retain, shift or reduce day count while preserving slots and saved hidden
+        requirement values; Reload and Auto cannot bypass guards.
+    impact: Large valid ranges can block browser or server work and allocate very large projections. This
+      reproduction does not establish the cause of the separate reported hangs in IMP-117.
+    closes_when:
+      - An approved supported-duration or bounded-projection policy covers creation, saved plans and
+        requirement editing.
+      - Shared calendar and requirement owners enforce the policy consistently without losing existing saved
+        data or drafts.
+      - Large-range verification measures bounded work and checks existing-plan compatibility.
+    disposition: Completed within the recorded approved scope; current implementation and executed verification
+      are stated below.
+    reported_evidence:
       - contracts/api/v1/activity.yaml accepts Activity creation dates without a duration bound;
         activityController validates real calendar dates from year 1000 without a maximum interval.
-      - src/common/lib/civilDate.ts civilDateWeeks enumerates each week/day synchronously for both
-        Activity creation and server presentation.
+      - src/common/lib/civilDate.ts civilDateWeeks enumerates each week/day synchronously for both Activity
+        creation and server presentation.
       - src/frontend/features/activity/requirements.ts createRequirementDraft allocates one stay row per day.
-      - A bounded source probe of 1000-01-01 through 1100-01-01 creates 5219 weeks and 36525 day cells
-        before rendering; longer admitted spans scale that allocation further.
-    impact: Large valid ranges can block browser or server work and allocate very large projections.
-      This reproduction does not establish the cause of the separate reported hangs in IMP-117.
-    closes_when:
-      - An approved supported-duration or bounded-projection policy covers creation, saved plans and requirement editing.
-      - Shared calendar and requirement owners enforce the policy consistently without losing existing saved data or drafts.
-      - Large-range verification measures bounded work and checks existing-plan compatibility.
-    disposition: Reproduced availability exposure; maximum duration and pagination are distinct product choices requiring review.
+      - A bounded source probe of 1000-01-01 through 1100-01-01 creates 5219 weeks and 36525 day cells before
+        rendering; longer admitted spans scale that allocation further.
+    resolved_on: 2026-10-28
+    resolution:
+      implementation: The settings-owned duration maximum defaults to 366 inclusive days. New plans and expansions
+        enforce it before allocation. Older longer plans retain data and use actual 42-day SQL/calendar/print
+        windows and 100-row read-only requirement pages; whole-plan editing/calculation/generation is guarded.
+      verification: Activity database boundaries pass all seven cases on Node.js 24.15.0 and disposable MariaDB
+        10.11.14; 103 focused frontend, two window/configuration and 27 civil-date checks pass. The subsequent
+        full relevant suites pass in the broad run.
+      remaining_scope: This bounded resource remedy does not identify or disprove the separately reported IMP-117
+        persistent hang. Raising the configured maximum deliberately permits larger full-plan work.
+    current_review:
+      reviewed_on: 2026-10-28
+      finding: The settings-owned duration maximum defaults to 366 inclusive days. New plans and expansions
+        enforce it before allocation. Older longer plans retain data and use actual 42-day SQL/calendar/print
+        windows and 100-row read-only requirement pages; whole-plan editing/calculation/generation is guarded.
+      evidence_limit: This bounded resource remedy does not identify or disprove the separately reported IMP-117
+        persistent hang. Raising the configured maximum deliberately permits larger full-plan work.
   - id: IMP-200
     status: resolved
     resolved_on: 2026-10-28
@@ -7312,56 +7395,305 @@ implementation_defects:
         participant requirement calculation; ordinary invalid, reversed, leap-day and complete-week cases pass.
         Built calendar workflows pass. This does not establish the cause of IMP-117 or resolve IMP-199.
   - id: IMP-201
-    status: open
+    status: resolved
     discovered_on: 2026-10-28
     severity: medium
     owner: API transport and upload maintainers
     package: production-readiness-review
     title: Upload infrastructure failures become invalid-file responses without server diagnostics
     evidence:
-      - src/backend/modules/api/transport.ts receiveApiUpload replaces every upload callback error
-        except LIMIT_FILE_SIZE with a new UPLOAD_INVALID problem and discards the original cause.
-      - Multer forwards native disk write errors through that callback; fileCommons.prepareFileUploader
-        also forwards allocation failures from the durable invoice proof owner.
-      - contracts/api/v1/common.yaml declares UPLOAD_INVALID as HTTP 400, while modules/api/problem.ts
-        emits its bounded server-failure diagnostic only for errors with status at least 500.
+      - fileCommons marks expected parser/filter failures; all creation/header/proof adapters continue through
+        receiveApiUpload.
+      - tests/integration/shared-entity-routing.spec.ts exercises real disk streams and allocation failures.
+    impact: Filesystem or proof-allocation database failures can tell users their valid file is invalid and
+      leave operators only a 400 access-log entry without the original bounded failure category. This is
+      distinct from the corrected review runner's unsupported absolute upload-directory configuration.
+    closes_when:
+      - An approved error contract distinguishes expected multipart, size and media rejection from storage or
+        allocation failure.
+      - Matching live upload callers share that classification and safe correlation/category diagnostics
+        without exposing paths or SQL.
+      - Existing admission, media limits, proof ownership, cleanup timing and single-attempt delivery remain
+        intact.
+      - Bounded tests cover native filesystem and allocation database failures, ordinary file rejection and
+        private error details.
+    disposition: Completed within the recorded approved scope; current implementation and executed verification
+      are stated below.
+    reported_evidence:
+      - src/backend/modules/api/transport.ts receiveApiUpload replaces every upload callback error except
+        LIMIT_FILE_SIZE with a new UPLOAD_INVALID problem and discards the original cause.
+      - Multer forwards native disk write errors through that callback; fileCommons.prepareFileUploader also
+        forwards allocation failures from the durable invoice proof owner.
+      - contracts/api/v1/common.yaml declares UPLOAD_INVALID as HTTP 400, while modules/api/problem.ts emits
+        its bounded server-failure diagnostic only for errors with status at least 500.
       - Shared creation, header-image and both invoice-proof adapters all use this transport operation;
         current frontend-contracts tests explicitly expect generic upload errors to become UPLOAD_INVALID.
-    impact: Filesystem or proof-allocation database failures can tell users their valid file is invalid
-      and leave operators only a 400 access-log entry without the original bounded failure category.
-      This is distinct from the corrected review runner's unsupported absolute upload-directory configuration.
-    closes_when:
-      - An approved error contract distinguishes expected multipart, size and media rejection from storage or allocation failure.
-      - Matching live upload callers share that classification and safe correlation/category diagnostics without exposing paths or SQL.
-      - Existing admission, media limits, proof ownership, cleanup timing and single-attempt delivery remain intact.
-      - Bounded tests cover native filesystem and allocation database failures, ordinary file rejection and private error details.
-    disposition: Source-confirmed error-contract and observability gap; changing HTTP classification requires a separate decision.
+    resolved_on: 2026-10-28
+    resolution:
+      implementation: The shared upload transport preserves expected multipart/media/size client rejections and
+        classifies genuine allocation/storage failures as generic server errors with a bounded category and
+        request correlation.
+      verification: Actual Express/Multer allocation, native disk-write and malformed/media cases pass, with
+        assertions for HTTP 400/500, private details and useful diagnostics. Complete routing suites pass in
+        the broad run.
+      remaining_scope: Media/byte limits, proof ownership, admission, cleanup timing and single-attempt behavior
+        are unchanged.
+    current_review:
+      reviewed_on: 2026-10-28
+      finding: The shared upload transport preserves expected multipart/media/size client rejections and
+        classifies genuine allocation/storage failures as generic server errors with a bounded category and
+        request correlation.
+      evidence_limit: Media/byte limits, proof ownership, admission, cleanup timing and single-attempt behavior
+        are unchanged.
   - id: IMP-202
-    status: open
+    status: resolved
     discovered_on: 2026-10-28
     severity: high
     owner: identity and account persistence maintainers
     package: production-readiness-review
     title: Case-insensitive database collation can merge distinct OIDC identities before email policy runs
     evidence:
-      - src/backend/modules/database/entities/user/User.ts gives oidcIssuer and oidcSub no explicit
-        collation, and UserService.findOidcAccount compares both with ordinary database equality.
+      - The one private query predicate is adopted by findOidcAccount and the restricted projection.
+      - tests/integration/authentication-workflows.spec.ts verifies exact opaque identity under default
+        case-insensitive collation.
+    impact: On case-insensitive installations, distinct provider identities can resolve to the same local
+      account if the provider issues case-distinct subjects or a changed issuer differs only in case. The
+      primary lookup returns before either email-linking control, so this is separate from IMP-193.
+    closes_when:
+      - Reviewed issuer/subject lookup and any required existing-installation reconciliation preserve exact
+        opaque identity.
+      - Both email settings remain independent of primary identity matching and cannot bypass its required
+        distinction.
+      - Real persistence tests cover case-distinct subjects and issuer paths under the supported default
+        database collation.
+      - Any persistent constraint or collation change includes its entity and reviewed migration without
+        guessing account ownership.
+    disposition: Completed within the recorded approved scope; current implementation and executed verification
+      are stated below.
+    reported_evidence:
+      - src/backend/modules/database/entities/user/User.ts gives oidcIssuer and oidcSub no explicit collation,
+        and UserService.findOidcAccount compares both with ordinary database equality.
       - OpenID Connect Core section 2 requires case-sensitive issuer and subject identifiers;
         https://openid.net/specs/openid-connect-core-1_0.html#IDToken is the protocol reference.
       - A bounded compiled-production ORM probe on the isolated MariaDB 10.11 schema confirmed
-        utf8mb4_unicode_ci on both columns. Case-distinct subjects and issuer paths each selected the
-        same synthetic account, including through identity.findOrCreateUserFromOidc with both email flags false.
+        utf8mb4_unicode_ci on both columns. Case-distinct subjects and issuer paths each selected the same
+        synthetic account, including through identity.findOrCreateUserFromOidc with both email flags false.
       - The probe's exact synthetic User/Profile cleanup was verified. No real provider attack or
         existing-installation account inspection was performed.
-    impact: On case-insensitive installations, distinct provider identities can resolve to the same local
-      account if the provider issues case-distinct subjects or a changed issuer differs only in case.
-      The primary lookup returns before either email-linking control, so this is separate from IMP-193.
+    resolved_on: 2026-10-28
+    resolution:
+      implementation: The shared UserService OIDC predicate requires indexed candidate equality plus byte-exact
+        issuer and subject equality in both full and projected lookups. Stored values and email
+        linking/rebinding controls remain independent.
+      verification: Full authentication persistence passes on Node.js 24.15.0 and disposable MariaDB 10.11.14,
+        covering case/trailing-space distinction, distinct persisted accounts and the projected lookup
+        private-field boundary.
+      remaining_scope: No automatic account merge, rebind, schema conversion or existing-installation ownership
+        reconciliation is performed.
+    current_review:
+      reviewed_on: 2026-10-28
+      finding: The shared UserService OIDC predicate requires indexed candidate equality plus byte-exact issuer
+        and subject equality in both full and projected lookups. Stored values and email linking/rebinding
+        controls remain independent.
+      evidence_limit: No automatic account merge, rebind, schema conversion or existing-installation ownership
+        reconciliation is performed.
+  - id: IMP-203
+    status: resolved
+    discovered_on: 2026-10-28
+    severity: high
+    owner: HTTP logging and identity maintainers
+    package: production-readiness-review
+    title: Application access logging records bearer capabilities and provider callback secrets
+    evidence:
+      - src/backend/modules/lib/http.ts owns the exact-span projection; app.ts installs that logger without
+        changing requests.
+      - Nonsecret keys, ordering, duplicates, raw encoding and neighboring malformed values remain intact.
+    impact: Application log readers and collectors can receive reusable login or reset capabilities and
+      authentication callback data, expanding the authority exposed through operational logs.
     closes_when:
-      - Reviewed issuer/subject lookup and any required existing-installation reconciliation preserve exact opaque identity.
-      - Both email settings remain independent of primary identity matching and cannot bypass its required distinction.
-      - Real persistence tests cover case-distinct subjects and issuer paths under the supported default database collation.
-      - Any persistent constraint or collation change includes its entity and reviewed migration without guessing account ownership.
-    disposition: Quick fallback analysis confirmed a separate identity-lookup defect; no remedy is authorized by the email-setting decisions.
+      - A reviewed logging policy defines safe route identity, method, status and timing evidence.
+      - The existing logging owner excludes capability path values and sensitive or nested query values
+        without changing requests, routing or identity behavior.
+      - Synthetic normal, error, unmatched and malformed requests verify secret omission and useful
+        diagnostics.
+      - External proxy logging and historical-log handling retain their separately defined operational scope.
+    disposition: Completed within the recorded approved scope; current implementation and executed verification
+      are stated below.
+    reported_evidence:
+      - src/backend/app.ts installs Morgan dev logging before all routes; its URL token uses originalUrl.
+      - Guest sign-in, password reset and activation put capabilities in URL paths; OIDC callback and Event
+        registration bypass routes also carry sensitive query values.
+      - A current installed Express/Morgan probe confirmed secret emission for four synthetic route families
+        without a database, real credentials or external delivery.
+    resolved_on: 2026-10-28
+    resolution:
+      implementation: The sole Morgan logger preserves complete method, URL spelling, status and timing while
+        redacting actual capability/callback query values in place, including nested destinations and
+        malformed neighbors.
+      verification: Installed Express/Morgan normal/error/unmatched checks and exact-output regressions pass. The
+        15KB deeply nested URL also passes a 64MB bounded child test; complete relevant suites pass in the
+        broad run.
+      remaining_scope: External proxy logs, production historical-log exposure and real deployment collectors were
+        not inspected.
+    current_review:
+      reviewed_on: 2026-10-28
+      finding: The sole Morgan logger preserves complete method, URL spelling, status and timing while redacting
+        actual capability/callback query values in place, including nested destinations and malformed
+        neighbors.
+      evidence_limit: External proxy logs, production historical-log exposure and real deployment collectors were
+        not inspected.
+  - id: IMP-204
+    status: needs-review
+    discovered_on: 2026-10-28
+    severity: medium
+    owner: application maintainers
+    package: production-readiness-review
+    title: Residual diagnostic maintainability warnings require bounded semantic review
+    evidence:
+      - Fresh SonarQube MCP analysis of 429 current source/changed script files returned 745 notices before
+        this pass of equivalent cleanup; this scope differs from the earlier 372-file inventory and is not a
+        trend comparison.
+      - Category/source review inspected 291 frontend notices and 400 backend/common notices. Several
+        duplicate-ID and label findings refer to valid component label/control pairs; native checkbox state,
+        reactive dependency reads, sequential locks and deterministic lexical ordering also explain
+        conservative warnings.
+      - Confirmed unused/duplicate imports are corrected across frontend/backend owners. Eight unattached
+        decorative captions now use neutral spans with equivalent display; actual control names and handlers
+        remain intact.
+      - All eight direct/versioned/description Packing/Drivers metadata saves now adopt one lists/metadata
+        feature owner. Matching business checks and sparse writes are shared while DBAL keeps Event/root locks
+        and Drivers preparation stays inside its transaction.
+      - Two historical migration helpers repeat physical identifier metadata mechanics with different
+        nullability and DDL order. Their wider consolidation remains a maintainability candidate;
+        IMP-205/IMP-206 own the independently established migration failures.
+      - Residual cognitive-complexity and expression-style notices are not proven runtime defects or claimed
+        fixed. Current source review did not establish an additional remote regex exploit; reported sites
+        concern operator configuration, trusted shipped Help or legacy mail normalization.
+      - WebStorm MCP again returned timedOut on the new identity-admission source, so it supplies no complete
+        usable IDE problem inventory.
+      - The proper-baseline full Vitest run passed 2959 and hit three unchanged five-second deadlines. A
+        serial seven-file rerun passed all 292, including those three cases and actual caption rendering.
+        Build and test/client/SSR typechecks pass; this is not a clean full-invocation result.
+      - The complete built E2E run reported 262 passes, two failures and one configuration skip. A calendar
+        worker exited with Windows code 3221226505; its focused rerun passed. Stronger detail-heading
+        readiness corrected the lifecycle fixture race, and all four lifecycle cases passed. The
+        disabled-authentication configuration case also passed separately. These runs do not establish a clean
+        complete invocation or the native exit cause.
+      - Targeted SonarQube MCP analysis of the three repaired migration/helper files returns 69 notices;
+        independent source review accepts the actual preservation boundaries and classifies remaining
+        style/complexity notices without treating them as resolved runtime defects. WebStorm MCP again timed
+        out on the helper; no complete IDE result is claimed.
+    impact: An unclassified warning inventory cannot establish production readiness or justify blanket rewrites
+      that change locks, canonical ordering, draft ownership or feature behavior.
+    closes_when:
+      - Current diagnostics are classified against executable owners and actual DOM behavior, with limitations
+        explicit.
+      - Confirmed equivalent readability and duplication fixes adopt existing owners and preserve security and
+        lifecycle.
+      - Matching list metadata business checks have one actual feature implementation while controller
+        admission, direct/versioned locks and feature-specific precommit preparation remain explicit.
+      - Newly established behavioral or architectural defects are recorded once with their own evidence and
+        decisions.
+      - Independent source review and appropriate production checks verify actual changes; diagnostic timeouts
+        are not clean results.
+    disposition: The confirmed metadata/import/caption corrections are implemented and independently reviewed.
+      Remaining style/complexity candidates and the unavailable IDE inventory stay visible; no blanket
+      algorithm rewrite or production certification is inferred.
+  - id: IMP-205
+    status: resolved
+    discovered_on: 2026-10-28
+    severity: critical
+    owner: database migration maintainers
+    package: production-readiness-review
+    title: Item-owner migration cannot reference synchronized native UUID guest identifiers
+    evidence:
+      - AddItemOwners prepares all four references through the existing shared migration-helper before DDL,
+        matching actual native UUID/text/binary/numeric storage without copying parent identity, uniqueness or
+        default attributes.
+      - Populated compatible values and valid existing constraints are retained. Empty incompatible columns
+        require complete dependency admission; populated mismatches, orphans, invalid engines/indexes and
+        constraint collisions refuse before mutation.
+      - The reverse migration checks all four columns and dependencies before any drop and refuses populated
+        ownership.
+    impact: The supported empty-schema bootstrap stops before application startup; retry must account for
+      partially applied DDL without coercing populated ownership values.
+    closes_when:
+      - Referencing columns match actual parent identifier storage across supported schemas.
+      - Missing and safely compatible partial columns resume without deleting or guessing values.
+      - Ambiguous or populated incompatible states fail before mutation.
+      - Real migration tests cover native UUID and supported text/binary references, and the documented
+        synchronize/migrate/status sequence completes on a disposable target.
+    disposition: Current-source repair completed and independently reviewed; the unchanged official release
+      retains the originally observed defect.
+    resolved_on: 2026-10-28
+    reported_evidence:
+      - The official v0.2.3-rc.12 archive and matching tagged source were rehearsed with Node.js 24.15.0 and
+        MariaDB 10.11.14 against a verified empty disposable schema.
+      - Documented schema synchronization completed, but AddItemOwners1785163809347 failed creating
+        packing_items.guest_id to guests.id with foreign-key errno 150.
+      - Read-only metadata confirms guests.id uses native uuid while the migration adds varchar(36) guest_id
+        columns. Earlier additive DDL survives the failed migration.
+      - At discovery, src/backend/migrations/1785163809347-AddItemOwners.ts and the shared helper retained the
+        same incompatible physical-reference assumptions as the released source.
+    resolution:
+      implementation: One shared physical-reference, constraint-name and dependency owner is adopted by both
+        pending migrations. No existing populated identifier is coerced or deleted.
+      verification: All 43 real-database preservation cases pass on Node.js 24.15.0 and MariaDB 10.11.14. The
+        documented current-checkout empty bootstrap completes all 25 migrations and migration status. A
+        separate seeded numeric-owner upgrade completes the same chain, preserving all original values across
+        38 table digests and all five ownership joins.
+      limits: Existing migration history is not replayed. No production/staging data, retained failed rehearsal or
+        released archive was changed; full released-installation operational certification remains separate.
+  - id: IMP-206
+    status: resolved
+    discovered_on: 2026-10-28
+    severity: critical
+    owner: database migration maintainers
+    package: production-readiness-review
+    title: Profile migration misclassifies established native UUID ownership as numeric user ownership
+    evidence:
+      - An actual pre-change native-UUID reproduction entered the numeric User join and failed after earlier
+        schema changes; ownership-value destruction was not observed in that reproduction.
+      - AddProfiles now preflights all five root owners and its declared relation, temporary-column,
+        constraint, uniqueness, trigger and narrowing hazards before changing FK checks, schema or rows.
+      - Proven Profile values/storage/FKs remain intact. Numeric User conversion requires complete unique
+        mapping, exact temporary replacement and preserved automatic audit timestamps before one source
+        drop/rename ALTER.
+      - Ambiguous, orphaned, conflicting or unsupported states refuse rather than guess mappings or binary
+        encodings. Populated affected data also prevents reverse migration before mutation.
+    impact: Established Profile ownership can enter a destructive conversion intended for earlier numeric User
+      ownership, losing values or rebuilding incompatible foreign keys.
+    closes_when:
+      - Proven existing Profile ownership and compatible native/text/binary storage are preserved.
+      - Numeric legacy conversion requires an unambiguous User-to-Profile mapping before destructive DDL.
+      - Missing, conflicting and partial conversion evidence is rejected without guessed ownership.
+      - Real migration coverage protects populated Profile ownership, unique numeric conversion, partial
+        states and refusal before mutation, followed by a representative seeded upgrade.
+    disposition: Current-source classification and data-preservation repair completed and independently
+      reviewed. Conservative unsupported-state refusals are intentional; no broader sibling conversion policy
+      was redesigned.
+    resolved_on: 2026-10-28
+    reported_evidence:
+      - At discovery, src/backend/migrations/1785610467095-AddProfiles.ts skipped ownership conversion only
+        for char/varchar owner IDs. Its other-type path joined numeric Users before dropping and replacing the
+        original owner column.
+      - The originally inspected matching official v0.2.3-rc.12 source contains the same classification.
+      - Read-only metadata after the originally stopped released bootstrap confirms native uuid profiles.id
+        and owner_id storage on Drivers lists, Packing lists, Events, Activity plans and Surveys.
+      - This later migration was not executed during the original released rehearsal. Its destructive
+        consequences were inferred from the source inspected at that time, independently of the earlier
+        observed IMP-205 failure.
+    resolution:
+      implementation: Both migrations adopt the actual shared metadata/reference/dependency checks. Original row
+        data and audit precision are retained in admitted transitions; unsafe conversions and destructive
+        reversals refuse.
+      verification: All 43 real-ORM migration cases pass, covering native/text/binary ownership, numeric
+        conversion, retries, every original row, exact SQL temporal values, triggers and complete refusal
+        snapshots. Empty and seeded full 25-migration current-checkout rehearsals pass; the seeded chain
+        retains all 38 original table digests and five owner-to-Profile joins.
+      limits: No ambiguous ownership is repaired automatically, and reverse migration is not a substitute for the
+        canonical paired restore. The official v0.2.3-rc.12 archive was not altered or certified by
+        checkout-only execution.
 findings:
   - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
     status: closed
@@ -7759,24 +8091,29 @@ findings:
     category: design-follow-up
     owner: permission-system maintainers
     title: Review current permission semantics across features
-    related_defects: [ IMP-022, IMP-023 ]
+    related_defects:
+      - IMP-022
+      - IMP-023
     implementation_evidence:
-      - src/backend/modules/permissionEngine.ts and src/backend/modules/lib/permissions.ts define
-        current audience grants, method/field policy and item fallbacks.
-      - src/backend/controller/packingController.ts projects actual mutation capabilities and
-        coordinates admitted commands; shared frontend controls consume those capabilities without
-        granting authority.
-      - src/backend/controller/eventPoolController.ts admits Finance management before upload or pool-lock
-        waits, while src/backend/modules/invoice/invoiceOperations.ts persistOrganizerInvoice and
-        acceptSavedInvoice do not receive the actor or recheck the grant under that lock. Define whether
-        a revocation during the wait must reject the pending operation before changing this behavior.
+      - src/backend/modules/permissionEngine.ts and src/backend/modules/lib/permissions.ts define current
+        audience grants, method/field policy and item fallbacks.
+      - src/backend/controller/packingController.ts projects actual mutation capabilities and coordinates
+        admitted commands; shared frontend controls consume those capabilities without granting authority.
+      - Finance management now receives its captured actor and Event context, locks Event before pool in one
+        transaction, and checks uncached current grants through the existing permission feature owner. All
+        five Event ACL/default writers adopt the same Event fence.
     desired_outcome: Review actor, page, method, field and private-projection boundaries across current
-      features; distinguish intentional public powers and feature exceptions from unintended access.
-      Define any coherent rework through its existing owners and explicit decision before changing
-      grants, defaults, resource access or deliberate domain policy.
-    containment: Current API requests retain captured actor/context, CSRF, locked grant checks, private
-      baselines and profile-required operations. No concrete unsafe public-action expansion or
-      blanket-profile requirement is established by this follow-up.
+      features; distinguish intentional public powers and feature exceptions from unintended access. Define
+      any coherent rework through its existing owners and explicit decision before changing grants, defaults,
+      resource access or deliberate domain policy.
+    containment: "Current API requests retain captured actor/context, CSRF, locked grant checks, private
+      baselines and profile-required operations. No concrete unsafe public-action expansion or blanket-profile
+      requirement is established by this follow-up.\r"
+    bounded_resolution_2026_10_28: The Finance revocation timing policy is implemented and independently
+      reviewed. Nine real-ORM concurrency cases pass on Node.js 24.15.0/MariaDB 10.11.14, proving earlier
+      revocation denial, later revocation waiting, active-manager writers and intentional public/participant
+      separation. The broad suite passes the complete file; wider cross-feature policy review remains a
+      distinct open follow-up.
   - id: DOC-ENTITY-PROPERTIES-VISUAL
     severity: low
     category: visual-maintenance
@@ -8167,14 +8504,18 @@ findings:
       - migrationDataSource.ts
       - scripts/runMigration.ts
       - src/backend/modules/database/migrations/
-    deficiency: The documented empty-database sequence is source-derived but has not
-      been run against a clean MariaDB 10.11 database, including
-      migration-history and trigger outcomes.
-    desired_outcome: Initialize an empty isolated database exactly as documented,
-      verify the resulting tables, migration history, triggers, application
-      startup, and repeatability, and record any discrepancy as a separate
-      defect.
+    deficiency: The documented empty-database sequence is source-derived but has not been run against a clean
+      MariaDB 10.11 database, including migration-history and trigger outcomes.
+    desired_outcome: Initialize an empty isolated database exactly as documented, verify the resulting tables,
+      migration history, triggers, application startup, and repeatability, and record any discrepancy as a
+      separate defect.
     status: open
+    current_evidence_2026_10_28: The unchanged official v0.2.3-rc.12 rehearsal failed at IMP-205. After the
+      current-source repairs, a new isolated Node.js 24.15.0/MariaDB 10.11.14 checkout rehearsal completes
+      synchronization, all 25 migrations, migration status and trigger inspection. A separate seeded
+      numeric-owner target completes the full chain while retaining all 38 original table digests and five
+      ownership joins. Official corrected-release startup and full operational repeatability remain
+      unverified; no failed target or history was bypassed.
     verification_only: true
     blocks_documentation_migration: false
   - id: OPSV-003
@@ -8368,7 +8709,7 @@ work_packages:
       - OPS-003
       - OPS-004
   - id: D04V
-    status: deferred
+    status: blocked
     priority: P1
     title: Controlled operator-runbook verification
     audiences:
@@ -8412,23 +8753,20 @@ work_packages:
       - command and output transcript with secrets redacted
       - database and persistent-file integrity evidence
       - upgrade and rollback record
-      - separately classified defects and narrowly scoped documentation
-        corrections
+      - separately classified defects and narrowly scoped documentation corrections
     acceptance_criteria:
       - every OPSV finding has environment-specific execution evidence
-      - backup and restore prove database/file/release consistency in an
-        isolated target
-      - upgrade and rollback both finish with health, authentication,
-        representative data, and file checks
-      - discovered runtime defects are registered once and are not copied into
-        product documentation
-      - runbook corrections are made only where observed behavior disproves the
-        current working contract
-    execution_note: This is explicit deferred verification debt, not a blocker for
-      the documentation migration. Run it only with Node.js 24.15.0, MariaDB
-      10.11, an official release archive, a matching tagged source workspace,
-      isolated persistent storage, controlled SMTP, and a non-production OIDC
-      client where available.
+      - backup and restore prove database/file/release consistency in an isolated target
+      - upgrade and rollback both finish with health, authentication, representative data, and file checks
+      - discovered runtime defects are registered once and are not copied into product documentation
+      - runbook corrections are made only where observed behavior disproves the current working contract
+    execution_note: Current checkout source repairs for IMP-205/IMP-206 now pass empty and seeded full migration
+      rehearsals on separate disposable targets. The original official archive is unchanged and still has its
+      observed bootstrap failure; a corrected matching official release/source pair is unavailable for
+      complete released-installation verification. Service/proxy/TLS, controlled SMTP/OIDC, persistent-file,
+      paired restore and full rollback evidence remains outstanding. This does not block documentation
+      delivery. Retain the canonical supported runtime, dedicated schemas/storage and controlled side-effect
+      prerequisites.
   - id: D05
     status: done
     title: Events and registration

@@ -23,13 +23,13 @@ schemas:
     additionalProperties: false
     required: [name]
     properties:
-      name: {type: string, minLength: 1}
+      name: {$ref: './auth.yaml#/schemas/IdentityName'}
   ProfileUpdateInput:
     type: object
     additionalProperties: false
     required: [name, isDefault]
     properties:
-      name: {type: string, minLength: 1}
+      name: {$ref: './auth.yaml#/schemas/IdentityName'}
       isDefault: {type: boolean}
   ProfileMigrationInput:
     type: object

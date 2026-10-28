@@ -13,6 +13,7 @@ import {renderFrontend} from '../modules/frontendRenderer';
 import {applyPageEntry, bootstrap} from './frontendDocuments';
 import {createHeaderHandler} from './entityHeaderDownloadHandler';
 import {paramHandler} from './paramHandler';
+import {getIdentityAdmission} from './identityAdmission';
 import type {ApiOperationId, ApiResponseBody, ApiSuccessStatus, PreparedApiJsonResponse} from '../../types/ApiTransportTypes';
 import type {RegistrationEmailDelivery} from '../../types/IdentityTypes';
 import type {GuestFlow, GuestFlowConfig, GuestFlowCreateEntry, GuestFlowResponse,
@@ -261,7 +262,8 @@ export function createGuestFlowApiRouter<Type extends EntityType, Root extends E
         // The method owner admits private fields before an ETag can produce a 304.
         const actor = await requireApiContext(request, response, true);
         validateOperationRequest(request, operations.detail.operation);
-        const result = await config.detail(String(request.params[config.parameter]), actor, request.query.view as 'detail' | 'admin' | undefined);
+        const result = await config.detail(String(request.params[config.parameter]), actor,
+            request.query.view as 'detail' | 'admin' | undefined, request.query);
         operations.detail.send(request, response, result.data, result.etag);
     }));
 
@@ -333,6 +335,10 @@ export function createGuestFlowGuestRouter<Type extends EntityType, Root extends
         validateOperationRequest(request, operation);
         const entry = await flow.readGuestEntry(String(request.params[config.parameter]));
         const body = request.body as components['schemas']['GuestRegistrationInput'];
+        // All five entry flows share one client budget. Optional recovery mail
+        // reserves its independent budget before identity/token writes begin.
+        await getIdentityAdmission().guestCreation(request, response);
+        if (body.email) await getIdentityAdmission().mail(request, response, body.email);
         const token = config.entityType === 'event' && typeof request.query.regToken === 'string'
             ? `?${new URLSearchParams({regToken: request.query.regToken})}` : '';
         const next = `/${config.entityType}/${entry.id}${token}`;

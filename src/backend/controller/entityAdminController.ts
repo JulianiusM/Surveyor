@@ -16,12 +16,18 @@
 
 // src/backend/controller/entityAdminController.ts
 import Joi from 'joi';
+import {listMetadataProjection, listMetadataResult, listPermissions} from '../modules/lists/metadata';
 import {coerceLimit, getHeaderImageVersion, maskEmail, SQL_ALLOW_LIST, sameUuid, uuidKey, resolveCompleteUuidOrder} from '../modules/lib/util';
-import type {UserInfo} from '../../types/UserTypes';
+import type {
+    UserInfo, EntityBase,
+} from '../../types/UserTypes';
 import {comparisonActor, comparisonToken, requireComparisonToken, requireFieldComparison} from '../modules/api/transport';
 import {getLockedListAssignment} from '../modules/database/services/ListService';
 import type {ListPersistenceType, ListRootRows, ListItemRows} from '../../types/ListPersistenceTypes';
-import type {ListItemCommandOperations} from '../../types/EntityPropertyTypes';
+import type {
+    ListItemCommandOperations, BasicEntityPropertyPatch, EntityPropertyField, EntityPropertyPresentation,
+    EntityDefaultReviewOptions, EntityAdministratorReviewOptions, ListReadOperations,
+} from '../../types/EntityPropertyTypes';
 import type {components} from '../../types/api/v1';
 import {ApiProblem} from '../modules/api/problem';
 import {archiveKey} from '../modules/archive/policy';
@@ -38,14 +44,10 @@ import {APIError} from '../modules/lib/errors';
 import {getInitialPerms, getPresetMask, PERM, toMask} from "../modules/lib/permissions";
 import {requireSessionProfileId} from '../modules/lib/session';
 import {assertEditableEntityFields, entityMethodPermission, entityPropertyFields, entityPropertyPermission, permissionDefinitions, evaluateEntities, evaluateSubject, isOwner, saveDefaultPermsFromBody, entityPermissionKey} from '../modules/permissionEngine';
-import type {BasicEntityPropertyValues, BasicEntityPropertyField, BasicEntityPropertyPatch, EntityPropertyField, EntityPropertyPresentation, EntityDefaultReviewOptions, EntityAdministratorReviewOptions, ListReadOperations} from '../../types/EntityPropertyTypes';
-import type {LockedArchiveContext} from '../../types/ArchiveTypes';
-import type {EntityAdministratorCommand, EntityAdministratorOutcome, PermType, PermView, SessionLike} from '../../types/PermissionTypes';
-import type {EntityBase} from '../../types/UserTypes';
+import type {EntityAdministratorCommand, EntityAdministratorOutcome, PermView, SessionLike} from '../../types/PermissionTypes';
 import type {CombEntityType, EntityType} from "../../types/UtilTypes";
 
 type ListType = 'packing' | 'drivers';
-type ListRoot = EntityBase & {archivedAt?: Date | null; event?: {archivedAt?: Date | null} | null};
 type ListReadRoot = EntityBase & {archivedAt?: Date | null; event?: Event | null};
 type ListReadItem = {id: string; pos: number};
 
@@ -122,29 +124,6 @@ export async function deleteListAssignment<Type extends ListPersistenceType, Pat
     return {changed: true};
 }
 
-/** Root field projection discloses only values permitted by the existing shared property policy. */
-export function listMetadataProjection<Type extends ListType>(type: Type, list: ListRoot, permissions: PermView) {
-    const values: BasicEntityPropertyValues = {};
-    const editableFields: BasicEntityPropertyField[] = [];
-    // Copy each value only after its direct field grant, retaining title/description disclosure order.
-    for (const field of ['title', 'description'] as const) {
-        if (!permissions.has(entityPropertyPermission(type, field)!)) continue;
-        editableFields.push(field);
-        if (field === 'title') values.title = list.title;
-        else values.description = list.description ?? null;
-    }
-    return {entityType: type, id: list.id, values, editableFields, currentEventId: list.eventId ?? null,
-        archived: Boolean(list.archivedAt), inheritedArchived: Boolean(list.event?.archivedAt)};
-}
-
-/** Presentation context hashes retain conditional reads while sparse writes compare submitted fields only. */
-export function listMetadataResult<Type extends ListType>(type: Type, list: ListRoot, permissions: PermView, session: SessionLike) {
-    const data = listMetadataProjection(type, list, permissions);
-    const etag = comparisonToken(`${type}-meta`, list.id, session, {...data.values,
-        currentEventId: data.currentEventId, archived: data.archived, inheritedArchived: data.inheritedArchived});
-    return {data, etag};
-}
-
 /** Reuse form trimming/clearing before generated validation; JSON omission never becomes a stored undefined. */
 export function normalizeListMetadataPatch(body: unknown): unknown {
     if (!body || typeof body !== 'object' || Array.isArray(body)) return body;
@@ -156,21 +135,6 @@ export function normalizeListMetadataPatch(body: unknown): unknown {
     if (typeof fields.title === 'string') fields.title = fields.title.trim();
     if (fields.description === '') fields.description = null;
     return fields;
-}
-
-/** Reject a disappeared or reassociated root after the DBAL acquires its existing parent/root locks. */
-export function assertListContext(context: LockedArchiveContext): void {
-    if (!context.root) throw new ApiProblem('NOT_FOUND');
-    if (context.initialEventId !== context.root.eventId && !sameUuid(context.initialEventId, context.root.eventId)
-        || (context.root.eventId && !context.parents.has(uuidKey(context.root.eventId)))) throw new ApiProblem('ENTITY_CONTEXT_CHANGED');
-}
-
-/** Evaluate current root grants on the supplied snapshot, independently of page/profile admission. */
-export function listPermissions(type: ListType, manager: EntityManager, list: EntityBase,
-    session: SessionLike, caches?: import('../../types/PermissionTypes').PermEngineCaches): Promise<PermView> {
-    comparisonActor(session);
-    return evaluateSubject({kind: 'entity', entity: {entityType: type, entityId: list.id,
-        ownerId: list.ownerId, eventId: list.eventId}}, session, caches, manager);
 }
 
 /** Page reads require an actor and the existing feature admission before any detail projection. */

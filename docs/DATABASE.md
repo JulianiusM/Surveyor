@@ -5,10 +5,10 @@ documentation-metadata
 audience: database administrators; operators; site reliability engineers; maintainers
 owner: application operators
 status: current
-last-verified: 2026-10-27
+last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: approved durable invoice-proof ledger migration and recovery boundaries reconciled against source; existing targeting and cutover safety retained; no deployment claim
-source-anchors: src/backend/migrations/1789862400000-AddEntityArchival.ts; src/backend/modules/database/entities/archive/EntityVisibilityPreference.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; src/backend/controller/packingController.ts; src/backend/modules/database/services/PackingService.ts; src/backend/modules/api/contracts.ts; src/backend/modules/database/entities/session/Session.ts; src/backend/migrations; package.json; .github/workflows/ci.yml
+verification-scope: approved item-owner/Profile preservation preflights and rollback refusals reconciled against current source; Activity pairing, invoice-proof recovery and targeting guidance retained; no full-bootstrap or deployment certification
+source-anchors: src/backend/migrations/1793232000000-AddActivityRecommendationPairing.ts; src/backend/modules/database/entities/activity/ActivityAssignmentRecommendation.ts; src/backend/modules/activity/recommendations.ts; src/backend/migrations/1789862400000-AddEntityArchival.ts; src/backend/modules/database/entities/archive/EntityVisibilityPreference.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; src/backend/controller/packingController.ts; src/backend/modules/database/services/PackingService.ts; src/backend/modules/api/contracts.ts; src/backend/modules/database/entities/session/Session.ts; src/backend/migrations; package.json; .github/workflows/ci.yml; src/backend/migrations/1785163809347-AddItemOwners.ts; src/backend/migrations/1785610467095-AddProfiles.ts; src/backend/modules/database/utils/migration-helper.ts
 next-review: database-schema-or-targeting-change
 -->
 
@@ -194,6 +194,34 @@ Do not use migration reversion as the primary production rollback strategy. A re
 or application behavior that is not safely reversible one migration at a time. The supported rollback is to restore the
 pre-upgrade database and persistent-file backup as one set and restart the matching previous release.
 
+## Pending owner migrations
+
+Run `1785163809347-AddItemOwners.ts` and `1785610467095-AddProfiles.ts` only through the normal settings-aware migration
+workflow. Migration history determines whether they are pending; these repairs do not replay migrations already recorded
+as applied. They do not authorize removing migration records or changing an installed release archive.
+
+The item-owner migration checks all four User/Guest references on Packing items and Activity slots before its first
+schema write. Its shared helper matches each referenced identifier's physical type, length, numeric signedness,
+character set and collation without copying primary-key, uniqueness, generation or default attributes into the new
+nullable reference. Compatible populated values remain intact. An incompatible existing column can be aligned only
+when every value is NULL. Orphan values, conflicting constraints and unsupported storage, engines or dependencies stop
+the migration before changes.
+
+The Profile migration checks ownership on Drivers lists, Packing lists, Events, Activity plans and Surveys, together
+with its declared relations and temporary columns, before changing schema or rows. Proven native UUID, text and binary
+Profile ownership remains unchanged. Numeric ownership requires a real User reference and an unambiguous mapping to
+one Profile. A verified User with no Profile may receive one only when the existing identifier storage supports the
+migration's UUID creation; binary Profile storage requires an existing mapping. Backfills retain saved tracking
+timestamps. The migration refuses missing Users or Guests, ambiguous mappings, conflicting temporary values and orphan
+references before mutation. It also refuses triggers that could fire during its INSERT or UPDATE work and unsupported
+text or timestamp conversions.
+
+Item-owner reversal refuses populated owner columns or dependencies that cannot be retired safely. Profile reversal
+refuses populated affected tables. Do not clear values, delete rows or remove constraints to bypass these guards.
+MariaDB can retain earlier DDL after a failed attempt; inspect that state and retry only when the complete preflight
+admits it. Keep the service stopped when migration cannot complete, retain the failure evidence, and use the existing
+[paired full rollback](UPGRADING.md#full-rollback-procedure) when safe continuation or reversal cannot be established.
+
 ## Free-text storage
 
 Descriptions on activities, roles, packing items, driver entries, and survey combinations use `TEXT`, matching
@@ -250,6 +278,20 @@ to bypass the guard. A retained personal preference after membership loss cannot
 that membership is restored. Preferences for deleted entities are also retained; use the reviewed full rollback when
 an explicit empty-state reversal is unavailable or inappropriate. Migration SQL must
 be rehearsed separately from tests that only synchronize entity metadata.
+
+## Activity recommendation pairing
+
+Apply `1793232000000-AddActivityRecommendationPairing.ts` through the normal settings-aware upgrade workflow before
+starting the matching application release. It adds `pairing_known`, initially false, and nullable `swap_group` to
+`activity_assignment_recommendations`. The migration preserves every recommendation and assignment. Existing moves
+remain unresolved, even when their source and destination slots are reciprocal; an organizer must explicitly choose
+a swap partner or an independent move before applying an unresolved reassignment.
+
+Newly reviewed independent moves have known intent with no group; an explicit swap has one shared group for its two
+legs. The down migration checks every present pairing column before dropping either column and refuses reversal if
+any known intent or non-null group exists, including a partially applied schema. Do not clear these values or delete
+recommendations to bypass the guard. Use the [paired full rollback](UPGRADING.md#full-rollback-procedure) to restore the
+pre-upgrade database and persistent files with their matching previous release.
 
 ## Sessions are database data
 

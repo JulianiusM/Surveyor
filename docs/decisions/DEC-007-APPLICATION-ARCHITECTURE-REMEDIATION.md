@@ -110,3 +110,52 @@ calendar pagination policy.
 
 R5 authorizes this review's production-dependency vulnerability audit and its registry metadata export. It supplies
 no approval for dependency changes or a blanket future export permission.
+
+## Approved production remediation (2026-10-28)
+
+The maintainer subsequently instructs full implementation of the immediately preceding **A1–A21** explanation
+and its prose plan. These identifiers belong to that answer only. The original choices above remain historical;
+the following bounded approvals supersede their named exclusions, not unrelated decisions.
+
+| Request | Approved decision and direct amendments |
+|---|---|
+| A1 | Include provider-bearing account deletion, required local session clearing and prepared completion in the existing atomic identity operation; prepare mail before commit and report later delivery/provider outcomes separately without replay. |
+| A2 | After reproducing the backend pairing defect, persist explicit swap/independent-move provenance through the shared recommendation owner and reviewed migration. Legacy reciprocal moves require explicit organizer resolution; reciprocal slots never establish intent. |
+| A3 | After reproducing premature or failed destruction completion, correct the existing session-store adapter to await actual deletion and propagate errors once, retaining soft-delete and ordinary logout behavior. |
+| A4 | Configurable login budgets: 30 client attempts and 10 failures per account per 15 minutes. The maintainer additionally requires one shared client failure budget across password values, usernames and email identifiers: changing an identifier must not restore attempts. Reuse resolved account identity for accepted aliases; never retain password values as counter keys. |
+| A5 | Configurable local-signup budget, initially 10 client attempts per hour, through shared admission before expensive work/writes. |
+| A6 | Configurable guest-creation budget, initially 20 client attempts per hour across all five feature entries. The maintainer additionally requires actual shared components/flow ownership and removal of any duplicate implementation discovered there. |
+| A7 | Configurable identity-mail budgets, initially 10 client attempts per 15 minutes and three recipient/account attempts per hour, preserving privacy and preparation/finality. |
+| A8 | Configurable guest-email lookup budget, initially 30 client attempts per 15 minutes. Preserve the admitted lookup contract. |
+| A9 | Shared 50-Unicode-code-point guest-name bound before writes, preserving exact input and existing data. |
+| A10 | The same authored bound for profile creation/rename within the existing lifecycle; no wider profile transaction redesign or trimming. |
+| A11 | For newly provisioned provider accounts, project the first 50 Unicode code points for display-only User/Profile names. The maintainer requires A9–A11 and the prior login/name correction to share actual schemas, validation and components rather than duplicate implementations. |
+| A12 | Assemble from the immutable tested application revision, allow only the version bump and abort publication if the selected branch advanced. |
+| A13 | Build/package/validate before publishing branch/tag references together; preserve source/archive identity and report later asset-publication failure without moving/reusing tags. This is implementation authority, not a real release request. |
+| A14 | Default maximum 366 inclusive Activity days for new plans or increased duration; existing longer plans may shorten without first meeting the cap. The maintainer additionally requires this maximum to be configurable through the existing settings module. |
+| A15 | Saved plans exceeding the configured duration threshold use selectable calendar/print windows of at most 42 days, preserving saved data, participation and drafts. |
+| A16 | Shared upload transport distinguishes expected client rejection from infrastructure server failure with bounded diagnostics, retaining admission, proof ownership, cleanup and single-attempt delivery. |
+| A17 | Byte-exact primary provider issuer/subject lookup through the existing UserService, preserving email settings/projections and stored values; no automatic ownership reconciliation or schema change. |
+| A18 | Serialize Finance management authorization and matching grant writers with Event-before-pool locks; recheck current authority in the write transaction and preserve financial rules and intentional method/public exceptions. |
+| A19 | Activate the existing seven-part D04V isolated verification only if possible in this environment and with its official-release, matching-tagged-source, supported-runtime, disposable-data and controlled-side-effect prerequisites. No production/staging/shared deployment is authorized. |
+| A20 | Preserve full diagnostic logging. Redact only actual secrets precisely **in place**, retaining original URL structure, nonsecret values and existing method/status/timing evidence. Removing logging, whole queries or whole URL details is prohibited; external/historical log actions remain separately scoped. |
+| A21 | Above the configured Activity threshold, preserve requirement data in read-only pages of at most 100 rows; disallow whole-plan requirement editing/calculation until within that threshold, without discarding saved values. |
+
+The approved prose plan also includes remaining behavior-preserving metadata consolidation, diagnostic reproduction,
+current permission/session/flash inventory, complete live-caller adoption, appropriate production checks and independent
+semantic review. These approvals do not certify execution or resolve unavailable environment prerequisites. Record
+findings and concise verified dispositions in the backlog; implementation plans and questions remain in the final answer.
+
+## Approved migration preservation repairs (2026-10-28)
+
+The maintainer explicitly approves **A22** and **A23** from the immediately preceding final answer and requires
+that neither database nor migration changes lose data. A22 repairs the pending item-owner references through the
+existing shared migration helper, retaining populated compatible values and admitting incompatible physical storage
+only when every child value is NULL. A23 preserves proven Profile ownership on the five entity roots and permits
+legacy numeric ownership conversion only with unambiguous User-to-Profile evidence.
+
+This amendment authorizes the reviewed pending-migration changes and preservation checks, including refusal before
+mutation when a conversion, partial state or reversal cannot preserve information. It does not authorize guessed
+ownership, account/profile merging, populated identifier coercion, destructive rollback, migration-history bypass,
+released-archive edits or a production deployment. Preserve the original decisions above and use the existing paired
+restore procedure whenever safe reversal cannot be established.

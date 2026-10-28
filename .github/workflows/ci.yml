@@ -154,6 +154,11 @@ jobs:
         # SFC types; the other jobs retain their existing runtime boundaries.
         run: npm run typecheck:tests --ignore-scripts
 
+      - name: Verify release source and atomic publication
+        if: matrix.stage == 'database-free'
+        # Exercise only disposable local Git origins; this never publishes a release.
+        run: node --test scripts/tests/release-publication.test.mjs
+
       - name: Build application for integration fixtures
         if: matrix.stage == 'integration'
         # Installed SSR fixtures consume the entry and lazy modules from this

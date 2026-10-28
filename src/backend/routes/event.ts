@@ -1,12 +1,11 @@
 
 import {eventMethodPermission} from '../modules/permissionEngine';
 import type {Request} from 'express';
-import eventController from '../controller/eventController';
+import eventController, {createParticipantsPdf} from '../controller/eventController';
 import invoiceController, {readEventInvoiceProof} from '../controller/eventPoolController';
 import {paramHandler} from '../middleware/paramHandler';
 import {isLoggedIn, requirePermission} from '../middleware/permissionMiddleware';
 import * as eventService from '../modules/database/services/EventService';
-import {createParticipantsPdf} from '../controller/eventController';
 import {createInvoiceSharesPdf} from '../modules/invoice/exports';
 import {getResource} from '../modules/lib/util';
 import type {EntityDescriptor} from '../../types/PermissionTypes';

@@ -6,8 +6,8 @@ owner: architecture maintainers
 status: current
 last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: current-source diagrams, controller/feature/DBAL ownership and approved identity/Event completion boundaries reconciled; no installed-release or deployment certification
-source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
+verification-scope: current-source diagrams, controller/feature/DBAL ownership, shared list metadata, identity completion/admission and Finance authorization fences reconciled; no installed-release or deployment certification
+source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/backend/modules/lists/metadata.ts; src/backend/modules/identity.ts; src/backend/middleware/identityAdmission.ts; src/backend/modules/lib/session.ts; src/backend/modules/invoice/state.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: architecture-or-help-delivery-change
 -->
 
@@ -247,6 +247,12 @@ policy and snapshot callbacks remain explicit, and header writers receive no pro
 consume each feature's eligible rows; Packing's Everyone exclusion and Drivers' passenger meaning remain feature policy.
 The Event linkage owner resolves navigation from an already loaded parent and the caller's optional snapshot manager.
 
+`modules/lists/metadata.ts` owns the matching Packing/Drivers root metadata decisions, projections, field grants and
+comparison checks. All direct, versioned and description-only callers use that operation with their original policy:
+direct changes keep root-only locking and captured association checks; versioned changes keep parent/root coordination
+and current authority. Drivers' optional response preparation stays inside its transaction; Packing retains its existing
+delivery timing. Their existing DBAL services still own persistence, and shared contexts live in `ListMetadataTypes.d.ts`.
+
 That existing utility module also owns backend UUID identity keys, comparison, indexing, grouping and reference
 resolution. Controllers, permission and lifecycle owners, and Activity calculation/job boundaries consume that single
 implementation. Lookup keys identify equivalent UUID spellings; resolved rows retain their stored IDs for writes
@@ -275,6 +281,9 @@ That operation checks the snapshot and calls DBAL writes with the same manager. 
 feature operations, and service results; the feature business owner decides whether absence,
 conflicts, capacity, or lifecycle state should reject the operation. Native database failures propagate normally.
 
+`src/backend/modules/lists/membership.ts` owns the matching Packing/Drivers desired-membership decisions:
+idempotent assignment, capacity and insertion, plus removal through each feature's existing persistence owner.
+Direct and versioned controller adapters share that implementation while retaining their admission and error contracts.
 `ListService` supplies the matching Packing/Drivers root-lock transaction, item assignment evidence, assignment
 insertion and optional-parent creation transaction. Each domain service retains its own outer assignment locking
 sequence and CRUD operations; supplying a shared inner operation preserves the existing manager and callback timing.
@@ -362,6 +371,25 @@ Exact provider-identity lookup remains independent of those options. The user co
 selection through one synchronous operation for local and provider login, while each journey retains its own save
 and token order. Provider protocol code has no dependency on that controller.
 
+Both full and restricted provider-account queries share byte-exact issuer/subject predicates in `UserService`, preserving
+their distinct projections and all stored bindings. The authored `IdentityName` schema supplies the shared 50-code-point
+name contract for local registration, guest entry and profile creation/rename. Generated server/browser validation and
+metadata derive from that owner, with the existing shared form controls. The identity business owner rejects overlong
+submitted names before writes and projects only newly provisioned provider display names to the first 50 code points.
+
+`middleware/identityAdmission.ts` owns one process-wide set of installed limiter stores. Auth routes and the shared
+guest-flow factory admit protected work through it; the identity owner supplies resolved account and mail-recipient hooks
+before password verification or token/mail changes. The existing settings module owns all limits. Pending credential
+checks reserve capacity until their result is known; a completion can release only its own current-window reservation.
+No password or plaintext submitted identity is retained as a counter key. Admission adds no session persistence and never
+replays a business operation. Operator limits and deployment boundaries belong in [Configuration](CONFIGURATION.md#authentication-request-budgets).
+
+Provider-bearing account deletion uses the existing identity transaction to delete the account, clear required local
+Session identity, prepare mail content and prepare local completion/failure variants before commit. Later mail delivery
+and provider logout URL discovery are separate delivery outcomes. Their failure returns an already prepared local
+confirmation, with no account/session rewrite or automatic replay. Any dynamic provider-URL receipt preparation is
+serialization-only and guarded by that prepared fallback.
+
 ### Guests
 
 A guest has a private link token and one associated profile. Optional email enables recovery of guest links. Guest participation is persistent server state, not an anonymous browser-only session.
@@ -371,6 +399,8 @@ A guest has a private link token and one associated profile. Optional email enab
 The session stores either a full user or guest authentication object plus the active `profile`. Ownership, participation, assignments, display names, permissions, and dashboard membership are evaluated against that profile. Maintainer changes must not substitute account IDs where a profile ID is required.
 
 Sessions are stored in MariaDB through the `Session` entity. They expire after one day in both cookie and store configuration and are revalidated against current account/profile state on each request.
+The shared store factory preserves soft deletion and reports successful destruction only after every requested deletion
+fulfills. A failure reaches the completion callback once; ordinary logout retains its existing behavior.
 
 ## Authorization architecture
 
@@ -400,6 +430,12 @@ Events own date boundaries, capacity, registration/deadline policy, dietary data
 locked pool/invoice/coverage operations, request normalization, notifications, presentation, exports, and proof retention.
 The existing `EventInvoiceService.ts` remains pure DBAL. Shared type-only contracts live in
 `src/types/InvoicePoolTypes.d.ts`; no forwarding or barrel exports bridge old and new paths.
+
+Finance management commands carry the captured actor into the existing invoice feature owner. Inside the same write
+transaction, the DBAL locks the Event before the pool and the feature owner checks fresh, uncached management authority.
+Matching Event administrator/default-grant writers take the same Event fence, including when a manager already owns the
+transaction. A previously committed revocation rejects the waiting command; a later revocation waits for that authorized
+write. Public method grants and participant submission, self-close and self-takeover rules retain their separate admission.
 
 Pool lifecycle separates participant submission access from financial closure. OPEN allows participant invoices and
 self-service takeovers; ORGANIZER_ONLY is displayed as **Organizer invoices only** and disables both participant actions.

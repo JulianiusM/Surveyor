@@ -642,7 +642,11 @@
           "closestBaseline_other": "Die nächste ganzzahlige Grundanforderung weicht um {{count}} Aktivitäten von der Kapazität ab.",
           "exactBaseline": "Die gerundete Tabelle erreicht die genaue Kapazität.",
           "fixedBaseline": "Feste Rollenanforderungen und persönliche Ausnahmen belegen bereits die verfügbare Kapazität.",
-          "noBaselineParticipants": "Keine verbleibende persönliche Anforderung kann durch die Grundanforderung nach Aufenthaltsdauer geändert werden."
+          "noBaselineParticipants": "Keine verbleibende persönliche Anforderung kann durch die Grundanforderung nach Aufenthaltsdauer geändert werden.",
+          "oversized": "Die Anforderungen sind schreibgeschützt, solange dieser Plan mehr als {{days}} Tage umfasst. Verkürze den Zeitraum, um Anforderungen zu bearbeiten oder zu berechnen. Gespeicherte Werte bleiben erhalten.",
+          "page": "Seite",
+          "previousPage": "Vorherige Seite",
+          "nextPage": "Nächste Seite"
         },
         "recommendations": {
           "addShort": "+ Hinzufügen",
@@ -710,7 +714,7 @@
           "moveName": "{{name}} — aus {{source}} verschieben",
           "swapName": "{{name}} — aus {{source}} tauschen",
           "pairTitle": "Gegenstück des Tauschs wählen",
-          "pairHint": "Mehrere gespeicherte Verschiebungen führen zwischen diesen Aktivitäten hin und her. Wähle die Verschiebung, die zu diesem Tausch gehört, bevor du die Prüfung einer beteiligten Person änderst.",
+          "pairHint": "Wähle den vorgesehenen Tauschpartner oder kennzeichne diese Verschiebung als unabhängig. Gegenläufige Verschiebungen beweisen keinen Tausch.",
           "pairCounterpart": "Gegenstück",
           "pairChoose": "Gegenstück auswählen",
           "pairConfirm": "Ausgewähltes Gegenstück verwenden",
@@ -727,7 +731,8 @@
           "max": "max.",
           "chooseSource": "Ursprüngliche Zuweisung auswählen...",
           "chooseSwap": "Person zum Tauschen auswählen...",
-          "swapNeedsSource": "Ein Tausch benötigt eine Zuweisung ohne benannte Rolle in diesem Zeitfenster."
+          "swapNeedsSource": "Ein Tausch benötigt eine Zuweisung ohne benannte Rolle in diesem Zeitfenster.",
+          "independent": "Unabhängige Verschiebung (kein Tauschpartner)"
         },
         "slotIdLabel": "Aktivität {{id}}",
         "manageRolesFor": "Rollenzuweisungen verwalten – {{slot}}",
@@ -871,8 +876,13 @@
         "noParticipants": "Noch keine Teilnehmenden. Zuweisungen und Anwesenheit werden hier angezeigt.",
         "noParticipantMatches": "Keine Person entspricht der aktuellen Suche und dem Filter.",
         "reviewUnknownItem": "Die neue Aktivität, die Rolle oder das Textfeld könnte bereits existieren. Prüfe zuerst den aktuellen Plan.",
-        "confirmUnknownReviewed": "Hast du den Plan auf das Ergebnis geprüft, bevor du erneut etwas erstellst?"
-},
+        "confirmUnknownReviewed": "Hast du den Plan auf das Ergebnis geprüft, bevor du erneut etwas erstellst?",
+        "durationLimit": "Wähle eine Dauer von höchstens {{days}} Tagen.",
+        "calendarWindow": "Zeitraum anzeigen",
+        "previousWindow": "Vorheriger Zeitraum",
+        "nextWindow": "Nächster Zeitraum",
+        "windowStart": "Beginn des Zeitraums"
+      },
         "event": {
         "create": "Veranstaltung erstellen",
         "createDocumentTitle": "Veranstaltung erstellen | Surveyor",
@@ -1801,7 +1811,10 @@
         "invalidDeactivation": "Ungültige Bestätigung der Profildeaktivierung",
         "invalidAccountDeletion": "Ungültige Bestätigung der Kontolöschung",
         "invalidMigrationToken": "Ungültiger oder nicht passender Token",
-        "workflowReload": "Öffne diese Seite erneut, um fortzufahren."
+        "workflowReload": "Öffne diese Seite erneut, um fortzufahren.",
+        "accountDeletedMailUnconfirmed": "Dein Konto wurde gelöscht. Die Zustellung der Bestätigungs-E-Mail konnte nicht bestätigt werden.",
+        "accountDeletedProviderUnconfirmed": "Dein Konto wurde gelöscht und du bist hier abgemeldet. Die Abmeldung bei deinem Anmeldeanbieter konnte nicht bestätigt werden.",
+        "accountDeletedDeliveryUnconfirmed": "Dein Konto wurde gelöscht und du bist hier abgemeldet. Die Zustellung der Bestätigungs-E-Mail und die Abmeldung bei deinem Anmeldeanbieter konnten nicht bestätigt werden."
       },
       "landing": {
         "documentTitle": "Surveyor – Gruppenaktivitäten organisieren und koordinieren",
@@ -1909,7 +1922,7 @@
         "TOKEN_INVALID": "Dieser Link ist ungültig, abgelaufen oder bereits verwendet.",
         "LOCAL_LOGIN_DISABLED": "Die lokale Anmeldung ist deaktiviert.",
         "PAYLOAD_TOO_LARGE": "Die übermittelte Anfrage ist zu groß.",
-        "RATE_LIMITED": "Zu viele Suchanfragen. Versuche es später erneut.",
+        "RATE_LIMITED": "Zu viele Anfragen. Versuche es später erneut.",
         "AUTH_REQUIRED": "Melde dich an, um fortzufahren.",
         "FORBIDDEN": "Du hast keine Berechtigung für diese Aktion.",
         "CSRF_INVALID": "Diese Anfrage konnte nicht überprüft werden. Lade die Seite neu, bevor du es erneut versuchst.",
@@ -1975,7 +1988,10 @@
         "INVALID_JSON": "Die Anfrage enthält kein gültiges JSON.",
         "CLIENT_UPDATE_REQUIRED": "Eine Aktualisierung ist verfügbar. Lass deine Änderungen geöffnet und lade die Seite nach der Prüfung neu.",
         "WORKFLOW_OUTCOME_UNKNOWN": "Der Vorgang kann teilweise oder vollständig abgeschlossen sein. Prüfe den aktuellen Zustand, bevor du einen weiteren Vorgang startest.",
-        "INTERNAL_ERROR": "Die Anfrage konnte nicht abgeschlossen werden. Versuche es später erneut."
+        "INTERNAL_ERROR": "Die Anfrage konnte nicht abgeschlossen werden. Versuche es später erneut.",
+        "ACTIVITY_DURATION_LIMIT": "Dieser Aktivitätsplan überschreitet die konfigurierte Höchstdauer.",
+        "ACTIVITY_REQUIREMENTS_OVERSIZED": "Verkürze diesen Aktivitätsplan, bevor du Anforderungen bearbeitest oder berechnest. Gespeicherte Werte bleiben erhalten.",
+        "ACTIVITY_SWAP_PAIR_REQUIRED": "Wähle einen Tauschpartner oder kennzeichne die Verschiebung als unabhängig, bevor du diese Empfehlungen anwendest."
       }
     }
   }

@@ -15,7 +15,7 @@
  */
 
 import bcrypt from 'bcryptjs';
-import {EntityManager, In, MoreThan, type DeepPartial, type FindOptionsWhere, type SelectQueryBuilder} from "typeorm";
+import {EntityManager, In, MoreThan, Raw, type DeepPartial, type FindOptionsWhere, type SelectQueryBuilder} from "typeorm";
 import type {ArchiveReference, PersonalVisibility} from '../../../../types/ArchiveTypes';
 import type {Entity, OverviewCollection, OverviewQuery, OverviewReadResult} from '../../../../types/UserTypes';
 import type {EntityType} from '../../../../types/UtilTypes';
@@ -296,13 +296,23 @@ export async function usernameExists(username: string): Promise<boolean> {
     return count > 0;
 }
 
-/**
- * Find a user by OIDC issuer+sub.
- */
+/** Share byte-exact provider identity comparison across full and projected
+ * lookups. The ordinary predicate still narrows indexed candidates under the
+ * installed collation; its binary companion rejects case/Unicode/padding aliases. */
+function oidcIdentityWhere(oidcIssuer: string, oidcSub: string): FindOptionsWhere<User> {
+    // Keep both opaque identifiers unchanged. Parameter binding remains with
+    // TypeORM; SQL identifier aliases come only from the ORM's own query builder.
+    return {
+        oidcIssuer: Raw(alias => `${alias} = :oidcIssuer AND BINARY ${alias} = BINARY :oidcIssuer`, {oidcIssuer}),
+        oidcSub: Raw(alias => `${alias} = :oidcSub AND BINARY ${alias} = BINARY :oidcSub`, {oidcSub}),
+    };
+}
+
+/** Find the existing deliberately projected account through exact issuer/subject identity. */
 export async function getUserByOidc(oidcIssuer: string, oidcSub: string) {
     const repo = AppDataSource.getRepository(User);
     return await repo.findOne({
-        where: {oidcIssuer, oidcSub},
+        where: oidcIdentityWhere(oidcIssuer, oidcSub),
         select: {
             id: true,
             name: true,
@@ -1015,7 +1025,7 @@ export async function createProfile(userId: number, name: string) {
 
 /** Read the same full account/profile projection used by provider identity policy. */
 export function findOidcAccount(oidcIssuer: string, oidcSub: string): Promise<User | null> {
-    return AppDataSource.getRepository(User).findOne({where: {oidcIssuer, oidcSub}, relations: {profiles: true}});
+    return AppDataSource.getRepository(User).findOne({where: oidcIdentityWhere(oidcIssuer, oidcSub), relations: {profiles: true}});
 }
 
 /** Read the email candidate on the caller's transaction, optionally fencing its

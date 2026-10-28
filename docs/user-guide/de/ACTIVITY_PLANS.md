@@ -4,10 +4,10 @@ documentation-metadata
 audience: Aktivitätsteilnehmer; Aktivitätsorganisatoren
 owner: activity-plan maintainers
 status: current
-last-verified: 2026-10-27
+last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: German saved-assignment and suggestion-refresh recovery wording reconciled with visible controls and focused frontend/database checks; prior labels and stable heading anchors retained. No article figures are referenced; no new full-article browser verification claimed.
-source-anchors: docs/user-guide/en/ACTIVITY_PLANS.md; src/common/locales/de.json; src/frontend/features/activity/; src/frontend/components/EntitySettingsDialog.vue; src/frontend/features/activity/ActivityRecommendations.vue; src/frontend/features/activity/recommendationDraft.ts; src/common/locales/; src/frontend/components/permissions/CreationPermissions.vue; src/frontend/; src/backend/controller/helpController.ts
+verification-scope: German duration, selected calendar/print windows, read-only requirement pages and explicit saved-move wording reconciled independently with current source and visible labels; prior assignment guidance and stable heading anchors retained. No article figures or new full-article browser verification claimed.
+source-anchors: docs/user-guide/en/ACTIVITY_PLANS.md; src/common/locales/de.json; src/frontend/features/activity/; src/frontend/components/EntitySettingsDialog.vue; src/frontend/features/activity/ActivityRecommendations.vue; src/frontend/features/activity/recommendationDraft.ts; src/common/locales/; src/frontend/components/permissions/CreationPermissions.vue; src/frontend/; src/backend/controller/helpController.ts; src/backend/modules/settings.ts; src/backend/views/activity/export/schedule.pug; src/common/lib/civilDate.ts; src/backend/migrations/1793232000000-AddActivityRecommendationPairing.ts
 heading-anchors: 1:activity-plans; 2:choose-your-task; 3:i-am-participating; 3:i-am-organizing; 2:before-you-begin; 2:participate-in-an-activity-plan; 3:find-a-slot; 3:join-a-whole-slot; 3:take-a-named-role; 3:leave-a-slot-or-role; 3:understand-assignment-warnings; 3:use-shared-text-fields; 2:organize-an-activity-plan; 3:create-an-activity-plan; 3:understand-the-tabs; 3:change-plan-properties; 3:link-change-or-remove-an-event; 3:add-and-edit-slots; 4:add-a-slot-after-creation; 4:edit-a-slot; 3:add-named-roles-to-a-slot; 3:manage-role-assignments; 3:review-participants; 3:configure-basic-assignment-rules; 3:change-permissions-and-administrators; 3:export-the-schedule; 2:advanced-requirements-and-assignment-recommendations; 3:set-participant-requirements; 4:understand-which-requirement-wins; 3:check-requirement-coverage; 3:generate-assignment-suggestions; 3:review-generated-suggestions; 3:stage-a-manual-assignment-change; 3:save-and-apply-the-review; 3:advanced-limitations; 2:archive-or-restore-a-plan; 2:troubleshooting; 3:i-see-registration-required; 3:join-or-take-is-unavailable; 3:a-slot-does-not-appear-under-open-slots; 3:i-joined-the-wrong-profile; 3:i-cannot-edit-slots-roles-participants-rules-settings-or-exports; 3:my-changes-in-rules-and-auto-assign-were-lost; 3:auto-generate-is-disabled; 3:requirement-coverage-says-the-configuration-is-incomplete; 3:recommendation-generation-became-stale-or-failed; 3:a-participant-still-needs-shifts-after-generation; 3:an-approved-change-was-not-applied; 2:related-guides
 next-review: activity-plan-visible-UI-or-behavior-change
 -->
@@ -63,13 +63,15 @@ Ihre sichtbaren Aktionen richten sich nach den Freigabeeinstellungen des Plans. 
 
 Verwenden Sie die Filter des Ablaufplans:
 
-- **Alle Aktivitäten** zeigt den vollständigen Ablaufplan.
+- **Alle Aktivitäten** zeigt alle Zeitfenster im angezeigten Datumsbereich.
 - **Meine Aktivitäten** zeigt Zeitfenster, die Ihrem aktiven Profil zugewiesen sind.
 - **Offene Aktivitäten** zeigt Zeitfenster mit verbleibender regulärer Kapazität. Volle Zeitfenster erscheinen hier auch dann nicht, wenn der Organisator eine Teilnahme über die Kapazität hinaus erlaubt.
 
 Die Zusammenfassung oberhalb des Kalenders zeigt **Teilnehmende**, **Aktivitäten:**, offene und unbesetzte Zeitfenster. Ein unbesetztes Zeitfenster hat derzeit keine Teilnehmer; es ist deshalb nicht unbedingt gesperrt.
 
-Bei vorgeschriebener Teilnahme zeigt eine Nachricht oberhalb der Filter Ihren Fortschritt, beispielsweise **Du nimmst an 1 von 2 erforderlichen Aktivitäten teil. Noch erforderlich: 1.** Im freien Modus gibt es keine Mindestanzahl.
+Ein vorhandener Plan oberhalb der aktuellen Höchstdauer der Website zeigt jeweils höchstens 42 Tage. Geben Sie **Beginn des Zeitraums** ein und wählen Sie **Zeitraum anzeigen**, oder verwenden Sie **Vorheriger Zeitraum** und **Nächster Zeitraum**. Prüfen Sie die angezeigten Daten vor dem Beitreten oder Bearbeiten. Aktivitätsfilter, Zuweisungszahlen und Aktivitätssummen beziehen sich auf diesen Zeitraum; gespeicherte Zuweisungen außerhalb bleiben erhalten. Speichern oder verwerfen Sie eine offene direkte Zeitfensterbearbeitung vor dem Zeitraumwechsel. Entwürfe gemeinsamer Textfelder bleiben verfügbar.
+
+Bei vorgeschriebener Teilnahme zeigt eine Nachricht oberhalb der Filter Ihren Fortschritt, beispielsweise **Du nimmst an 1 von 2 erforderlichen Aktivitäten teil. Noch erforderlich: 1.** Im freien Modus gibt es keine Mindestanzahl. Oberhalb der Höchstdauer wird der Anforderungsfortschritt nicht angezeigt; erlaubten Zeitfenstern können Sie weiterhin beitreten und sie verlassen.
 
 ### Einem vollständigen Zeitfenster beitreten
 
@@ -152,6 +154,8 @@ Das Erstellen setzt ein angemeldetes vollständiges Benutzerkonto voraus. Das ak
    - Setzen Sie **Maximale Teilnehmendenzahl** auf eine ganze Zahl von mindestens 1.
 6. Wählen Sie **Plan erstellen**.
 
+Der Datumsbereich muss die bei den Datumsfeldern angezeigte Höchstdauer einhalten. Anfangs- und Endtag zählen mit; standardmäßig sind es höchstens 366 Tage. Der Betreiber kann diese Grenze ändern. Auch das Duplizieren erstellt einen neuen Plan und muss die aktuelle Grenze einhalten.
+
 Jedes Zeitfenster muss innerhalb des Datumsbereichs des Plans liegen. Sind beide Uhrzeiten gesetzt, muss die Endzeit nach der Anfangszeit liegen.
 
 Anfängliche Zeitfenster haben noch keine benannten Rollen. Fügen Sie diese nach dem Erstellen im Zeitfenstereditor hinzu.
@@ -175,6 +179,8 @@ Die Planbeschreibung steht oberhalb von **Gemeinsame Textfelder**. Zum Ändern �
 3. Wählen Sie **Eigenschaften speichern**.
 
 Titel, Beschreibung und Datumswerte haben getrennte Bearbeitungsrechte. Der Datumsbereich muss weiterhin alle vorhandenen Zeitfenster einschließen. Eine Datumsänderung verschiebt oder entfernt keine Zeitfenster oder Zuweisungen. Zeitfensterbearbeitung und **Regeln & automatische Zuweisung** bleiben separate Aufgaben.
+
+Eine Erhöhung der Tagesanzahl muss die aktuelle Höchstdauer der Website einhalten. Ein älterer längerer Plan darf seine Tagesanzahl beibehalten oder verringern, ohne die Grenze sofort erreichen zu müssen. Beim Verkürzen bleiben gespeicherte Anforderungen für längere Aufenthalte erhalten; bei einer späteren erlaubten Verlängerung werden passende Werte wieder berücksichtigt.
 
 Jeder Abschnitt speichert separat. Das Speichern lässt die Seite geöffnet und erhält unvollständige Eingaben anderer Abschnitte. Ein fehlgeschlagenes Speichern erhält den Entwurf. Beim Schließen mit ungespeicherten Änderungen entscheiden Sie, ob Sie diese verwerfen möchten; brechen Sie das Schließen ab, um weiterzubearbeiten.
 
@@ -258,6 +264,8 @@ Verwenden Sie **Person suchen…** oder die Filter:
 
 Die Spalten zeigen **Person**, **Zuweisungen**, **Anforderung**, **Anwesenheit** und **Rollen**. Im freien Modus steht in der Anforderungsspalte **Kein Minimum**. Im Pflichtmodus zeigt sie den Fortschritt zur aktuellen Mindestanforderung des Teilnehmers.
 
+Bei einem Plan oberhalb der Höchstdauer beziehen sich Zuweisungszahlen und Rollen auf den ausgewählten Kalenderzeitraum. **Anforderung** zeigt einen Strich; Fortschrittsfilter stehen erst wieder zur Verfügung, wenn der Plan die Grenze einhält. Die Teilnehmeransicht bleibt verfügbar.
+
 Anwesenheits- und Anforderungsangaben sind vor allem bei einem einer Veranstaltung zugeordneten Plan sinnvoll. Behandeln Sie diese Ansicht als Teilnehmerinformationen und geben Sie **Zugriff auf Teilnehmer** nur Personen, die sie sehen sollen.
 
 ### Grundlegende Zuweisungsregeln festlegen
@@ -289,6 +297,8 @@ Mit **Daten exportieren**:
 
 Der Export enthält Titel und Datumsbereich des Plans, gegebenenfalls verknüpfte Veranstaltung und Zeitzone, Summenzähler, Planbeschreibung, gemeinsame Notizen, Zeitfenster, Uhrzeiten, Beschreibungen, zugewiesene Teilnehmer und benannte Rollen. Er bildet die Daten zum Erstellungszeitpunkt ab. Erstellen Sie nach geänderten Zuweisungen einen neuen Export.
 
+Bei einem vorhandenen Plan oberhalb der Höchstdauer enthält jeder Export höchstens 42 Tage und nennt die **Shown dates**. Die Druckseite verwendet englische Beschriftungen: Wählen Sie die Daten vor dem Drucken über **Window start** und **Show window** oder **Previous window** und **Next window**. **Zeitplan exportieren** neben den Zeitraumsteuerelementen öffnet den gerade angezeigten Zeitraum; die Aktion in **Entitätseinstellungen** beginnt mit dem ersten Zeitraum des Plans. Drucken Sie jeden benötigten Zeitraum separat.
+
 Teilnehmernamen und Zuweisungen können personenbezogene Informationen sein. Teilen Sie exportierte Kopien nur mit den vorgesehenen Empfängern und löschen Sie veraltete Kopien entsprechend den Regeln Ihrer Organisation.
 
 ## Fortgeschritten: Anforderungen und Zuweisungsvorschläge
@@ -306,6 +316,8 @@ Schließen Sie vor automatischen Vorschlägen die Veranstaltungsanmeldungen und 
 ### Teilnahmeanforderungen festlegen
 
 Öffnen Sie **Regeln & automatische Zuweisung** und verwenden Sie **Schritt 1 — Regeln und Vorgaben festlegen**. Die Karte **Anforderungseinstellungen** enthält gespeicherten Zuweisungsmodus, Frist, Ausnahmen an Anwesenheitsgrenzen und Anforderungstabellen.
+
+Überschreitet der Plan die aktuelle Höchstdauer der Website, zeigt die Karte gespeicherte Werte schreibgeschützt auf Seiten mit höchstens 100 Zeilen. Wählen Sie **Anforderungen nach Aufenthaltsdauer**, **Rollenanforderungen** oder **Persönliche Ausnahmen** und blättern Sie mit **Vorherige Seite** und **Nächste Seite**. Anforderungsbearbeitung, **Berechnen**, Abdeckungsprüfung und **Automatisch erstellen** sind nicht verfügbar. Verkürzen Sie den Plan auf die erlaubte Dauer, um diese Funktionen wieder zu nutzen; alle gespeicherten Zeitfenster müssen weiterhin innerhalb seiner Daten liegen. Gespeicherte Anforderungswerte bleiben erhalten. Normale Teilnahme und manuelle Zuweisungsprüfung bleiben verfügbar.
 
 1. Wählen Sie unter **Zuweisungsmodus** den Wert **Erforderlich**. **Frei** lässt die Teilnahme freiwillig, zeigt **Kein Minimum** und deaktiviert **Automatisch erstellen**.
 2. Setzen Sie **Verbindliche Frist**, wenn Teilnehmer ihre eigenen Zuweisungen ab einem Zeitpunkt nicht mehr ändern sollen.
@@ -402,7 +414,7 @@ Verwenden Sie den Vorschlagsplan, wenn eine Korrektur gemeinsam mit erzeugten Vo
 
 Manuelle Zuweisungen und Verschiebungen mit Überschneidungen sind nach Bestätigung weiterhin möglich. Warnungen erscheinen im Hinzufügen-Dialog und bleiben neben der vorgemerkten Zeile sichtbar, damit Sie sie mit dem betroffenen Teilnehmer besprechen können. Eine Verschiebung oder ein Tausch kann nur eine Quellzuweisung ohne benannte Rolle in diesem Plan verwenden. Eine manuell vorgemerkte Zeile beginnt mit dem Status **Genehmigt**. Entfernen oder setzen Sie sie vor dem Speichern zurück, wenn sie nicht angewendet werden soll.
 
-Wenn Sie den Prüfstatus eines neu vorgemerkten Tauschs ändern oder ihn entfernen, werden beide Zeilen gemeinsam geändert. Erscheint bei gespeicherten Verschiebungen **Gegenstück des Tauschs wählen**, wählen Sie unter **Gegenstück** die passende entgegengesetzte Verschiebung und anschließend **Ausgewähltes Gegenstück verwenden**. Prüfen Sie vor der Bestätigung die Person sowie das ursprüngliche und das neue Zeitfenster. **Abbrechen** lässt die Prüfzeilen unverändert.
+Wenn Sie den Prüfstatus eines ausdrücklich festgelegten Tauschs ändern oder ihn entfernen, werden beide Zeilen gemeinsam geändert. Ältere gespeicherte Verschiebungen können Ihre Entscheidung in **Gegenstück des Tauschs wählen** benötigen: Wählen Sie unter **Gegenstück** die beabsichtigte entgegengesetzte Verschiebung für einen echten Tausch oder **Unabhängige Verschiebung (kein Tauschpartner)** für einen einzelnen Wechsel. Wählen Sie danach **Ausgewähltes Gegenstück verwenden**. Gegenläufige Verschiebungen beweisen keinen Tausch, auch wenn nur ein möglicher Partner vorhanden ist. Prüfen Sie die Personen sowie die ursprünglichen und neuen Zeitfenster. **Abbrechen** lässt die Prüfzeilen unverändert.
 
 ### Die Prüfung speichern und anwenden
 
@@ -410,6 +422,8 @@ Wenn Sie den Prüfstatus eines neu vorgemerkten Tauschs ändern oder ihn entfern
 2. Besprechen Sie Überschneidungen vor der Anwendung mit den betroffenen Teilnehmern.
 3. Wählen Sie **Änderungen speichern**.
 4. Erscheint der Dialog **Zuweisungswarnungen** für manuelle Überschneidungen oder Vorschläge mit Vorrang der Pflichtteilnahme vor freiwilliger Teilnahme, wählen Sie **Überschneidungen bestätigen** nur bei beabsichtigter Zustimmung. **Abbrechen** lässt den Entwurf und seine Warnungen sichtbar, ohne die Prüfung zu speichern oder anzuwenden.
+
+Öffnet das Speichern **Gegenstück des Tauschs wählen**, klären Sie diese Verschiebung, prüfen Sie den Stapel und wählen Sie erneut **Änderungen speichern**. Wiederholen Sie dies für weitere ungeklärte Verschiebungen; die Wahl eines Partners oder einer unabhängigen Verschiebung setzt das Speichern nicht automatisch fort. Ist eine Seite eines ausdrücklichen Tauschs blockiert, werden beide Seiten nicht angewendet. Eine unabhängige Verschiebung wird einzeln geprüft.
 
 Surveyor speichert die Prüfzustände und wendet Vorgänge mit dem Status **Genehmigt** an, die seine Prüfungen bestehen. **Ausstehend** und **Abgelehnt** ändern den Ablaufplan nicht. Vor der Anwendung prüft Surveyor Plan und Teilnehmer erneut, einschließlich Quellzuweisungen, doppelter Ziele, Anwesenheit, Ankunfts- und Abreisegrenzen, Überschneidungen, benannter Rollen und Kapazität. Manuelle Überschneidungen und Überschneidungen mit Vorrang der Pflichtteilnahme vor freiwilliger Teilnahme können bestätigt werden. Andere blockierende Warnungen überspringen den Vorgang weiterhin. Eine veränderte Überschneidung erfordert eine neue Prüfung und Bestätigung, bevor irgendein Teil des Stapels gespeichert wird.
 
@@ -471,7 +485,7 @@ Verwenden Sie je nach Abschnitt **Einstellungen speichern**, **Anforderungseinst
 
 ### Automatisch erstellen ist deaktiviert
 
-Der Plan muss mit einer Veranstaltung verknüpft sein, **Zuweisungsmodus** muss auf **Erforderlich** stehen und Ihr Profil benötigt **Zuweisungen verwalten**. Speichern Sie vor der Erzeugung eine vollständige Anforderungstabelle.
+Der Plan muss mit einer Veranstaltung verknüpft sein, **Zuweisungsmodus** muss auf **Erforderlich** stehen und Ihr Profil benötigt **Zuweisungen verwalten**. Der Plan muss außerdem die aktuelle Höchstdauer der Website einhalten. Speichern Sie vor der Erzeugung eine vollständige Anforderungstabelle. Bei einem längeren Plan bleiben gespeicherte Werte seitenweise lesbar und die manuelle Prüfung verfügbar.
 
 ### Die Abdeckungsprüfung meldet eine unvollständige Konfiguration
 

@@ -98,7 +98,7 @@ export interface GuestFlowConfig<Type extends EntityType, Root extends EntityBas
         location: boolean;
     };
     duplicate(id: string, actor: SessionLike, eventId?: unknown): Promise<GuestFlowSchemas[Type]['duplicate']>;
-    detail(id: string, actor: SessionLike, view?: 'detail' | 'admin'): Promise<{data: GuestFlowSchemas[Type]['detail']; etag?: string}>;
+    detail(id: string, actor: SessionLike, view?: 'detail' | 'admin', query?: Readonly<Record<string, unknown>>): Promise<{data: GuestFlowSchemas[Type]['detail']; etag?: string}>;
     header(id: string, actor: SessionLike): Promise<string>;
     remove(id: string, actor: SessionLike, prepare: (result: components['schemas']['MutationResult']) => void): Promise<components['schemas']['MutationResult']>;
     deletion: {profile: boolean; receipt: 'before-command' | 'controller' | 'after-success'};

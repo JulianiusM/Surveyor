@@ -18,6 +18,14 @@ import {InvoicePoolDistributions} from "../backend/modules/database/entities/eve
 import type {EventInvoiceShare} from "../backend/modules/database/entities/event/EventInvoiceShare";
 import type {Event} from '../backend/modules/database/entities/event/Event';
 import type {EventInvoicePool} from '../backend/modules/database/entities/event/EventInvoicePool';
+import type {SessionLike} from './PermissionTypes';
+
+/** Captured management authority supplied only by admitted server callers.
+ * Trusted internal operations may omit it; submitted bodies never select it. */
+export interface InvoiceManagementContext {
+    readonly eventId: string;
+    readonly actor: SessionLike;
+}
 
 export type InvoicePoolStatus = 'OPEN' | 'ORGANIZER_ONLY' | 'CLOSED';
 

@@ -561,6 +561,8 @@ schemas:
         type: array
         items:
           "$ref": "#/schemas/ActivityWeek"
+      window:
+        $ref: '#/schemas/ActivityCalendarWindow'
       allRoles:
         type: "array"
         items:
@@ -638,6 +640,17 @@ schemas:
             type: "boolean"
           remove:
             type: "boolean"
+  ActivityCalendarWindow:
+    type: object
+    additionalProperties: false
+    required: [startDate, endDate, previous, next, oversized, maxDurationDays]
+    properties:
+      startDate: {type: string, format: date}
+      endDate: {type: string, format: date}
+      previous: {type: [string, 'null'], format: date}
+      next: {type: [string, 'null'], format: date}
+      oversized: {type: boolean}
+      maxDurationDays: {type: integer, minimum: 1}
   ActivityWeek:
     description: Monday-based civil weeks with visible stored day keys clipped to the plan date range, independent of timezone and daylight saving time.
     type: object
@@ -864,6 +877,7 @@ schemas:
     required:
       - "order"
     properties:
+      windowStart: {type: string, format: date}
       order:
         type: "array"
         items:
@@ -1362,6 +1376,8 @@ schemas:
       - overrideTargets
       - allRoles
     properties:
+      paging:
+        $ref: '#/schemas/ActivityRequirementPaging'
       plan:
         type: object
         additionalProperties: false
@@ -1485,6 +1501,18 @@ schemas:
         type: array
         items:
           $ref: "#/schemas/ActivityRole"
+  ActivityRequirementPaging:
+    type: object
+    additionalProperties: false
+    required: [readOnly, section, page, pages, total, pageSize, maxDurationDays]
+    properties:
+      readOnly: {type: boolean}
+      section: {type: string, enum: [stays, roles, overrides]}
+      page: {type: integer, minimum: 1}
+      pages: {type: integer, minimum: 1}
+      total: {type: integer, minimum: 0}
+      pageSize: {type: integer, const: 100}
+      maxDurationDays: {type: integer, minimum: 1}
   ActivityRecommendationInput:
     type: object
     additionalProperties: false
@@ -1492,6 +1520,10 @@ schemas:
       - itemId
       - profileId
     properties:
+      swapGroup:
+        type: [string, 'null']
+        minLength: 1
+        maxLength: 128
       id:
         $ref: ./common.yaml#/schemas/Uuid
       itemId:
@@ -1671,6 +1703,10 @@ schemas:
             - operation
             - manual
           properties:
+            swapGroup:
+              type: [string, 'null']
+              minLength: 1
+              maxLength: 128
             id:
               $ref: ./common.yaml#/schemas/Uuid
             item:
@@ -1805,6 +1841,10 @@ schemas:
     required:
       - itemId
     properties:
+      swapGroup:
+        type: [string, 'null']
+        minLength: 1
+        maxLength: 128
       id:
         $ref: ./common.yaml#/schemas/Uuid
       itemId:
@@ -2147,6 +2187,9 @@ paths:
         precondition: "none"
       summary: "get Activity Plan"
       parameters:
+        - name: windowStart
+          in: query
+          schema: {type: string, format: date}
         -
           "$ref": "./common.yaml#/parameters/Context"
         -
@@ -3042,6 +3085,9 @@ paths:
         precondition: "none"
       summary: "get Activity Order Baseline"
       parameters:
+        - name: windowStart
+          in: query
+          schema: {type: string, format: date}
         -
           "$ref": "./common.yaml#/parameters/Context"
         -
@@ -3452,6 +3498,12 @@ paths:
         precondition: none
       summary: getActivityRequirements
       parameters:
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1}
+        - name: section
+          in: query
+          schema: {type: string, enum: [stays, roles, overrides]}
         - $ref: "./common.yaml#/parameters/Context"
         - $ref: "./common.yaml#/parameters/Locale"
         - name: planId

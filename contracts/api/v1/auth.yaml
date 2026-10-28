@@ -8,11 +8,13 @@ schemas:
     type: string
     minLength: 15
     x-surveyor-max-utf8-bytes: 72
-  LocalRegistrationName:
-    description: Local account usernames and display names retain their exact entered spelling within the shared Unicode code-point bound.
+  IdentityName:
+    description: Account, guest and profile names retain their exact entered spelling within the shared Unicode code-point storage bound.
     type: string
     minLength: 1
     maxLength: 50
+  LocalRegistrationName:
+    $ref: '#/schemas/IdentityName'
   ProfileWorkflowEntry:
     type: object
     additionalProperties: false
@@ -184,9 +186,7 @@ schemas:
       - "email"
     properties:
       username:
-        type: "string"
-        minLength: 1
-        maxLength: 100
+        $ref: '#/schemas/IdentityName'
       email:
         type:
           - "string"

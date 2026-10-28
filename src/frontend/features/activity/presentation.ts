@@ -1,6 +1,7 @@
 import type {components} from '../../../types/api/v1';
 import type {Translator} from '../../../types/LocalizationTypes';
 import {civilDateWeeks, formatCivilDate} from '../../../common/lib/civilDate';
+import {countInclusiveDays} from '../../../common/activity/requirements';
 
 /** Localize only an explicitly generated label. Literal
  * user names remain data even when they equal the old English fallback wording.
@@ -14,7 +15,10 @@ export function activityParticipantName(name: string | null | undefined, t: Tran
 
 /** Creation uses the same civil-week owner as the versioned saved schedule;
  * retain the creation table's existing array shape and lexical date drafts. */
-export function activityCreationWeeks(start: string, end: string): string[][] {
+export function activityCreationWeeks(start: string, end: string, maxDurationDays = 366): string[][] {
+    // Reject oversized drafts before week/day allocation. The server supplies
+    // the effective maximum; this display guard never authorizes persistence.
+    if (start && end && countInclusiveDays(start, end) > maxDurationDays) return [];
     return civilDateWeeks(start, end).map(week => week.days);
 }
 

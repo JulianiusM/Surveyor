@@ -7,8 +7,8 @@ owner: application operators
 status: current
 last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: operator-controlled OIDC email linking and rebinding defaults reconciled with current settings and maintainer decisions; prior archival/settings reference retained; controlled deployment execution remains D04V
-source-anchors: src/backend/modules/entityArchival.ts; src/backend/modules/archive/policy.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/modules/settings.ts; src/backend/server.ts; src/backend/app.ts; src/backend/modules/email.ts; src/backend/modules/oidc.ts; src/backend/modules/identity.ts; src/backend/modules/lib/fileCommons.ts; src/backend/modules/invoice/retention.ts; src/backend/modules/database/services/EventInvoiceService.ts; .github/workflows/ci.yml
+verification-scope: approved authentication budgets, exact provider identity and display projection, and configurable Activity duration reconciled with current settings/source; prior archival/settings reference retained; no deployment certification
+source-anchors: src/backend/modules/entityArchival.ts; src/backend/modules/archive/policy.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/modules/settings.ts; src/backend/server.ts; src/backend/app.ts; src/backend/modules/email.ts; src/backend/modules/oidc.ts; src/backend/modules/identity.ts; src/backend/middleware/identityAdmission.ts; src/backend/routes/api/v1/auth.ts; src/backend/modules/database/services/UserService.ts; contracts/api/v1/auth.yaml; src/backend/controller/activityController.ts; src/backend/modules/activity/autoAssignment.ts; src/common/lib/civilDate.ts; src/backend/modules/lib/fileCommons.ts; src/backend/modules/invoice/retention.ts; src/backend/modules/database/services/EventInvoiceService.ts; .github/workflows/ci.yml
 next-review: D04V
 -->
 
@@ -127,6 +127,7 @@ HEADER_IMG_DIR,uploads/headerImgs/
 IMPRINT_URL,https://www.example.org/imprint
 PRIVACY_POLICY_URL,https://www.example.org/privacy
 
+ACTIVITY_MAX_DURATION_DAYS,366
 ACTIVITY_AVAILABILITY_WEIGHT,0.30
 ACTIVITY_SWAP_OPTIMIZATION_ITERATIONS,10
 ACTIVITY_ARRIVAL_DEPARTURE_PENALTY,0.2
@@ -204,7 +205,11 @@ OIDC uses discovery, authorization code flow, PKCE, state validation, and the `o
 must return a stable `sub` claim. Supplying email and profile claims improves account linking and profile creation.
 Behind a proxy, preserve the public host and scheme as shown in the [reverse-proxy configuration](OPERATIONS.md#reverse-proxy-and-tls).
 
-Existing issuer/subject matches continue to sign in independently of both email settings. With email linking off,
+Existing issuer/subject matches require byte-exact values, including case and trailing spaces, and continue to sign in
+independently of both email settings. Distinct values follow the existing provisioning/email policy; Surveyor does not
+merge accounts or rewrite old bindings to reconcile them. A newly provisioned account and its first profile use the
+first 50 Unicode code points of the selected provider display name or fallback. Existing account/profile names and
+the issuer, subject, email and username rules are unchanged by that display projection. With email linking off,
 a new provider identity follows the separate-account provisioning path rather than adopting an existing account
 because its email matches. That existing off-mode provisioning path uses a subject-based synthetic email address
 even when the provider email is unused; mail is therefore not delivered to the provider address for such new accounts.
@@ -217,6 +222,47 @@ can therefore grant access to that person's matching local account. Reassigned e
 access when rebinding is enabled. Review the provider's enrollment, email-verification and address-reuse policies
 before opting in. Both defaults are false, including for an existing settings file that omits the new keys.
 See the [operator sign-in checks](OPERATIONS.md#mail-and-sign-in-smoke-tests) before changing either setting.
+
+### Authentication request budgets
+
+These settings use the same CSV/environment precedence as other settings. All values must be positive safe integers;
+windows are in minutes and must fit the process timer range. Invalid values fail startup. Restart after changing them.
+
+| Setting | Built-in default | Budget or window |
+|---|---|---|
+| `AUTH_LOGIN_CLIENT_LIMIT` | `30` | All local-login attempts per client within the login window. |
+| `AUTH_LOGIN_FAILURE_CLIENT_LIMIT` | `10` | Failed local credentials per client, shared across usernames, email identifiers and passwords. |
+| `AUTH_LOGIN_ACCOUNT_LIMIT` | `10` | Failed local credentials per resolved account within the login window. |
+| `AUTH_LOGIN_WINDOW_MINUTES` | `15` | Window for all three login budgets. |
+| `AUTH_SIGNUP_CLIENT_LIMIT` | `10` | Local-account signup attempts per client. |
+| `AUTH_SIGNUP_WINDOW_MINUTES` | `60` | Local-signup window. |
+| `AUTH_GUEST_CREATION_CLIENT_LIMIT` | `20` | Guest-identity creation attempts per client across all five feature entry flows. |
+| `AUTH_GUEST_CREATION_WINDOW_MINUTES` | `60` | Guest-creation window. |
+| `AUTH_MAIL_CLIENT_LIMIT` | `10` | Identity-mail attempts per client. |
+| `AUTH_MAIL_CLIENT_WINDOW_MINUTES` | `15` | Client identity-mail window. |
+| `AUTH_MAIL_RECIPIENT_LIMIT` | `3` | Identity-mail attempts per recipient. |
+| `AUTH_MAIL_RECIPIENT_WINDOW_MINUTES` | `60` | Recipient identity-mail window. |
+| `AUTH_GUEST_LOOKUP_CLIENT_LIMIT` | `30` | Guest-email lookup requests per client. |
+| `AUTH_GUEST_LOOKUP_WINDOW_MINUTES` | `15` | Guest-email lookup window. |
+
+Admission occurs before the protected hashing, token replacement, mail preparation or identity writes. The mail budgets
+are shared by signup, guest creation with email, inactive-login activation mail, password recovery and guest recovery.
+Unknown recovery submissions consume the same mail budgets and retain generic recovery confirmation. Guest-email lookup
+keeps its existing admitted result; its independent request budget does not remove that feature.
+
+Username/email aliases resolving to one account share its failure bucket. A valid password does not add a credential
+failure, including when activation prevents login; completed login clears the account's earlier failures. Client failure
+history is retained until expiry even after successful login, so changing an identifier cannot restore that client's
+allowance. Password values are never counter keys. Recipient keys normalize email spelling for budgeting only; this does
+not change the identity or mail operation's submitted values.
+
+Exhaustion returns HTTP 429 with a `Retry-After` delay and no account-found or delivery evidence. The application does not
+queue or replay the identity operation. Shared-network users can therefore need to wait. Client identity uses the existing
+one-hop proxy trust and IPv6 address grouping; keep direct access to the application port restricted as described in
+[Reverse proxy and TLS](OPERATIONS.md#reverse-proxy-and-tls).
+
+Counters are expiring, in-process state for the supported single application process. They reset on process restart and
+are not shared between replicas. They do not establish a distributed deployment budget or replace proxy controls.
 
 ### Persistent files and retention
 
@@ -260,13 +306,25 @@ policies. [Invoice retention](OPERATIONS.md#invoice-retention) remains independe
 | `IMPRINT_URL` | Absolute HTTP(S) URL | `http://example.com/imprint` | Footer and transactional-email imprint link. | Replace with the legally applicable page. |
 | `PRIVACY_POLICY_URL` | Absolute HTTP(S) URL | `http://example.com/privacy` | Footer and transactional-email privacy link. | Replace with the deployment's privacy notice. |
 
-### Activity-planning compatibility settings
+### Activity planning
 
 | Setting | Type | Built-in default | Current contract | Production rule |
 |---|---|---|---|---|
+| `ACTIVITY_MAX_DURATION_DAYS` | Positive safe integer | `366` | Maximum inclusive day count for new plans and increases to an existing plan's duration; threshold for bounded calendar/print views and read-only requirements. | Choose a resource budget appropriate to the instance. Invalid values fail startup. Raising the limit permits larger full-plan views and calculations. |
 | `ACTIVITY_AVAILABILITY_WEIGHT` | Number | `0.30` | Accepted and retained by the settings loader as an activity-planning compatibility setting. | Keep the default unless a release explicitly documents changed scheduling behavior. |
 | `ACTIVITY_SWAP_OPTIMIZATION_ITERATIONS` | Number | `10` | Accepted and retained by the settings loader as an activity-planning compatibility setting. | Keep the default unless a release explicitly documents changed scheduling behavior. |
 | `ACTIVITY_ARRIVAL_DEPARTURE_PENALTY` | Number | `0.2` | Accepted and retained by the settings loader as an activity-planning compatibility setting. | Keep the default unless a release explicitly documents changed scheduling behavior. |
+
+Start and end dates both count toward the duration limit. Existing plans above the configured limit keep their data
+and may retain or reduce their day count without first meeting the limit; their dates must still include every saved
+slot. An increase must fit within the configured maximum. Duplication creates a new plan and therefore uses that same
+maximum.
+
+Plans above the limit use selectable calendar and print windows of at most 42 days. Their saved requirement tables
+are available in read-only pages of at most 100 rows; whole-plan requirement editing, coverage calculation and automatic
+recommendation generation resume once the duration fits the limit. Saved assignments, participation and requirement
+values remain intact. Reducing the setting can place existing plans in this bounded mode after restart without
+rewriting their dates or deleting their data. This setting uses the normal CSV/environment precedence and E2E override.
 
 ## Secret handling and rotation
 

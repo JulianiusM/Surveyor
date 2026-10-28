@@ -117,3 +117,6 @@ export class ExpectedError extends Error {
 export class InternalError extends Error {
     //Dummy for now
 }
+
+/** The existing uploader rejected the submitted media or original extension. */
+export class UploadRejectionError extends Error {}

@@ -102,6 +102,8 @@ export interface RecommendationInput {
     sourceItemId?: string | null;
     manual?: boolean;
     hidden?: boolean;
+    /** Null is an explicit independent move; absent retains unknown legacy provenance. */
+    swapGroup?: string | null;
 }
 
 /** A time commitment. Linked-plan provenance never contributes to the current plan's shift count. */

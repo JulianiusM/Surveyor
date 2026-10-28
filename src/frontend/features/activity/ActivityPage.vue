@@ -35,7 +35,10 @@ const context = useFrontend();
 const {messages} = context;
 const api = useActivityApi(context);
 const planId = computed(() => String(route.params.planId).toLowerCase());
-const key = computed(() => activityKeys.detail(context.session.value?.context, planId.value));
+const windowStart = ref(typeof route.query.windowStart === 'string' ? route.query.windowStart : '');
+const key = computed(() => windowStart.value
+    ? [...activityKeys.detail(context.session.value?.context, planId.value), {windowStart: windowStart.value}]
+    : activityKeys.detail(context.session.value?.context, planId.value));
 const tab = ref('schedule');
 const settingsOpen = ref(false);
 const editor = ref<{id?: string; day: string} | null>(null);
@@ -51,8 +54,9 @@ const requirementMode = ref<components['schemas']['ActivityView']['assignmentMod
 let previewAbort: AbortController | undefined;
 let active = true;
 onBeforeUnmount(() => { active = false; previewAbort?.abort(); });
-const {list, data, denied, refresh: readDetail, isActive} = useListDetail({resourceId: planId, queryKey: key,
-    resourceFamily: () => activityKeys.resource(context.session.value?.context, planId.value), read: api.activity.bind(api), denied: revokeAccess});
+const {list, data, denied, refresh: readDetail, isActive} = useListDetail<components['schemas']['ActivityView']>({resourceId: planId, queryKey: key,
+    resourceFamily: () => activityKeys.resource(context.session.value?.context, planId.value),
+    read: (id, scope, signal, previous) => api.activity(id, scope, signal, previous, windowStart.value), denied: revokeAccess});
 const {command, blocked: commandBlocked, readAction, retryAt, refresh, retireSettingsAccess, denyInlineEdit} = useListCommands({active: isActive, denied: () => denied.value,
     reading: () => list.isFetching.value, error: () => list.error.value, refresh: readFresh},
 {dirty: () => false, busy: () => previewPending.value, unknownMessage: 'draft.leaveUnknown'});
@@ -80,7 +84,7 @@ async function readFresh(): Promise<void> {
     // Pure requirement recalculation follows changed assignments/slots/dates.
     // Its editor retains dirty values; ordinary polling cannot run maintenance.
     if (data.value !== previous && data.value?.capabilities.manageRequirements)
-        void context.queryClient.invalidateQueries({queryKey: activityKeys.requirements(context.session.value?.context, planId.value), exact: true});
+        void context.queryClient.invalidateQueries({queryKey: activityKeys.requirements(context.session.value?.context, planId.value)});
 }
 
 /** Denial retires private server snapshots and pending warning authority together.
@@ -105,6 +109,7 @@ watch([planId, context.epoch], () => {
     reviewOpen.value = false;
     tab.value = 'schedule';
     requirementMode.value = null;
+    windowStart.value = typeof route.query.windowStart === 'string' ? route.query.windowStart : '';
     previewAbort?.abort();
 });
 watch(tabs, reconcileSelectedTab);
@@ -162,7 +167,8 @@ async function patch(slot: components['schemas']['ActivitySlotView'], field: 'ti
 }
 /** Submit one captured day-order gesture without optimistic DOM persistence. */
 async function reorder(order: components['schemas']['ActivityOrderInput']['order'], token: string): Promise<unknown> {
-    return command.run(scope => api.reorder(planId.value, order, token, scope), true, false,
+    return command.run(scope => api.reorder(planId.value, order, token, scope,
+        data.value?.window?.oversized ? data.value.window.startDate : undefined), true, false,
         {success: 'common.orderSaved'});
 }
 /** Confirm the destructive slot action before its independent server check. */
@@ -294,6 +300,7 @@ async function confirmAssignment(): Promise<void> {
                         @denied="denyInlineEdit"
                         @remove-assignment="removeAssignment"
                         @roles="roleSlotId = $event.id"
+                        @window="windowStart = $event"
                     />
                 </div>
                 <div v-if="data.participants.length" v-show="tab === 'participants'" id="tab-participants"
@@ -302,6 +309,7 @@ async function confirmAssignment(): Promise<void> {
                         :key="planId + '-participants'"
                         :participants="data.participants"
                         :assignment-mode="data.assignmentMode"
+                        :requirements-available="!data.window?.oversized"
                     />
                 </div>
                 <!-- Keep admitted advanced workspaces mounted across local tabs.

@@ -53,6 +53,7 @@ export async function saveRecommendations(
         status: rec.status ?? 'PENDING', operation: rec.operation ?? 'ASSIGN',
         sourceItem: rec.sourceItemId ? {id: rec.sourceItemId} : null,
         manual: Boolean(rec.manual), hidden: Boolean(rec.hidden),
+        pairingKnown: rec.swapGroup !== undefined || rec.operation !== 'REASSIGN', swapGroup: rec.swapGroup ?? null,
     }));
     if (rows.length) await repo.save(rows);
 }

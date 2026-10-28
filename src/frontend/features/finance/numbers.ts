@@ -26,23 +26,35 @@ export function financeDecimal(value: string, fractionDigits?: number): string {
     }
     const exponent = Number(match[4] ?? 0);
     const leadingZeroes = rawDigits.length - rawDigits.replace(/^0+/u, '').length;
-    const digits = rawDigits.slice(leadingZeroes).replace(/0+$/u, '');
+    const digits = withoutTrailingZeroes(rawDigits.slice(leadingZeroes));
     const point = match[2].length + exponent - leadingZeroes;
 
     // Bound only added zeroes around the retained significant digits. Every
     // nonzero finite native number fits this window; excessive underflow money
     // remains invalid instead of requiring unbounded exponent expansion.
     if (!Number.isSafeInteger(point) || point < -324 || point > 309) return value;
-    const expanded = point <= 0 ? `0.${'0'.repeat(-point)}${digits}`
-        : point >= digits.length ? digits + '0'.repeat(point - digits.length)
-            : `${digits.slice(0, point)}.${digits.slice(point)}`;
+    let expanded: string;
+    if (point <= 0) expanded = `0.${'0'.repeat(-point)}${digits}`;
+    else if (point >= digits.length) expanded = digits + '0'.repeat(point - digits.length);
+    else expanded = `${digits.slice(0, point)}.${digits.slice(point)}`;
     const [whole, fraction = ''] = expanded.split('.');
     const integer = whole.replace(/^0+(?=\d)/u, '');
-    let decimal = fraction.replace(/0+$/u, '');
+    let decimal = withoutTrailingZeroes(fraction);
 
     // Factors have one canonical four-place representation. Excess meaningful
     // precision is deliberately retained so validation rejects rather than rounds.
     if (fractionDigits !== undefined && decimal.length <= fractionDigits) decimal = decimal.padEnd(fractionDigits, '0');
     const negative = match[1] === '-' && /[1-9]/u.test(integer + decimal);
-    return `${negative ? '-' : ''}${integer}${decimal ? `.${decimal}` : ''}`;
+    const decimalSuffix = decimal ? `.${decimal}` : '';
+    return `${negative ? '-' : ''}${integer}${decimalSuffix}`;
+}
+
+/** Remove only insignificant decimal zeroes in linear time. An unanchored
+ * suffix regex retries long interior zero runs when a meaningful digit follows. */
+function withoutTrailingZeroes(value: string): string {
+    // Inspect the suffix once; retain every interior digit so excess precision
+    // still reaches ordinary command validation instead of being rounded.
+    let end = value.length;
+    while (end > 0 && value[end - 1] === '0') end--;
+    return value.slice(0, end);
 }

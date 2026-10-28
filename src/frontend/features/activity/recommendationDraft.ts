@@ -18,10 +18,12 @@ export function recommendationReview(rows: ActivityRecommendationDraftRow[]): co
     const recommendations: Input[] = [];
     // Keep provenance and move sources alongside status; reducing this to a
     // participant/slot pair would turn a move or unassignment into an assignment.
-    for (const {value} of rows) {
+    for (const {value, swapGroup} of rows) {
         if (value.manual && value.status === 'REJECTED') continue;
+        const group = swapGroup === undefined ? value.swapGroup : swapGroup;
         recommendations.push({...(value.id ? {id: value.id} : {}), itemId: value.item.id, profileId: value.profile.id,
-            status: value.status, operation: value.operation, sourceItemId: value.sourceItem?.id ?? null, manual: value.manual});
+            status: value.status, operation: value.operation, sourceItemId: value.sourceItem?.id ?? null, manual: value.manual,
+            ...(group === undefined ? {} : {swapGroup: group})});
     }
     return {recommendations};
 }
@@ -29,7 +31,7 @@ export function recommendationReview(rows: ActivityRecommendationDraftRow[]): co
 /** Stable machine identity protects a pending choice through harmless label and
  * locale refreshes. Status remains separate because it is the review's editable value. */
 export function recommendationIdentity(row: Row): string {
-    return JSON.stringify([row.id ?? null, row.item.id, row.profile.id, row.operation, row.sourceItem?.id ?? null, row.manual]);
+    return JSON.stringify([row.id ?? null, row.item.id, row.profile.id, row.operation, row.sourceItem?.id ?? null, row.manual, row.swapGroup]);
 }
 
 /** Match one saved or newly persisted operation without depending on its label,
@@ -43,37 +45,41 @@ function sameRecommendationOperation(left: Row, right: Row): boolean {
 /** Reciprocal slot endpoints are eligibility evidence, never sufficient evidence
  * that two of several moves were authored as the same swap. */
 function reciprocal(left: ActivityRecommendationDraftRow, right: ActivityRecommendationDraftRow): boolean {
-    return left !== right && left.value.manual && right.value.manual && left.value.operation === 'REASSIGN'
+    return left !== right && left.value.operation === 'REASSIGN'
         && right.value.operation === 'REASSIGN' && !!left.value.sourceItem && !!right.value.sourceItem
         && left.value.item.id === right.value.sourceItem.id && left.value.sourceItem.id === right.value.item.id;
+}
+
+/** Prefer intentional local edits while accepting pairing supplied by a fresh server projection. */
+function reviewedSwapGroup(row: ActivityRecommendationDraftRow): string | null | undefined {
+    return row.swapGroup === undefined ? row.value.swapGroup : row.swapGroup;
 }
 
 /** Only unresolved restored moves can become another restored move's counterpart.
  * Explicit single moves and legs already belonging to another local swap stay independent. */
 function counterpartCandidates(rows: ActivityRecommendationDraftRow[], row: ActivityRecommendationDraftRow): ActivityRecommendationDraftRow[] {
-    return rows.filter(candidate => candidate.swapGroup === undefined && reciprocal(row, candidate));
+    return rows.filter(candidate => reviewedSwapGroup(candidate) === undefined && reciprocal(row, candidate));
 }
 
 /** Resolve the same relationship for labels, status changes and removal. Known
- * local groups win; restored data preserves one-step behavior only for a mutually
- * unique reciprocal pair. Larger reciprocal sets require deliberate user choice. */
+ * persisted/local groups win; every restored unknown move requires explicit intent,
+ * even when its reciprocal candidate happens to be unique. */
 export function recommendationRelationship(rows: ActivityRecommendationDraftRow[], row: ActivityRecommendationDraftRow): ActivityRecommendationRelationship {
     const single: ActivityRecommendationRelationship = {kind: 'single', partners: [row], candidates: []};
-    if (!row.value.manual || row.value.operation !== 'REASSIGN' || !row.value.sourceItem || row.swapGroup === null) return single;
+    const group = reviewedSwapGroup(row);
+    if (row.value.operation !== 'REASSIGN' || !row.value.sourceItem || group === null) return single;
 
     // A local group is exact identity, not a search for the first reverse move.
-    if (row.swapGroup !== undefined) {
-        const grouped = rows.filter(candidate => candidate.swapGroup === row.swapGroup);
+    if (group !== undefined) {
+        const grouped = rows.filter(candidate => reviewedSwapGroup(candidate) === group);
         return grouped.length === 2 && grouped.every(candidate => candidate === row || reciprocal(row, candidate))
             ? {kind: 'paired', partners: grouped, candidates: []} : single;
     }
 
-    // A lone reverse candidate can itself have multiple possible partners.
-    // Both directions must be unique before preserving the old one-step action.
+    // Reciprocal endpoints never establish historical intent. The chooser also
+    // permits an explicit independent move when no candidate remains.
     const candidates = counterpartCandidates(rows, row);
-    if (candidates.length === 1 && counterpartCandidates(rows, candidates[0]!).length === 1)
-        return {kind: 'paired', partners: [row, candidates[0]!], candidates: []};
-    return candidates.length ? {kind: 'ambiguous', partners: [row], candidates} : single;
+    return {kind: 'ambiguous', partners: [row], candidates};
 }
 
 /** Existing matching consumers obtain their legs from the sole relationship owner. */
@@ -81,13 +87,12 @@ export function recommendationPartners(rows: ActivityRecommendationDraftRow[], r
     return recommendationRelationship(rows, row).partners;
 }
 
-/** Record an explicitly constructed or chosen swap in local draft metadata only.
- * Serialization above deliberately ignores this group and the local row keys. */
+/** Record an explicitly constructed or chosen pair for the complete review serializer. */
 export function pairRecommendationRows(row: ActivityRecommendationDraftRow, partner: ActivityRecommendationDraftRow): boolean {
     if (!reciprocal(row, partner)) return false;
-    // Keys are unique within this mounted review. The group survives fresh reads
-    // through operation matching below, not through a server field or storage key.
-    row.swapGroup = partner.swapGroup = 'swap:' + row.key;
+    // A group is opaque plan-scoped provenance, never authority over either row.
+    const group = reviewedSwapGroup(row);
+    row.swapGroup = partner.swapGroup = typeof group === 'string' ? group : 'swap:' + row.key;
     return true;
 }
 
@@ -98,8 +103,9 @@ export function reconcileRecommendationRows(values: Row[], previous: ActivityRec
     const rows: ActivityRecommendationDraftRow[] = [];
     for (const value of values) {
         const known = previous.find(row => sameRecommendationOperation(row.value, value));
+        const group = known?.swapGroup === undefined ? value.swapGroup : known.swapGroup;
         rows.push({key: known?.key ?? nextKey(), value: {...value},
-            ...(known?.swapGroup === undefined ? {} : {swapGroup: known.swapGroup})});
+            ...(group === undefined ? {} : {swapGroup: group})});
     }
 
     // Every group remains a complete, reciprocal pair in the new projection.
@@ -163,6 +169,9 @@ export function manualRecommendationRows(workspace: Workspace, rows: ActivityRec
     second.operation = 'REASSIGN';
     second.sourceItem = target;
     result.push(second);
+    // Construction knows this exact pair. Persist its provenance through the
+    // complete review serializer rather than recovering it from slot endpoints.
+    result[0]!.swapGroup = second.swapGroup = crypto.randomUUID();
     return result;
 
     /** Both proposed and committed placements participate in the duplicate guard. */
@@ -174,7 +183,7 @@ export function manualRecommendationRows(workspace: Workspace, rows: ActivityRec
 
     function makeRow(item: Row['item'], id: string, name: string, nameIsFallback?: boolean): Row {
         return {item, profile: {id, name, ...(nameIsFallback === undefined ? {} : {nameIsFallback})},
-            sourceItem: null, status: 'APPROVED', operation: 'ASSIGN', manual: true};
+            sourceItem: null, status: 'APPROVED', operation: 'ASSIGN', manual: true, swapGroup: null};
     }
 }
 

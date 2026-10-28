@@ -1,6 +1,6 @@
 import {createFeatureApiResolver} from '../../app/api';
 import type {components} from '../../../types/api/v1';
-import type {FrontendContext, FrontendRead, FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import type {FrontendRead, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {FrontendApi} from '../../app/api';
 import {createMultipartForm, generatedInputError, InvalidInputError} from '../../app/transport';
 import {validateSurveyView} from '../../../../.generated/api/v1/browser/validateSurveyView.mjs';

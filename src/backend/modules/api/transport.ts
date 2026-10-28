@@ -9,6 +9,8 @@ import {requestLocale} from '../lib/http';
 import type {ErrorObject} from 'ajv';
 import {decodeScalarParameter, fieldDiagnostic} from '../../../common/localization/inputValidation';
 import {resolveStoredFile} from '../lib/fileCommons';
+import {UploadRejectionError} from '../lib/errors';
+import {MulterError} from 'multer';
 
 /** Await the caller's uploader without changing its filename, byte or type policy.
  * Parser diagnostics stay private; routes retain admission and upload cleanup. */
@@ -19,9 +21,26 @@ export async function receiveApiUpload(req: Request, res: Response, upload: Requ
         // The injected parser retains its own storage policy; expose only bounded completion categories.
         upload(req, res, error => {
             if (!error) resolve();
-            else reject(new ApiProblem(error.code === 'LIMIT_FILE_SIZE' ? 'PAYLOAD_TOO_LARGE' : 'UPLOAD_INVALID'));
+            else reject(uploadProblem(error));
         });
     });
+}
+
+/** Keep recognized request rejection separate from failed storage/allocation.
+ * Unknown parser exceptions can contain private paths or database diagnostics;
+ * the shared Problem owner records only this bounded category and correlation. */
+function uploadProblem(error: unknown): ApiProblem {
+    if (error instanceof MulterError && error.code === 'LIMIT_FILE_SIZE') return new ApiProblem('PAYLOAD_TOO_LARGE');
+    // Multer's declared structural/limit errors and our explicit media checks
+    // belong to the client. Busboy's closed malformed-input diagnostics do too.
+    const malformedMultipart = new Set(['Unexpected end of form', 'Unexpected end of file',
+        'Malformed part header', 'Multipart: Boundary not found', 'Missing Content-Type', 'Malformed content type']);
+    if (error instanceof MulterError || error instanceof UploadRejectionError
+        || error instanceof Error && malformedMultipart.has(error.message)) return new ApiProblem('UPLOAD_INVALID');
+
+    const problem = new ApiProblem('INTERNAL_ERROR');
+    problem.name = 'UploadStorageError';
+    return problem;
 }
 
 /** Populate wire image metadata only from the actual upload, preserving unknown form fields. */

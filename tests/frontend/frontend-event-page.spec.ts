@@ -340,7 +340,7 @@ describe('Event page read dependencies', () => {
         const mounted = await mountFrontendEvent(EventSummary, async () => json(view), {event: view});
         cleanups.push(mounted.dispose);
         const label = mounted.context.messages.value.t('event.descriptionLabel');
-        const descriptionLabels = mounted.wrapper.findAll('label').filter(item => item.text() === label);
+        const descriptionLabels = mounted.wrapper.findAll('.form-label').filter(item => item.text() === label);
 
         // Native omits both label and paragraph for null/empty descriptions.
         // Nonempty Event text keeps its own column, ordinary p margins and no

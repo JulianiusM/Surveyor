@@ -3,9 +3,8 @@ import {computed, ref, watch} from 'vue';
 import {useRoute} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../types/api/v1';
-import type {FrontendRequestScope} from '../../types/FrontendUiTypes';
+import type {FrontendPlainMessageKey, FrontendRequestScope} from '../../types/FrontendUiTypes';
 import type {FrontendListCreationCopy, FrontendListCreationSource} from '../../types/FrontendListTypes';
-import type {FrontendPlainMessageKey} from '../../types/FrontendUiTypes';
 import {useActionState, useFrontend} from '../app/context';
 import {isReadDenial} from '../app/transport';
 import {isPlainMessageKey} from '../../common/localization/translator';
@@ -282,7 +281,7 @@ function collectCreation() {
                          title still belongs to this shared creation draft owner. -->
                     <!-- Only Create's admission/write lifetime can own Enter focus;
                          unrelated admission recovery still uses the wider blocked policy. -->
-                    <slot name="root-fields" :title="title" :update-title="(value: string) => title = value"
+                    <slot name="root-fields" :title="title" :update-title="(value: string) => title = value" :context="formContext"
                         :disabled="blocked || !formContext" :pending="createAction.pending.value">
                         <FormField id="create-title" v-model="title" class="mb-3" :name="null"
                             :label="messages.t('packing.title')" label-icon="bi-tag" label-class="" required
@@ -317,7 +316,7 @@ function collectCreation() {
                             />
                         </div>
                     </div>
-                    <slot :disabled="blocked || !formContext" :pending="createAction.pending.value"></slot>
+                    <slot :disabled="blocked || !formContext" :pending="createAction.pending.value" :context="formContext"></slot>
                     <div :class="fullWidthSubmit ? 'd-grid mt-4' : 'frontend-action-row justify-content-between'">
                         <slot name="before-submit" :disabled="blocked || !formContext"></slot>
                         <ActionButton type="submit" variant="success" :state="createAction"

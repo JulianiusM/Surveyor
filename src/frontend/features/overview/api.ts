@@ -1,6 +1,6 @@
 import {createFeatureApiResolver} from '../../app/api';
 import type {components, paths} from '../../../types/api/v1';
-import type {FrontendContext, FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {FrontendApi} from '../../app/api';
 import type {LocationQuery} from 'vue-router';
 import {validateOverviewRegion} from '../../../../.generated/api/v1/browser/validateOverviewRegion.mjs';

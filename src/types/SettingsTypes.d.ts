@@ -64,4 +64,21 @@ export type Settings = {
     activityAvailabilityWeight: number;
     activitySwapOptimizationIterations: number;
     activityArrivalDeparturePenalty: number;
+    /** Maximum inclusive duration for new or expanded Activity plans and full requirement workflows. */
+    activityMaxDurationDays: number;
+    /** Shared HTTP abuse budgets; every limit/window is a positive safe integer. */
+    authLoginClientLimit: number;
+    authLoginFailureClientLimit: number;
+    authLoginAccountLimit: number;
+    authLoginWindowMinutes: number;
+    authSignupClientLimit: number;
+    authSignupWindowMinutes: number;
+    authGuestCreationClientLimit: number;
+    authGuestCreationWindowMinutes: number;
+    authMailClientLimit: number;
+    authMailClientWindowMinutes: number;
+    authMailRecipientLimit: number;
+    authMailRecipientWindowMinutes: number;
+    authGuestLookupClientLimit: number;
+    authGuestLookupWindowMinutes: number;
 };

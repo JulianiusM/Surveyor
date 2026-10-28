@@ -267,7 +267,7 @@ describe('contract and catalog generation', () => {
         }
     }, 30_000);
 
-    it('derives local registration and new-password limits from their authored schemas', async function projectsIdentityPolicies() {
+    it('derives shared identity-name and new-password limits from their authored schemas', async function projectsIdentityPolicies() {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
         try {
             await prepareGenerationTree(temporary);
@@ -277,7 +277,7 @@ describe('contract and catalog generation', () => {
             // nor runtime metadata has independent copied acceptance thresholds.
             auth.setIn(['schemas', 'NewPassword', 'minLength'], 16);
             auth.setIn(['schemas', 'NewPassword', 'x-surveyor-max-utf8-bytes'], 80);
-            auth.setIn(['schemas', 'LocalRegistrationName', 'maxLength'], 48);
+            auth.setIn(['schemas', 'IdentityName', 'maxLength'], 48);
             await fs.writeFile(source, auth.toString());
             generate('generate-api.mjs', [], temporary);
             const policyUrl = pathToFileURL(path.join(temporary, 'src/common/generated/passwordPolicy.ts')).href;
@@ -286,8 +286,9 @@ describe('contract and catalog generation', () => {
             const registrationUrl = pathToFileURL(path.join(temporary, '.generated/api/v1/browser/validateRegistrationInput.mjs')).href;
             execFileSync(process.execPath, ['--input-type=module', '-e', `
                 globalThis.Function = function () { throw new Error('Runtime compilation is forbidden'); };
-                const {newPasswordPolicy} = await import(${JSON.stringify(policyUrl)});
+                const {newPasswordPolicy, identityNamePolicy} = await import(${JSON.stringify(policyUrl)});
                 if (newPasswordPolicy.minLength !== 16 || newPasswordPolicy.maxUtf8Bytes !== 80) throw new Error('Password policy drift');
+                if (identityNamePolicy.maxLength !== 48) throw new Error('Provider display-name projection policy drift');
                 const server = (await import(${JSON.stringify(serverUrl)})).default;
                 const browser = await import(${JSON.stringify(browserUrl)});
                 const registration = await import(${JSON.stringify(registrationUrl)});
@@ -298,6 +299,17 @@ describe('contract and catalog generation', () => {
                     if (!validators.validateLoginInput({username: 'Existing', password: 'short'})) throw new Error('Existing login policy changed');
                     if (!validators.validateLocalRegistrationName('😀'.repeat(48))) throw new Error('Shared registration code-point bound rejected');
                     if (validators.validateLocalRegistrationName('😀'.repeat(49))) throw new Error('Shared registration code-point bound ignored');
+                    for (const validator of [validators.validateIdentityName]) {
+                        if (!validator('😀'.repeat(48)) || validator('😀'.repeat(49))) throw new Error('Shared identity-name bound drift');
+                    }
+                    for (const [validator, field, rest] of [
+                        [validators.validateGuestRegistrationInput, 'username', {email: null}],
+                        [validators.validateProfileCreateInput, 'name', {}],
+                        [validators.validateProfileUpdateInput, 'name', {isDefault: false}],
+                    ]) {
+                        if (!validator({...rest, [field]: '😀'.repeat(48)})) throw new Error('Stored-name field rejected its shared bound');
+                        if (validator({...rest, [field]: '😀'.repeat(49)})) throw new Error('Stored-name field ignored its shared bound');
+                    }
                     const input = {username: '😀'.repeat(48), displayname: '😀'.repeat(48), email: 'name@example.invalid',
                         password: 'a'.repeat(16), password_repeat: 'a'.repeat(16)};
                     if (!validators.validateRegistrationInput(input)) throw new Error('Registration did not adopt its shared name schema');

@@ -13,6 +13,7 @@ import {activityKeys} from '../../src/frontend/app/queryKeys';
 import ActivityRequirements from '../../src/frontend/features/activity/ActivityRequirements.vue';
 import ActivityPage from '../../src/frontend/features/activity/ActivityPage.vue';
 import {analyzeRequirementDraft, createRequirementDraft, requirementInput, requirementAnalysisInput} from '../../src/frontend/features/activity/requirements';
+import * as requirementDraft from '../../src/frontend/features/activity/requirements';
 
 const planId = '11111111-1111-4111-8111-111111111111';
 const profileId = '22222222-2222-4222-8222-222222222222';
@@ -79,7 +80,8 @@ function json(value: unknown, status = 200): Response {
 
 /** Exercise production query, draft, generated transport and command owners with
  * substituted HTTP delivery. Persistence belongs to integration and built E2E. */
-async function mounted(handler: (request: Request) => Promise<Response>, component: Component = ActivityRequirements) {
+async function mounted(handler: (request: Request) => Promise<Response>, component: Component = ActivityRequirements,
+    readySelector = '#requirementForm') {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
     const context = createFrontendContext({session}, true, request);
     context.hydrated.value = true;
@@ -95,12 +97,57 @@ async function mounted(handler: (request: Request) => Promise<Response>, compone
     }});
     cleanups.push(async () => { root.unmount(); stopInitial(); await context.queryClient.cancelQueries(); context.queryClient.clear(); });
     await flushPromises();
-    await vi.waitFor(() => expect(root.find('#requirementForm').exists()).toBe(true));
+    await vi.waitFor(() => expect(root.find(readySelector).exists()).toBe(true));
     await flushPromises();
     return {root, wrapper: root.findComponent(ActivityRequirements), context, request, router};
 }
 
 describe('Activity requirements production frontend', () => {
+    it('reads only requested 100-row pages and never creates an oversized editable duration table', async () => {
+        // Observe the real allocation boundary without substituting its result.
+        // Hidden DOM alone cannot prove that a huge draft was never allocated.
+        const allocation = vi.spyOn(requirementDraft, 'createRequirementDraft');
+        const saved = configuration();
+        saved.plan.startDate = '1000-01-01';
+        saved.plan.endDate = '9999-12-31';
+        const {root, request} = await mounted(async input => {
+            const page = Number(new URL(input.url).searchParams.get('page') ?? 1);
+            return json({...saved, paging: {readOnly: true, section: 'stays', page, pages: 2, total: 105, pageSize: 100, maxDurationDays: 366},
+                stayRequirements: Array.from({length: page === 1 ? 100 : 5}, (_, index) => ({stayDays: (page - 1) * 100 + index + 1, requiredShifts: 2}))});
+        }, ActivityRequirements, '[data-requirement-readonly]');
+        expect(root.findAll('[data-requirement-readonly] tbody tr')).toHaveLength(100);
+        expect(root.find('#stayRequirementList').exists()).toBe(false);
+        expect(root.get<HTMLButtonElement>('[data-requirements-save]').element.disabled).toBe(true);
+        await root.get('[data-requirements-refresh]').trigger('click');
+        await flushPromises();
+        expect(root.find('#stayRequirementList').exists()).toBe(false);
+        expect(root.findAll('[data-requirement-readonly] tbody tr')).toHaveLength(100);
+        await root.findAll('button').find(button => button.text() === 'Next page')!.trigger('click');
+        await flushPromises();
+        expect(root.findAll('[data-requirement-readonly] tbody tr')).toHaveLength(5);
+        expect(request.mock.calls.map(([value]) => new URL((value as Request).url).searchParams.get('page'))).toContain('2');
+        expect(request.mock.calls.some(([value]) => (value as Request).method !== 'GET')).toBe(false);
+        expect(allocation).not.toHaveBeenCalled();
+    });
+
+    it('retains a dirty requirement draft while a changed duration policy suspends editing', async () => {
+        const saved = configuration();
+        let oversized = false;
+        const {root, context} = await mounted(async () => json(oversized ? {...saved,
+            plan: {...saved.plan, startDate: '1000-01-01', endDate: '9999-12-31'},
+            paging: {readOnly: true, section: 'stays', page: 1, pages: 1, total: 2, pageSize: 100, maxDurationDays: 366}} : saved));
+        await root.get<HTMLInputElement>('#requiredShifts').setValue('8');
+        oversized = true;
+        await context.queryClient.invalidateQueries({queryKey: activityKeys.requirements(session.context, planId)});
+        await flushPromises();
+        expect(root.find('[data-requirement-readonly]').exists()).toBe(true);
+        expect(root.find('#requirementForm').exists()).toBe(false);
+        oversized = false;
+        await context.queryClient.invalidateQueries({queryKey: activityKeys.requirements(session.context, planId)});
+        await flushPromises();
+        expect(root.get<HTMLInputElement>('#requiredShifts').element.value).toBe('8');
+    });
+
     it.each(['fresh', 'stale'] as const)('restores saved requirement controls and coverage on %s cached plan re-entry',
         async function restoreCachedRequirements(cacheState) {
             const saved = configuration();

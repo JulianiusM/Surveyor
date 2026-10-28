@@ -17,13 +17,57 @@
 import type {PlanRequirementSettings, RequirementConfiguration} from '../../../../types/ActivityTypes';
 
 
-import type {RequirementOverrideInput, RoleRequirementInput, StayRequirementInput} from "../../../../types/ActivityRequirementTypes";
-import type {EntityManager} from "typeorm";
+import type {
+    RequirementOverrideInput, RoleRequirementInput, StayRequirementInput, RequirementPageSection,
+} from "../../../../types/ActivityRequirementTypes";
+import type {
+    EntityManager, ObjectLiteral, SelectQueryBuilder,
+} from "typeorm";
+import {Between, LessThanOrEqual} from 'typeorm';
+import {countInclusiveDays} from '../../../../common/activity/requirements';
 import {AppDataSource} from "../dataSource";
 import {ActivityPlan} from "../entities/activity/ActivityPlan";
 import {ActivityPlanRequirement} from "../entities/activity/ActivityPlanRequirement";
 import {ActivityPlanRequirementOverride} from "../entities/activity/ActivityPlanRequirementOverride";
 import {ActivityPlanStayRequirement} from "../entities/activity/ActivityPlanStayRequirement";
+
+/** Count and fetch one bounded SQL page without hydrating the complete saved collection. */
+async function readRequirementRows<Row extends ObjectLiteral>(query: SelectQueryBuilder<Row>, requestedPage: number) {
+    // Counts do not materialize rows. Clamp before applying the SQL offset so an
+    // out-of-range request still returns the final existing page deterministically.
+    const total = await query.getCount();
+    const pages = Math.max(1, Math.ceil(total / 100));
+    const page = Math.min(Math.max(1, requestedPage), pages);
+    const rows = await query.skip((page - 1) * 100).take(100).getMany();
+    return {rows, total, pages, page};
+}
+
+/** Read only the selected stored requirement collection; policy and editing rights remain feature-owned. */
+export async function getRequirementPage(planId: string, section: RequirementPageSection, requestedPage: number,
+    manager: EntityManager = AppDataSource.manager) {
+    const empty = {roleRequirements: [] as ActivityPlanRequirement[], stayRequirements: [] as ActivityPlanStayRequirement[],
+        overrides: [] as ActivityPlanRequirementOverride[]};
+    // Each branch chooses its actual relation projection, preserving the saved
+    // row identities/names while the common page owner bounds every SQL read.
+    if (section === 'roles') {
+        const query = manager.getRepository(ActivityPlanRequirement).createQueryBuilder('requirement')
+            .leftJoinAndSelect('requirement.role', 'role').where('requirement.entity_id = :planId', {planId})
+            .orderBy('requirement.id', 'ASC');
+        const result = await readRequirementRows(query, requestedPage);
+        return {...empty, roleRequirements: result.rows, total: result.total, pages: result.pages, page: result.page};
+    }
+    if (section === 'overrides') {
+        const query = manager.getRepository(ActivityPlanRequirementOverride).createQueryBuilder('requirement')
+            .leftJoinAndSelect('requirement.role', 'role').leftJoinAndSelect('requirement.profile', 'profile')
+            .where('requirement.entity_id = :planId', {planId}).orderBy('requirement.id', 'ASC');
+        const result = await readRequirementRows(query, requestedPage);
+        return {...empty, overrides: result.rows, total: result.total, pages: result.pages, page: result.page};
+    }
+    const query = manager.getRepository(ActivityPlanStayRequirement).createQueryBuilder('requirement')
+        .where('requirement.entity_id = :planId', {planId}).orderBy('requirement.stay_days', 'ASC');
+    const result = await readRequirementRows(query, requestedPage);
+    return {...empty, stayRequirements: result.rows, total: result.total, pages: result.pages, page: result.page};
+}
 
 /** Load the selected plan settings and their stored requirement collections.
  * Reuse the caller's manager, preserve nullable absence and sort the copied stay
@@ -31,6 +75,7 @@ import {ActivityPlanStayRequirement} from "../entities/activity/ActivityPlanStay
 export async function getRequirementConfiguration(
     planId: string,
     manager: EntityManager = AppDataSource.manager,
+    includeStayRequirements = true,
 ): Promise<RequirementConfiguration | null> {
     // Hydrate only the established settings projection and related requirement data.
     const planRepo = manager.getRepository(ActivityPlan);
@@ -52,18 +97,25 @@ export async function getRequirementConfiguration(
         relations: {
             activityPlanRequirements: {role: true},
             activityPlanRequirementOverrides: {role: true, profile: true},
-            activityPlanStayRequirements: true,
         },
     });
 
     // Absence remains a nullable DBAL result; the controller chooses its outcome.
     if (!plan) return null;
 
+    // Saved values outside a shortened range are retained historical inputs,
+    // not part of its current configuration. Bound SQL before hydrating rows.
+    const stayRequirements = includeStayRequirements
+        ? await manager.getRepository(ActivityPlanStayRequirement).find({
+            where: {entity: {id: planId}, stayDays: Between(1, countInclusiveDays(plan.startDate, plan.endDate))},
+            order: {stayDays: 'ASC'},
+        }) : [];
+
     return {
         plan,
         roleRequirements: plan.activityPlanRequirements,
         overrides: plan.activityPlanRequirementOverrides,
-        stayRequirements: [...(plan.activityPlanStayRequirements ?? [])].sort((a, b) => a.stayDays - b.stayDays),
+        stayRequirements,
     };
 }
 
@@ -125,6 +177,7 @@ export async function replaceRequirements(
     planSettings?: PlanRequirementSettings,
     stayRequirements: StayRequirementInput[] = [],
     manager?: EntityManager,
+    stayReplacementThrough?: number,
 ): Promise<void> {
     // The controller supplies validated, reconciled rows under its plan lock. This callback
     // only maps those rows to persistence and participates in that same transaction.
@@ -164,18 +217,20 @@ export async function replaceRequirements(
             planPatch.allowDepartureDayMorning = planSettings.allowDepartureDayMorning;
         }
 
-        // Clear role, profile override and stay rows in their existing sequential
-        // order before saving replacements; the same manager makes this atomic.
+        // Replace active inputs in their existing sequential order. An explicit
+        // duration boundary retains values outside a shortened saved plan; the
+        // feature supplied that boundary while holding its operation lock.
         await roleRepo.delete({entity: {id: planId}});
         await overrideRepo.delete({entity: {id: planId}});
-        await stayRepo.delete({entity: {id: planId}});
+        await stayRepo.delete({entity: {id: planId},
+            ...(stayReplacementThrough === undefined ? {} : {stayDays: LessThanOrEqual(stayReplacementThrough)})});
 
         if (Object.keys(planPatch).length) {
             await planRepo.update({id: planId}, planPatch);
         }
 
-        // Only nonempty validated sets allocate replacement records. Empty sets
-        // retain the deletions above rather than resurrecting previous entries.
+        // Empty active sets retain their deletion, while saved durations outside
+        // the supplied replacement scope remain available for a later expansion.
         if (roleRequirements.length) {
             const roleRows = roleRequirements.map((req) =>
                 roleRepo.create({

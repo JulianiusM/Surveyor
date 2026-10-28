@@ -20,10 +20,9 @@ import type {
     ShiftSlot, ShiftParticipant, ShiftParticipantGroup, ShiftRequirementParticipantResult,
     ShiftRequirementComputationResult, ParticipantRequirementSummary, RequirementCapacitySummary,
     BaselineRequirementDiagnostics, BaselineRequirementComputationResult, RequirementCapacitySlot,
-    RequirementAnalysisInput, RequirementAnalysisResult, HypotheticalRoleCapacity, HypotheticalRoleMatch,
+    RequirementAnalysisInput, RequirementAnalysisResult,
     HypotheticalRoleCoverageResult, RequirementPlanInput, BaselineSlotInput,
 } from "../../types/ActivityRequirementTypes";
-import {addCivilDays} from '../lib/civilDate';
 
 interface DaysWindow {
     start: string;
@@ -35,19 +34,12 @@ interface DaysWindow {
  * Reversed intervals contribute no days; stepping retains its existing invalid-date failure. */
 export function countInclusiveDays(start: string, end: string): number {
     if (start > end) return 0;
-    // Advance calendar dates in UTC so a local daylight-saving transition cannot
-    // add or remove a day from the attendance window.
-    let cursor = start;
-    let days = 0;
-    while (cursor <= end) {
-        days += 1;
-        // Preserve the primitive's RangeError even for an equal invalid endpoint,
-        // then stop before comparing an extended-year key with four-digit dates.
-        const nextDay = addCivilDays(cursor, 1);
-        if (cursor === end) break;
-        cursor = nextDay;
-    }
-    return days;
+    // Civil UTC coordinates avoid DST and years-below-100 constructor behavior.
+    // Constant arithmetic also makes admission of a large saved range inexpensive.
+    const first = new Date(start + 'T00:00:00Z').getTime();
+    const last = new Date(end + 'T00:00:00Z').getTime();
+    if (!Number.isFinite(first) || !Number.isFinite(last)) throw new RangeError('Invalid time value');
+    return Math.floor((last - first) / 86_400_000) + 1;
 }
 
 export function clampAttendanceWindow(planStart: string, planEnd: string, arrival?: string | null, departure?: string | null): DaysWindow | null {

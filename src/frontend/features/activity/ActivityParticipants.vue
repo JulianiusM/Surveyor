@@ -9,8 +9,8 @@ import ActionButton from '../../components/ActionButton.vue';
 // Search/filter are local presentation only. The server has already admitted
 // every participant field, requirement target, role and attendance window.
 const props = withDefaults(defineProps<{participants: components['schemas']['ActivityParticipant'][]; assignmentMode: 'FREE' | 'REQUIRED';
-    id?: string; heading?: boolean; localizeAttendance?: boolean}>(),
-{id: 'participant-status-overview', heading: true, localizeAttendance: false});
+    id?: string; heading?: boolean; localizeAttendance?: boolean; requirementsAvailable?: boolean}>(),
+{id: 'participant-status-overview', heading: true, localizeAttendance: false, requirementsAvailable: true});
 const {messages} = useFrontend();
 const search = ref('');
 const filter = ref('all');
@@ -21,6 +21,7 @@ const filters: {value: string; label: FrontendPlainMessageKey; color: string}[] 
     {value: 'no-requirement', label: 'activity.noMinimum', color: 'info'},
 ];
 function state(person: components['schemas']['ActivityParticipant']): string {
+    if (!props.requirementsAvailable) return 'unavailable';
     return person.requiredShifts <= 0 ? 'no-requirement' : person.remainingShifts <= 0 ? 'complete'
         : person.assignedShifts <= 0 ? 'unstarted' : 'needs-more';
 }
@@ -93,7 +94,7 @@ function attendance(person: components['schemas']['ActivityParticipant']): strin
                     role="group"
                     :aria-label="messages.t('activity.participantFilters')">
                     <ActionButton
-                        v-for="option in filters"
+                        v-for="option in filters.filter(option => requirementsAvailable || ['all', 'assigned', 'unassigned'].includes(option.value))"
                         :key="option.value"
                         type="button"
                         :variant="'outline-' + option.color"
@@ -104,7 +105,7 @@ function attendance(person: components['schemas']['ActivityParticipant']): strin
             </div>
             <div class="d-flex flex-wrap gap-1 participant-status-stats" data-participant-summary-stats>
                 <span class="badge bg-light text-dark">{{ messages.t('activity.countTotal', {count: participants.length}) }}</span>
-                <template v-if="assignmentMode === 'REQUIRED'">
+                <template v-if="requirementsAvailable && assignmentMode === 'REQUIRED'">
                     <span class="badge bg-danger text-white">{{ messages.t('activity.countNotStarted', {count: countState('unstarted')}) }}</span>
                     <span class="badge bg-warning text-dark">{{ messages.t('activity.countNeedsSlots', {count: countState('needs-more')}) }}</span>
                     <span class="badge bg-success text-white">{{ messages.t('activity.countComplete', {count: countState('complete')}) }}</span>
@@ -113,7 +114,7 @@ function attendance(person: components['schemas']['ActivityParticipant']): strin
                 <template v-else>
                     <span class="badge bg-success text-white">{{ messages.t('activity.countAssigned', {count: assigned}) }}</span>
                     <span class="badge bg-secondary text-white border border-light-subtle">{{ messages.t('activity.countUnassigned', {count: participants.length - assigned}) }}</span>
-                    <span class="badge bg-info text-white">{{ messages.t('activity.freeModeHint') }}</span>
+                    <span v-if="requirementsAvailable" class="badge bg-info text-white">{{ messages.t('activity.freeModeHint') }}</span>
                 </template>
             </div>
         </div>
@@ -149,8 +150,9 @@ function attendance(person: components['schemas']['ActivityParticipant']): strin
                     </div>
                     <div class="participant-status-cell">
                         <span class="participant-status-label">{{ messages.t('activity.requirement') }}</span>
+                        <span v-if="!requirementsAvailable" class="text-secondary">—</span>
                         <div
-                            v-if="person.assignmentMode === 'REQUIRED' || person.requiredShifts > 0"
+                            v-else-if="person.assignmentMode === 'REQUIRED' || person.requiredShifts > 0"
                             class="d-flex flex-wrap align-items-center gap-1">
                             <span v-if="person.source === 'unconfigured'" class="badge bg-danger text-white">{{ messages.t('activity.missingDurationRule') }}</span>
                             <template v-else>

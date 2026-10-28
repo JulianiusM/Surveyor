@@ -6,8 +6,8 @@ owner: identity feature maintainers
 status: current
 last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved registration/reset password requirements and standalone guest recovery reconciled with current source; other article topics retain their prior review scope
-source-anchors: tests/unit/email-rendering.spec.ts; src/backend/controller/userController.ts; src/backend/middleware/permissionMiddleware.ts; src/backend/modules/database/services/UserService.ts; src/backend/modules/database/entities/user/; src/backend/modules/oidc.ts; src/backend/modules/settings.ts; src/backend/modules/email.ts; src/backend/modules/lib/guestRegistrationNags.ts; tests/integration/authentication-workflows.spec.ts; src/backend/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/identity/; src/frontend/components/CommandFeedback.vue; src/common/locales/; src/frontend/
+verification-scope: approved shared name bounds, temporary identity-request waits and provider-account deletion completion reconciled with current forms and messages; prior password/recovery guidance retained
+source-anchors: tests/unit/email-rendering.spec.ts; src/backend/controller/userController.ts; src/backend/modules/identity.ts; contracts/api/v1/auth.yaml; src/backend/middleware/identityAdmission.ts; src/backend/middleware/permissionMiddleware.ts; src/backend/modules/database/services/UserService.ts; src/backend/modules/database/entities/user/; src/backend/modules/oidc.ts; src/backend/modules/settings.ts; src/backend/modules/email.ts; src/backend/modules/lib/guestRegistrationNags.ts; tests/integration/authentication-workflows.spec.ts; src/backend/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/identity/; src/frontend/components/CommandFeedback.vue; src/common/locales/; src/frontend/
 next-review: identity-or-authentication-visible-behavior-change
 -->
 
@@ -42,6 +42,10 @@ A Surveyor installation can offer one or both full-account sign-in methods:
 You can also join an invitation as a **guest**. A guest sets no password and has one guest profile. The guest receives a private access link and can use **Your overview** to return to items connected to that profile.
 
 The screens depend on how this Surveyor installation is configured. Selecting **Login** or **Register** may show local account fields, an organization sign-in button, both, or an immediate redirect to the organization’s sign-in page.
+
+Names you enter for local registration, guest entry or profile creation/renaming can have up to 50 Unicode code points.
+A letter and a separate combining accent count as two; a multi-part emoji can count as several. If a name is too long,
+shorten it in the form before submitting. Surveyor does not silently shorten these entered names.
 
 ## Create and activate a local account
 
@@ -78,6 +82,9 @@ Use these steps when Surveyor shows **Login using _provider name_** or redirects
 4. After the provider returns you to Surveyor, Surveyor opens **Your overview** with the active profile.
 
 The first successful provider sign-in creates an active Surveyor account and profile when none exists. When the provider supplies an email address already used by a Surveyor account, Surveyor can connect the provider identity to that account instead.
+
+For a newly created account, a long provider display name is shortened to the first 50 Unicode code points. Later
+provider sign-ins do not replace an existing account or profile name.
 
 The external provider manages this sign-in method’s credentials. Use the provider’s account-recovery process rather than Surveyor’s **Forgot password?** flow.
 
@@ -251,9 +258,18 @@ A guest account contains only one profile and does not use the multi-profile dea
 
 Deleting a full account closes the account and deactivates every profile attached to it. Deleting a guest account closes that guest identity and deactivates its one profile. The action cannot be undone through Surveyor. Existing participation can remain visible where it is needed for shared group records.
 
+Wait for the deletion confirmation. If it confirms deletion but warns that confirmation email or organization-provider
+sign-out could not be confirmed, the Surveyor deletion and local sign-out are still complete. Do not repeat deletion;
+sign out at the provider separately when needed. Follow the page's recovery guidance if the result remains unclear.
+
 Deleting a Surveyor account that uses organization sign-in does not delete the account at the external identity provider. Signing in again creates or connects a Surveyor account, but it does not restore profiles that were previously deactivated.
 
 ## Troubleshooting
+
+After repeated login, registration, guest-entry or recovery requests, Surveyor may temporarily ask you to wait. Wait
+until the indicated retry time, then deliberately try again; the request is not queued for later submission. Changing
+the username, email or password does not reset a shared login wait. Other people using the same network can also
+contribute to that temporary limit.
 
 ### I do not see local registration or password fields
 

@@ -5,6 +5,7 @@ import {committedSessionView, prepareAccountRegistrationReplies, prepareIdentity
 import {prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import settings from '../../../modules/settings';
+import {getIdentityAdmission} from '../../../middleware/identityAdmission';
 import type {ApiOperationId} from '../../../../types/ApiTransportTypes';
 import type {components} from '../../../../types/api/v1';
 
@@ -49,7 +50,7 @@ router.post('/profiles/current/deactivate', asyncHandler(async function deactiva
 /** Account deletion keeps provider handoff distinct from ordinary in-application navigation. */
 router.delete('/account', asyncHandler(async function deleteIdentityAccount(req, res) {
     await admit(req, res, 'deleteIdentityAccount');
-    /** Token-free deletion prepares this receipt before its database and Session writes commit. */
+    /** Prepare account/local-session completion before its database and Session writes commit. */
     function prepareDeletion(result: components['schemas']['ProfileWorkflowCompletion']) {
         return prepareValidatedJson(req, 'deleteIdentityAccount', 200, result, result.resultingContext);
     }
@@ -87,11 +88,28 @@ router.post('/auth/login', asyncHandler(async function loginIdentity(req, res) {
     function prepareLoginReply(staged: Request['session']) {
         return prepareIdentityReply(req, staged, 'loginIdentity');
     }
-    const committed = await userController.loginUserWithSession(req.body, req,
-        {frontend: true, next: req.body.next, context: req.apiActor!.context, prepareResult: prepareLoginReply});
-    req.session = committed.session;
-    sendPreparedJson(req, res, committed.result);
+    const credentialAdmission = await getIdentityAdmission().login(req, res, req.body.username);
+    try {
+        const committed = await userController.loginUserWithSession(req.body, req,
+            {frontend: true, next: req.body.next, context: req.apiActor!.context, prepareResult: prepareLoginReply,
+                credentialAdmission, beforeIdentityMail: identityMailAdmission(req, res)});
+        req.session = committed.session;
+        await credentialAdmission.succeeded();
+        sendPreparedJson(req, res, committed.result);
+    } catch (error) {
+        // Only the identity owner's existing invalid-credential cause spends a
+        // failure reservation. Operational and later completion faults do not.
+        await credentialAdmission.finish(error);
+        throw error;
+    } finally {
+        await credentialAdmission.finish();
+    }
 }));
+
+/** Bind shared mail admission to this request without retaining recipient data. */
+function identityMailAdmission(req: Request, res: Response): (recipient: string) => Promise<void> {
+    return recipient => getIdentityAdmission().mail(req, res, recipient);
+}
 
 /** Ordinary logout prepares its anonymous receipt before commit; provider sessions retain their existing owner. */
 router.post('/auth/logout', asyncHandler(/** Admit the captured logout command,
@@ -125,6 +143,8 @@ async function logoutIdentity(req, res) {
 router.post('/auth/register', asyncHandler(async function registerAccount(req, res) {
     await admit(req, res, 'registerAccount');
     requireLocalLogin();
+    await getIdentityAdmission().signup(req, res);
+    await getIdentityAdmission().mail(req, res, req.body.email);
 
     /** Bind the request's transport metadata to precommit signup confirmation only. */
     function prepareSignupReply() {
@@ -146,7 +166,8 @@ router.post('/auth/forgot-password', asyncHandler(async function requestPassword
         return prepareValidatedJson(req, 'requestPasswordReset', 200, {changed: true});
     }
     const committed = await userController.requestPasswordResetWithSession(req.body.username, req,
-        {frontend: true, next: req.body.next, context: req.apiActor!.context, prepareResult: prepareRecoveryReply});
+        {frontend: true, next: req.body.next, context: req.apiActor!.context, prepareResult: prepareRecoveryReply,
+            beforeIdentityMail: identityMailAdmission(req, res)});
     sendPreparedJson(req, res, committed.result);
 }));
 
@@ -203,12 +224,14 @@ router.post('/auth/guest-login', asyncHandler(async function loginGuestIdentity(
 
 router.post('/auth/guest-recovery', asyncHandler(async function recoverGuestIdentity(req, res) {
     await admit(req, res, 'recoverGuestIdentity');
-    await userController.recoverGuestAccount(req.body.email.trim().toLowerCase(), {frontend: true, next: req.body.next});
+    await userController.recoverGuestAccount(req.body.email.trim().toLowerCase(),
+        {frontend: true, next: req.body.next, beforeIdentityMail: identityMailAdmission(req, res)});
     sendValidatedJson(req, res, 'recoverGuestIdentity', 200, {changed: true});
 }));
 
 router.post('/auth/guest-email-exists', asyncHandler(async function findGuestEmail(req, res) {
     await admit(req, res, 'findGuestEmail');
+    await getIdentityAdmission().guestLookup(req, res);
     sendValidatedJson(req, res, 'findGuestEmail', 200, {exists: await userController.hasGuestAccountForEmail(req.body.email.trim().toLowerCase())});
 }));
 

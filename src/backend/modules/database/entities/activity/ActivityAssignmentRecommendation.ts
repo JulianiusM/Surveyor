@@ -39,6 +39,14 @@ export class ActivityAssignmentRecommendation extends DefaultUuidEntityItemAssig
     @Column({name: "is_manual", type: "boolean", default: false})
     manual!: boolean;
 
+    /** Existing rows have no reviewed pairing intent; reciprocal endpoints cannot backfill it. */
+    @Column({name: 'pairing_known', type: 'boolean', default: false})
+    pairingKnown!: boolean;
+
+    /** Exact reviewed group identity, or null for an explicitly independent operation. */
+    @Column({type: 'varchar', name: 'swap_group', length: 128, nullable: true, charset: 'utf8mb4', collation: 'utf8mb4_bin'})
+    swapGroup?: string | null;
+
     @Column({name: "is_hidden", type: "boolean", default: false})
     hidden!: boolean;
 

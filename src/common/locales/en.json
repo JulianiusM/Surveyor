@@ -635,7 +635,11 @@
           "closestBaseline_other": "The closest integer baseline differs from capacity by {{count}} shifts.",
           "exactBaseline": "The rounded duration table reaches exact capacity.",
           "fixedBaseline": "Fixed role and personal requirements already consume the available capacity.",
-          "noBaselineParticipants": "No participant remains whose requirement can be changed by the stay-duration baseline."
+          "noBaselineParticipants": "No participant remains whose requirement can be changed by the stay-duration baseline.",
+          "oversized": "Requirements are read-only while this plan exceeds {{days}} days. Shorten its date range to edit or calculate requirements; saved values remain intact.",
+          "page": "Page",
+          "previousPage": "Previous page",
+          "nextPage": "Next page"
         },
         "recommendations": {
           "addShort": "+ Add",
@@ -703,7 +707,7 @@
           "moveName": "{{name}} — move from {{source}}",
           "swapName": "{{name}} — swap from {{source}}",
           "pairTitle": "Choose swap counterpart",
-          "pairHint": "Several saved moves run between these slots. Choose the move that belongs to this swap before changing either participant's review.",
+          "pairHint": "Choose the intended swap partner, or mark this move as independent. Opposite slot directions do not prove a swap.",
           "pairCounterpart": "Counterpart",
           "pairChoose": "Choose a counterpart",
           "pairConfirm": "Use selected counterpart",
@@ -720,7 +724,8 @@
           "max": "max",
           "chooseSource": "Choose the source assignment...",
           "chooseSwap": "Choose the participant to swap...",
-          "swapNeedsSource": "A swap needs an assignment without named roles in this slot."
+          "swapNeedsSource": "A swap needs an assignment without named roles in this slot.",
+          "independent": "Independent move (no swap partner)"
         },
         "slotIdLabel": "slot {{id}}",
         "manageRolesFor": "Manage role assignments – {{slot}}",
@@ -864,8 +869,13 @@
         "noParticipants": "No participants yet. Assignment and attendance coverage will appear here.",
         "noParticipantMatches": "No participants match the current search and filter.",
         "reviewUnknownItem": "The new slot, role or text field may already exist. Review the current plan before creating it again.",
-        "confirmUnknownReviewed": "Have you checked the plan for the result before creating anything again?"
-},
+        "confirmUnknownReviewed": "Have you checked the plan for the result before creating anything again?",
+        "durationLimit": "Choose a duration of at most {{days}} days.",
+        "calendarWindow": "Show window",
+        "previousWindow": "Previous window",
+        "nextWindow": "Next window",
+        "windowStart": "Window start"
+      },
         "event": {
         "create": "Create event",
         "createDocumentTitle": "Create Event | Surveyor",
@@ -1794,7 +1804,10 @@
         "invalidDeactivation": "Invalid profile deactivation verification",
         "invalidAccountDeletion": "Invalid account deletion verification",
         "invalidMigrationToken": "Invalid or mismatched token",
-        "workflowReload": "Open this page again to continue."
+        "workflowReload": "Open this page again to continue.",
+        "accountDeletedMailUnconfirmed": "Your account was deleted. Delivery of the confirmation email could not be confirmed.",
+        "accountDeletedProviderUnconfirmed": "Your account was deleted and you are signed out here. Sign-out at your sign-in provider could not be confirmed.",
+        "accountDeletedDeliveryUnconfirmed": "Your account was deleted and you are signed out here. Confirmation email delivery and sign-out at your sign-in provider could not be confirmed."
       },
       "landing": {
         "documentTitle": "Surveyor – Organize and coordinate group activities",
@@ -1902,7 +1915,7 @@
         "TOKEN_INVALID": "This link is invalid, expired, or already used.",
         "LOCAL_LOGIN_DISABLED": "Local login is not enabled.",
         "PAYLOAD_TOO_LARGE": "The submitted request is too large.",
-        "RATE_LIMITED": "Too many searches. Try again later.",
+        "RATE_LIMITED": "Too many requests. Try again later.",
         "AUTH_REQUIRED": "Log in to continue.",
         "FORBIDDEN": "You do not have permission for this action.",
         "CSRF_INVALID": "This request could not be verified. Reload before trying again.",
@@ -1968,7 +1981,10 @@
         "INVALID_JSON": "The request does not contain valid JSON.",
         "CLIENT_UPDATE_REQUIRED": "An update is available. Keep your changes open and refresh after reviewing them.",
         "WORKFLOW_OUTCOME_UNKNOWN": "The operation may have completed partly or fully. Review the current state before starting another operation.",
-        "INTERNAL_ERROR": "The request could not be completed. Try again later."
+        "INTERNAL_ERROR": "The request could not be completed. Try again later.",
+        "ACTIVITY_DURATION_LIMIT": "This activity plan exceeds the configured maximum duration.",
+        "ACTIVITY_REQUIREMENTS_OVERSIZED": "Shorten this activity plan before editing or calculating requirements. Saved values remain intact.",
+        "ACTIVITY_SWAP_PAIR_REQUIRED": "Choose a swap partner or mark this move as independent before applying these recommendations."
       }
     }
   },
@@ -2187,6 +2203,16 @@
     "validation.minLength": {"parameters": {"limit": "number"}},
     "validation.maximum": {"parameters": {"limit": "number"}},
     "validation.minimum": {"parameters": {"limit": "number"}},
-    "validation.minItems": {"parameters": {"limit": "number"}}
+    "validation.minItems": {"parameters": {"limit": "number"}},
+    "activity.durationLimit": {
+      "parameters": {
+        "days": "number"
+      }
+    },
+    "activity.requirements.oversized": {
+      "parameters": {
+        "days": "number"
+      }
+    }
   }
 }

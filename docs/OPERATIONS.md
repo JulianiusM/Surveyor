@@ -7,8 +7,8 @@ owner: application operators
 status: current
 last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: operator OIDC linking/rebinding decisions and upgrade checks reconciled with current settings; prior proof-retention and deployment guidance retained; no live-provider or deployment certification
-source-anchors: src/backend/modules/entityArchival.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/migrations/1789862400000-AddEntityArchival.ts; src/backend/migrations/1789689600000-AddInvoiceRetraction.ts; src/backend/migrations/1789603200000-AddOrganizerInvoices.ts; src/backend/migrations/1789516800000-AddInvoiceShareRounding.ts; src/backend/modules/invoice/settlementEmail.ts; src/backend/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/backend/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; src/backend/server.ts; src/backend/app.ts; src/backend/modules/settings.ts; src/backend/modules/database/dataSource.ts; src/backend/modules/invoice/retention.ts; src/backend/modules/database/services/EventInvoiceService.ts; src/backend/modules/lib/fileCommons.ts; src/backend/modules/lib/pdf.ts; src/backend/controller/helpController.ts; src/backend/controller/eventPoolController.ts; src/backend/modules/email.ts; src/backend/modules/oidc.ts; src/backend/modules/identity.ts; docs/UPGRADING.md; src/backend/modules/invoice/invoiceOperations.ts; src/backend/modules/invoice/calculation.ts; src/frontend/composables/command.ts; src/frontend/composables/feedback.ts; src/frontend/features/finance/
+verification-scope: approved precise access-log secret redaction, upload fault diagnostics and OIDC controls reconciled with current source; prior proof-retention and deployment guidance retained; no live-provider or deployment certification
+source-anchors: src/backend/modules/entityArchival.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/migrations/1789862400000-AddEntityArchival.ts; src/backend/migrations/1789689600000-AddInvoiceRetraction.ts; src/backend/migrations/1789603200000-AddOrganizerInvoices.ts; src/backend/migrations/1789516800000-AddInvoiceShareRounding.ts; src/backend/modules/invoice/settlementEmail.ts; src/backend/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/backend/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; src/backend/server.ts; src/backend/app.ts; src/backend/modules/lib/http.ts; src/backend/modules/api/transport.ts; src/backend/modules/api/problem.ts; src/backend/modules/settings.ts; src/backend/modules/database/dataSource.ts; src/backend/modules/invoice/retention.ts; src/backend/modules/database/services/EventInvoiceService.ts; src/backend/modules/lib/fileCommons.ts; src/backend/modules/lib/pdf.ts; src/backend/controller/helpController.ts; src/backend/controller/eventPoolController.ts; src/backend/modules/email.ts; src/backend/modules/oidc.ts; src/backend/modules/identity.ts; docs/UPGRADING.md; src/backend/modules/invoice/invoiceOperations.ts; src/backend/modules/invoice/calculation.ts; src/frontend/composables/command.ts; src/frontend/composables/feedback.ts; src/frontend/features/finance/
 next-review: release-layout-or-operational-procedure-change
 -->
 
@@ -313,9 +313,17 @@ Suggested probes:
 Surveyor writes startup, request, retention, archival, email, and error output to standard output/error. Under systemd, collect it
 from the journal or forward it to the normal centralized logging system.
 
-The request logger includes request paths. Account activation, password reset, invitations, and personal access can use
-tokens in paths. Restrict log access, redact tokens before exporting logs, and apply an approved retention period. Do
-not paste unredacted request URLs into tickets or public channels.
+The application request logger retains the existing method, URL, status, response length and timing. It replaces only
+known secret values with `[REDACTED]` in their original positions: guest-login, activation and password-reset path tokens;
+provider-callback code/state/token query values; password-reset query tokens; and Event registration-link tokens. The same
+projection inspects nested `next` and `returnTo` destinations. Route names, ordinary identifiers, harmless query values,
+field order, separators and encoding outside a secret remain diagnostic evidence, including on rejected or unmatched
+requests. Logging does not alter the actual request or remove whole queries.
+
+This protection covers the application access logger. Reverse proxies, collectors and earlier logs can still contain
+original URLs; verify their handling separately with synthetic links. Restrict log access and exports, and apply the
+approved retention/incident policy to existing material. The application does not rewrite or erase historical logs.
+Do not paste secret-bearing request URLs into tickets or public channels.
 
 Useful commands:
 
@@ -439,6 +447,11 @@ Invoice upload success confirms persistence and does not wait for confirmation e
 uncertain upload outcome, have them check **Your invoice history** before retrying. Investigate repeated slow uploads
 through proxy request limits, storage latency, application errors, and database connectivity. Review SMTP logs separately
 when a persisted invoice has no receipt email.
+Expected file-type or malformed multipart rejections remain client errors; an oversized upload receives HTTP 413.
+Storage/allocation faults receive a generic server error, with an `[api]` diagnostic containing the request correlation
+identifier and `UploadStorageError` category. Match that identifier when investigating infrastructure. Raw filesystem
+paths, uploaded contents and arbitrary parser details are not included in that bounded diagnostic. A server error does
+not prove that every upload-related effect failed; inspect saved state before deliberately retrying.
 After confirmed success, the participant form clears the completed invoice details and proof while retaining an
 eligible pool. Required invoice-history reads refresh in the same document. An uncertain outcome retains the draft
 and requires saved-history inspection and acknowledgement before another submission.

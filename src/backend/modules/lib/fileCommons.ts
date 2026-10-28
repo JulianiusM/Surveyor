@@ -20,7 +20,7 @@ import path from "node:path";
 import {v4 as uuidv4} from "uuid";
 import {EntityBase} from "../../../types/UserTypes";
 import type {ImageSwapReceipt, UploadFileAllocation} from '../../../types/UtilTypes';
-import {APIError} from "./errors";
+import {APIError, UploadRejectionError} from "./errors";
 import {isImageMimeType, uploadFileMedia} from '../../../common/lib/fileMedia';
 
 /** Configure the existing disk uploader with its reviewed media switches.
@@ -42,7 +42,7 @@ export function prepareFileUploader(dir: string, allowImg: boolean = true, allow
             // Reject the original extension before allocating a stored filename.
             const ext = path.extname(file.originalname).toLowerCase();
             if (!media.extensions.includes(ext)) {
-                return cb(new Error('Invalid file extension'), '');
+                return cb(new UploadRejectionError('Invalid file extension'), '');
             }
             const filename = `${Date.now()}-${uuidv4()}${ext}`;
             // A feature may reserve durable ownership before storage opens a stream.
@@ -66,7 +66,7 @@ export function prepareFileUploader(dir: string, allowImg: boolean = true, allow
             if (ok) {
                 cb(null, true);
             } else {
-                cb(new Error("File type not allowed"));
+                cb(new UploadRejectionError("File type not allowed"));
             }
         },
     });

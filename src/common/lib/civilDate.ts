@@ -1,4 +1,4 @@
-import type {CivilDateWeek} from '../../types/CivilDateTypes';
+import type {CivilDateWeek, CivilDateWindow} from '../../types/CivilDateTypes';
 
 /** Step an ISO calendar day in UTC for existing Event and Activity calculations.
  * Keep their historical ISO parsing and RangeError behavior; this primitive
@@ -62,4 +62,27 @@ export function civilDateWeeks(start: string, end: string): CivilDateWeek[] {
         monday.setUTCDate(monday.getUTCDate() + 7);
     }
     return weeks;
+}
+
+/** Select a bounded saved-calendar window using constant date arithmetic.
+ * The caller supplies the effective duration policy; this pure owner neither reads settings
+ * nor edits saved dates. Invalid requested starts fall back to the first saved day. */
+export function civilDateWindow(startDate: string, endDate: string, maxDurationDays: number,
+    requestedStart?: unknown): CivilDateWindow {
+    // UTC timestamps count civil days without allocating or walking the saved interval.
+    const start = parseCivilDate(startDate);
+    const finish = parseCivilDate(endDate);
+    if (!start || !finish || start > finish) throw new RangeError('Invalid calendar interval');
+    const oversized = (finish.getTime() - start.getTime()) / 86_400_000 + 1 > maxDurationDays;
+    if (!oversized) return {startDate, endDate, previous: null, next: null, oversized, maxDurationDays};
+
+    // Every oversized projection has at most 42 inclusive days. Clamp before
+    // enumeration so even a malicious century-wide saved range stays bounded.
+    const requested = typeof requestedStart === 'string' ? parseCivilDate(requestedStart) : null;
+    const selected = requested && requested >= start && requested <= finish ? requested : start;
+    const selectedEnd = new Date(Math.min(selected.getTime() + 41 * 86_400_000, finish.getTime()));
+    const previous = selected > start
+        ? civilDateKey(new Date(Math.max(start.getTime(), selected.getTime() - 42 * 86_400_000))) : null;
+    const next = selectedEnd < finish ? civilDateKey(new Date(selectedEnd.getTime() + 86_400_000)) : null;
+    return {startDate: civilDateKey(selected), endDate: civilDateKey(selectedEnd), previous, next, oversized, maxDurationDays};
 }

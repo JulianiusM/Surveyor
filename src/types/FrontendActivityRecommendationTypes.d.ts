@@ -27,7 +27,7 @@ export interface ActivityRecommendationRelationship {
 }
 
 export type ActivityRecommendationReviewAction = {kind: 'status'; status: 'PENDING' | 'APPROVED' | 'REJECTED'}
-    | {kind: 'remove'};
+    | {kind: 'remove'} | {kind: 'resolve'};
 
 /** A chooser retains intent/evidence only. No draft row changes before confirmation. */
 export interface ActivityRecommendationPairChoice {

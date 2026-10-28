@@ -43,6 +43,131 @@ afterAll(async () => {
     await closeIntegrationDatabase();
 });
 
+describe('configured Session destruction persistence', () => {
+    it('acknowledges committed soft deletion while retaining the stored row evidence', async () => {
+        const req = await atomicGuestRequest();
+        const repository = AppDataSource.getRepository(Session);
+        const before = await repository.findOneByOrFail({id: req.sessionID});
+        await new Promise<void>(function destroyStoredSession(resolve, reject) {
+            req.sessionStore.destroy(req.sessionID, function destroyed(error) {
+                if (error) reject(error); else resolve();
+            });
+        });
+        expect(await readStoredSession(req.sessionStore, req.sessionID)).toBeUndefined();
+        expect(await repository.findOneBy({id: req.sessionID})).toBeNull();
+        const retained = await repository.findOneOrFail({where: {id: req.sessionID}, withDeleted: true});
+        expect(retained.destroyedAt).toBeInstanceOf(Date);
+        expect(retained.json).toBe(before.json);
+        expect(retained.expiredAt).toBe(before.expiredAt);
+    });
+});
+
+describe.each(['direct', 'prepared'] as const)('shared guest-name bounds through %s creation', completion => {
+    it('rejects an overlong guest before either related row or Session changes', async () => {
+        const req = await atomicGuestRequest();
+        const before = JSON.stringify(req.session);
+        const guests = await AppDataSource.getRepository(Guest).count();
+        const profiles = await AppDataSource.getRepository(Profile).count();
+        const operation = completion === 'direct'
+            ? userController.registerGuest('😀'.repeat(51), undefined, req.session)
+            : userController.registerGuestWithSession('😀'.repeat(51), undefined, req, atomicGuestOptions(req));
+        await expect(operation).rejects.toMatchObject({code: 'VALIDATION_FAILED'});
+        expect(await AppDataSource.getRepository(Guest).count()).toBe(guests);
+        expect(await AppDataSource.getRepository(Profile).count()).toBe(profiles);
+        expect(JSON.stringify(req.session)).toBe(before);
+    });
+
+    it('persists fifty supplementary code points exactly in both guest and profile', async () => {
+        const req = await atomicGuestRequest();
+        const name = '😀'.repeat(50);
+        if (completion === 'direct') await userController.registerGuest(name, undefined, req.session);
+        else {
+            const committed = await userController.registerGuestWithSession(name, undefined, req, atomicGuestOptions(req));
+            req.session = committed.session;
+        }
+        const guest = (await userService.getGuestInternal(req.session.auth!.guest!.id))!;
+        expect(guest.username).toBe(name);
+        expect(guest.profile.name).toBe(name);
+    });
+});
+
+describe('shared profile-name bounds', () => {
+    it('rejects names before profile/default writes and preserves exact accepted code points', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const original = (await userService.getProfileById(req.session.profile!.id))!;
+        const profiles = await AppDataSource.getRepository(Profile).count();
+        const before = JSON.stringify(req.session);
+        await expect(userController.createProfile({name: '😀'.repeat(51)}, req.session.auth!.user!.id))
+            .rejects.toMatchObject({code: 'VALIDATION_FAILED'});
+        await expect(userController.updateProfile({name: '😀'.repeat(51), isDefault: false}, req.session))
+            .rejects.toMatchObject({code: 'VALIDATION_FAILED'});
+        expect(await AppDataSource.getRepository(Profile).count()).toBe(profiles);
+        expect(await userService.getProfileById(original.id)).toMatchObject({name: original.name,
+            defaultForOwner: original.defaultForOwner});
+        expect(JSON.stringify(req.session)).toBe(before);
+
+        const name = '😀'.repeat(48) + 'e\u0301';
+        const created = await userController.createProfile({name}, req.session.auth!.user!.id);
+        await userController.updateProfile({name, isDefault: false}, req.session);
+        expect((await userService.getProfileById(created.id))!.name).toBe(name);
+        expect((await userService.getProfileById(original.id))!.name).toBe(name);
+        expect(req.session.profile!.name).toBe(name);
+    });
+});
+
+describe('exact provider identity and bounded display provisioning', () => {
+    it('shares exact issuer/subject lookup across full and private projected callers', async () => {
+        const account = await registerLocalAccount('oidc-byte-exact');
+        const issuer = 'https://identity.example/CaseSensitive';
+        const subject = `CaseSensitiveSubject-${randomUUID()}`;
+        await userService.linkUserToOidc(account.id, issuer, subject);
+        const full = await userService.findOidcAccount(issuer, subject);
+        const projected = await userService.getUserByOidc(issuer, subject);
+        expect(full).toMatchObject({id: account.id, oidcIssuer: issuer, oidcSub: subject});
+        expect(full!.password).toEqual(expect.any(String));
+        expect(projected).toMatchObject({id: full!.id, name: full!.name, username: full!.username,
+            email: full!.email, isActive: full!.isActive});
+        // TypeORM constructs User class fields even when SQL did not select them.
+        // Undefined credentials must stay absent from the serialized private projection.
+        expect(projected!.password).toBeUndefined();
+        const serializedProjection = JSON.parse(JSON.stringify(projected)) as Record<string, unknown>;
+        expect(Object.keys(serializedProjection).sort()).toEqual(['email', 'id', 'isActive', 'name', 'profiles', 'username']);
+        expect(projected!.profiles.map(profile => profile.id)).toEqual(full!.profiles.map(profile => profile.id));
+        for (const [differentIssuer, differentSubject] of [
+            [issuer.toLowerCase(), subject], [issuer, subject.toLowerCase()], [issuer, subject + ' '],
+        ]) {
+            expect(await userService.findOidcAccount(differentIssuer, differentSubject)).toBeNull();
+            expect(await userService.getUserByOidc(differentIssuer, differentSubject)).toBeNull();
+        }
+        const configuration = vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value,
+            oidcLinkByEmail: false, oidcAllowEmailRebinding: false});
+        try {
+            const distinct = await findOrCreateUserFromOidc(issuer, {sub: subject.toLowerCase(),
+                preferred_username: `distinct-${randomUUID()}`, name: 'Distinct identity'});
+            expect(distinct.id).not.toBe(account.id);
+            expect(distinct.oidcSub).toBe(subject.toLowerCase());
+        } finally { configuration.mockRestore(); }
+    });
+
+    it('projects a new provider display once and never changes an existing exact account name', async () => {
+        const configuration = vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value,
+            oidcLinkByEmail: false, oidcAllowEmailRebinding: false});
+        const issuer = `https://identity.example/${randomUUID()}`;
+        const subject = `CaseSubject-${randomUUID()}`;
+        try {
+            const user = await findOrCreateUserFromOidc(issuer, {sub: subject,
+                preferred_username: `provider-${randomUUID()}`, name: '😀'.repeat(51)});
+            expect(user.name).toBe('😀'.repeat(50));
+            expect(user.profiles[0].name).toBe(user.name);
+            expect(user.oidcIssuer).toBe(issuer);
+            expect(user.oidcSub).toBe(subject);
+            const again = await findOrCreateUserFromOidc(issuer, {sub: subject, name: 'Changed upstream name'});
+            expect(again.id).toBe(user.id);
+            expect(again.name).toBe(user.name);
+        } finally { configuration.mockRestore(); }
+    });
+});
+
 describe.each(['direct', 'prepared'] as const)('local registration name bounds through %s completion', completion => {
     it('rejects either overlength name before account/profile writes or mail preparation', async () => {
         const req = await initialIdentityRequest();
@@ -1760,6 +1885,17 @@ describe('authentication user stories', () => {
 });
 
 
+/** Retain real recipient/template preparation while replacing only SMTP delivery. */
+function deletionDelivery(accepted = true) {
+    const render = emailOwner.prepareDeletionEmail;
+    const deliver = vi.fn().mockResolvedValue(accepted);
+    const prepared = vi.spyOn(emailOwner, 'prepareDeletionEmail').mockImplementation((...args) => {
+        render(...args);
+        return {deliver};
+    });
+    return {prepared, deliver};
+}
+
 describe('approved local identity deletion and provider outcome', () => {
     it('preserves deactivation partial failure without introducing a whole-operation transaction', async () => {
         const {req} = await ordinaryLogoutFixture('account');
@@ -1775,8 +1911,12 @@ describe('approved local identity deletion and provider outcome', () => {
         } finally { delivery.mockRestore(); }
     });
 
-    it('leaves a token-free account and Session intact when mail preparation fails', async () => {
+    it.each([false, true])('leaves account and Session intact when mail preparation fails (provider=%s)', async provider => {
         const {req} = await ordinaryLogoutFixture('account');
+        if (provider) {
+            req.session.tokens = {access_token: 'synthetic-private-access', token_type: 'bearer'};
+            await persistSession(req.session);
+        }
         const original = req.session;
         const user = original.auth!.user!;
         const prepared = vi.spyOn(emailOwner, 'prepareDeletionEmail').mockImplementationOnce(() => { throw new Error('Controlled closure rendering failure'); });
@@ -1807,8 +1947,12 @@ describe('approved local identity deletion and provider outcome', () => {
             frontendContext: original.frontendContext, frontendCsrfToken: original.frontendCsrfToken});
     });
 
-    it('rolls back deletion and dependent database effects when the real Session write fails', async () => {
+    it.each([false, true])('rolls back deletion and dependents when the real Session write fails (provider=%s)', async provider => {
         const {req} = await ordinaryLogoutFixture('account');
+        if (provider) {
+            req.session.tokens = {access_token: 'synthetic-private-access', token_type: 'bearer'};
+            await persistSession(req.session);
+        }
         const original = req.session;
         const user = original.auth!.user!;
         // Inject a storage failure only in this suite's disposable schema. The
@@ -1907,7 +2051,7 @@ describe('approved local identity deletion and provider outcome', () => {
         } finally { discovery.mockRestore(); configuration.mockRestore(); }
     });
 
-    it('retains provider-bearing deletion uncertainty rather than applying token-free finality', async () => {
+    it('confirms provider-bearing deletion with a separate provider failure warning', async () => {
         const {req} = await ordinaryLogoutFixture('account');
         const user = req.session.auth!.user!;
         req.session.tokens = {} as NonNullable<Request['session']['tokens']>;
@@ -1917,14 +2061,60 @@ describe('approved local identity deletion and provider outcome', () => {
         const discovery = vi.spyOn(openid, 'discovery').mockResolvedValue({serverMetadata() {
             throw new Error('Controlled provider-bearing deletion failure');
         }} as unknown as openid.Configuration);
-        const delivery = vi.spyOn(email, 'sendDeletionEmail').mockResolvedValue();
+        const delivery = deletionDelivery();
         try {
             await oidc.initOIDC();
             await expect(userController.deleteIdentityAccount(req, {username: user.username!}))
-                .rejects.toMatchObject({code: 'WORKFLOW_OUTCOME_UNKNOWN'});
+                .resolves.toMatchObject({destination: '/', redirect: null,
+                    notice: {kind: 'info', messageKey: 'profile.accountDeletedProviderUnconfirmed'}});
             expect(await userService.getUserById(user.id)).toBeNull();
             expect((await readStoredSession(req.sessionStore, req.sessionID))?.auth).toBeUndefined();
-        } finally { discovery.mockRestore(); configuration.mockRestore(); delivery.mockRestore(); }
+            expect(delivery.deliver).toHaveBeenCalledOnce();
+        } finally { discovery.mockRestore(); configuration.mockRestore(); delivery.prepared.mockRestore(); }
+    });
+
+    it('keeps a prepared local confirmation when only postcommit provider URL serialization fails', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const user = req.session.auth!.user!;
+        req.session.tokens = {id_token: 'synthetic-private-hint', access_token: 'synthetic-access', token_type: 'bearer'};
+        await persistSession(req.session);
+        const delivery = deletionDelivery();
+        const provider = vi.spyOn(oidc, 'prepareProviderLogout').mockImplementation(async () => {
+            expect(await userService.getUserById(user.id)).toBeNull();
+            expect((await readStoredSession(req.sessionStore, req.sessionID))?.auth).toBeUndefined();
+            return {redirect: 'https://identity.example/logout'};
+        });
+        try {
+            function prepareCompletion(completion: components['schemas']['ProfileWorkflowCompletion']) {
+                if (completion.redirect) throw new Error('Controlled external URL serialization failure');
+                return prepareValidatedJson(req, 'deleteIdentityAccount', 200, completion, completion.resultingContext);
+            }
+            const reply = await userController.deleteIdentityAccount(req, {username: user.username!}, prepareCompletion);
+            expect(JSON.parse(reply.json)).toMatchObject({redirect: null,
+                notice: {kind: 'info', messageKey: 'profile.accountDeletedProviderUnconfirmed'}});
+            expect(provider).toHaveBeenCalledOnce();
+            expect(delivery.deliver).toHaveBeenCalledOnce();
+            expect(req.session.tokens).toBeUndefined();
+            expect(JSON.stringify(reply)).not.toContain('synthetic-private-hint');
+        } finally { provider.mockRestore(); delivery.prepared.mockRestore(); }
+    });
+
+    it('keeps provider-bearing deletion confirmed and local when mail delivery fails', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const user = req.session.auth!.user!;
+        req.session.tokens = {access_token: 'synthetic-private-access', token_type: 'bearer'};
+        await persistSession(req.session);
+        const delivery = deletionDelivery(false);
+        const provider = vi.spyOn(oidc, 'prepareProviderLogout');
+        try {
+            await expect(userController.deleteIdentityAccount(req, {username: user.username!}))
+                .resolves.toMatchObject({redirect: null,
+                    notice: {kind: 'info', messageKey: 'profile.accountDeletedDeliveryUnconfirmed'}});
+            expect(provider).not.toHaveBeenCalled();
+            expect(delivery.deliver).toHaveBeenCalledOnce();
+            expect(await userService.getUserById(user.id)).toBeNull();
+            expect((await readStoredSession(req.sessionStore, req.sessionID))?.tokens).toBeUndefined();
+        } finally { provider.mockRestore(); delivery.prepared.mockRestore(); }
     });
 
     it('preserves a successful provider handoff after confirmed local sign-out', async () => {

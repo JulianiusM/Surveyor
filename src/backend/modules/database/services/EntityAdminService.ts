@@ -24,6 +24,7 @@ import {EntityPermissions} from "../entities/permissions/EntityPermissions";
 import {EventRegistration} from "../entities/event/EventRegistration";
 import {Event} from "../entities/event/Event";
 import {PackingList} from "../entities/packing/PackingList";
+import {lockEvent} from './EventService';
 
 /**
  * Share overview membership between full discovery and a single-target visibility write.
@@ -149,8 +150,8 @@ export function addEntityPermissionCandidates<T extends ObjectLiteral>(query: Se
         permissionProfileId: scope.profileId, permissionMask: scope.requiredMask, permissionAudiences: scope.audiences});
 }
 
-/** Insert the controller-approved grant and creator attribution. Packing's
- * nontransactional callers first coordinate with its root; an active supplied
+/** Insert the controller-approved grant and creator attribution. Root
+ * coordination is shared by Packing and Event writers; an active supplied
  * manager is reused rather than starting a separate ACL transaction. */
 export async function addAdmin(
     entityType: CombEntityType,
@@ -160,15 +161,16 @@ export async function addAdmin(
     createdBy?: number,
     manager: EntityManager = AppDataSource.manager
 ): Promise<void> {
-    if (entityType === 'packing' && !manager.queryRunner?.isTransactionActive) {
-        return withPackingAclWrite(entityId, transaction => addAdmin(entityType, entityId, profileId, perms, createdBy, transaction));
+    /** Persist the unchanged grant only after its owning root coordination. */
+    async function persistGrant(transaction: EntityManager): Promise<void> {
+        const repo = transaction.getRepository(ACL);
+        await repo.save(repo.create({entityType, entityId, profile: {id: profileId}, perms, createdBy: createdBy ?? null}));
     }
-    const repo = manager.getRepository(ACL);
-    await repo.save(repo.create({entityType, entityId, profile: {id: profileId}, perms, createdBy: createdBy ?? null}));
+    return withEntityAclWrite(entityType, entityId, manager, persistGrant);
 }
 
 /** Upsert one grant through the established entity/profile unique key.
- * Packing uses the same root coordination as add/update/remove; this DBAL does
+ * Packing and Event use shared root coordination; this DBAL does
  * not interpret fields, decide authority or convert numeric masks. */
 export async function upsertAdmin(
     entityType: CombEntityType,
@@ -177,25 +179,26 @@ export async function upsertAdmin(
     perms: number,
     manager: EntityManager = AppDataSource.manager
 ): Promise<void> {
-    if (entityType === 'packing' && !manager.queryRunner?.isTransactionActive) {
-        return withPackingAclWrite(entityId, transaction => upsertAdmin(entityType, entityId, profileId, perms, transaction));
+    /** Preserve the existing unique-key upsert on the coordinated connection. */
+    async function persistGrant(transaction: EntityManager): Promise<void> {
+        const repo = transaction.getRepository(ACL);
+        await repo.upsert(
+            repo.create({entityType, entityId, profile: {id: profileId}, perms}),
+            ['entityType', 'entityId', 'profile']
+        );
     }
-    const repo = manager.getRepository(ACL);
-    await repo.upsert(
-        repo.create({entityType, entityId, profile: {id: profileId}, perms}),
-        ['entityType', 'entityId', 'profile']
-    );
+    return withEntityAclWrite(entityType, entityId, manager, persistGrant);
 }
 
-/** Remove only the selected grant. Packing's existing writers coordinate
+/** Remove only the selected grant. Packing and Event writers coordinate
  * against the root so an authorized command's ACL evidence survives to commit;
  * target existence and direct/versioned diagnostics remain controller-owned. */
 export async function removeAdmin(entityType: CombEntityType, entityId: string, profileId: string, manager: EntityManager = AppDataSource.manager): Promise<void> {
-    if (entityType === 'packing' && !manager.queryRunner?.isTransactionActive) {
-        return withPackingAclWrite(entityId, transaction => removeAdmin(entityType, entityId, profileId, transaction));
+    /** Remove only this supplied grant after any owning root wait completes. */
+    async function deleteGrant(transaction: EntityManager): Promise<void> {
+        await transaction.getRepository(ACL).delete({entityType, entityId, profile: {id: profileId}});
     }
-    const repo = manager.getRepository(ACL);
-    await repo.delete({entityType, entityId, profile: {id: profileId}});
+    return withEntityAclWrite(entityType, entityId, manager, deleteGrant);
 }
 
 /** Load roster evidence through the caller's manager for an admitted setup
@@ -221,7 +224,7 @@ export async function getAdminGrant(entityType: CombEntityType, entityId: string
 }
 
 /** Store the reviewed grant mask, including zero, without changing other rows.
- * Packing callers reuse or acquire the same root coordination as other ACL writes. */
+ * Packing and Event reuse the same root coordination as other ACL writes. */
 export async function updateAdminPerms(
     entityType: CombEntityType,
     entityId: string,
@@ -229,10 +232,11 @@ export async function updateAdminPerms(
     perms: number,
     manager: EntityManager = AppDataSource.manager
 ): Promise<void> {
-    if (entityType === 'packing' && !manager.queryRunner?.isTransactionActive) {
-        return withPackingAclWrite(entityId, transaction => updateAdminPerms(entityType, entityId, profileId, perms, transaction));
+    /** Retain zero masks and the existing matching-row update after coordination. */
+    async function updateGrant(transaction: EntityManager): Promise<void> {
+        await transaction.getRepository(ACL).update({entityType, entityId, profile: {id: profileId}}, {perms});
     }
-    await manager.getRepository(ACL).update({entityType, entityId, profile: {id: profileId}}, {perms});
+    return withEntityAclWrite(entityType, entityId, manager, updateGrant);
 }
 
 export async function isAdmin(entityType: CombEntityType, entityId: string, profileId: string) {
@@ -260,8 +264,9 @@ export async function getDefaultPerms(entityType: CombEntityType, entityId: stri
  * Upsert default permissions (bitmask) for the given entity and audience(s).
  * - Only audiences provided in `opts` are touched.
  * - To clear an audience, pass mask 0 for that audience.
- * Reuse a supplied active transaction; Packing callers outside one first hold its
- * root coordination lock. Skip unchanged rows so a no-op does not rewrite metadata.
+ * Reuse a supplied active transaction; Packing retains its existing root lock,
+ * and every Event writer acquires the Finance fence before comparing or writing.
+ * Skip unchanged rows so a no-op does not rewrite metadata.
  */
 export async function updatePerms(
     entityType: CombEntityType,
@@ -274,36 +279,37 @@ export async function updatePerms(
     },
     manager: EntityManager = AppDataSource.manager,
 ): Promise<void> {
-    if (entityType === 'packing' && !manager.queryRunner?.isTransactionActive) {
-        return withPackingAclWrite(entityId, transaction => updatePerms(entityType, entityId, opts, transaction));
+    /** Compare and upsert only supplied changed audiences under one root fence. */
+    async function persistDefaults(transaction: EntityManager): Promise<void> {
+        const repo = transaction.getRepository(EntityPermissions);
+
+        const rows: Array<{ entityType: CombEntityType; entityId: string; audience: Audience; perms: number }> = [];
+
+        const push = (aud: Audience, mask: number | undefined) => {
+            if (mask === undefined) return;                  // untouched if not provided
+            rows.push({entityType, entityId, audience: aud, perms: mask});
+        };
+
+        push('guest', opts.guest);
+        push('participant', opts.participant);
+        push('authenticated', opts.authenticated);
+        push('public', opts.public);
+
+        if (!rows.length) return;
+
+        // Compare current persisted rows inside the same manager before upserting.
+        // This is persistence evidence, not a permission or body-validation decision.
+        const current = await getDefaultPerms(entityType, entityId, transaction);
+        const changedRows = rows.filter((row) => current[row.audience] !== row.perms);
+        if (!changedRows.length) return;
+
+        await repo.upsert(changedRows, {
+            // matches UNIQUE(entity_type, entity_id, audience)
+            conflictPaths: ['entityType', 'entityId', 'audience'],
+            skipUpdateIfNoValuesChanged: true,
+        });
     }
-    const repo = manager.getRepository(EntityPermissions);
-
-    const rows: Array<{ entityType: CombEntityType; entityId: string; audience: Audience; perms: number }> = [];
-
-    const push = (aud: Audience, mask: number | undefined) => {
-        if (mask === undefined) return;                  // untouched if not provided
-        rows.push({entityType, entityId, audience: aud, perms: mask});
-    };
-
-    push('guest', opts.guest);
-    push('participant', opts.participant);
-    push('authenticated', opts.authenticated);
-    push('public', opts.public);
-
-    if (!rows.length) return;
-
-    // Compare current persisted rows inside the same manager before upserting.
-    // This is persistence evidence, not a permission or body-validation decision.
-    const current = await getDefaultPerms(entityType, entityId, manager);
-    const changedRows = rows.filter((row) => current[row.audience] !== row.perms);
-    if (!changedRows.length) return;
-
-    await repo.upsert(changedRows, {
-        // matches UNIQUE(entity_type, entity_id, audience)
-        conflictPaths: ['entityType', 'entityId', 'audience'],
-        skipUpdateIfNoValuesChanged: true,
-    });
+    return withEntityAclWrite(entityType, entityId, manager, persistDefaults);
 }
 
 /** Read entity identifiers whose stored direct grant contains all requested bits. */
@@ -320,17 +326,24 @@ export async function getIds(entityType: CombEntityType, profileId: string, mask
 }
 
 /**
- * Packing's polymorphic ACL/default rows have no owning-root foreign-key lock.
- * Coordinate only these existing writers with the v1 root transaction so a grant or
- * reviewed settings value cannot change between authorization/comparison and commit.
- * The DBAL chooses no permission policy and still permits the original persisted inputs.
+ * Polymorphic ACL/default rows have no owning-root foreign-key lock. Packing
+ * retains its original root coordination; Event writers additionally share the
+ * Finance authorization fence, including callers with an already active manager.
+ * Other entity writers retain their previous transaction and persistence scope.
  */
-async function withPackingAclWrite<T>(id: string, write: (manager: EntityManager) => Promise<T>): Promise<T> {
-    return AppDataSource.transaction(async function persistAcl(manager) {
-        await manager.getRepository(PackingList).findOne({where: {id}, lock: {mode: 'pessimistic_write'}});
+async function withEntityAclWrite<T>(type: CombEntityType, id: string, manager: EntityManager,
+    write: (manager: EntityManager) => Promise<T>): Promise<T> {
+    const active = Boolean(manager.queryRunner?.isTransactionActive);
+    if (type !== 'event' && (type !== 'packing' || active)) return write(manager);
 
-        // The callback uses this manager after the root wait. Missing-root policy
-        // remains with callers; polymorphic rows retain their original DB semantics.
-        return write(manager);
-    });
+    /** Retain the correct root until the same connection completes its ACL write. */
+    async function persistAcl(transaction: EntityManager): Promise<T> {
+        if (type === 'event') await lockEvent(transaction, id);
+        else await transaction.getRepository(PackingList).findOne({where: {id}, lock: {mode: 'pessimistic_write'}});
+
+        // A supplied active Event manager must acquire this fence too; a nested
+        // transaction or a lock on another pooled connection would release it early.
+        return write(transaction);
+    }
+    return active ? persistAcl(manager) : AppDataSource.transaction(persistAcl);
 }

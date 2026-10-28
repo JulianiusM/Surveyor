@@ -25,10 +25,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout selected branch
+      - name: Checkout immutable CI-tested revision
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -40,6 +40,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify tested source and unchanged publication branch
+        run: node scripts/release-publication.mjs verify-source
 
       - name: Validate requested version and check tag availability
         env:
@@ -116,8 +119,7 @@ jobs:
           git commit -m "chore: release v${RELEASE_VERSION}"
           git tag -a "v${RELEASE_VERSION}" -m "Release v${RELEASE_VERSION}"
 
-          git push origin "HEAD:${GITHUB_REF_NAME}"
-          git push origin "v${RELEASE_VERSION}"
+          # Keep both references local until the complete archive is built.
 
       - name: Build application for release
         run: npm run build
@@ -196,9 +198,15 @@ jobs:
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
           set -e
+          node scripts/release-publication.mjs record-build
           mkdir -p artifacts
           tar -czf "artifacts/surveyor-v${RELEASE_VERSION}.tar.gz" -C release .
           ls -R artifacts
+
+      - name: Publish tested version commit and tag atomically
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: node scripts/release-publication.mjs publish
 
       - name: Create GitHub Release
         id: create_release

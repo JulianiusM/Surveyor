@@ -26,7 +26,8 @@ import {resolveActorLabel, projectEventParticipants} from '../modules/lib/util';
 import * as poolOperations from '../modules/invoice/poolOperations';
 import * as invoiceOperations from '../modules/invoice/invoiceOperations';
 import {savePoolTakeovers} from '../modules/invoice/takeovers';
-import {isParticipantSubmissionPool} from '../modules/invoice/state';
+import {isParticipantSubmissionPool, withInvoiceManagementEvent} from '../modules/invoice/state';
+import type {EntityManager} from 'typeorm';
 import {
     preparePoolCreation, preparePoolAssignments, prepareTakeoverRequest, preparePoolSettings,
     prepareSurchargeRequest, prepareSubmittedInvoice, prepareOrganizerInvoice, prepareInvoiceAcceptance,
@@ -55,7 +56,7 @@ import type {EventInvoice} from '../modules/database/entities/event/EventInvoice
 import type {EventInvoiceShare} from '../modules/database/entities/event/EventInvoiceShare';
 import type {components} from '../../types/api/v1';
 import type {ParticipantRow} from '../../types/EventTypes';
-import type {InvoiceSharesPdfData, InvoiceTextFormatter, InvoiceAppliedTakeover, InvoiceMoneyMetric} from '../../types/InvoicePoolTypes';
+import type {InvoiceSharesPdfData, InvoiceTextFormatter, InvoiceAppliedTakeover, InvoiceMoneyMetric, InvoiceManagementContext} from '../../types/InvoicePoolTypes';
 import type {MessageKey, MessageParameters} from '../../types/LocalizationTypes';
 import type {PermBundle, SessionLike} from '../../types/PermissionTypes';
 
@@ -339,26 +340,27 @@ async function runFinanceOperation<T>(operation: () => Promise<T>): Promise<T> {
 /** Create a pool through the existing validated controller owner after matching its shared method grant. */
 export async function createEventFinancePool(eventId: string, body: unknown, session: SessionLike): Promise<string> {
     const event = await admitEventFinanceOrganizer(eventId, session);
-    return runFinanceOperation(() => createInvoicePool(event, body));
+    return runFinanceOperation(() => createInvoicePool(event, body, {eventId: event.id, actor: session}));
 }
 
 /** Adapt settings transport without altering saved shares or existing recalculation behavior. */
 export async function updateEventFinanceSettings(eventId: string, poolId: string, body: unknown, session: SessionLike): Promise<void> {
     const event = await admitEventFinanceOrganizer(eventId, session);
-    await runFinanceOperation(() => updatePoolSettings(event, poolId, body));
+    await runFinanceOperation(() => updatePoolSettings(event, poolId, body, {eventId: event.id, actor: session}));
 }
 
 /** Keep submission access separate from calculation, reusing the existing revision-checked operation. */
 export async function changeEventFinanceSubmissionState(eventId: string, poolId: string, body: unknown, session: SessionLike): Promise<void> {
     const event = await admitEventFinanceOrganizer(eventId, session);
-    await runFinanceOperation(() => changePoolSubmissionState(event, poolId, body));
+    await runFinanceOperation(() => changePoolSubmissionState(event, poolId, body, {eventId: event.id, actor: session}));
 }
 
 /** Record optional proof only after the route has admitted the organizer before receiving upload bytes. */
 export async function recordEventOrganizerInvoice(event: Event, poolId: string, body: unknown, session: SessionLike,
     file?: Express.Multer.File): Promise<void> {
     // The existing owner validates attribution, locked pool membership, proof types and rejected-upload cleanup.
-    await runFinanceOperation(() => addOrganizerInvoice(event, poolId, body, session as Request['session'], file));
+    await runFinanceOperation(() => addOrganizerInvoice(event, poolId, body, session as Request['session'], file,
+        {eventId: event.id, actor: session}));
 }
 
 /** Dispatch one admitted invoice review to its existing owner, preserving evidence and revision requirements. */
@@ -367,16 +369,17 @@ export async function reviewEventFinanceInvoice(eventId: string, poolId: string,
     // Retroactive changes retain the actor requirement; initial review follows the independent method grant.
     const {event, permissions} = await admitFinanceManagement(eventId, session, action === 'revise' || action === 'reject');
     const actor = session as Request['session'];
+    const management: InvoiceManagementContext = {eventId: event.id, actor: session};
     // Every operation still validates event/pool ownership and lifecycle itself; this adapter supplies only method admission.
     await runFinanceOperation(async function reviewSavedInvoice() {
         switch (action) {
-            case 'approve': return approveInvoice(event, poolId, invoiceId, body, actor);
-            case 'decline': return declineInvoice(event, poolId, invoiceId, body, actor);
-            case 'revise': return reviseInvoice(event, poolId, invoiceId, body, actor);
-            case 'reject': return rejectAcceptedInvoice(event, poolId, invoiceId, body, actor);
+            case 'approve': return approveInvoice(event, poolId, invoiceId, body, actor, management);
+            case 'decline': return declineInvoice(event, poolId, invoiceId, body, actor, management);
+            case 'revise': return reviseInvoice(event, poolId, invoiceId, body, actor, management);
+            case 'reject': return rejectAcceptedInvoice(event, poolId, invoiceId, body, actor, management);
             case 'close': {
                 // Capture the already admitted method grant before the write instead of performing postcommit permission reads.
-                return closeInvoice(event, poolId, invoiceId, actor, {entity: permissions} as PermBundle);
+                return closeInvoice(event, poolId, invoiceId, actor, {entity: permissions} as PermBundle, true, management);
             }
         }
     });
@@ -385,19 +388,19 @@ export async function reviewEventFinanceInvoice(eventId: string, poolId: string,
 /** Save enrollment, exemptions and factors through the existing assignment owner without recalculating shares. */
 export async function updateEventFinanceAssignments(eventId: string, poolId: string, body: unknown, session: SessionLike): Promise<void> {
     const event = await admitEventFinanceOrganizer(eventId, session);
-    await runFinanceOperation(() => updatePoolAssignments(event, poolId, body));
+    await runFinanceOperation(() => updatePoolAssignments(event, poolId, body, {eventId: event.id, actor: session}));
 }
 
 /** Add a signed surcharge or rebate using the shared membership, precision and note checks. */
 export async function addEventFinanceAdjustment(eventId: string, poolId: string, body: unknown, session: SessionLike): Promise<void> {
     const event = await admitEventFinanceOrganizer(eventId, session);
-    await runFinanceOperation(() => addPoolSurcharge(event, poolId, body));
+    await runFinanceOperation(() => addPoolSurcharge(event, poolId, body, {eventId: event.id, actor: session}));
 }
 
 /** Remove an adjustment through the existing event-scoped controller, retaining its idempotent behavior. */
 export async function removeEventFinanceAdjustment(eventId: string, poolId: string, surchargeId: string, session: SessionLike): Promise<void> {
     const event = await admitEventFinanceOrganizer(eventId, session);
-    await runFinanceOperation(() => removePoolSurcharge(event, poolId, surchargeId));
+    await runFinanceOperation(() => removePoolSurcharge(event, poolId, surchargeId, {eventId: event.id, actor: session}));
 }
 
 /** Preserve participant self-coverage and the distinct organizer reassignment method in one transport adapter. */
@@ -406,7 +409,8 @@ export async function updateEventFinanceTakeovers(eventId: string, poolId: strin
     const event = organizer ? await admitEventFinanceOrganizer(eventId, session)
         : (await admitFinance(eventId, session, 'participant')).event;
     // The shared operation repeats OPEN, assigned-payer, one-level and reassignment checks under its existing lock.
-    await runFinanceOperation(() => updateTakeovers(event, poolId, body, session as Request['session'], organizer));
+    await runFinanceOperation(() => updateTakeovers(event, poolId, body, session as Request['session'], organizer,
+        organizer ? {eventId: event.id, actor: session} : undefined));
 }
 
 /** Present the shared read-only calculation with decimal wire values and request-local explanations. */
@@ -439,22 +443,24 @@ export async function calculateEventFinancePool(eventId: string, poolId: string,
     session: SessionLike, recalculate: boolean): Promise<void> {
     const event = await admitEventFinanceOrganizer(eventId, session);
     // The adapter chooses the existing operation once; notifications and carried credits remain owned by that operation.
-    await runFinanceOperation(() => recalculate ? recalculatePool(event, poolId, body, session as Request['session'])
-        : closePool(event, poolId, body, session as Request['session']));
+    const management: InvoiceManagementContext = {eventId: event.id, actor: session};
+    await runFinanceOperation(() => recalculate ? recalculatePool(event, poolId, body, session as Request['session'], management)
+        : closePool(event, poolId, body, session as Request['session'], false, management));
 }
 
 /** Restore the saved local inputs without changing existing shares or recorded transfers. */
 export async function rollbackEventFinancePool(eventId: string, poolId: string, body: unknown,
     session: SessionLike): Promise<components['schemas']['FinanceRollbackResult']> {
     const event = await admitEventFinanceOrganizer(eventId, session);
-    return runFinanceOperation(() => rollbackPoolChanges(event, poolId, body));
+    return runFinanceOperation(() => rollbackPoolChanges(event, poolId, body, {eventId: event.id, actor: session}));
 }
 
 /** Queue the existing reachable-payer notices from saved shares, independently of current browser filters. */
 export async function notifyEventFinancePool(eventId: string, poolId: string, body: unknown,
     session: SessionLike): Promise<components['schemas']['FinanceNotificationResult']> {
     const event = await admitEventFinanceOrganizer(eventId, session);
-    return runFinanceOperation(() => notifyPoolShares(event, poolId, body, session as Request['session']));
+    return runFinanceOperation(() => notifyPoolShares(event, poolId, body, session as Request['session'], 'requested', [],
+        {eventId: event.id, actor: session}));
 }
 
 /** Record or reverse the signed saved balance through the existing settlement owner, including stale calculations. */
@@ -462,7 +468,8 @@ export async function settleEventFinanceShare(eventId: string, poolId: string, s
     isPaid: boolean, session: SessionLike): Promise<void> {
     const event = await admitEventFinanceOrganizer(eventId, session);
     // Confirmation belongs to the frontend; this transport deliberately adds no new revision or comparison protocol.
-    await runFinanceOperation(() => markSharePaid(event, poolId, shareId, isPaid, session as Request['session']));
+    await runFinanceOperation(() => markSharePaid(event, poolId, shareId, isPaid, session as Request['session'],
+        {eventId: event.id, actor: session}));
 }
 
 // Resolve the registration ID for the current actor so validation stays localized.
@@ -495,51 +502,56 @@ async function assertRegistrationAllowed(pool: Awaited<ReturnType<typeof ensureP
 
 // Create a new invoice pool with optional default/assign-all behavior and explicit participant list.
 /** Orchestrate validated pool creation using current event registrations and the existing DBAL. */
-async function createInvoicePool(event: Event, body: unknown) {
+async function createInvoicePool(event: Event, body: unknown, management?: InvoiceManagementContext) {
     // Load event membership once; the request module normalizes only registrations from that event.
     const registrations = await eventService.getRegistrationsForEvent(event.id);
     const value = preparePoolCreation(body, registrations);
     // Persist the validated creation plan through the existing DBAL entry point.
-    return invoiceService.createPool(event.id, value.name, value.description, value.distribution,
-        value.isDefault, value.assignAll, value.subtractPersonalInvoices, value.registrationIds,
-        value.sendCalculationEmails, value.roundUpShares, value.status);
+    /** Reuse the creation DBAL on the supplied Event-fenced connection when an
+     * admitted management command requires fresh write-time authority. */
+    function persistCreation(manager?: EntityManager) {
+        return invoiceService.createPool(event.id, value.name, value.description, value.distribution,
+            value.isDefault, value.assignAll, value.subtractPersonalInvoices, value.registrationIds,
+            value.sendCalculationEmails, value.roundUpShares, value.status, manager);
+    }
+    return management ? withInvoiceManagementEvent(management, persistCreation) : persistCreation();
 }
 
 /** Normalize pool settings and delegate the locked input update. */
-async function updatePoolSettings(event: Event, poolId: string, body: any) {
+async function updatePoolSettings(event: Event, poolId: string, body: any, management?: InvoiceManagementContext) {
     await ensurePool(event, poolId);
 
     const value = preparePoolSettings(body);
 
     await poolOperations.saveInvoicePoolSettings(poolId, value.distribution, value.description,
         value.sendCalculationEmails === undefined ? undefined : value.sendCalculationEmails === true || value.sendCalculationEmails === 'on',
-        value.roundUpShares === undefined ? undefined : value.roundUpShares === true || value.roundUpShares === 'on');
+        value.roundUpShares === undefined ? undefined : value.roundUpShares === true || value.roundUpShares === 'on', management);
 }
 
 /** Orchestrate an explicit change between the two uncalculated pool states within the requested event. */
-async function changePoolSubmissionState(event: Event, poolId: string, body: unknown): Promise<void> {
+async function changePoolSubmissionState(event: Event, poolId: string, body: unknown, management?: InvoiceManagementContext): Promise<void> {
     // Resolve event ownership before delegating any lifecycle write; UI confirmation is not an authorization boundary.
     await ensurePool(event, poolId);
     const value = preparePoolSubmissionState(body);
     // The operation repeats lifecycle and revision checks under the same pool lock used by submissions and calculation.
-    await poolOperations.savePoolSubmissionState(poolId, value.status, value.expectedRevision);
+    await poolOperations.savePoolSubmissionState(poolId, value.status, value.expectedRevision, management);
 }
 
 // Save calculation inputs independently; closed pools keep their shares until recalculation.
 /** Normalize current event membership and delegate assignment, factor, and exemption changes. */
-async function updatePoolAssignments(event: Event, poolId: string, body: any) {
+async function updatePoolAssignments(event: Event, poolId: string, body: any, management?: InvoiceManagementContext) {
     // Confirm event ownership before using current registration data to interpret assignment fields.
     const pool = await ensurePool(event, poolId);
     const registrations = await eventService.getRegistrationsForEvent(event.id);
     const value = preparePoolAssignments(pool, body, registrations);
     // Membership-dependent checks repeat under the root lock inside the domain operation.
     await poolOperations.saveInvoicePoolAssignments(poolId, value.isDefault, value.assignAll,
-        value.subtractPersonalInvoices, value.registrationIds, value.exemptIds, value.participantFactors);
+        value.subtractPersonalInvoices, value.registrationIds, value.exemptIds, value.participantFactors, management);
 }
 
 // Signed adjustments are applied after the weighted base split.
 /** Validate a signed adjustment and delegate its locked persistence. */
-async function addPoolSurcharge(event: Event, poolId: string, body: any) {
+async function addPoolSurcharge(event: Event, poolId: string, body: any, management?: InvoiceManagementContext) {
     const pool = await ensurePool(event, poolId);
     const value = prepareSurchargeRequest(body);
 
@@ -548,19 +560,19 @@ async function addPoolSurcharge(event: Event, poolId: string, body: any) {
     if (!cleanedNote) throw new APIError(invoiceText('noteIsRequired'), body, 400, {cause: invoiceRejectionCause('noteIsRequired')});
     await assertRegistrationAllowed(pool, registrationId);
     const subtractFromPool = value.subtractFromPool === true || value.subtractFromPool === 'on';
-    await poolOperations.savePoolSurcharge(poolId, registrationId, Number(value.amount), cleanedNote, subtractFromPool);
+    await poolOperations.savePoolSurcharge(poolId, registrationId, Number(value.amount), cleanedNote, subtractFromPool, management);
 }
 
 // Remove an adjustment, invalidating previously calculated shares when necessary.
 /** Check event ownership before delegating an idempotent adjustment deletion. */
-async function removePoolSurcharge(event: Event, poolId: string, surchargeId: string) {
+async function removePoolSurcharge(event: Event, poolId: string, surchargeId: string, management?: InvoiceManagementContext) {
     await ensurePool(event, poolId);
-    await poolOperations.deletePoolSurcharge(poolId, Number(surchargeId));
+    await poolOperations.deletePoolSurcharge(poolId, Number(surchargeId), management);
 }
 
 // Update takeover mappings from either participants or administrators, respecting the "covered participants cannot cover others" rule.
 /** Save authorized coverage inputs, notifying immediately only while no calculation has been saved. */
-async function updateTakeovers(event: Event, poolId: string, body: any, session: Request['session'], allowReassign: boolean) {
+async function updateTakeovers(event: Event, poolId: string, body: any, session: Request['session'], allowReassign: boolean, management?: InvoiceManagementContext) {
     // Request authorization and membership are explicit inputs to the takeover business module.
     const pool = await ensurePool(event, poolId);
     const registrations = await eventService.getRegistrationsForEvent(event.id);
@@ -568,7 +580,7 @@ async function updateTakeovers(event: Event, poolId: string, body: any, session:
     const value = prepareTakeoverRequest(pool, body, registrations, actorId, allowReassign);
     // Commit the input diff first. The locked result distinguishes applied planning changes from
     // closed-pool edits, which leave the saved shares and applied coverage pending recalculation.
-    const changes = await savePoolTakeovers(poolId, value.payerId, value.beneficiaryIds, allowReassign);
+    const changes = await savePoolTakeovers(poolId, value.payerId, value.beneficiaryIds, allowReassign, management);
     if (!changes.applied || (!changes.added.length && !changes.removed.length)) return;
     // Notify only applied changes after commit; mail failures cannot undo their persisted inputs.
     try {
@@ -618,7 +630,7 @@ async function submitInvoice(event: Event, poolId: string, body: any, session: S
 
 // Organizers can enter a shared pool cost without becoming an event participant.
 /** Coordinate an accepted organizer expense and clean a rejected request’s optional upload. */
-async function addOrganizerInvoice(event: Event, poolId: string, body: any, session: Request['session'], file?: Express.Multer.File) {
+async function addOrganizerInvoice(event: Event, poolId: string, body: any, session: Request['session'], file?: Express.Multer.File, management?: InvoiceManagementContext) {
     /** Retain upload ownership through all admission, persistence and receipt work. */
     return withInvoiceProofUpload(file, async function persistOwnedProof() {
         // Organizers may record an accepted pool cost without registering, using optional bounded proof input.
@@ -632,7 +644,7 @@ async function addOrganizerInvoice(event: Event, poolId: string, body: any, sess
         // repeats participant eligibility under the pool lock; absent attribution retains the shared-cost behavior.
         return await invoiceOperations.persistOrganizerInvoice(poolId, session.profile.id, value.amount, value.description, file ? {
             path: path.relative(process.cwd(), file.path), originalName: file.originalname, mimeType: file.mimetype,
-        } : null, value.registrationId);
+        } : null, value.registrationId, management);
     });
 }
 
@@ -644,6 +656,7 @@ async function approveInvoice(
     invoiceId: string,
     body: any,
     session: Request['session'],
+    management?: InvoiceManagementContext,
 ) {
     const pool = await ensurePool(event, poolId);
     // Load the pool-scoped record for ownership checks and the post-commit notification context.
@@ -652,7 +665,7 @@ async function approveInvoice(
     if (invoice.status !== 'NEW') throw new APIError(invoiceText('onlyInvoicesAwaitingReviewCanBeAccepted'), body, 409, {cause: invoiceRejectionCause('onlyInvoicesAwaitingReviewCanBeAccepted', 409)});
     const {correctedAmount, correctedDescription} = prepareInvoiceAcceptance(body);
     // Repeat the review decision under the root lock; notify only the request that wins the transition.
-    const accepted = await invoiceOperations.acceptSavedInvoice(poolId, Number(invoiceId), {correctedAmount, correctedDescription});
+    const accepted = await invoiceOperations.acceptSavedInvoice(poolId, Number(invoiceId), {correctedAmount, correctedDescription}, management);
     if (!accepted) throw new APIError(invoiceText('invoiceWasAlreadyReviewedReloadToSeeTheSaved'), {}, 409, {cause: invoiceRejectionCause('invoiceWasAlreadyReviewedReloadToSeeTheSaved', 409)});
     notifyAcceptedInvoice(event, pool, invoice, correctedAmount, correctedDescription, session);
 }
@@ -666,6 +679,7 @@ async function closeInvoice(
     session: Request['session'],
     permData?: PermBundle,
     allowManageOverride = true,
+    management?: InvoiceManagementContext,
 ) {
     const pool = await ensurePool(event, poolId);
     // Load the pool-scoped record for ownership checks and the post-commit notification context.
@@ -683,7 +697,7 @@ async function closeInvoice(
         throw new APIError(invoiceText('youCanOnlyCloseYourOwnAcceptedInvoicesUnless'), {}, 403);
     }
     // The domain retains the accepted cost and treats an already closed row idempotently.
-    const closed = await invoiceOperations.closeSavedInvoice(poolId, Number(invoiceId));
+    const closed = await invoiceOperations.closeSavedInvoice(poolId, Number(invoiceId), management);
     if (!closed) return;
     notifyClosedInvoice(event, pool, invoice, session);
 }
@@ -696,6 +710,7 @@ async function declineInvoice(
     invoiceId: string,
     body: any,
     session: Request['session'],
+    management?: InvoiceManagementContext,
 ) {
     const pool = await ensurePool(event, poolId);
     // Load the pool-scoped record for ownership checks and the post-commit notification context.
@@ -705,13 +720,13 @@ async function declineInvoice(
     const value = prepareInvoiceRejection(body);
 
     // The locked decision retains invoice evidence and excludes this cost; notification follows successful commit.
-    const declined = await invoiceOperations.rejectSavedInvoice(poolId, Number(invoiceId), value.rejectionReason);
+    const declined = await invoiceOperations.rejectSavedInvoice(poolId, Number(invoiceId), value.rejectionReason, management);
     if (!declined) throw new APIError(invoiceText('invoiceWasAlreadyReviewedReloadToSeeTheSaved'), {}, 409, {cause: invoiceRejectionCause('invoiceWasAlreadyReviewedReloadToSeeTheSaved', 409)});
     notifyRejectedInvoice(event, pool, invoice, value.rejectionReason, session);
 }
 
 /** Coordinate a revision-checked correction while retaining submitted invoice evidence. */
-async function reviseInvoice(event: Event, poolId: string, invoiceId: string, body: any, session: Request['session']) {
+async function reviseInvoice(event: Event, poolId: string, invoiceId: string, body: any, session: Request['session'], management?: InvoiceManagementContext) {
     const value = prepareInvoiceRevision(body);
     const pool = await ensurePool(event, poolId);
     // Load the pool-scoped record for ownership checks and the post-commit notification context.
@@ -720,19 +735,19 @@ async function reviseInvoice(event: Event, poolId: string, invoiceId: string, bo
     // Delegate the revision-checked mutation, then describe its committed result to the saved contact.
     const saved = await invoiceOperations.reviseSavedInvoice(poolId, Number(invoiceId), {
         correctedAmount: value.correctedAmount, correctedDescription: value.correctedDescription || null,
-    }, value);
+    }, value, management);
     notifySavedInvoiceChange(event, pool, invoice, saved, 'corrected', session);
 }
 
 /** Coordinate a revision-checked removal from calculated costs without deleting history. */
-async function rejectAcceptedInvoice(event: Event, poolId: string, invoiceId: string, body: any, session: Request['session']) {
+async function rejectAcceptedInvoice(event: Event, poolId: string, invoiceId: string, body: any, session: Request['session'], management?: InvoiceManagementContext) {
     const value = prepareAcceptedInvoiceRejection(body);
     const pool = await ensurePool(event, poolId);
     // Load the pool-scoped record for ownership checks and the post-commit notification context.
     const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
     if (!invoice) throw new APIError(invoiceText('invoiceNotFound'), {}, 404);
     // Delegate the revision-checked mutation, then describe its committed result to the saved contact.
-    const saved = await invoiceOperations.rejectAcceptedSavedInvoice(poolId, Number(invoiceId), value.rejectionReason, value);
+    const saved = await invoiceOperations.rejectAcceptedSavedInvoice(poolId, Number(invoiceId), value.rejectionReason, value, management);
     notifySavedInvoiceChange(event, pool, invoice, saved, 'rejected', session);
 }
 
@@ -764,7 +779,7 @@ async function previewPool(event: Event, poolId: string) {
 }
 
 /** Apply allocation inputs atomically, then notify applied coverage and optional settlement results. */
-async function closePool(event: Event, poolId: string, body: any = {}, session?: Request['session'], recalculate = false) {
+async function closePool(event: Event, poolId: string, body: any = {}, session?: Request['session'], recalculate = false, management?: InvoiceManagementContext) {
     const options = prepareCalculationOptions(body);
     // Fetch authorized source data once, then let the calculation module build allocations and provenance.
     const pool = await ensurePool(event, poolId);
@@ -776,7 +791,7 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
         throw new APIError(invoiceText('thePreviewIsOutOfDatePreviewTheCalculation'), {}, 409, {cause: invoiceRejectionCause('thePreviewIsOutOfDatePreviewTheCalculation', 409)});
     }
     // Persist shares, cumulative settlement credits, and saved calculation inputs in one locked transaction.
-    const committed = await poolOperations.commitPoolCalculation(poolId, approvedInvoiceIds, sharePayloads, recalculate, pool.calculationRevision, explanation);
+    const committed = await poolOperations.commitPoolCalculation(poolId, approvedInvoiceIds, sharePayloads, recalculate, pool.calculationRevision, explanation, management);
     // Capture this exact committed calculation for mandatory history notices, even if another request edits the pool afterward.
     const committedPool = {...pool, status: 'CLOSED' as const, needsRecalculation: false,
         shares: committed.shares, calculationSnapshot: committed.calculationSnapshot};
@@ -812,15 +827,15 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
 }
 
 /** Delegate restoration of saved pool inputs while retaining shares and settlements. */
-async function rollbackPoolChanges(event: Event, poolId: string, body: any = {}) {
+async function rollbackPoolChanges(event: Event, poolId: string, body: any = {}, management?: InvoiceManagementContext) {
     await ensurePool(event, poolId);
     const options = prepareCalculationOptions(body);
-    return poolOperations.restorePoolCalculationInputs(poolId, options.expectedRevision);
+    return poolOperations.restorePoolCalculationInputs(poolId, options.expectedRevision, management);
 }
 
 /** Resolve saved share and contact data before requesting settlement notices. */
 async function notifyPoolShares(event: Event, poolId: string, body: any = {}, session?: Request['session'],
-    reason: 'closed' | 'recalculated' | 'requested' = 'requested', excludedRegistrationIds: readonly number[] = []) {
+    reason: 'closed' | 'recalculated' | 'requested' = 'requested', excludedRegistrationIds: readonly number[] = [], management?: InvoiceManagementContext) {
     const options = prepareCalculationOptions(body);
     // Notifications describe the saved calculation; load contact data without recalculating any shares.
     const participants = new Map((await eventService.getEventParticipantRows(event.id).then(projectEventParticipants)).map((participant) => [Number(participant.id), participant]));
@@ -829,18 +844,22 @@ async function notifyPoolShares(event: Event, poolId: string, body: any = {}, se
     if (options.expectedRevision !== undefined && options.expectedRevision !== pool.calculationRevision) {
         throw new APIError(invoiceText('theSettlementChangedReloadBeforeSendingEmails'), {}, 409, {cause: invoiceRejectionCause('theSettlementChangedReloadBeforeSendingEmails', 409)});
     }
+    // Explicit management dispatch receives fresh authority on the Event fence.
+    // External notification delivery follows that admitted transaction; automatic
+    // notices from an already committed calculation keep their original path.
+    if (management) await withInvoiceManagementEvent(management);
     // The notification module owns message construction and non-blocking delivery for reachable payers.
     return notifyPoolShareSettlements(event, pool, participants, reason, session, {excludedRegistrationIds});
 }
 
 // Toggle payment state of a share and inform the participant with actor attribution.
 /** Delegate a settlement-status change and describe the signed saved balance to its payer. */
-async function markSharePaid(event: Event, poolId: string, shareId: string, isPaid: boolean, session: Request['session']) {
+async function markSharePaid(event: Event, poolId: string, shareId: string, isPaid: boolean, session: Request['session'], management?: InvoiceManagementContext) {
     const pool = await ensurePool(event, poolId);
     const share = await invoiceService.getShareWithRegistration(poolId, Number(shareId));
     if (!share) throw new APIError(invoiceText('shareNotFound'), {}, 404);
     // The domain updates status and date only, retaining the original signed calculated balance.
-    await poolOperations.recordShareSettlement(poolId, Number(shareId), isPaid);
+    await poolOperations.recordShareSettlement(poolId, Number(shareId), isPaid, management);
     notifyShareSettlement(event, pool, share, isPaid, session);
 }
 
@@ -879,13 +898,13 @@ async function getInvoiceSharesPdfData(event: Event, poolId: string, query: unkn
 
 // Replace the saved calculation atomically while the pool remains closed to new uploads.
 /** Coordinate replacement of a closed pool’s saved calculation through the shared commit flow. */
-async function recalculatePool(event: Event, poolId: string, body: any = {}, session?: Request['session']) {
+async function recalculatePool(event: Event, poolId: string, body: any = {}, session?: Request['session'], management?: InvoiceManagementContext) {
     const pool = await ensurePool(event, poolId);
     if (pool.status !== 'CLOSED') {
         throw new APIError(invoiceText('onlyClosedPoolsCanBeRecalculated'), {}, 400, {cause: invoiceRejectionCause('onlyClosedPoolsCanBeRecalculated')});
     }
 
-    await closePool(event, poolId, body, session, true);
+    await closePool(event, poolId, body, session, true, management);
 }
 
 export default {

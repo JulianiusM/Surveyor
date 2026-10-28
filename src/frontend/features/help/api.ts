@@ -1,6 +1,6 @@
 import {createFeatureApiResolver} from '../../app/api';
 import type {components, operations} from '../../../types/api/v1';
-import type {FrontendContext, FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {FrontendApi} from '../../app/api';
 import {validateHelpPageData} from '../../../../.generated/api/v1/browser/validateHelpPageData.mjs';
 

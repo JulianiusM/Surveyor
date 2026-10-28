@@ -156,7 +156,7 @@ function collectCreation() {
                 <FileField id="headerImg" name="headerImg" class="col-12" :label="messages.t('survey.headerOptional')"
                     label-icon="bi-card-image" :selected-file="image" :disabled="blocked || !admitted" hydration-draft @choose="image = $event" />
                 <div class="col-12">
-                    <label class="form-label mb-2"><i class="bi bi-calendar4-week me-1" aria-hidden="true"></i>{{ messages.t('survey.selectCombinations') }}</label>
+                    <span class="form-label mb-2 d-inline-block"><i class="bi bi-calendar4-week me-1" aria-hidden="true"></i>{{ messages.t('survey.selectCombinations') }}</span>
                     <div class="table-responsive">
                         <table class="table table-dark table-hover table-bordered align-middle">
                             <thead><tr><th class="text-center w-50">{{ messages.t('survey.weekdayLabel') }}</th><th class="text-center w-40">{{ messages.t('survey.weekOfMonth') }}</th><th class="text-center w-10">{{ messages.t('packing.action') }}</th></tr></thead>

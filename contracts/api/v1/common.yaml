@@ -715,6 +715,24 @@ schemas:
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
       - properties:
+          code: {const: ACTIVITY_DURATION_LIMIT}
+          messageKey: {const: api:errors.ACTIVITY_DURATION_LIMIT}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_REQUIREMENTS_OVERSIZED}
+          messageKey: {const: api:errors.ACTIVITY_REQUIREMENTS_OVERSIZED}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_SWAP_PAIR_REQUIRED}
+          messageKey: {const: api:errors.ACTIVITY_SWAP_PAIR_REQUIRED}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
           code: {const: ACTIVITY_RECOMMENDATIONS_DISABLED}
           messageKey: {const: api:errors.ACTIVITY_RECOMMENDATIONS_DISABLED}
           status: {const: 409}
@@ -1544,6 +1562,10 @@ schemas:
       - permissions
       - presets
     properties:
+      maxDurationDays:
+        description: Optional server-selected inclusive date limit for forms with a duration policy; never grants authority to write.
+        type: integer
+        minimum: 1
       defaults:
         $ref: "#/schemas/PermissionDefaults"
       permissions:

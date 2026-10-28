@@ -243,7 +243,19 @@ function generate() {
     const header = `// ⚠️ AUTO-GENERATED FILE — do not edit manually.\n`;
     const output = `${header}${allImports.join("\n")}\n\n${sectionExports.join("\n\n")}\n`;
     fs.mkdirSync(path.dirname(OUTPUT_FILE), {recursive: true});
-    fs.writeFileSync(OUTPUT_FILE, output, "utf8");
+    // Publish a complete new index instead of overwriting a file already read by
+    // the type-checking host. On Windows that host can retain the original file
+    // handle; a failed write must never truncate the only usable generated index.
+    const pendingFile = `${OUTPUT_FILE}.${process.pid}-${Date.now()}.pending`;
+    try {
+        fs.writeFileSync(pendingFile, output, {encoding: 'utf8', flag: 'wx'});
+        fs.renameSync(pendingFile, OUTPUT_FILE);
+    } catch (error) {
+        // Preserve the publication failure if best-effort temporary cleanup also
+        // fails. The previous published index remains the consumer's input.
+        try { fs.unlinkSync(pendingFile); } catch { /* No completed temporary file to retire. */ }
+        throw error;
+    }
 
     console.log(`\n✅ Wrote combined index to ${OUTPUT_FILE}`);
 }

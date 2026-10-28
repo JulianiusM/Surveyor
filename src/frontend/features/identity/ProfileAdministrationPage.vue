@@ -140,7 +140,8 @@ function readProjection({signal}: QueryFunctionContext): Promise<Projection> {
     return mode.value === 'edit' ? api.current(context.capture(), signal) : api.profiles(context.capture(), signal);
 }
 
-/** Names have no new browser length policy. Default false is an explicit submitted value. */
+/** Generated admission bounds names by Unicode code points without imposing a
+ * stricter native UTF-16 limit. Default false remains an explicit submitted value. */
 function isDirty(): boolean {
     if (finished.value || mode.value === 'manage') return false;
     return mode.value === 'create' ? fields.name !== '' : !!baseline.value

@@ -30,8 +30,27 @@ import {APIError} from './errors';
 export function createSessionStore(manager: EntityManager): TypeormStore {
     // These are the existing application options. Cleanup runs only on set;
     // the library remains the owner of TTL, soft-delete and JSON semantics.
-    return new TypeormStore({cleanupLimit: 2, limitSubquery: false, ttl: 60 * 60 * 24})
-        .connect(manager.getRepository(Session));
+    const repository = manager.getRepository(Session);
+    const store = new TypeormStore({cleanupLimit: 2, limitSubquery: false, ttl: 60 * 60 * 24}).connect(repository);
+
+    /** Complete destruction only when the same repository's soft deletion settles.
+     * connect-typeorm 2.0.0 drops these promises from Promise.all, acknowledging
+     * destruction early and leaking rejected deletes as unhandled rejections. */
+    store.destroy = function destroyStoredSessions(sessionIds, callback): void {
+        const ids = Array.isArray(sessionIds) ? sessionIds : [sessionIds];
+        // Keep library soft-delete and multi-ID semantics on the caller's manager.
+        // Starting from a promise also routes synchronous adapter failures here.
+        const deletions = ids.map(id => Promise.resolve().then(() => repository.softDelete({id})));
+        void Promise.all(deletions).then(function destroyed(): void {
+            callback?.();
+        }, function destructionFailed(error: unknown): void {
+            // The factory has no custom onError; preserve the library's default
+            // disconnect notification as well as its optional completion callback.
+            callback?.(error);
+            store.emit('disconnect', error);
+        });
+    };
+    return store;
 }
 
 /** Read through the configured store without replacing a request's in-memory session. */

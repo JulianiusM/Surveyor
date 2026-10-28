@@ -14,16 +14,21 @@
  * limitations under the License.
  */
 
-import type {AssignmentCandidate, RecommendationApplicationSummary, RecommendationApplicationResult,
-    RecommendationGenerationOutcome} from '../../../types/ActivityTypes';
+import type {
+    AssignmentCandidate, RecommendationApplicationSummary, RecommendationApplicationResult,
+    RecommendationGenerationOutcome, RecommendationOperation, RecommendationStatus,
+    ActivityRecommendationOperationInput, RecommendationWarningPreview, AssignmentWarning,
+    AssignmentWarningPreview, RecommendationInput, RecommendationWarningResult,
+} from '../../../types/ActivityTypes';
 import type {ActivityCommandPreparation} from '../../../types/ActivityV1Types';
-import {generateAndSaveRecommendations, queueAutoGenerateRecommendations, toRecommendationInput, normalizeRecommendationForPersistence, saveReviewedRecommendations, recommendationContext, applyActivityRecommendationOperations, requireRequirementConfiguration, requireRecommendationContext, buildParticipantAttendanceMap, buildLinkedPlanContext, projectActivityAssignees} from './autoAssignment';
-import type {RecommendationOperation, RecommendationStatus, ActivityRecommendationOperationInput, RecommendationWarningPreview, AssignmentWarning, AssignmentWarningPreview} from '../../../types/ActivityTypes';
+import {generateAndSaveRecommendations, queueAutoGenerateRecommendations, toRecommendationInput, normalizeRecommendationForPersistence, saveReviewedRecommendations, recommendationContext, applyActivityRecommendationOperations, requireRequirementConfiguration, requireRecommendationContext, buildParticipantAttendanceMap, buildLinkedPlanContext, projectActivityAssignees, isActivityOversized} from './autoAssignment';
 import type {EntityManager} from 'typeorm';
 import Joi from 'joi';
 import {projectEventParticipants, ENTITIES, uuidKey, sameUuid, indexByUuid} from '../lib/util';
 import type {ParticipantAttendance} from '../../../types/ActivityRequirementTypes';
-import {toParticipantName} from '../../../common/activity/requirements';
+import {
+    toParticipantName, toParticipantKey,
+} from '../../../common/activity/requirements';
 import {ActivityAssignmentRecommendation} from '../database/entities/activity/ActivityAssignmentRecommendation';
 import {ActivityPlan} from '../database/entities/activity/ActivityPlan';
 import * as recommendationService from '../database/services/ActivityRecommendationService';
@@ -33,15 +38,15 @@ import {APIError} from '../lib/errors';
 import type {SessionLike, PermBundle} from '../../../types/PermissionTypes';
 import {Request} from 'express';
 import crypto from 'node:crypto';
-import {buildRecommendationWarnings} from './availability';
+import {
+    buildRecommendationWarnings, collectAssignmentWarnings, toAssignmentCandidate,
+    normalizeRecommendationInput, recommendationInputKey,
+} from './availability';
 import {evaluateEntities, entityPermissionKey} from '../permissionEngine';
 
 import {ActivitySlot} from "../database/entities/activity/ActivitySlot";
-import type {RecommendationInput, RecommendationWarningResult} from "../../../types/ActivityTypes";
 
-import {collectAssignmentWarnings, toAssignmentCandidate, normalizeRecommendationInput, recommendationInputKey} from './availability';
 
-import {toParticipantKey} from "../../../common/activity/requirements";
 
 /** Decode review rows while preserving legacy statuses, operation defaults and collected form diagnostics. */
 function preprocessRecommendationUpdate(body: any) {
@@ -57,6 +62,8 @@ function preprocessRecommendationUpdate(body: any) {
                     operation: Joi.string().valid("ASSIGN", "REASSIGN", "UNASSIGN").default("ASSIGN"),
                     sourceItemId: Joi.string().uuid().allow(null).optional(),
                     manual: Joi.boolean().optional(),
+                    swapGroup: Joi.string().allow(null).optional().custom((value, helpers) =>
+                        typeof value === 'string' && Array.from(value).length > 128 ? helpers.error('string.max', {limit: 128}) : value),
                 }).custom((recommendation, helpers) => {
                     // A reassignment needs a distinct source; normal assignment/removal retain their existing shapes.
                     if (
@@ -153,24 +160,57 @@ function reconcileSubmittedRecommendations(
             // Unknown client IDs cannot select saved rows outside this plan; genuine new manual work remains valid.
             id: persisted?.id,
             manual,
+            ...(recommendation.swapGroup !== undefined ? {swapGroup: recommendation.swapGroup}
+                : persisted?.pairingKnown ? {swapGroup: persisted.swapGroup ?? null} : {}),
             hidden: recommendation.status === "REJECTED" || recommendation.status === "APPLIED",
         };
     });
 
+    requireRecommendationPairs(resolved, false);
     return resolved.filter((recommendation) => {
         // Remove rejected manual work and its reciprocal move together, retaining generated rejection memory.
         if (recommendation.manual && recommendation.status === "REJECTED") return false;
-        if (!recommendation.manual || recommendation.operation !== "REASSIGN" || !recommendation.sourceItemId) {
+        if (!recommendation.manual || typeof recommendation.swapGroup !== 'string') {
             return true;
         }
         const rejectedReciprocal = resolved.some((candidate) =>
             candidate.manual
             && candidate.status === "REJECTED"
-            && candidate.operation === "REASSIGN"
-            && sameUuid(candidate.itemId, recommendation.sourceItemId)
-            && sameUuid(candidate.sourceItemId, recommendation.itemId));
+            && candidate.swapGroup === recommendation.swapGroup);
         return !rejectedReciprocal;
     });
+}
+
+/** Validate explicit pair intent without inferring any relationship from legacy endpoints. */
+function requireRecommendationPairs(recommendations: RecommendationInput[], applying: boolean): void {
+    const groups = new Map<string, RecommendationInput[]>();
+    // Unknown legacy reassignments remain readable/savable, but an organizer
+    // must explicitly classify an approved operation before applying it.
+    for (const recommendation of recommendations) {
+        if (recommendation.operation === 'REASSIGN' && recommendation.swapGroup === undefined
+            && applying && recommendation.status === 'APPROVED') {
+            throw new APIError('Choose a swap partner or an independent move before applying', {}, 409,
+                {cause: 'ACTIVITY_SWAP_PAIR_REQUIRED'});
+        }
+        if (typeof recommendation.swapGroup !== 'string') continue;
+        const group = groups.get(recommendation.swapGroup) ?? [];
+        group.push(recommendation);
+        groups.set(recommendation.swapGroup, group);
+    }
+    // A group is exactly two distinct participants moving between reciprocal
+    // slots in this plan. Ordinary target validation retains plan ownership.
+    for (const group of groups.values()) {
+        const [first, second] = group;
+        if (group.length !== 2 || first!.operation !== 'REASSIGN' || second!.operation !== 'REASSIGN'
+            || sameUuid(first!.profileId, second!.profileId)
+            || !sameUuid(first!.itemId, second!.sourceItemId) || !sameUuid(first!.sourceItemId, second!.itemId)) {
+            throw new APIError('A swap must identify exactly two reciprocal moves', {}, 409,
+                {cause: 'ACTIVITY_SWAP_PAIR_REQUIRED'});
+        }
+        if (applying && group.some(row => row.status === 'APPROVED') && group.some(row => row.status !== 'APPROVED')) {
+            throw new APIError('Approve both swap legs before applying', {}, 409, {cause: 'ACTIVITY_SWAP_PAIR_REQUIRED'});
+        }
+    }
 }
 
 /** Retain the existing post-application generation gate for Required plans after their deadline. */
@@ -188,7 +228,7 @@ export async function getRecommendations(planId: string, session?: SessionLike, 
     // Both entry and recovery use existing feature reads rather than a second domain model.
     const [plan, requirementConfig, initialRecommendations, slots, assignments, assignees] = await Promise.all([
         activityService.getActivityPlanById(planId),
-        requireRequirementConfiguration(planId),
+        requireRequirementConfiguration(planId, undefined, false),
         recommendationService.getRecommendations(planId),
         activityService.getActivitySlotsFlat(planId),
         activityService.getParticipantAssignmentsWithSlots(planId),
@@ -246,7 +286,7 @@ export async function getRecommendations(planId: string, session?: SessionLike, 
     let autoGenerationJob;
 
     // If the binding deadline passed and no recommendations exist, seed them automatically
-    if (maintain && shouldAutoGenerateRecommendations(plan, recommendations)) {
+    if (maintain && !isActivityOversized(plan) && shouldAutoGenerateRecommendations(plan, recommendations)) {
         const queued = await queueAutoGenerateRecommendations(planId);
         autoGenerationJob = queued.job;
     }
@@ -362,12 +402,12 @@ async function loadRecommendationReview(planId: string, body: any, manager: Enti
 
 /** Block the same pair of reciprocal moves together, preserving the existing swap contract. */
 function includeBlockedSwapLegs(recommendations: RecommendationInput[], blocked: Set<string>): void {
-    // Find reverse source/target moves in the same batch so one blocked leg cannot leave half a swap applicable.
+    // Only explicit reviewed provenance can carry blocking to another move.
+    // Independent reciprocal operations never acquire an inferred partner.
     for (const recommendation of recommendations) {
-        if (recommendation.operation !== 'REASSIGN' || !recommendation.sourceItemId) continue;
+        if (typeof recommendation.swapGroup !== 'string') continue;
         const reciprocal = recommendations.find((candidate) => candidate !== recommendation
-            && candidate.operation === 'REASSIGN' && sameUuid(candidate.itemId, recommendation.sourceItemId)
-            && sameUuid(candidate.sourceItemId, recommendation.itemId));
+            && candidate.swapGroup === recommendation.swapGroup);
         if (reciprocal && (blocked.has(recommendationInputKey(recommendation)) || blocked.has(recommendationInputKey(reciprocal)))) {
             blocked.add(recommendationInputKey(recommendation));
             blocked.add(recommendationInputKey(reciprocal));
@@ -393,6 +433,7 @@ function hasBlockingRecommendationWarning(result: RecommendationWarningResult): 
  * All overlap exceptions require a separate acknowledgement of the resulting final conflicts.
  */
 async function prepareRecommendationApplication(planId: string, reviewed: RecommendationInput[], manager: EntityManager) {
+    requireRecommendationPairs(reviewed, true);
     // Start from approved rows and repeatedly remove blocked operations until the projected occupancy is stable.
     const approved = reviewed.filter((recommendation) => recommendation.status === 'APPROVED');
     let applicable = approved;
@@ -629,7 +670,7 @@ export async function collectRecommendationWarnings(
     );
     const [plan, requirementConfig, slots, existingAssignments] = await Promise.all([
         activityService.getActivityPlanById(planId, manager),
-        requireRequirementConfiguration(planId, manager),
+        requireRequirementConfiguration(planId, manager, false),
         activityService.getActivitySlotsFlat(planId, manager),
         activityService.getParticipantAssignmentsWithSlots(planId, manager),
     ]);
@@ -881,7 +922,7 @@ export async function collectManualAssignmentWarnings(
     // Gather attendance and all saved commitments through the caller manager before evaluating this participant.
     const participantKey = toParticipantKey({profileId: uuidKey(profileId)});
     const [configuration, assignments, assignees, recommendations, linked, eventParticipants] = await Promise.all([
-        requireRequirementConfiguration(plan.id, manager),
+        requireRequirementConfiguration(plan.id, manager, false),
         activityService.getParticipantAssignmentsWithSlots(plan.id, manager),
         activityService.getActivitySlotAssigneeRows(plan.id, manager).then(projectActivityAssignees),
         recommendationService.getRecommendations(plan.id, manager),

@@ -64,6 +64,19 @@ describe('finance decimal transport preserves existing business inputs', () => {
         expect(validate({...input, participantFactors: {'7': 2.5}})).toBe(false);
     });
 
+    it('preserves significant digits after long interior zero runs without rounding factors', () => {
+        // A finite amount may have far more precision than JavaScript numbers.
+        // Transport keeps that exact spelling, including the final nonzero digit.
+        const draft = '1.' + '0'.repeat(30_000) + '1';
+        expect(financeDecimal(draft + '000')).toBe(draft);
+        expect(financeDecimal(draft + '000', 4)).toBe(draft);
+
+        // Normalization must not turn excessive factor precision into acceptance.
+        const validate = contractValidator('FinanceAssignmentsInput');
+        expect(validate({isDefault: false, assignAll: false, subtractPersonalInvoices: true,
+            registrations: ['7'], exemptions: [], participantFactors: {'7': financeDecimal(draft, 4)}})).toBe(false);
+    });
+
     it('requires reviewed calculation evidence while retaining the existing settlement and optional-output contracts', () => {
         const calculation = contractValidator('FinanceCalculationInput');
         expect(calculation({expectedRevision: 7, sendEmails: false})).toBe(true);

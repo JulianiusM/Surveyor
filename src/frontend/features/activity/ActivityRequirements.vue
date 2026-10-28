@@ -24,7 +24,11 @@ const context = useFrontend();
 const {messages} = context;
 const api = useActivityApi(context);
 const planId = computed(() => props.planId);
-const key = computed(() => activityKeys.requirements(context.session.value?.context, props.planId));
+const page = ref(1);
+const section = ref<'stays' | 'roles' | 'overrides'>('stays');
+const key = computed(() => page.value === 1 && section.value === 'stays'
+    ? activityKeys.requirements(context.session.value?.context, props.planId)
+    : [...activityKeys.requirements(context.session.value?.context, props.planId), {page: page.value, section: section.value}]);
 const draft = ref<ActivityRequirementDraft | null>(null);
 const configuration = shallowRef<ActivityRequirementConfiguration | null>(null);
 const dirty = ref(false);
@@ -32,13 +36,14 @@ const calculation = ref<{baseline: number; difference: number; reason?: string} 
 let nextOverride = 0;
 const {list, data, denied, refresh: readFresh, isActive} = useListDetail({resourceId: planId, queryKey: key,
     resourceFamily: () => activityKeys.resource(context.session.value?.context, props.planId),
-    read: async (id, scope, signal) => ({data: await api.requirements(id, scope, signal), etag: null}),
+    read: async (id, scope, signal) => ({data: await api.requirements(id, scope, signal, page.value, section.value), etag: null}),
     denied: revokeRequirements});
 const {command, refresh, readAction, retryAt} = useListCommands({active: isActive, denied: () => denied.value,
     reading: () => list.isFetching.value, error: () => list.error.value, refresh: readFresh},
 {dirty: () => dirty.value, unknownMessage: 'draft.leaveUnknown'});
-const blocked = computed(() => props.disabled || command.action.disabled.value || !draft.value);
-const analysis = computed(() => configuration.value && draft.value ? analyzeRequirementDraft(configuration.value, draft.value) : null);
+const readOnly = computed(() => data.value?.paging?.readOnly === true);
+const blocked = computed(() => readOnly.value || props.disabled || command.action.disabled.value || !draft.value);
+const analysis = computed(() => !readOnly.value && configuration.value && draft.value ? analyzeRequirementDraft(configuration.value, draft.value) : null);
 const coverage = computed(() => analysis.value && draft.value ? requirementCoverage(analysis.value.capacitySummary, draft.value, messages.value.t) : null);
 const targets = computed(() => [...(configuration.value?.overrideTargets ?? [])].sort((a, b) => targetLabel(a).localeCompare(targetLabel(b))));
 function targetLabel(target: ActivityRequirementConfiguration['overrideTargets'][number]): string {
@@ -65,10 +70,11 @@ function revokeRequirements(failure: Error): void {
 
 /** Only clean, explicitly reloaded or newly admitted forms accept a snapshot. */
 function accept(config: ActivityRequirementConfiguration): void {
-    // Each override key is local DOM identity only; persisted IDs stay separate.
+    // Every acceptance path, including explicit Reload, guards allocation.
+    // Read-only pages never construct the full duration-sized editable draft.
     configuration.value = config;
-    draft.value = createRequirementDraft(config);
-    nextOverride = draft.value.overrides.length;
+    draft.value = config.paging?.readOnly ? null : createRequirementDraft(config);
+    nextOverride = draft.value?.overrides.length ?? 0;
     dirty.value = false;
     calculation.value = null;
 }
@@ -76,6 +82,13 @@ function accept(config: ActivityRequirementConfiguration): void {
 // Initialize it now: an equal background GET keeps that cache object's identity
 // and cannot trigger this watcher later. Dirty controls retain their own values.
 watch(data, config => {
+    if (config?.paging?.readOnly) {
+        // A new duration policy suspends the editor without discarding a dirty
+        // local draft. Read-only pages never allocate a complete duration table.
+        if (!dirty.value) { configuration.value = config; draft.value = null; }
+        calculation.value = null;
+        return;
+    }
     if (config && (!draft.value || !dirty.value)) accept(config);
 }, {immediate: true});
 watch([planId, context.epoch], () => {
@@ -85,6 +98,8 @@ watch([planId, context.epoch], () => {
     configuration.value = null;
     dirty.value = false;
     calculation.value = null;
+    page.value = 1;
+    section.value = 'stays';
     command.acknowledge();
 });
 function markDirty(): void { dirty.value = true; calculation.value = null; }
@@ -92,7 +107,8 @@ function markDirty(): void { dirty.value = true; calculation.value = null; }
 function roleTitle(id: string): string {
     // A removed catalog entry retains its opaque saved identity for display;
     // the label does not create or authorize a role relationship.
-    return configuration.value?.allRoles.find(role => role.id === id)?.title ?? String(id);
+    const roles = readOnly.value ? data.value?.allRoles : configuration.value?.allRoles;
+    return roles?.find(role => role.id === id)?.title ?? String(id);
 }
 /** Former-event overrides remain visible and removable; their saved values stay fixed. */
 function retained(profileId: string): boolean {
@@ -210,7 +226,30 @@ async function save(): Promise<void> {
             <CommandFeedback :feedback="command.feedback" />
             <EntityDetailReadState :denied="denied" :error="list.error.value" :has-data="!!configuration" :pending="list.isPending.value" :refreshing="list.isFetching.value"
                 :last-updated-at="list.data.value ? list.dataUpdatedAt.value : undefined" :retry-at="retryAt" />
-            <template v-if="draft && configuration && analysis && coverage">
+            <div v-if="readOnly && data?.paging" data-requirement-readonly>
+                <StatusNotice kind="info" :role="null">{{ messages.t('activity.requirements.oversized', {days: data.paging.maxDurationDays}) }}</StatusNotice>
+                <div class="frontend-action-row mb-3">
+                    <label for="requirement-section">{{ messages.t('activity.requirements.settings') }}</label>
+                    <select id="requirement-section" v-model="section" :disabled="list.isFetching.value" @change="page = 1">
+                        <option value="stays">{{ messages.t('activity.requirements.stays') }}</option>
+                        <option value="roles">{{ messages.t('activity.requirements.roles') }}</option>
+                        <option value="overrides">{{ messages.t('activity.requirements.overrides') }}</option>
+                    </select>
+                    <ActionButton type="button" variant="outline-secondary" :disabled="list.isFetching.value || data.paging.page <= 1"
+                        @click="page = data!.paging!.page - 1">{{ messages.t('activity.requirements.previousPage') }}</ActionButton>
+                    <span>{{ messages.t('activity.requirements.page') }} {{ data.paging.page }} / {{ data.paging.pages }}</span>
+                    <ActionButton type="button" variant="outline-secondary" :disabled="list.isFetching.value || data.paging.page >= data.paging.pages"
+                        @click="page = data!.paging!.page + 1">{{ messages.t('activity.requirements.nextPage') }}</ActionButton>
+                </div>
+                <table class="table table-dark table-sm"><thead><tr><th>{{ messages.t('activity.requirements.settings') }}</th><th>{{ messages.t('activity.requirements.requiredShifts') }}</th></tr></thead>
+                    <tbody>
+                        <tr v-for="row in data.stayRequirements" :key="row.stayDays"><td>{{ messages.t('activity.dayCount', {count: row.stayDays}) }}</td><td>{{ row.requiredShifts }}</td></tr>
+                        <tr v-for="row in data.roleRequirements" :key="row.roleId"><td>{{ roleTitle(row.roleId) }}</td><td>{{ row.requiredShifts }}</td></tr>
+                        <tr v-for="row in data.overrides" :key="row.id ?? row.profileId"><td>{{ row.profileName ?? row.profileId }}<template v-if="row.roleId"> — {{ roleTitle(row.roleId) }}</template></td><td>{{ row.requiredShifts }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <template v-if="!readOnly && draft && configuration && analysis && coverage">
                 <p class="text-secondary small mb-3">{{ messages.t('activity.requirements.description') }}</p>
                 <!-- Live coverage belongs to the unsaved controls. Saved badges
                 describe persistence only, never a promise of timetable feasibility. -->

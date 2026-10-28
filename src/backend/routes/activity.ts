@@ -41,7 +41,7 @@ router.get('/:id/export/schedule', asyncHandler(async function admitSchedule(req
     next();
 }), requirePermission(activityPermission, PERM.DATA_EXPORT), asyncHandler(async function exportSchedule(req, res) {
     // Print remains an independent output with its established data and stylesheet.
-    const data = await activityController.getScheduleExport(getResource(req, 'activity'));
+    const data = await activityController.getScheduleExport(getResource(req, 'activity'), req.query.windowStart);
     res.render('activity/export/schedule', {data});
 }));
 

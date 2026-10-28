@@ -46,6 +46,28 @@ beforeAll(async () => {
 afterAll(closeIntegrationDatabase);
 
 describe('versioned Drivers production operations', () => {
+    it('keeps metadata and description response preparation inside their existing transaction', async () => {
+        const id = await fixture();
+        const session = actor(owner);
+        const metadata = await drivers.readDriversMetadata(id, session);
+        const failure = new Error('Controlled metadata preparation failure');
+        // The real callback observes the saved readback before throwing. The
+        // surrounding production transaction must still roll back that write.
+        await expect(drivers.patchDriversMetadata(id, {title: 'Uncommitted title'}, metadata.etag, session, result => {
+            expect(result.data.values.title).toBe('Uncommitted title');
+            throw failure;
+        })).rejects.toBe(failure);
+        expect(await driverService.getDriversListById(id)).toMatchObject({title: 'Shared journeys'});
+
+        const description = await drivers.readDriversDescription(id, session);
+        await expect(drivers.patchDriversDescription(id, {description: 'Uncommitted description'}, description.editToken, session, result => {
+            expect(result.description).toBe('Uncommitted description');
+            throw failure;
+        })).rejects.toBe(failure);
+        expect(await driverService.getDriversListById(id)).toMatchObject({description: 'Airport and station'});
+        expect(await drivers.readDriversDescription(id, session)).toEqual(description);
+    });
+
     it('creates with native sharing defaults and rejects unauthorized event selection before persistence', async () => {
         const before = await AppDataSource.getRepository(DriversList).count();
         const forbidden = await createIntegrationEvent(other.id, 'Private destination');

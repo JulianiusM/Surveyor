@@ -84,6 +84,24 @@ const defaults: Settings = {
     activityAvailabilityWeight: 0.30,
     activitySwapOptimizationIterations: 10,
     activityArrivalDeparturePenalty: 0.2,
+    activityMaxDurationDays: 366,
+
+    // Every identity entry consumes the same configured admission owners; limits
+    // never depend on a browser component or on a submitted password value.
+    authLoginClientLimit: 30,
+    authLoginFailureClientLimit: 10,
+    authLoginAccountLimit: 10,
+    authLoginWindowMinutes: 15,
+    authSignupClientLimit: 10,
+    authSignupWindowMinutes: 60,
+    authGuestCreationClientLimit: 20,
+    authGuestCreationWindowMinutes: 60,
+    authMailClientLimit: 10,
+    authMailClientWindowMinutes: 15,
+    authMailRecipientLimit: 3,
+    authMailRecipientWindowMinutes: 60,
+    authGuestLookupClientLimit: 30,
+    authGuestLookupWindowMinutes: 15,
 };
 
 // CSV_KEY -> settings key
@@ -126,6 +144,21 @@ const keyMap: Record<string, keyof Settings> = {
     ACTIVITY_AVAILABILITY_WEIGHT: "activityAvailabilityWeight",
     ACTIVITY_SWAP_OPTIMIZATION_ITERATIONS: "activitySwapOptimizationIterations",
     ACTIVITY_ARRIVAL_DEPARTURE_PENALTY: "activityArrivalDeparturePenalty",
+    ACTIVITY_MAX_DURATION_DAYS: 'activityMaxDurationDays',
+    AUTH_LOGIN_CLIENT_LIMIT: 'authLoginClientLimit',
+    AUTH_LOGIN_FAILURE_CLIENT_LIMIT: 'authLoginFailureClientLimit',
+    AUTH_LOGIN_ACCOUNT_LIMIT: 'authLoginAccountLimit',
+    AUTH_LOGIN_WINDOW_MINUTES: 'authLoginWindowMinutes',
+    AUTH_SIGNUP_CLIENT_LIMIT: 'authSignupClientLimit',
+    AUTH_SIGNUP_WINDOW_MINUTES: 'authSignupWindowMinutes',
+    AUTH_GUEST_CREATION_CLIENT_LIMIT: 'authGuestCreationClientLimit',
+    AUTH_GUEST_CREATION_WINDOW_MINUTES: 'authGuestCreationWindowMinutes',
+    AUTH_MAIL_CLIENT_LIMIT: 'authMailClientLimit',
+    AUTH_MAIL_CLIENT_WINDOW_MINUTES: 'authMailClientWindowMinutes',
+    AUTH_MAIL_RECIPIENT_LIMIT: 'authMailRecipientLimit',
+    AUTH_MAIL_RECIPIENT_WINDOW_MINUTES: 'authMailRecipientWindowMinutes',
+    AUTH_GUEST_LOOKUP_CLIENT_LIMIT: 'authGuestLookupClientLimit',
+    AUTH_GUEST_LOOKUP_WINDOW_MINUTES: 'authGuestLookupWindowMinutes',
 };
 
 // per-field coercion
@@ -147,7 +180,42 @@ const coerce: Partial<Record<keyof Settings, (v: string) => any>> = {
     // stricter integer/range validation in the archival policy before any database write.
     autoArchiveEnabled: (v) => /^(1|true|yes|on)$/i.test(v),
     autoArchiveAfterDays: Number,
+    activityMaxDurationDays: Number,
+    authLoginClientLimit: Number,
+    authLoginFailureClientLimit: Number,
+    authLoginAccountLimit: Number,
+    authLoginWindowMinutes: Number,
+    authSignupClientLimit: Number,
+    authSignupWindowMinutes: Number,
+    authGuestCreationClientLimit: Number,
+    authGuestCreationWindowMinutes: Number,
+    authMailClientLimit: Number,
+    authMailClientWindowMinutes: Number,
+    authMailRecipientLimit: Number,
+    authMailRecipientWindowMinutes: Number,
+    authGuestLookupClientLimit: Number,
+    authGuestLookupWindowMinutes: Number,
 };
+
+/** Validate only the newly configured bounds after CSV/environment precedence.
+ * Invalid budgets must fail before admission starts, rather than expire immediately
+ * through a truncated timer or silently stop protecting an identity operation. */
+function validateProductionBounds(target: Settings): void {
+    // The existing settings map owns names and coercion; select these numeric
+    // policies without another loader or a duplicate source of default values.
+    for (const [environmentKey, settingsKey] of Object.entries(keyMap)) {
+        if (!environmentKey.startsWith('AUTH_') && environmentKey !== 'ACTIVITY_MAX_DURATION_DAYS') continue;
+        const value = target[settingsKey];
+        if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
+            throw new Error(`${environmentKey} must be a positive safe integer`);
+        }
+        // Node's interval implementation cannot represent a longer millisecond
+        // window. Reject it rather than let a large operator value wrap to 1ms.
+        if (environmentKey.endsWith('_WINDOW_MINUTES') && value * 60_000 > 2_147_483_647) {
+            throw new Error(`${environmentKey} exceeds the supported timer window`);
+        }
+    }
+}
 
 // Apply environment variable overrides AFTER reading CSV.
 // In E2E: E2E_* vars override; otherwise plain vars override.
@@ -217,6 +285,7 @@ export class SettingsStore {
                 await this.write(file);
             }
             applyEnvOverrides(this._settings);
+            validateProductionBounds(this._settings);
             this._settings.initialized = true;
             return;
         }
@@ -239,6 +308,7 @@ export class SettingsStore {
 
         // Finally, apply env overrides on top.
         if (!forceCsv) applyEnvOverrides(this._settings);
+        validateProductionBounds(this._settings);
         this._settings.initialized = true;
     }
 

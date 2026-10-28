@@ -2,8 +2,7 @@
 import {computed, reactive, ref, shallowRef, useId, watch} from 'vue';
 import {RouterLink} from 'vue-router';
 import type {components} from '../../../types/api/v1';
-import type {FrontendEntityCardInteraction} from '../../../types/FrontendUiTypes';
-import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import type {FrontendEntityCardInteraction, FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import {useActionState, useFrontend} from '../../app/context';
 import {eventKeys} from '../../app/queryKeys';
 import {useCommand} from '../../composables/command';

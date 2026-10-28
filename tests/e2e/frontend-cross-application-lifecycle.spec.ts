@@ -203,10 +203,12 @@ test('revoked Packing admission cannot return through history while independent 
         await waitForFrontendHydration(page);
         await page.evaluate(() => { document.documentElement.dataset.p10Document = 'revoked-retirement'; });
         await cardLink(page, resources.activity.id).click();
-        await expect(page.getByRole('heading', {name: resources.activity.title, exact: true})).toBeVisible();
+        // Overview cards retain the same resource titles while lazy navigation
+        // settles. Only the admitted detail's h1 proves that destination mounted.
+        await expect(page.getByRole('heading', {level: 1, name: resources.activity.title, exact: true})).toBeVisible();
         await openOverview(page);
         await cardLink(page, resources.packing.id).click();
-        await expect(page.getByRole('heading', {name: resources.packing.title, exact: true})).toBeVisible();
+        await expect(page.getByRole('heading', {level: 1, name: resources.packing.title, exact: true})).toBeVisible();
 
         // Start from a genuinely admitted control. Entry and detail revalidation
         // independently retire this view, so deleting first and then seeking its
@@ -262,7 +264,7 @@ test('revoked Packing admission cannot return through history while independent 
         await expect(page.getByRole('heading', {name: resources.packing.title, exact: true})).toHaveCount(0);
         await openOverview(page);
         await cardLink(page, resources.activity.id).click();
-        await expect(page.getByRole('heading', {name: resources.activity.title, exact: true})).toBeVisible();
+        await expect(page.getByRole('heading', {level: 1, name: resources.activity.title, exact: true})).toBeVisible();
         expect((await session(page.request)).context).toBe(guest.context);
         expect(await page.evaluate(() => document.documentElement.dataset.p10Document)).toBe('revoked-retirement');
     } finally { await owner.close(); }

@@ -1,6 +1,6 @@
 import {createFeatureApiResolver} from '../../app/api';
 import type {components} from '../../../types/api/v1';
-import type {FrontendContext, FrontendRequestScope} from '../../../types/FrontendUiTypes';
+import type {FrontendRequestScope} from '../../../types/FrontendUiTypes';
 import type {FrontendInputField} from '../../../types/FrontendFeedbackTypes';
 import type {FrontendApi} from '../../app/api';
 import {createMultipartForm, generatedInputError} from '../../app/transport';

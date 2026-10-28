@@ -18,6 +18,9 @@ import {User} from '../../src/backend/modules/database/entities/user/User';
 import type {ApiActor} from '../../src/types/ApiTypes';
 import type {components} from '../../src/types/api/v1';
 import {prepareFileUploader} from '../../src/backend/modules/lib/fileCommons';
+import {receiveApiUpload} from '../../src/backend/modules/api/transport';
+import {createAccessLogger} from '../../src/backend/modules/lib/http';
+import {asyncHandler} from '../../src/backend/modules/lib/asyncHandler';
 
 const entityId = '84305c09-5386-47bc-b62d-520b8a8edbb2';
 const itemId = '52a92e09-e6c5-47ce-9eea-6329be8415f4';
@@ -89,6 +92,79 @@ function imageUpload(): FormData {
 }
 
 describe('shared entity routing components', () => {
+    it('classifies actual multipart/media rejection separately from failed storage and allocation', async () => {
+        const diagnostics = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const fixture = await routingFixture(app => {
+            const directory = settings.value.headerImgDir;
+            const ordinary = prepareFileUploader(directory).single('image');
+            const allocationFault = prepareFileUploader(directory, true, true,
+                async () => { throw new Error('Private database allocation detail'); }).single('proof');
+            // A directory at the actual allocated filename makes the real disk
+            // stream fail without changing host permissions or a shared folder.
+            const storageFault = prepareFileUploader(directory, true, true,
+                async (_req, filename) => { await fs.mkdir(filename); }).single('proof');
+            for (const [route, upload] of [['/ordinary', ordinary], ['/allocation', allocationFault], ['/storage', storageFault]] as const) {
+                app.post(route, asyncHandler(async function uploadFixture(req, res) {
+                    await receiveApiUpload(req, res, upload);
+                    res.json({changed: true});
+                }));
+            }
+        });
+        for (const [filename, mime] of [['forged.txt', 'image/png'], ['image.svg', 'image/svg+xml']] as const) {
+            const form = new FormData();
+            form.set('image', new Blob(['fixture'], {type: mime}), filename);
+            const reply = await fetch(fixture.origin + '/ordinary', {method: 'POST', body: form});
+            expect(reply.status).toBe(400);
+            expect(await reply.json()).toMatchObject({code: 'UPLOAD_INVALID'});
+        }
+        const malformed = await fetch(fixture.origin + '/ordinary', {method: 'POST',
+            headers: {'Content-Type': 'multipart/form-data'}, body: 'Missing boundary'});
+        expect(malformed.status).toBe(400);
+        expect(await malformed.json()).toMatchObject({code: 'UPLOAD_INVALID'});
+        for (const route of ['/allocation', '/storage']) {
+            const form = new FormData();
+            form.set('proof', new Blob(['fixture'], {type: 'application/pdf'}), 'fixture.pdf');
+            const reply = await fetch(fixture.origin + route, {method: 'POST', body: form});
+            expect(reply.status).toBe(500);
+            const problem = await reply.json();
+            expect(problem).toMatchObject({code: 'INTERNAL_ERROR', requestId: expect.any(String)});
+            expect(JSON.stringify(problem)).not.toContain(fixture.directory);
+            expect(JSON.stringify(problem)).not.toContain('Private database');
+            expect(diagnostics).toHaveBeenCalledWith('[api]', expect.objectContaining({requestId: problem.requestId,
+                category: 'UploadStorageError'}));
+        }
+        expect(JSON.stringify(diagnostics.mock.calls)).not.toContain(fixture.directory);
+        expect(JSON.stringify(diagnostics.mock.calls)).not.toContain('Private database');
+    });
+
+    it('keeps full Morgan request diagnostics with only secrets redacted on success, error and missing routes', async () => {
+        const logs: string[] = [];
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        const fixture = await routingFixture(app => {
+            app.use(createAccessLogger({stream: {write(value: string) { logs.push(value); }}}));
+            app.get('/users/reset-password/:token', (_req, res) => { res.json({changed: true}); });
+            app.get('/users/oidc/callback', (_req, _res, next) => { next(new Error('Controlled provider failure')); });
+            app.use((_req, res) => { res.status(404).send('Missing'); });
+        });
+        for (const [route, expected] of [
+            ['/users/reset-password/private?next=%2fevent%2Fpublic&locale=de',
+                '/users/reset-password/[REDACTED]?next=%2fevent%2Fpublic&locale=de'],
+            ['/users/oidc/callback?code=private-code&state=private-state&scope=openid',
+                '/users/oidc/callback?code=[REDACTED]&state=[REDACTED]&scope=openid'],
+            ['/guest/visible-id/login/private-cap/unmatched?retained=a+b',
+                '/guest/visible-id/login/[REDACTED]/unmatched?retained=a+b'],
+        ] as const) {
+            const reply = await fetch(fixture.origin + route);
+            await reply.text();
+            await vi.waitFor(() => expect(logs.some(line => line.includes('GET ' + expected))).toBe(true));
+        }
+        expect(logs.join('')).not.toContain('private');
+        expect(logs.join('')).toContain('200');
+        expect(logs.join('')).toContain('500');
+        expect(logs.join('')).toContain('404');
+        expect(logs.every(line => line.includes(' ms'))).toBe(true);
+    });
+
     it('retains the real uploader media, extension and rejected-file boundary', async function admitsReviewedUploadMedia() {
         const fixture = await routingFixture(app => {
             const upload = prepareFileUploader(settings.value.headerImgDir, true, true).single('file');

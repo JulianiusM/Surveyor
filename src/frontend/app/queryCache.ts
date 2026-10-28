@@ -24,7 +24,7 @@ export function useQueryInvalidation(client: QueryClient, key: ComputedRef<reado
     return computed(() => {
         // Cache events invalidate this projection; every evaluation reads the
         // library's actual state instead of mirroring its flag into Vue state.
-        revision.value;
+        void revision.value;
         return client.getQueryState(key.value)?.isInvalidated ?? false;
     });
 }

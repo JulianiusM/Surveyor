@@ -246,6 +246,65 @@ async function createTakeoverContext(title: string) {
     return {...context, third, thirdId};
 }
 
+describe('pool assignment adjustment cleanup', () => {
+    it('prunes seeded stale takeovers and surcharges when the final explicit assignment is cleared', async () => {
+        const {event, poolId, firstId, secondId, invoiceId} = await createCalculationContext('Final explicit allocation');
+        await poolOperations.saveInvoicePoolAssignments(poolId, false, false, false, [firstId], []);
+        await poolOperations.savePoolSurcharge(poolId, firstId, 8, 'Assigned member adjustment', true);
+
+        // Reproduce historical stale dependents with real ORM rows. Ordinary business
+        // admission correctly rejects adding these for the now unassigned second member.
+        await AppDataSource.transaction(async function seedHistoricalAllocation(manager) {
+            await invoiceService.insertTakeovers(poolId, [{payerId: firstId, beneficiaryId: secondId}], manager);
+            await invoiceService.saveSurcharge(poolId, secondId, -3, 'Historical unassigned rebate', false, manager);
+        });
+        const seeded = (await invoiceService.getPoolWithInvoices(poolId))!;
+        expect(seeded.assignments.map(assignment => assignment.registrationId)).toEqual([firstId]);
+        expect(seeded.takeovers).toHaveLength(1);
+        expect(seeded.surcharges).toHaveLength(2);
+
+        // The empty explicit scope must remain empty, rather than fall back to all
+        // event members. Allocation cleanup must not remove invoices or attendance.
+        await poolOperations.saveInvoicePoolAssignments(poolId, false, false, false, [], []);
+        const cleared = (await invoiceService.getPoolWithInvoices(poolId))!;
+        expect(cleared.assignments).toEqual([]);
+        expect(cleared.takeovers).toEqual([]);
+        expect(cleared.surcharges).toEqual([]);
+        expect(cleared.invoices.map(invoice => invoice.id)).toEqual([invoiceId]);
+        expect((await eventService.getRegistrationsForEvent(event.id)).map(registration => registration.id).sort((left, right) => left - right))
+            .toEqual([firstId, secondId].sort((left, right) => left - right));
+    });
+
+    it('retains eligible adjustment rows and prunes only dependencies outside the new allocation', async () => {
+        const {event, poolId, firstId, secondId, thirdId, invoiceId} = await createTakeoverContext('Retained explicit allocation');
+        await poolOperations.saveInvoicePoolAssignments(poolId, false, false, false, [firstId, secondId, thirdId], []);
+        await savePoolTakeovers(poolId, firstId, [secondId, thirdId], true);
+        const retainedSurcharge = await poolOperations.savePoolSurcharge(poolId, firstId, 12.5, 'Retained member adjustment', true);
+        await poolOperations.savePoolSurcharge(poolId, thirdId, -3.25, 'Removed member rebate', false);
+        const seeded = (await invoiceService.getPoolWithInvoices(poolId))!;
+        const retainedTakeover = seeded.takeovers.find(takeover => takeover.beneficiaryRegistrationId === secondId)!;
+        expect(seeded.takeovers).toHaveLength(2);
+        expect(seeded.surcharges).toHaveLength(2);
+
+        // Reduce eligibility through the production operation. Retained records keep
+        // their actual identities and saved content, rather than being reconstructed.
+        await poolOperations.saveInvoicePoolAssignments(poolId, false, false, false, [firstId, secondId], []);
+        const remaining = (await invoiceService.getPoolWithInvoices(poolId))!;
+        expect(remaining.assignments.map(assignment => assignment.registrationId).sort((left, right) => left - right))
+            .toEqual([firstId, secondId].sort((left, right) => left - right));
+        expect(remaining.takeovers).toHaveLength(1);
+        expect(remaining.takeovers[0]).toMatchObject({id: retainedTakeover.id,
+            payerRegistrationId: firstId, beneficiaryRegistrationId: secondId});
+        expect(remaining.surcharges).toHaveLength(1);
+        expect(remaining.surcharges[0]).toMatchObject({id: retainedSurcharge.id,
+            registrationId: firstId, amount: '12.50', note: 'Retained member adjustment'});
+        expect(remaining.surcharges[0].subtractFromPool).toBeTruthy();
+        expect(remaining.invoices.map(invoice => invoice.id)).toEqual([invoiceId]);
+        expect((await eventService.getRegistrationsForEvent(event.id)).map(registration => registration.id))
+            .toEqual(expect.arrayContaining([firstId, secondId, thirdId]));
+    });
+});
+
 describe('staged takeover notifications', () => {
     it('blocks participant coverage changes while participant invoices are disabled but immediately applies organizer planning edits', async () => {
         const {event, poolId, firstId, secondId} = await createCalculationContext('Organizer invoice coverage');

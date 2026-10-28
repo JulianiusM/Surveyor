@@ -67,7 +67,7 @@ function deadlineCountdown(): string {
                 </div>
 
                 <div class="col-md-6" v-if="event.description">
-                    <label class="form-label">{{ messages.t('event.descriptionLabel') }}</label>
+                    <span class="form-label d-inline-block">{{ messages.t('event.descriptionLabel') }}</span>
                     <!-- Event keeps its labeled column and ordinary paragraph
                          margins; only escaped line rendering is shared with lists. -->
                     <EntityDescription :description="event.description" :paragraph-id="null" paragraph-class="" />

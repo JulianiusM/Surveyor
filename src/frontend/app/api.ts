@@ -1,6 +1,6 @@
-import type {components, paths} from '../../types/api/v1';
+import type {components} from '../../types/api/v1';
 import type {ApiOperationId} from '../../types/ApiTransportTypes';
-import type {FrontendContext, FrontendDecodedResponse, FrontendRead, FrontendRequestScope} from '../../types/FrontendUiTypes';
+import type {FrontendContext, FrontendDecodedResponse, FrontendRequestScope} from '../../types/FrontendUiTypes';
 import {FrontendTransport, ObsoleteRequestError, UnconfirmedResponseError} from './transport';
 import {validateSessionView} from '../../../.generated/api/v1/browser/validateSessionView.mjs';
 import {validatePasswordResetCheck} from '../../../.generated/api/v1/browser/validatePasswordResetCheck.mjs';

@@ -14,6 +14,17 @@ html(lang="en")
                     button.btn.no-print(type="button" onclick="window.print()") Print
 
                 h3 Plan info
+                if data.window.oversized
+                    .no-print
+                        form(method="get")
+                            label(for="windowStart") Window start
+                            input#windowStart(type="date" name="windowStart" value=data.window.startDate min=data.plan.startDate max=data.plan.endDate required)
+                            button(type="submit") Show window
+                        if data.window.previous
+                            a(href=`?windowStart=${data.window.previous}`) Previous window
+                        if data.window.next
+                            a(href=`?windowStart=${data.window.next}`) Next window
+                    p= `Shown dates: ${data.window.startDate} → ${data.window.endDate}`
                 .meta
                     div
                         strong Dates:&nbsp;

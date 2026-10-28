@@ -14,9 +14,16 @@
  * limitations under the License.
  */
 
-import {readEntityDefaultsBaseline, updateEntityDefaults, readEntityAdministratorBaseline, updateEntityAdministrator} from './entityAdminController';
+import {
+    readEntityDefaultsBaseline, updateEntityDefaults, readEntityAdministratorBaseline,
+    updateEntityAdministrator, searchEntityProfiles, completeDefaults, defaultPermissionValues,
+    getEntityPropertyPresentation, readEntitySettingsAccess, entityCreationPermissionContext,
+} from './entityAdminController';
 
-import {eventMethodPermission, mayPerformEventMethod} from '../modules/permissionEngine';
+import {
+    eventMethodPermission, mayPerformEventMethod, assertEditableEntityFields, can, evaluateSubject, isOwner,
+    saveDefaultPermsFromBody,
+} from '../modules/permissionEngine';
 import {validateCalendarDate} from '../modules/event/linkage';
 import {registerAttendance as registerEventAttendance, cancelRegistration, updateRegistrationDates,
     eventCapacityReached, listDeadlineBypassLinks,
@@ -27,15 +34,15 @@ import {registerAttendance as registerEventAttendance, cancelRegistration, updat
 // controllers/eventController.ts
 import {hasAccountProfile} from './userController';import {Request} from "express";
 import {comparisonToken, requireFieldComparison} from '../modules/api/transport';
-import {searchEntityProfiles, completeDefaults, defaultPermissionValues, getEntityPropertyPresentation, readEntitySettingsAccess, entityCreationPermissionContext} from './entityAdminController';
 import {archiveEntity, classifyArchiveCommandError, getArchivePresentations, getArchiveView, restoreEntity, setAutomaticArchival} from '../modules/entityArchival';
-import {assertEditableEntityFields} from '../modules/permissionEngine';
 
 import path from 'node:path';
 import pdfmake, {type TCreatedPdf} from 'pdfmake';
 import type {Content, Table, TableCell, TDocumentDefinitions} from 'pdfmake/interfaces';
 import {PAGE_MARGINS, FONT_SIZE_BASE, FONT_SIZE_SMALL, FONT_SIZE_TITLE, FONT_SIZE_SECTION, formatDateTime, keyValueLine} from '../modules/lib/pdf';
-import type {ParticipantRow} from '../../types/EventTypes';
+import type {
+    ParticipantRow, DIETARY, EventMethod,
+} from '../../types/EventTypes';
 // Business logic for the Event routes
 import Joi from 'joi';
 import type {EntityManager} from 'typeorm';
@@ -62,19 +69,10 @@ import {ApiProblem} from '../modules/api/problem';
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {checkNewImage, performImageSwap, removeImage} from "../modules/lib/fileCommons";
 import {
-    buildDateTotals,
-    projectEventParticipants,
-    convertToSingleList,
-    ENTITIES,
-    getResource,
-    getHeaderImageVersion,
-    rewriteISOToZone,
-    uuidKey
+    buildDateTotals, projectEventParticipants, convertToSingleList, ENTITIES, getResource,
+    getHeaderImageVersion, rewriteISOToZone, uuidKey, projectEntityCard,
 } from "../modules/lib/util";
-import {can, evaluateSubject, isOwner, saveDefaultPermsFromBody} from '../modules/permissionEngine';
 import {requireSessionProfileId} from '../modules/lib/session';
-import {projectEntityCard} from '../modules/lib/util';
-import type {DIETARY, EventMethod} from '../../types/EventTypes';
 import type {PermBundle, PermView, SessionLike} from '../../types/PermissionTypes';
 import type {components} from '../../types/api/v1';
 import type {ApiResponsePreparer} from '../../types/ApiTransportTypes';

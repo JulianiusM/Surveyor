@@ -76,7 +76,7 @@ for (const locale of ['en', 'de'] as const) {
             const readProgress = page.locator('#requirementPanel').getByRole('status')
                 .filter({hasText: messages.t('common.loading')});
             const otherControl = page.locator('#requiredShifts');
-            const endpoint = `**/api/v1/activity-plans/${plan.id}/requirements`;
+            const endpoint = (url: URL) => url.pathname === `/api/v1/activity-plans/${plan.id}/requirements`;
 
             // Hold only delivery of a genuine authorized backend response. Both
             // cycles use the built application, session and saved requirements;
@@ -90,6 +90,12 @@ for (const locale of ['en', 'de'] as const) {
                     if (route.request().method() !== 'GET') return route.continue();
                     intercepted = true;
                     try {
+                        // The ordinary editor now requests its first saved-stay
+                        // page explicitly. Keep query validation separate from
+                        // route matching so a changed query fails this assertion.
+                        const url = new URL(route.request().url());
+                        expect(url.searchParams.getAll('page')).toEqual(['1']);
+                        expect(url.searchParams.getAll('section')).toEqual(['stays']);
                         const response = await route.fetch();
                         expect(response.status()).toBe(200);
                         received.release();
@@ -484,12 +490,15 @@ test('keeps both manual swap legs together and saves swap, unassignment and assi
     await page.locator('[data-recommendations-apply]').click();
     const swapped = await swapping;
     expect(swapped.status()).toBe(200);
-    const batch = swapped.request().postDataJSON().recommendations as Array<{itemId: string; sourceItemId: string; operation: string}>;
+    const batch = swapped.request().postDataJSON().recommendations as components['schemas']['ActivityRecommendationReview']['recommendations'];
     expect(batch).toHaveLength(2);
     expect(batch).toEqual(expect.arrayContaining([
         expect.objectContaining({operation: 'REASSIGN', itemId: first!.id, sourceItemId: second!.id}),
         expect.objectContaining({operation: 'REASSIGN', itemId: second!.id, sourceItemId: first!.id}),
     ]));
+    expect(batch[0]!.swapGroup).toEqual(expect.any(String));
+    expect(batch[0]!.swapGroup).not.toBe('');
+    expect(batch[1]!.swapGroup).toBe(batch[0]!.swapGroup);
     expect(await swapped.json()).toMatchObject({applied: 2, skipped: 0});
     await expect.poll(async () => (await readActivityRecommendationsForE2E(page.request, plan.id)).existingAssignments)
         .toEqual(expect.arrayContaining([
@@ -539,6 +548,9 @@ for (const scenario of [
                     status: 'PENDING', operation: 'REASSIGN', manual: true});
             }
             await savePendingActivityRecommendationsForE2E(page.request, plan.id, recommendations);
+            const saved = await readActivityRecommendationsForE2E(page.request, plan.id);
+            expect(saved.recommendations).toHaveLength(4);
+            for (const recommendation of saved.recommendations) expect(recommendation).not.toHaveProperty('swapGroup');
         }
 
         await page.goto(`${plan.path}?locale=${locale}`, {waitUntil: 'domcontentloaded'});
@@ -560,6 +572,23 @@ for (const scenario of [
         const counterpart = page.locator(`#recommendationScheduleView [data-rec-id][data-profile-id="${plan.extraSecond.id}"]`);
         const originalPair = page.locator(`#recommendationScheduleView [data-rec-id][data-profile-id="${plan.owner.id}"], #recommendationScheduleView [data-rec-id][data-profile-id="${plan.other.id}"]`);
         const chooser = page.locator('#recommendationPairDialog');
+
+        /** Resolve a legacy move through its visible organizer choice. Even a
+         * unique reciprocal option must never supply unconfirmed pairing intent. */
+        async function confirmSavedSwapCounterpart(profileName: string): Promise<void> {
+            await expect(chooser).toBeVisible();
+            // Select the intended person, preserving the exact option identity
+            // emitted by the current review instead of inventing a pair token.
+            const choice = chooser.locator('#recommendationPairCounterpart');
+            const option = choice.locator('option').filter({hasText: profileName});
+            await expect(option).toHaveCount(1);
+            const value = await option.getAttribute('value');
+            expect(value).toBeTruthy();
+            await choice.selectOption(value!);
+            await chooser.locator('#recommendationPairConfirm').click();
+            await expect(chooser).not.toBeVisible();
+        }
+
         const action = restored ? 'approve' : 'revert';
         await selected.getByRole('button', {name: messages.t(`activity.recommendations.${action}`), exact: true}).click();
 
@@ -572,14 +601,7 @@ for (const scenario of [
             await expect(chooser).not.toBeVisible();
             await expect(rows.locator('.badge').filter({hasText: messages.t('activity.recommendations.pending')})).toHaveCount(4);
             await selected.getByRole('button', {name: messages.t('activity.recommendations.approve'), exact: true}).click();
-            const choice = chooser.locator('#recommendationPairCounterpart');
-            const option = choice.locator('option').filter({hasText: plan.extraSecond.name});
-            await expect(option).toHaveCount(1);
-            const value = await option.getAttribute('value');
-            expect(value).toBeTruthy();
-            await choice.selectOption(value!);
-            await chooser.locator('#recommendationPairConfirm').click();
-            await expect(chooser).not.toBeVisible();
+            await confirmSavedSwapCounterpart(plan.extraSecond.name);
         } else await expect(chooser).not.toBeVisible();
 
         const selectedStatus = messages.t(restored ? 'activity.recommendations.approved' : 'activity.recommendations.pending');
@@ -592,13 +614,16 @@ for (const scenario of [
         await expect(originalPair).toHaveCount(2);
         await expect(chooser).not.toBeVisible();
 
-        // Recreate only the removed pair. Applying all four eligible moves
-        // protects unchanged wire/persistence behavior without claiming repair
-        // of the separately tracked backend's blocked-operation pairing.
+        // Recreate only the removed pair. The final reviewed command carries
+        // explicit, distinct pair provenance for all four eligible moves.
         await stageActivitySwapForE2E(page, {sourceSlotId: first!.id, targetSlotId: second!.id,
             profileId: plan.extraFirst.id, counterpartId: plan.extraSecond.id}, messages.t('activity.recommendations.stage'));
         await expect(rows).toHaveCount(4);
-        if (restored) await originalPair.first().getByRole('button', {name: messages.t('activity.recommendations.approve'), exact: true}).click();
+        if (restored) {
+            await page.locator(`#recommendationScheduleView [data-rec-id][data-profile-id="${plan.owner.id}"]`)
+                .getByRole('button', {name: messages.t('activity.recommendations.approve'), exact: true}).click();
+            await confirmSavedSwapCounterpart(plan.other.name);
+        }
         await expect(rows.locator('.badge').filter({hasText: messages.t('activity.recommendations.approved')})).toHaveCount(4);
         const applying = page.waitForResponse(response => response.request().method() === 'POST'
             && new URL(response.url()).pathname === `/api/v1/activity-plans/${plan.id}/recommendations/apply`);
@@ -609,9 +634,19 @@ for (const scenario of [
         const submitted = applied.request().postDataJSON().recommendations as Array<Record<string, unknown>>;
         expect(submitted).toHaveLength(4);
         for (const recommendation of submitted) {
-            expect(Object.keys(recommendation).sort()).toEqual(expect.arrayContaining(['itemId', 'manual', 'operation', 'profileId', 'sourceItemId', 'status']));
-            expect(Object.keys(recommendation).every(key => ['id', 'itemId', 'manual', 'operation', 'profileId', 'sourceItemId', 'status'].includes(key))).toBe(true);
+            expect(Object.keys(recommendation).sort()).toEqual(expect.arrayContaining(['itemId', 'manual', 'operation', 'profileId', 'sourceItemId', 'status', 'swapGroup']));
+            expect(Object.keys(recommendation).every(key => ['id', 'itemId', 'manual', 'operation', 'profileId', 'sourceItemId', 'status', 'swapGroup'].includes(key))).toBe(true);
         }
+        const swapGroups = pairs.map(([incoming, outgoing]) => {
+            const pair = submitted.filter(row => row.profileId === incoming.id || row.profileId === outgoing.id);
+            expect(pair).toHaveLength(2);
+            const group = pair[0]!.swapGroup;
+            expect(group).toEqual(expect.any(String));
+            expect(group).not.toBe('');
+            expect(pair[1]!.swapGroup).toBe(group);
+            return group;
+        });
+        expect(new Set(swapGroups).size).toBe(2);
         await expect.poll(async () => (await readActivityRecommendationsForE2E(page.request, plan.id)).existingAssignments)
             .toEqual(expect.arrayContaining(pairs.flatMap(([incoming, outgoing]) => [
                 expect.objectContaining({item: expect.objectContaining({id: second!.id}), profile: expect.objectContaining({id: incoming.id})}),

@@ -8,12 +8,16 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import type {AssignmentCandidate, SlotAssignmentMap, ActivityRequirementPreparationInputs} from '../../../types/ActivityTypes';
+import type {
+    AssignmentCandidate, SlotAssignmentMap, ActivityRequirementPreparationInputs, RequirementConfiguration,
+    ActivityRecommendationPersistenceContext, ActivityLinkedPlanContext, AutoAssignmentContext,
+    AutoAssignmentSlot, RecommendationInput, ActivityRecommendationContext,
+    ActivityRecommendationOperationInput,
+} from '../../../types/ActivityTypes';
 import type {EntityManager} from 'typeorm';
 import {ActivityPlan} from '../database/entities/activity/ActivityPlan';
 import type {ActivitySlot} from '../database/entities/activity/ActivitySlot';
 import {ActivityAssignmentRecommendation} from '../database/entities/activity/ActivityAssignmentRecommendation';
-import type {RequirementConfiguration, ActivityRecommendationPersistenceContext, ActivityLinkedPlanContext, AutoAssignmentContext, AutoAssignmentSlot, RecommendationInput, ActivityRecommendationContext, ActivityRecommendationOperationInput} from '../../../types/ActivityTypes';
 import type {ParticipantRow} from '../../../types/EventTypes';
 import * as activityService from '../database/services/ActivityService';
 import * as requirementService from '../database/services/ActivityRequirementService';
@@ -27,6 +31,34 @@ import {fingerprintRecommendationContext, RecommendationJobCoordinator, Recommen
 import {projectEventParticipants, uuidKey, sameUuid, indexByUuid} from '../lib/util';
 import {generateFairRecommendations} from './fairAssignment';
 import {countInclusiveDays, hasCompleteStayRequirements, toParticipantKey} from '../../../common/activity/requirements';
+import settings from '../settings';
+
+/** Apply the configured duration policy using constant-time civil-day counting. */
+export function isActivityOversized(plan: Pick<ActivityPlan, 'startDate' | 'endDate'>): boolean {
+    return countInclusiveDays(plan.startDate, plan.endDate) > settings.value.activityMaxDurationDays;
+}
+
+/** Admit new/expanded ranges before allocation or persistence; older long plans may keep or reduce their day count. */
+export function requireActivityDuration(startDate: string, endDate: string,
+    previous?: Pick<ActivityPlan, 'startDate' | 'endDate'>): void {
+    // Only increases are constrained for existing data. Shifting an unchanged
+    // duration retains its saved-slot checks in the owning property operation.
+    const days = countInclusiveDays(startDate, endDate);
+    if (days > settings.value.activityMaxDurationDays
+        && (!previous || days > countInclusiveDays(previous.startDate, previous.endDate))) {
+        throw new APIError('Activity duration exceeds the configured maximum', {}, 400, {cause: 'ACTIVITY_DURATION_LIMIT'});
+    }
+}
+
+/** Stop whole-plan requirements work before loading duration-sized collections or allocating the engine input. */
+export function requireActivityRequirementWork(plan: Pick<ActivityPlan, 'startDate' | 'endDate'>): void {
+    // Existing saved rows remain untouched; managers can shorten the plan through
+    // the ordinary date operation without discarding any out-of-range slot.
+    if (isActivityOversized(plan)) {
+        throw new APIError('Requirements are read-only for an oversized activity plan', {}, 409,
+            {cause: 'ACTIVITY_REQUIREMENTS_OVERSIZED'});
+    }
+}
 
 import type {ParticipantAttendance} from "../../../types/ActivityRequirementTypes";
 
@@ -99,8 +131,9 @@ export function participantsFromAssignments(assignments: Record<string, Assignme
 
 /** Admit a saved configuration and project UUID references for the shared pure
  * engine without changing hydrated rows or numeric requirement identifiers. */
-export async function requireRequirementConfiguration(planId: string, manager?: EntityManager): Promise<RequirementConfiguration> {
-    const configuration = await requirementService.getRequirementConfiguration(planId, manager);
+export async function requireRequirementConfiguration(planId: string, manager?: EntityManager,
+    includeStayRequirements = true): Promise<RequirementConfiguration> {
+    const configuration = await requirementService.getRequirementConfiguration(planId, manager, includeStayRequirements);
     if (!configuration) throw new APIError('Activity plan not found', {planId}, 404);
     return {...configuration, overrides: configuration.overrides.map(override => ({
         ...override, profileId: uuidKey(override.profileId),
@@ -307,6 +340,7 @@ export function toRecommendationInput(recommendation: ActivityAssignmentRecommen
     input.sourceItemId = recommendation.sourceItem?.id ?? null;
     input.manual = recommendation.manual;
     input.hidden = recommendation.hidden;
+    if (recommendation.pairingKnown) input.swapGroup = recommendation.swapGroup ?? null;
     if (identity === 'saved') return input;
     const memory = normalizeRecommendationInput(input, 'canonical');
     delete memory.id;
@@ -412,14 +446,15 @@ export async function buildPlanRecommendationContext(
         }
         return activityService.withActivityReadSnapshot(readContext);
     }
-    const [requirementConfig, plan, slots, existingAssignments, participantRoles] = await Promise.all([
+    const plan = await activityService.getActivityPlanById(planId, manager);
+    if (!plan) throw new APIError('Activity plan not found', {planId}, 404);
+    requireActivityRequirementWork(plan);
+    const [requirementConfig, slots, existingAssignments, participantRoles] = await Promise.all([
         requireRequirementConfiguration(planId, manager),
-        activityService.getActivityPlanById(planId, manager),
         activityService.getActivitySlotsFlat(planId, manager) as Promise<AutoAssignmentSlot[]>,
         activityService.getParticipantAssignmentsWithSlots(planId, manager),
         activityService.getParticipantRolesForPlan(planId, manager),
     ]);
-    if (!plan) throw new APIError('Activity plan not found', {planId}, 404);
 
     existingRecommendations ??= await recommendationService.getRecommendations(planId, manager);
     const recommendationMemory = existingRecommendations.map(recommendation => toRecommendationInput(recommendation, 'memory'));
@@ -667,6 +702,7 @@ export async function queueAutoGenerateRecommendations(planId: string) {
     // Free assignment and incomplete stay requirements cannot start a useful job.
     const plan = await activityService.getActivityPlanById(planId);
     if (!plan) throw new APIError('Activity plan not found', {planId}, 404);
+    requireActivityRequirementWork(plan);
     if (plan.assignmentMode === "FREE") {
         throw new APIError('Automatic recommendations are disabled in free assignment mode', {planId}, 409, {cause: 'ACTIVITY_RECOMMENDATIONS_DISABLED'});
     }

@@ -73,7 +73,7 @@ function seedInitialCounts(): void {
  * independently admitted sibling remains usable, while missing authority stays unknown. */
 function collectionCounts(): Partial<Record<Region['collection'], {total: number; hidden: number}>> {
     // Cache notifications make the otherwise nonreactive QueryClient lookup observable.
-    cacheRevision.value;
+    void cacheRevision.value;
     const result: Partial<Record<Region['collection'], {total: number; hidden: number}>> = {};
     for (const collection of ['participant', 'owner'] as const) {
         let newest: FrontendOverviewCountRead | undefined;

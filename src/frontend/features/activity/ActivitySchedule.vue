@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, ref} from 'vue';
+import {computed, ref, watch} from 'vue';
 import RichMessage from '../../components/RichMessage.vue';
 import type {components} from '../../../types/api/v1';
 import {useFrontend} from '../../app/context';
@@ -16,7 +16,7 @@ const props = defineProps<{view: components['schemas']['ActivityView']; disabled
     patch(slot: components['schemas']['ActivitySlotView'], field: 'title' | 'description' | 'maxAssignees', value: string, token: string): Promise<boolean>;
     reorder(order: components['schemas']['ActivityOrderInput']['order'], token: string): Promise<unknown>}>();
 const emit = defineEmits<{edit: [slot: components['schemas']['ActivitySlotView']]; add: [day: string]; remove: [slot: components['schemas']['ActivitySlotView']];
-    assign: [slot: components['schemas']['ActivitySlotView'], assigned: boolean, role?: string]; removeAssignment: [id: string]; roles: [slot: components['schemas']['ActivitySlotView']]; editing: [active: boolean]; denied: [source?: Event]}>();
+    assign: [slot: components['schemas']['ActivitySlotView'], assigned: boolean, role?: string]; removeAssignment: [id: string]; roles: [slot: components['schemas']['ActivitySlotView']]; editing: [active: boolean]; denied: [source?: Event]; window: [start: string]}>();
 const context = useFrontend();
 const {messages} = context;
 const filter = ref('all');
@@ -24,6 +24,9 @@ const draggedDay = ref('');
 const editing = ref(0);
 const editingDescriptions = ref(new Set<string>());
 const weeks = computed(() => props.view.weeks);
+const selectedWindow = ref(props.view.window?.startDate ?? props.view.startDate);
+const windowBlocked = computed(() => props.disabled || editing.value > 0);
+watch(() => props.view.window?.startDate, value => { if (value) selectedWindow.value = value; });
 /** Keep the server's time/position order within each date before filtering. */
 function daySlots(day: string): components['schemas']['ActivitySlotView'][] {
     return props.view.slots.filter(slot => slot.day === day);
@@ -61,6 +64,21 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
 </script>
 
 <template>
+    <!-- Only a deliberate admitted window read replaces the visible schedule.
+         Active inline drafts keep their current rows and block window changes. -->
+    <form v-if="view.window?.oversized" class="frontend-action-row mb-3" @submit.prevent="!windowBlocked && emit('window', selectedWindow)">
+        <label for="activity-window-start">{{ messages.t('activity.windowStart') }}</label>
+        <input id="activity-window-start" v-model="selectedWindow" type="date" required
+            :min="view.startDate" :max="view.endDate" :disabled="windowBlocked" />
+        <ActionButton type="submit" variant="outline-secondary" :disabled="windowBlocked">{{ messages.t('activity.calendarWindow') }}</ActionButton>
+        <ActionButton v-if="view.window.previous" type="button" variant="outline-secondary" :disabled="windowBlocked"
+            @click="emit('window', view.window!.previous!)">{{ messages.t('activity.previousWindow') }}</ActionButton>
+        <ActionButton v-if="view.window.next" type="button" variant="outline-secondary" :disabled="windowBlocked"
+            @click="emit('window', view.window!.next!)">{{ messages.t('activity.nextWindow') }}</ActionButton>
+        <a v-if="view.capabilities.exportSchedule" :href="'/activity/' + encodeURIComponent(view.id) + '/export/schedule?windowStart=' + encodeURIComponent(view.window.startDate)"
+            target="_blank" rel="noopener">{{ messages.t('activity.exportSchedule') }}</a>
+        <span>{{ activityDateLabel(view.window.startDate, context.locale.value) }} – {{ activityDateLabel(view.window.endDate, context.locale.value) }}</span>
+    </form>
     <!-- Requirement progress is persistent content. The shared notice owns its
          visual shell without adding transient feedback, dismissal or a live role. -->
     <StatusNotice

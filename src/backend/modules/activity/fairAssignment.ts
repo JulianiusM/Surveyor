@@ -4,7 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  */
 
-import {toAssignmentCandidate} from './availability';
+import {
+    toAssignmentCandidate, collectAssignmentWarnings, findOverlapConflicts,
+} from './availability';
 import type {RecommendationInput, AssignmentCandidate, AttendancePolicy, FairAssignmentSlot, FairAssignmentContext} from '../../../types/ActivityTypes';
 
 
@@ -12,7 +14,6 @@ import type {RecommendationInput, AssignmentCandidate, AttendancePolicy, FairAss
 
 
 
-import {collectAssignmentWarnings, findOverlapConflicts} from './availability';
 import type {ParticipantAttendance} from "../../../types/ActivityRequirementTypes";
 import {calculateRequirementsForParticipants, countInclusiveDays, hasCompleteStayRequirements, toParticipantKey} from "../../../common/activity/requirements";
 import {compareSlotsByDayAndTime} from "./timebox";
@@ -714,6 +715,8 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
             status: "PENDING",
             operation: assignment.sourceSlotId ? "REASSIGN" : "ASSIGN",
             sourceItemId: assignment.sourceSlotId ?? null,
+            // The allocator constructs independent moves, never inferred swaps.
+            swapGroup: null,
         }))
         .sort((a, b) => `${a.itemId}:${a.profileId}`.localeCompare(`${b.itemId}:${b.profileId}`));
 }

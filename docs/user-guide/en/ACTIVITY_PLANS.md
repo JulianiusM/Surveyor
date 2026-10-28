@@ -4,10 +4,10 @@ documentation-metadata
 audience: activity participants; activity organizers
 owner: activity-plan maintainers
 status: current
-last-verified: 2026-10-27
+last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Saved assignment outcomes and suggestion-refresh recovery reconciled with the visible controls and focused frontend/database checks; prior requirement labels and stable heading IDs retained. No article figures are referenced; no new full-article browser verification claimed.
-source-anchors: tests/unit/activity-linked-recommendations.spec.ts; tests/integration/activity-plan-interlinking.spec.ts; tests/e2e/frontend-activity-advanced.spec.ts; src/backend/controller/entityAdminController.ts; src/backend/modules/archive/policy.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/controller/activityController.ts; src/common/activity/requirements.ts; src/backend/modules/activity/availability.ts; src/backend/modules/activity/fairAssignment.ts; src/backend/modules/activity/autoAssignment.ts; src/backend/modules/activity/recommendations.ts; src/backend/modules/activity/recommendationJobs.ts; src/backend/modules/database/services/ActivityService.ts; src/backend/modules/database/services/ActivityRequirementService.ts; src/backend/modules/database/services/ActivityRecommendationService.ts; tests/unit/activity-requirements.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/backend/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/activity/ActivityRecommendations.vue; src/frontend/features/activity/recommendationDraft.ts; src/common/locales/en.json; src/frontend/features/activity/; src/frontend/components/EntitySettingsDialog.vue; src/common/locales/; src/frontend/components/permissions/CreationPermissions.vue; src/frontend/
+verification-scope: Configurable duration, selected calendar/print windows, read-only requirement pages and explicit saved-move choices reconciled with current source and visible English labels; earlier assignment guidance and stable heading IDs retained. No article figures or new full-article browser verification claimed.
+source-anchors: tests/unit/activity-linked-recommendations.spec.ts; tests/integration/activity-plan-interlinking.spec.ts; tests/e2e/frontend-activity-advanced.spec.ts; src/backend/controller/entityAdminController.ts; src/backend/modules/archive/policy.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/controller/activityController.ts; src/common/activity/requirements.ts; src/backend/modules/activity/availability.ts; src/backend/modules/activity/fairAssignment.ts; src/backend/modules/activity/autoAssignment.ts; src/backend/modules/activity/recommendations.ts; src/backend/modules/activity/recommendationJobs.ts; src/backend/modules/database/services/ActivityService.ts; src/backend/modules/database/services/ActivityRequirementService.ts; src/backend/modules/database/services/ActivityRecommendationService.ts; tests/unit/activity-requirements.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/backend/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/activity/ActivityRecommendations.vue; src/frontend/features/activity/recommendationDraft.ts; src/common/locales/en.json; src/frontend/features/activity/; src/frontend/components/EntitySettingsDialog.vue; src/common/locales/; src/frontend/components/permissions/CreationPermissions.vue; src/frontend/; src/backend/modules/settings.ts; src/backend/views/activity/export/schedule.pug; src/common/lib/civilDate.ts; src/backend/migrations/1793232000000-AddActivityRecommendationPairing.ts
 heading-anchors: 1:activity-plans; 2:choose-your-task; 3:i-am-participating; 3:i-am-organizing; 2:before-you-begin; 2:participate-in-an-activity-plan; 3:find-a-slot; 3:join-a-whole-slot; 3:take-a-named-role; 3:leave-a-slot-or-role; 3:understand-assignment-warnings; 3:use-shared-text-fields; 2:organize-an-activity-plan; 3:create-an-activity-plan; 3:understand-the-tabs; 3:change-plan-properties; 3:link-change-or-remove-an-event; 3:add-and-edit-slots; 4:add-a-slot-after-creation; 4:edit-a-slot; 3:add-named-roles-to-a-slot; 3:manage-role-assignments; 3:review-participants; 3:configure-basic-assignment-rules; 3:change-permissions-and-administrators; 3:export-the-schedule; 2:advanced-requirements-and-assignment-recommendations; 3:set-participant-requirements; 4:understand-which-requirement-wins; 3:check-requirement-coverage; 3:generate-assignment-suggestions; 3:review-generated-suggestions; 3:stage-a-manual-assignment-change; 3:save-and-apply-the-review; 3:advanced-limitations; 2:archive-or-restore-a-plan; 2:troubleshooting; 3:i-see-registration-required; 3:join-or-take-is-unavailable; 3:a-slot-does-not-appear-under-open-slots; 3:i-joined-the-wrong-profile; 3:i-cannot-edit-slots-roles-participants-rules-settings-or-exports; 3:my-changes-in-rules-and-auto-assign-were-lost; 3:auto-generate-is-disabled; 3:requirement-coverage-says-the-configuration-is-incomplete; 3:recommendation-generation-became-stale-or-failed; 3:a-participant-still-needs-shifts-after-generation; 3:an-approved-change-was-not-applied; 2:related-guides
 next-review: activity-plan-visible-UI-or-behavior-change
 -->
@@ -63,13 +63,15 @@ Open the plan and stay on the **Schedule** tab. The schedule is grouped by week 
 
 Use the schedule filters:
 
-- **All slots** shows the complete schedule.
+- **All slots** shows every slot in the displayed date range.
 - **My slots** shows slots assigned to your active profile.
 - **Open slots** shows slots that still have ordinary capacity. A full slot does not appear here even when the organizer permits joining beyond capacity.
 
 The summary above the calendar shows the number of **Participants**, **Slots**, open slots, and unassigned slots. An unassigned slot currently has no participant; it is not necessarily unavailable.
 
-When the organizer uses required participation, a message above the filters shows your progress, such as **You participate in 1 of 2 required slots. Take 1 more.** In free mode, no minimum is required.
+An existing plan longer than the site's current duration limit displays at most 42 days at a time. Enter **Window start** and select **Show window**, or use **Previous window** and **Next window**. Check the displayed dates before joining or editing a slot. Slot filters, assignment counts and slot totals describe that window; saved assignments outside it remain in place. Save or cancel an open inline slot edit before changing the window. Shared-text drafts remain available.
+
+When the organizer uses required participation, a message above the filters shows your progress, such as **You participate in 1 of 2 required slots. Take 1 more.** In free mode, no minimum is required. Requirement progress is unavailable while the plan exceeds the site's duration limit; joining and leaving eligible slots remain available.
 
 ### Join a whole slot
 
@@ -152,6 +154,8 @@ Creation requires a signed-in full account. The active profile becomes the owner
    - Set **Max participants** to a whole number of at least 1.
 6. Select **Create plan**.
 
+The date range must fit the maximum shown beside the dates. Both the start and end day count; the site's default maximum is 366 days. The site operator can change that limit. Duplication also creates a new plan and must fit the current limit.
+
 Each slot must be inside the plan’s date range. When both times are set, the end time must be later than the start time.
 
 Initial slots do not yet have named roles. Add those after creation with the slot editor.
@@ -175,6 +179,8 @@ The plan description appears above **Shared text fields**. To change it, open **
 3. Select **Save properties**.
 
 Title, description, and dates have separate edit permissions. Dates must still include every existing slot; changing them never moves or removes slots or assignments. Slot editing and **Rules & auto-assign** remain separate tasks.
+
+Increasing the number of days must fit the site's current duration limit. An older plan above that limit may keep or reduce its day count without first reaching the limit. Shortening a plan retains saved requirement values for longer stays; those values become relevant again if a later permitted expansion includes them.
 
 Each section saves separately. Saving keeps the page open and preserves unfinished input in other sections. A failed save keeps your draft. When closing with unsaved changes, choose whether to discard them; cancel closing to keep editing.
 
@@ -258,6 +264,8 @@ Use **Search participant…** or the filters:
 
 The columns show **Participant**, **Assignments**, **Requirement**, **Attendance**, and **Roles**. In free mode, the requirement column says **No minimum**. In required mode, it shows progress toward the participant’s current minimum.
 
+For a plan above the site's duration limit, assignment counts and roles reflect the selected calendar window. **Requirement** shows a dash and requirement-progress filters are unavailable until the plan fits the limit. The participant view remains available.
+
 Attendance and requirement information is meaningful mainly for a plan assigned to an event. Treat this view as participant information and grant **Access Participants** only to people who should see it.
 
 ### Configure basic assignment rules
@@ -289,6 +297,8 @@ With **Data Export** permission:
 
 The export contains the plan title and dates, linked event and time zone when applicable, summary counts, plan description, shared notes, slots, times, descriptions, assigned participants, and named roles. It reflects the current data at the generated time; create a new export after assignments change.
 
+For an existing plan above the site's duration limit, each export contains at most 42 days and identifies its **Shown dates**. Use **Window start** and **Show window**, or **Previous window** and **Next window**, on the print page to select the dates before printing. **Export schedule** beside the schedule's window controls opens the currently displayed window; the action in **Entity settings** starts with the plan's first window. Print each required window separately.
+
 Because participant names and assignments can be personal information, share exported copies only with their intended recipients and delete obsolete copies according to your organization’s policy.
 
 ## Advanced: requirements and assignment recommendations
@@ -306,6 +316,8 @@ Before using automatic suggestions, finish the event registrations and attendanc
 ### Set participant requirements
 
 Open **Rules & auto-assign**, then use **Step 1 — Configure rules & defaults**. The **Requirement settings** card contains the saved assignment mode, deadline, attendance-boundary switches, and requirement tables.
+
+If the plan exceeds the site's current duration limit, the card shows saved values in read-only pages of at most 100 rows. Select **Stay duration requirements**, **Role requirements**, or **Participant overrides**, then use **Previous page** and **Next page**. Requirement editing, **Calculate**, coverage and **Auto-generate** are unavailable. To resume them, shorten the plan within the limit while keeping every saved slot inside its dates. Saved requirement values remain intact; normal participation and manual assignment review remain available.
 
 1. In **Assignment mode**, select **Required**. **Free** keeps participation optional, displays **No minimum**, and disables **Auto-generate**.
 2. Set the **Binding deadline** when participants should stop changing their own assignments.
@@ -402,7 +414,7 @@ Use the recommendation schedule when a correction should be reviewed together wi
 
 Manual assignment and reassignment overlaps remain possible after confirmation. Warnings appear in the add dialog and stay beside the staged row, giving you time to discuss them with the affected participant. A reassignment or swap can use only a source assignment without a named role in this plan. A manually staged row starts Approved. Remove or revert it before saving when it should not be applied.
 
-Changing the review state or removing a newly staged swap affects its two rows together. When **Choose swap counterpart** appears for saved moves, select the matching opposite move under **Counterpart**, then select **Use selected counterpart**. Check the participant and source and destination slots before confirming. **Cancel** leaves the review rows unchanged.
+Changing the review state or removing an explicit swap affects its two rows together. Older saved reassignments may need your choice in **Choose swap counterpart**: under **Counterpart**, select the intended opposite move for a real swap, or **Independent move (no swap partner)** for a separate move. Then select **Use selected counterpart**. Opposite directions alone do not prove a swap, even when there is only one possible partner. Check the people and source and destination slots before confirming. **Cancel** leaves the review rows unchanged.
 
 ### Save and apply the review
 
@@ -410,6 +422,8 @@ Changing the review state or removing a newly staged swap affects its two rows t
 2. Discuss any overlap with the affected participant before applying it.
 3. Select **Save changes**.
 4. When **Assignment warnings** appears for manual overlaps or Required-over-Free suggestions, select **Confirm overlapping changes** only when you intend to accept them. **Cancel** keeps the draft and its warnings visible without applying or saving the review.
+
+If saving opens **Choose swap counterpart**, resolve that saved move, review the batch, then select **Save changes** again. Repeat for any remaining unresolved moves; choosing a counterpart or independent move does not automatically resume saving. A blocked leg prevents both legs of an explicit swap from applying. A separate independent move is checked on its own.
 
 Surveyor saves the review states and applies Approved operations that pass its checks. Pending and Rejected rows do not change the schedule. Before applying, Surveyor checks the plan and participants again, including source assignments, duplicate targets, attendance, arrival/departure boundaries, overlaps, named roles, and capacity. Manual overlaps and Required-over-Free overlaps can be confirmed; other blocking warnings still skip the operation. A changed overlap requires a fresh review and confirmation before any part of the batch is saved.
 
@@ -471,7 +485,7 @@ Use **Save settings**, **Save requirement settings**, or **Save changes**, depen
 
 ### Auto-generate is disabled
 
-The plan must be linked to an event, **Assignment mode** must be **Required**, and your profile needs **Manage Assignments**. Save a complete requirement table before generating.
+The plan must be linked to an event, **Assignment mode** must be **Required**, and your profile needs **Manage Assignments**. The plan must also fit the site's current duration limit. Save a complete requirement table before generating. For a longer plan, saved values remain readable in pages and manual review remains available.
 
 ### Requirement coverage says the configuration is incomplete
 

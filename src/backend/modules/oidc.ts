@@ -16,7 +16,7 @@
 
 import type {Request} from 'express';
 import * as oidc from 'openid-client';
-import type {OidcLoginEvidence, ProviderLogoutOutcome} from '../../types/IdentityTypes';
+import type {OidcLoginEvidence, ProviderLogoutEvidence, ProviderLogoutOutcome} from '../../types/IdentityTypes';
 import {ExpectedError} from "./lib/errors";
 import {persistSession} from "./lib/session";
 import {rotateFrontendSessionContext} from './lib/frontendSession';
@@ -141,21 +141,12 @@ export async function logout(session: Request['session'], presentation?: 'outcom
     // A local save failure is never converted into confirmed sign-out.
     await logoutLocal(session);
 
-    // Only initialize OIDC if this is an OIDC session
+    // Discovery remains after confirmed local persistence. The existing default
+    // caller still receives provider errors, while outcome callers get a warning.
     if (isOidc) {
         try {
-            if (!config) await initOIDC();
-
-            const meta = config.serverMetadata();
-            const endSession = meta.end_session_endpoint;
-            const postLogoutRedirectUri = settings.value.rootUrl;
-
-            if (endSession) {
-                const url = new URL(endSession);
-                if (id_token_hint) url.searchParams.set('id_token_hint', id_token_hint);
-                url.searchParams.set('post_logout_redirect_uri', postLogoutRedirectUri);
-                return presentation ? {redirect: url.toString()} : url.toString();
-            }
+            const redirect = await providerLogoutRedirect(id_token_hint);
+            return presentation ? {redirect} : redirect;
         } catch (error) {
             // Local identity is already durably cleared. Default callers retain
             // their existing error behavior, notably provider-bearing account deletion.
@@ -165,4 +156,35 @@ export async function logout(session: Request['session'], presentation?: 'outcom
     }
 
     return presentation ? {redirect: settings.value.rootUrl} : settings.value.rootUrl;
+}
+
+/** Build only the provider delivery destination; this owner never mutates or
+ * saves local authority. Ordinary logout and committed deletion share its exact
+ * configured metadata, private hint and return-URL behavior. */
+async function providerLogoutRedirect(idTokenHint?: string): Promise<string> {
+    if (!config) await initOIDC();
+    const endSession = config.serverMetadata().end_session_endpoint;
+    if (!endSession) return settings.value.rootUrl;
+
+    // Only the configured provider metadata selects the external destination.
+    // Keep the ID-token hint private; neither request logging nor local receipts
+    // receive it independently of this explicit provider navigation.
+    const url = new URL(endSession);
+    if (idTokenHint) url.searchParams.set('id_token_hint', idTokenHint);
+    url.searchParams.set('post_logout_redirect_uri', settings.value.rootUrl);
+    return url.toString();
+}
+
+/** Resolve an external handoff after account/local-session deletion committed.
+ * Discovery, malformed metadata and unavailable termination produce a delivery
+ * warning; none can reject or replay the completed local operation. */
+export async function prepareProviderLogout(evidence: ProviderLogoutEvidence): Promise<ProviderLogoutOutcome> {
+    try {
+        const redirect = await providerLogoutRedirect(evidence.idTokenHint);
+        return redirect === settings.value.rootUrl ? {redirect, providerLogout: 'unconfirmed'} : {redirect};
+    } catch {
+        // The existing controller already prepared its local warning receipt.
+        // No underlying provider error or private hint enters the public result.
+        return {redirect: settings.value.rootUrl, providerLogout: 'unconfirmed'};
+    }
 }

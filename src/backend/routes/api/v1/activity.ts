@@ -94,7 +94,7 @@ router.get('/:planId/slots/:slotId/edit-baseline', asyncHandler(async function g
 router.get('/:planId/slot-order', asyncHandler(async function getActivityOrderBaseline(req, res) {
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'getActivityOrderBaseline');
-    const result = await activityApi.readActivityOrderBaseline(String(req.params.planId), actor);
+    const result = await activityApi.readActivityOrderBaseline(String(req.params.planId), actor, req.query.windowStart);
     sendValidatedJson(req, res, 'getActivityOrderBaseline', 200, result, result.editToken);
 }));
 
@@ -247,7 +247,9 @@ router.get('/:planId/requirements', asyncHandler(async function getActivityRequi
     // Requirements remain a private management projection with generated scalar validation.
     validateOperationRequest(req, 'getActivityRequirements');
     sendValidatedJson(req, res, 'getActivityRequirements', 200,
-        await activityApi.readActivityRequirements(String(req.params.planId), actor));
+        await activityApi.readActivityRequirements(String(req.params.planId), actor,
+            req.query.page === undefined ? 1 : Number(req.query.page),
+            req.query.section as 'stays' | 'roles' | 'overrides' | undefined));
 }));
 
 router.put('/:planId/requirements', asyncHandler(async function updateActivityRequirements(req, res) {

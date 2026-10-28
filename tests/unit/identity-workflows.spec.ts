@@ -1,6 +1,7 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
-import {requireCurrentMigrationToken, requireCurrentProfileOwner, requireLocalRegistrationNames} from '../../src/backend/modules/identity';
+import {requireCurrentMigrationToken, requireCurrentProfileOwner, requireIdentityName,
+    requireLocalRegistrationNames, projectProviderDisplayName} from '../../src/backend/modules/identity';
 
 afterEach(() => vi.useRealTimers());
 
@@ -12,6 +13,25 @@ describe('local registration name admission', () => {
             expect(() => requireLocalRegistrationNames(...names as [string, string]))
                 .toThrowError(expect.objectContaining({name: 'ValidationError', cause: 'VALIDATION_FAILED', data: {}}));
         }
+    });
+});
+
+describe('shared stored identity names', () => {
+    it('admits the same complete Unicode names without trimming or normalization', () => {
+        for (const name of ['😀'.repeat(50), 'a'.repeat(50), '  Name cafe\u0301  ']) {
+            expect(() => requireIdentityName(name)).not.toThrow();
+        }
+        for (const name of ['😀'.repeat(51), 'a'.repeat(51), '', null, undefined]) {
+            expect(() => requireIdentityName(name)).toThrowError(expect.objectContaining({code: 'VALIDATION_FAILED'}));
+        }
+    });
+
+    it('projects only a new provider display name at complete code-point boundaries', () => {
+        const exact = '😀'.repeat(48) + 'e\u0301';
+        expect(projectProviderDisplayName(exact)).toBe(exact);
+        expect(projectProviderDisplayName(exact + ' omitted')).toBe(exact);
+        expect(projectProviderDisplayName('  Provider display  ')).toBe('  Provider display  ');
+        expect(projectProviderDisplayName('😀'.repeat(51))).toBe('😀'.repeat(50));
     });
 });
 
