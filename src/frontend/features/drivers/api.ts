@@ -29,7 +29,7 @@ type Assignment = components['schemas']['DriversAssignmentResult'];
 
 /** Feature operations own their generated validators; transport and actor admission are shared. */
 export class DriversApi {
-    constructor(private transport: FrontendApi) {}
+    constructor(private readonly transport: FrontendApi) {}
 
     // The feature owns discovery authorization and cache families. The shared picker only
     // renders and selects the supplied options, so another feature can reuse its behavior.

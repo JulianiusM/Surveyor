@@ -216,8 +216,14 @@ async function hasLiveProofReference(reference: string, manager?: EntityManager)
     // protection independent of the total number of invoices in the installation.
     if (await invoiceService.hasInvoiceProofReference([reference, path.resolve(reference), portableProofPath(reference)], manager)) return true;
     let actual: string;
-    try { actual = await fs.promises.realpath(path.resolve(reference)); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false; throw error; }
+    try {
+        actual = await fs.promises.realpath(path.resolve(reference));
+    } catch (error) {
+        // Only a missing file proves this path has no surviving physical target.
+        // Permission and storage failures leave its cleanup authority uncertain.
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+        throw error;
+    }
     let afterId = 0;
     let references: {id: number; path: string}[];
     do {

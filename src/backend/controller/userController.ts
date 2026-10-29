@@ -39,7 +39,7 @@ import {ApiProblem} from '../modules/api/problem';
 import {buildGuestLink, ENTITIES, uuidKey} from "../modules/lib/util";
 import * as oidc from "../modules/oidc";
 import settings from "../modules/settings";
-import type {Entity, GuestLinkData, OverviewCollection, OverviewPageView, OverviewQuery, OverviewReadResult, OverviewRegion, OverviewRegionView, PersonalVisibilityCompletion, PersonalVisibilityResult} from "../../types/UserTypes";
+import type {Entity, GuestLinkData, OverviewCollection, OverviewQuery, OverviewReadResult, OverviewRegion, OverviewRegionView, PersonalVisibilityCompletion, PersonalVisibilityResult} from "../../types/UserTypes";
 import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, LockedArchiveContext, PersonalVisibility} from "../../types/ArchiveTypes";
 import type {SessionLike} from "../../types/PermissionTypes";
 import {archiveKey, isHiddenInOverview} from "../modules/archive/policy";
@@ -72,10 +72,16 @@ const LOGIN_TEMPLATE = 'users/login';
  * direct callers retain their established route and literal next spelling.
  */
 function identityLink(path: string, options?: IdentityLinkOptions): string {
-    const next = options?.next ? (options.frontend ? safeFrontendReturn(options.next) : options.next) : undefined;
+    let next: string | undefined;
+    if (options?.next) {
+        next = options.frontend ? safeFrontendReturn(options.next) : options.next;
+    }
     // The frontend option serializes its bounded return destination. Direct mail
     // retains its original literal next parameter and route contract.
-    return `${settings.value.rootUrl}${path}${next ? `?next=${options?.frontend ? encodeURIComponent(next) : next}` : ''}`;
+    const destination = `${settings.value.rootUrl}${path}`;
+    if (!next) return destination;
+    const returnValue = options?.frontend ? encodeURIComponent(next) : next;
+    return `${destination}?next=${returnValue}`;
 }
 
 /**
@@ -117,21 +123,6 @@ async function requireAvailableUsername(username: string, email: string, manager
     }
 }
 
-/** Registration keeps its established persistence, activation and default mail error ordering. */
-export async function registerUser(body: any, next?: string, options?: IdentityLinkOptions) {
-    const {username, name, password, email} = validateUserRegistration(body);
-    await requireAvailableUsername(username, email);
-
-    // Benutzer registrieren
-    let userId = await userService.registerUser(username, name, password, email);
-
-    // Generiere den Aktivierungs-Token und sende ihn per E-Mail
-    const token = await userService.generateActivationToken(userId);
-    const activationLink = identityLink(`/users/activate/${encodeURIComponent(token)}`, {...options, next: options?.next ?? next});
-
-    await mailer.sendActivationEmail({name, address: email}, activationLink);
-}
-
 /**
  * Prepare a frontend account, default profile and activation token in one registration
  * transaction. Signup preserves the current actor; only document completion opts
@@ -158,19 +149,6 @@ export async function registerUserWithSession<Result>(body: any, req: Request,
     }
 
     return commitRegistration(req, options.context, createAccount, Boolean(options.persistCompletion));
-}
-
-/**
- * Share credential and activation checks between direct and versioned login.
- * An API caller may recheck its admitted session immediately before identity
- * mutation; only an active account reaches that hook and rotates the context.
- * Shared validation prose and renderer values remain owned by this controller.
- */
-export async function loginUser(body: any, session: Request["session"], options?: IdentityTransitionOptions) {
-    // Credential rejection and inactive-account resend preserve operation ordering.
-    const user = await resolveLoginUser(body, options);
-    await options?.beforeTransition?.();
-    await saveAccountIdentity(session, user);
 }
 
 /**
@@ -302,11 +280,11 @@ function overviewRegionId(collection: OverviewCollection, region: OverviewRegion
 }
 
 /**
- * Page and fragment requests share this allowlist. A decimal string is validated before
+ * Region requests use this allowlist. A decimal string is validated before
  * conversion, rejecting nested query values, signs, fractions, overflow, and arbitrary size.
- * There is no caller-selected profile or page-size field in either transport.
+ * There is no caller-selected profile or page-size field.
  */
-function normalizeOverviewNavigation(input: unknown, fragment: boolean) {
+function normalizeOverviewNavigation(input: unknown) {
     const fields: Record<string, Joi.Schema> = {};
     for (const collection of OVERVIEW_COLLECTIONS) {
         for (const region of OVERVIEW_REGIONS) {
@@ -319,10 +297,8 @@ function normalizeOverviewNavigation(input: unknown, fragment: boolean) {
             fields[`${prefix}open`] = Joi.string().valid('1', '0');
         }
     }
-    if (fragment) {
-        fields.collection = Joi.string().valid(...OVERVIEW_COLLECTIONS).required();
-        fields.region = Joi.string().valid(...OVERVIEW_REGIONS).required();
-    }
+    fields.collection = Joi.string().valid(...OVERVIEW_COLLECTIONS).required();
+    fields.region = Joi.string().valid(...OVERVIEW_REGIONS).required();
     const parsed = Joi.object<Record<string, string>>(fields).unknown(false)
         .validate(input ?? {}, {convert: false, abortEarly: false});
     if (parsed.error) {
@@ -348,12 +324,10 @@ function normalizeOverviewNavigation(input: unknown, fragment: boolean) {
             };
         }
     }
-    const target = fragment
-        ? overviewKey(parsed.value.collection as OverviewCollection, parsed.value.region as OverviewRegion)
-        : undefined;
+    const target = overviewKey(parsed.value.collection as OverviewCollection, parsed.value.region as OverviewRegion);
     // Asking for a hidden region is the explicit load operation even when the caller omitted
     // its open marker. The canonical URL records it for reloads and ordinary browser history.
-    if (target) state[target].open = true;
+    state[target].open = true;
     return {state, target};
 }
 
@@ -419,14 +393,14 @@ async function decorateOverviewReads(reads: OverviewReadResult[], session: Sessi
     }
 }
 
-/** Build one region's navigation and loaded/unloaded display state while retaining
- * other regions' search parameters. Loaded cards gain their existing expansion
- * URLs, and parent context selects child-page rather than mixed-card pagination. */
+/**
+ * Build one loaded region's navigation while retaining other regions' search parameters.
+ * Cards gain their existing expansion URLs; parent context selects child-page pagination.
+ */
 function makeOverviewRegionView(
     state: OverviewNavigationState,
     key: string,
-    read: OverviewReadResult | undefined,
-    totals: {collectionTotal: number; hiddenTotal: number; pageSize: number},
+    read: OverviewReadResult,
 ): OverviewRegionView {
     const query = state[key];
     const prefix = `${key}_`;
@@ -436,25 +410,22 @@ function makeOverviewRegionView(
     // reset both page numbers. Their q/type inputs supply this region's new filter values.
     for (const field of ['q', 'type', 'page', 'childPage']) search.delete(`${prefix}${field}`);
     if (query.region === 'hidden') search.set(`${prefix}open`, '1');
-    // An unopened region keeps its supplied totals/navigation without inventing
-    // loaded cards or running another overview query here.
     const view: OverviewRegionView = {
         collection: query.collection, region: query.region, q: query.q, type: query.type,
         page: query.page, childPage: query.childPage, eventId: query.eventId,
         id: overviewRegionId(query.collection, query.region), title, queryPrefix: prefix,
-        items: read?.items ?? [], parent: read?.event,
-        totalEntities: totals.collectionTotal, hiddenEntities: totals.hiddenTotal,
-        regionEntities: read?.regionTotal ?? totals.hiddenTotal,
-        matchingEntities: read?.matchingTotal ?? 0,
-        totalCards: read?.cardTotal ?? 0, totalChildren: read?.childTotal ?? 0,
-        availableTypes: read?.types ?? [], pageSize: totals.pageSize,
+        items: read.items, parent: read.event,
+        totalEntities: read.collectionTotal, hiddenEntities: read.hiddenTotal,
+        regionEntities: read.regionTotal,
+        matchingEntities: read.matchingTotal,
+        totalCards: read.cardTotal, totalChildren: read.childTotal,
+        availableTypes: read.types, pageSize: read.pageSize,
         canonicalUrl: overviewUrl(state, key, {open: true}),
         backUrl: overviewUrl(state, key, {eventId: undefined, childPage: 1}),
         clearUrl: overviewUrl(state, key, {q: '', type: 'all', page: 1, childPage: 1}),
-        loaded: !!read,
+        loaded: true,
         searchFields: Array.from(search, ([name, value]) => ({name, value})),
     };
-    if (!read) return view;
 
     // Add expansion destinations only for event containers on the mixed page;
     // an already expanded parent retains its independently selected child context.
@@ -472,13 +443,13 @@ function makeOverviewRegionView(
     return view;
 }
 
-/** Full HTML and fragment navigation use the same bounded reader and presentation path. */
-async function readOverviewNavigation(session: SessionLike, input: unknown, fragment: boolean) {
+/** Admit one selected region and retain every region's navigation through the bounded read. */
+async function readOverviewNavigation(session: SessionLike, input: unknown) {
     const profileId = requireSessionProfileId(session);
-    const {state, target} = normalizeOverviewNavigation(input, fragment);
-    const selected = target ? [state[target]] : Object.values(state).filter(query => query.open);
+    const {state, target} = normalizeOverviewNavigation(input);
+    const selected = [state[target]];
     const queries: OverviewQuery[] = selected.map(({open, ...query}) => query);
-    // Identity, normalized query values and the maximum of four regions are owned here:
+    // Identity, normalized query values and the selected region are owned here:
     // the closed navigation matrix cannot select another profile or arbitrary DBAL input.
     // Services consume this validated contract without repeating transport-level checks.
     const reads = await userService.getOverviewPages(profileId, queries);
@@ -494,28 +465,10 @@ async function readOverviewNavigation(session: SessionLike, input: unknown, frag
     return {state, target, byRegion};
 }
 
-/** Build both Overview collections from the same admitted, bounded navigation read. */
-export async function getOverviewPage(session: SessionLike, query: unknown = {}): Promise<OverviewPageView> {
-    // The reader owns identity/query admission and the resulting clamped state;
-    // both main and hidden regions use that same collection total and link context.
-    const {state, byRegion} = await readOverviewNavigation(session, query, false);
-    function collectionView(collection: OverviewCollection) {
-        const mainKey = overviewKey(collection, 'main');
-        const hiddenKey = overviewKey(collection, 'hidden');
-        const main = byRegion.get(mainKey)!;
-        return {
-            main: makeOverviewRegionView(state, mainKey, main, main),
-            hidden: makeOverviewRegionView(state, hiddenKey, byRegion.get(hiddenKey), main),
-            total: main.collectionTotal,
-        };
-    }
-    return {participant: collectionView('participant'), owner: collectionView('owner')};
-}
-
 export async function getOverviewRegion(session: SessionLike, query: unknown): Promise<OverviewRegionView> {
-    const {state, target, byRegion} = await readOverviewNavigation(session, query, true);
-    const read = byRegion.get(target!)!;
-    return makeOverviewRegionView(state, target!, read, read);
+    const {state, target, byRegion} = await readOverviewNavigation(session, query);
+    const read = byRegion.get(target)!;
+    return makeOverviewRegionView(state, target, read);
 }
 
 /**
@@ -593,27 +546,10 @@ async function personalVisibilityResult(reference: ArchiveReference, visibility:
     };
 }
 
-/** Share direct and guarded recovery mail while keeping an unknown account a quiet
- * no-op. Only the trusted link option selects the destination frontend route. */
-export async function sendPasswordForgotMail(username: string, options?: IdentityLinkOptions) {
-    const user = await resolveNamedAccount(username);
-    await options?.beforeIdentityMail?.(user?.email ?? username);
-    if (!user) {
-        return;
-    }
-
-    // Generiere ein Passwort-Zurücksetzungs-Token und speichere es in der Datenbank
-    const token = await userService.generatePasswordResetToken(user.username);
-    const resetLink = identityLink(`/users/reset-password/${encodeURIComponent(token)}`, options);
-
-    // Sende eine E-Mail mit dem Zurücksetzungs-Link
-    await mailer.sendPasswordResetEmail({name: resolveEmailRecipientName(user.name, user.username), address: user.email}, resetLink);
-}
-
-/** Own direct and guarded username-first account resolution, retaining the caller's optional persistence scope. */
+/** Resolve credential and recovery accounts by username before falling back to email. */
 async function resolveNamedAccount(username: string, manager?: EntityManager) {
-    // An exact username wins over the email fallback. Locked callers pass the
-    // same manager for both reads; direct callers keep their default DBAL scope.
+    // Recovery supplies its completion manager for both reads. Credential
+    // admission retains ordinary DBAL reads before the identity lock is acquired.
     const user = await userService.getUserByUsername(username, manager);
     return user ?? await userService.getUserByEmail(username, manager);
 }
@@ -622,7 +558,7 @@ async function resolveNamedAccount(username: string, manager?: EntityManager) {
  * Prepare frontend recovery's existing generic confirmation and optional token/mail
  * on the locked completion transaction. Unknown accounts stay a quiet no-op;
  * setup errors roll back, while caught SMTP failure retains normal confirmation.
- * Direct forgot-mail and inactive-login resend keep their original owners/order.
+ * Inactive-login resend retains its separate credential-admission ordering.
  */
 export async function requestPasswordResetWithSession<Result>(username: string, req: Request,
     options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
@@ -658,20 +594,7 @@ export async function checkPasswordForgotToken(token: string) {
     await requirePasswordResetToken(token);
 }
 
-/** Preserve the reset form's mismatch-before-token diagnostic order.
- * A successful command re-verifies the token before delegating the password write;
- * page admission is not a lasting authorization to submit an expired token. */
-export async function resetPassword(token: string, body: any) {
-    const password = validatePasswordResetInput(token, body);
-
-    // Überprüfe den Token und setze das Passwort zurück
-    const user = await requirePasswordResetToken(token);
-
-    // Setze das Passwort zurück
-    await userService.resetPassword(user.username, password);
-}
-
-/** Preserve the mismatch-before-token check and renderer data for both completion paths. */
+/** Preserve reset's mismatch-before-token check and existing renderer data. */
 function validatePasswordResetInput(token: string, body: any) {
     const {password, confirmPassword} = body;
     if (password !== confirmPassword) {
@@ -695,8 +618,8 @@ async function requirePasswordResetToken(token: string, manager?: EntityManager,
 
 /**
  * Consume a frontend reset capability exactly once with its prepared API/document
- * completion. Direct reset remains unchanged above. The session/token locks and
- * password update share one manager; unchanged actor state needs no JSON write.
+ * completion. The session/token locks and password update share one manager;
+ * unchanged actor state needs no JSON write.
  */
 export async function resetPasswordWithSession<Result>(token: string, body: any, req: Request,
     options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
@@ -712,24 +635,11 @@ export async function resetPasswordWithSession<Result>(token: string, body: any,
     return commitIdentityCompletion(req, options.context, consumeReset, Boolean(options.persistCompletion));
 }
 
-/** Activation submission verifies current token evidence again before the shared
- * account write. The controller literal error and versioned stable cause stay distinct. */
-export async function activateAccount(token: string) {
-    // Überprüfe, ob der Aktivierungs-Token gültig ist
-    const user = await userService.verifyActivationToken(token);
-    if (!user) {
-        throw new ExpectedError('Invalid or expired token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
-    }
-
-    // Aktiviere den Benutzer
-    await userService.activateUser(user.id);
-}
-
 /**
  * Commit a frontend token consumption with its prepared API/document completion.
- * Session and token locks share one connection; direct activation keeps its
- * original owner above. No mutable-context check, flash save or token projection
- * follows this commit, and the public receipt never contains the capability.
+ * Session and token locks share one connection. No mutable-context check,
+ * flash save or token projection follows this commit, and the public receipt
+ * never contains the capability.
  */
 export async function activateAccountWithSession<Result>(token: string, req: Request,
     options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
@@ -866,30 +776,6 @@ function normalizeGuestContact(username: string, email: string | undefined): str
 }
 
 /**
- * Preserve shared feature registration and its injectable persistence hook. The
- * guarded versioned workflow below uses this same input and guest/profile DBAL,
- * but owns atomic stored-session persistence and an immutable completion receipt.
- */
-export async function registerGuest(username: string, email: string | undefined, session: Request['session'],
-    options?: IdentityLinkOptions, createGuest: typeof userService.createGuest = userService.createGuest): Promise<string> {
-    // Direct callers supply their existing creator; preserve its ordering and
-    // link destination options without introducing a new transaction scope.
-    const normalizedEmail = normalizeGuestContact(username, email);
-
-    const guest = await createGuest(username, normalizedEmail);
-
-    // Persist session authority before delivering its existing private link/mail.
-    // The atomic API operation never enters this post-creation session-save path.
-    setGuestIdentity(session, guest);
-    await persistSession(session);
-    const link = options?.frontend
-        ? identityLink(`/guest/${encodeURIComponent(guest.id)}/login/${encodeURIComponent(guest.token)}`, options)
-        : buildGuestLink(guest.id, guest.token);
-    if (normalizedEmail) await mailer.sendLinkEmail({name: resolveEmailRecipientName(guest.username, guest.profile?.name), address: normalizedEmail}, link);
-    return link;
-}
-
-/**
  * Commit a versioned guest, profile and stored session together under the original
  * session row lock. Prepare every response/mail variant before that final commit;
  * a rollback leaves request authority untouched, while later delivery cannot turn
@@ -960,8 +846,16 @@ async function settleIdentityDelivery(receipt: PreparedIdentityEmail): Promise<b
  */
 async function commitIdentityCompletion<Result>(req: Request, context: string | null,
     prepare: (manager: EntityManager, session: Request['session']) => Promise<Result>,
-    persistSessionState: boolean): Promise<IdentityCompletionReceipt<Result>> {
+    persistSessionState: boolean, superseded?: () => Result): Promise<IdentityCompletionReceipt<Result>> {
     const sessionId = req.sessionID;
+
+    /** Feedback may be omitted, but its old request must never autosave over a newer identity. */
+    function rejectOrOmitSuperseded(): IdentityCompletionReceipt<Result> {
+        // Identity commands still reject before business writes. Only the approved
+        // feedback caller supplies this no-op result; never adopt the newer actor.
+        if (!superseded) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
+        return Object.freeze({session: stageIdentitySession(req, req.session), result: superseded()});
+    }
 
     /** Keep every prepared write and optional completion session on the locked connection. */
     async function prepareLocked(manager: EntityManager, lockedSession: Session | null) {
@@ -972,7 +866,7 @@ async function commitIdentityCompletion<Result>(req: Request, context: string | 
         const stored = await readStoredSession(store, sessionId);
         if (stored) {
             if (!lockedSession || !sameFrontendSessionIdentity(req.session, stored)
-                || readFrontendSessionMetadata(stored, sessionId).context !== context) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
+                || readFrontendSessionMetadata(stored, sessionId).context !== context) return rejectOrOmitSuperseded();
         } else {
             // A login/guest creation can be the browser's first session-changing
             // action. No empty row is saved before credential/business validation.
@@ -980,7 +874,7 @@ async function commitIdentityCompletion<Result>(req: Request, context: string | 
             const original = req.session;
             if (lockedSession || req.apiSessionStored !== false || context !== null || original.auth || original.profile
                 || original.tokens || original.oidc || original.frontendContext || original.frontendCsrfToken) {
-                throw new ApiProblem('SESSION_CONTEXT_CHANGED');
+                return rejectOrOmitSuperseded();
             }
         }
 
@@ -1002,6 +896,26 @@ async function commitIdentityCompletion<Result>(req: Request, context: string | 
     // Serialization, SQL and ambiguous commit errors propagate unchanged. Only
     // an actually completed transaction may acknowledge registration success.
     return userService.withIdentitySessionTransaction(sessionId, prepareLocked);
+}
+
+/**
+ * Complete document feedback on its originating generation using the existing
+ * locked Session owner. Superseded feedback is omitted without changing captured
+ * authority; both committed consumption and omission seal later response saves.
+ */
+export async function completeDocumentFeedback<Result>(req: Request,
+    prepare: (session: Request['session']) => Result): Promise<Result | undefined> {
+    // For expiry feedback this is the completed logout's generation, rather than
+    // the earlier captured actor. Nothing reloads or adopts another tab's actor.
+    const context = readFrontendSessionMetadata(req.session, req.sessionID).context;
+    async function prepareFeedback(_manager: EntityManager, session: Request['session']): Promise<Result | undefined> {
+        return prepare(session);
+    }
+    const completed = await commitIdentityCompletion(req, context, prepareFeedback, true, () => undefined);
+    // The same staged save acknowledgement prevents Express from writing an old
+    // full snapshot after this transaction or after another identity has won.
+    req.session = completed.session;
+    return completed.result;
 }
 
 /**
@@ -1043,19 +957,12 @@ function profileOwnerCleanupMessage(cleanup: ProfileOwnerCleanup): string {
     return '';
 }
 
-/** Verify the typed username before selecting the existing account or
- * guest deletion workflow, including its mail and provider/logout completion. */
-export async function deleteAccount(body: any, session: Request['session']) {
-    // Provider-bearing deletion retains its established feature-owned partial outcomes.
-    return identity.deleteAccount(body, session);
-}
-
 export function deactivateProfile(body: any, session: Request['session']): Promise<string>;
 export function deactivateProfile(body: any, session: Request['session'], presentation: 'facts'): Promise<ProfileOwnerCleanup>;
 /** Preserve confirmation, ownership removal and former-owner cleanup.
  * The optional API projection reports facts after the same completed sequence;
  * default callers retain their exact original string and trailing empty suffix. */
-export async function deactivateProfile(body: any, session: Request['session'], presentation?: 'facts'): Promise<string | ProfileOwnerCleanup> {
+export async function deactivateProfile(body: any, session: Request['session'], presentation?: 'facts'): Promise<string> {
     // The feature owns confirmation, detach and cleanup; this controller selects presentation only.
     const cleanup = await identity.deactivateProfile(body, session);
     return presentation === 'facts' ? cleanup : `Profile successfully deactivated. ${profileOwnerCleanupMessage(cleanup)}`;
@@ -1108,27 +1015,18 @@ export async function changeActiveProfileWithSession<Result>(profileId: string, 
     return commitIdentityCompletion(req, options.context, prepareProfileChange, true);
 }
 
-/** Retain blank-name validation, optional rename and default selection,
- * then reload the saved active profile before persisting the session copy. */
-export async function updateProfile(body: any, session: Request['session']) {
-    const {name, isDefault} = body;
-    const profileId = session.profile!.id;
-    if (name?.trim()?.length === 0) {
-        throw new ValidationError("users/profile/view", "Invalid profile name", {}, {cause: 'PROFILE_NAME_REQUIRED'});
+/** Complete current-profile fields, required Session refresh and the prepared
+ * acknowledgement together, preserving the admitted generation without rotation. */
+export async function updateProfileWithSession<Result>(body: any, req: Request,
+    options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
+    /** The existing completion owner supplies current staged authority and one manager. */
+    async function prepareProfileEdit(manager: EntityManager, session: Request['session']): Promise<Result> {
+        // Shared feature policy checks locked ownership and saves the fields;
+        // only this completion coordinator installs their required Session view.
+        session.profile = await identity.updateProfile(body, session, manager);
+        return options.prepareResult(session, manager);
     }
-    // Omission retains the existing name; a supplied name must fit the same
-    // authored code-point bound before either profile/default persistence starts.
-    if (name !== undefined) identity.requireIdentityName(name);
-    // An omitted name keeps its old value; default selection still saves next.
-    if (name) {
-        await userService.updateProfileName(profileId, name);
-    }
-    await userService.updateProfileDefault(profileId, !!isDefault);
-
-    // Session presentation follows both original profile writes in their order.
-    session.profile = await userService.getProfileById(profileId);
-    await persistSession(session);
-    return "Updated profile";
+    return commitIdentityCompletion(req, options.context, prepareProfileEdit, true);
 }
 
 export async function getProfilesForUser(userId: number) {
@@ -1204,7 +1102,8 @@ export function getProfileAdministrationEntry(session: SessionLike,
     view: operations['getProfileAdministrationEntry']['parameters']['query']['view'], returnTo?: unknown): components['schemas']['PageEntryOutcome'] {
     // A guest remains a valid identity when a full-account page redirects to login.
     // The adapter supplies the view; the established account owner decides admission.
-    const destination = safeFrontendReturn(returnTo ?? `/users/profile${view === 'edit' ? '' : `/${view}`}`);
+    const defaultPath = view === 'edit' ? '/users/profile' : `/users/profile/${view}`;
+    const destination = safeFrontendReturn(returnTo ?? defaultPath);
     if (view !== 'edit') return getAccountPageEntry(session, '/users/login', destination);
     return session.profile ? {kind: 'render'}
         : {kind: 'redirect', url: `/users/login?next=${encodeURIComponent(destination)}`, notice: null};
@@ -1306,7 +1205,9 @@ export async function deactivateIdentityProfile(req: Request, body: components['
         await changeActiveProfile(req.session);
         return profileWorkflowCompletion(req, '/users/profile/manage', profileWorkflowNoticeKeys.deactivation[cleanup]);
     } catch (error) {
-        if (error instanceof ValidationError) throw error;
+        // Only confirmation or the feature's exact pre-detach ownership denial
+        // is a known rejection. A matching API code from a later phase is not.
+        if (error instanceof ValidationError || identity.isDeactivationOwnershipRejection(error)) throw error;
         // Cleanup, remaining-profile selection and local save can fail after
         // detach. Do not report those later failures as a definite rejection.
         throw new ApiProblem('WORKFLOW_OUTCOME_UNKNOWN');

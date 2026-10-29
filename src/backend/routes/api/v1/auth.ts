@@ -278,17 +278,22 @@ router.get('/profiles', asyncHandler(async function getIdentityProfiles(req, res
     sendValidatedJson(req, res, 'getIdentityProfiles', 200, await userController.getIdentityProfiles(req.apiActor!));
 }));
 
-/** Adapt existing field editing without changing its persistence or session-save boundary. */
+/** Complete current-profile fields and their Session view before delivering the acknowledgement. */
 router.patch('/profiles/current', asyncHandler(async function updateIdentityProfile(req, res) {
     await admit(req, res, 'updateIdentityProfile');
     // Admission captures current ownership. Profile selection remains server-owned;
     // no submitted ID or later mutable-context read can change the acting profile.
     if (!req.apiActor!.profile) throw new ApiProblem('AUTH_REQUIRED');
-    const reply = prepareValidatedJson(req, 'updateIdentityProfile', 200, {changed: true});
-    await userController.updateProfile(req.body, req.session);
-    // Only delivery follows the unchanged shared operation. The client refreshes
-    // display data separately after this simple acknowledgement is confirmed.
-    sendPreparedJson(req, res, reply);
+    /** Validate and serialize the existing reply before profile/Session completion commits. */
+    function prepareProfileEdit() {
+        return prepareValidatedJson(req, 'updateIdentityProfile', 200, {changed: true});
+    }
+    const completed = await userController.updateProfileWithSession(req.body, req,
+        {context: req.apiActor!.context, prepareResult: prepareProfileEdit});
+    // Adopt only committed staged authority. Delivery performs no new Session
+    // read/write, while the client refreshes display separately after confirmation.
+    req.session = completed.session;
+    sendPreparedJson(req, res, completed.result);
 }));
 
 /** Add a profile through the existing account operation without selecting it. */

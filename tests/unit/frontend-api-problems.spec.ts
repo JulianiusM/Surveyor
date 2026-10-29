@@ -7,7 +7,7 @@ import {contractValidator} from '../../src/backend/modules/api/contracts';
 import {createTranslator} from '../../src/common/localization/translator';
 import {ExpectedError, ValidationError} from '../../src/backend/modules/lib/errors';
 import {frontendIdentityProblemKey} from '../../src/common/lib/frontendIdentity';
-import {loginUser, registerUser, resetPassword} from '../../src/backend/controller/userController';
+import {loginUserWithSession, registerUserWithSession, resetPasswordWithSession} from '../../src/backend/controller/userController';
 
 import {validateApiInput} from '../../src/backend/modules/api/transport';
 
@@ -100,15 +100,18 @@ describe('validated API problem output', () => {
     it('retains native controller validation wording, cause and renderer data from the shared catalog', async () => {
         // These production early-rejection paths require no persistence or mail.
         // Literal expectations remain independent of the catalog implementation.
-        await expect(loginUser({username: '', password: ''}, {} as Request['session'])).rejects.toMatchObject({
+        const req = {} as Request;
+        function unusedCompletion(): never { throw new Error('Invalid input must reject before completion'); }
+        const options = {context: null, prepareResult: unusedCompletion};
+        await expect(loginUserWithSession({username: '', password: ''}, req, options)).rejects.toMatchObject({
             message: 'Invalid username/email or password', cause: 'INVALID_CREDENTIALS', template: 'users/login', data: {username: ''},
         });
-        await expect(registerUser({username: 'entered', displayname: 'Entered name', email: 'entered@example.invalid',
-            password: 'First-password!A1', password_repeat: 'Second-password!A1'})).rejects.toMatchObject({
+        await expect(registerUserWithSession({username: 'entered', displayname: 'Entered name', email: 'entered@example.invalid',
+            password: 'First-password!A1', password_repeat: 'Second-password!A1'}, req, options)).rejects.toMatchObject({
             message: 'Passwords do not match.', cause: 'PASSWORD_MISMATCH', template: 'users/register',
             data: {username: 'entered', email: 'entered@example.invalid'},
         });
-        await expect(resetPassword('unread-token', {password: 'first', confirmPassword: 'second'})).rejects.toMatchObject({
+        await expect(resetPasswordWithSession('unread-token', {password: 'first', confirmPassword: 'second'}, req, options)).rejects.toMatchObject({
             message: 'Passwords do not match!', cause: 'PASSWORD_MISMATCH', template: 'users/reset-password', data: {token: 'unread-token'},
         });
     });

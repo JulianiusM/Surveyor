@@ -29,7 +29,7 @@ import {validateFinanceSettlementInput} from '../../../../.generated/api/v1/brow
 /** Finance selects authored operations; shared transport owns actor admission,
  * generated delivery checks and progress without automatic command replay. */
 export class FinanceApi {
-    constructor(private transport: FrontendApi) {}
+    constructor(private readonly transport: FrontendApi) {}
 
     /** Read a fresh saved-input preview. Each dialog owns its captured revision;
      * this read never commits shares or reuses a cached financial review. */

@@ -51,7 +51,7 @@ async function expectPackingReadOrder(id: string, stage: string) {
     // detail, duplicate draft and minimal order baseline on the same fixture.
     const nativeItems = await packingService.getPackingItems(id);
     const nativeView = await packingController.fetchForView(list, request);
-    const nativeDuplicate = await packingController.fetchForDuplicate(list, request.session);
+    const nativeDuplicate = await packingController.fetchForDuplicate(list);
     const nativeIds = nativeItems.map(item => item.id);
     const nativeTitles = nativeItems.map(item => item.title);
     expect(nativeView.items.map(item => item.id), `${stage}: native detail`).toEqual(nativeIds);

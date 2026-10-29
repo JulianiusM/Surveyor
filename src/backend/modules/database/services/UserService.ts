@@ -896,20 +896,28 @@ export function withMigrationProfileTransaction<Result>(profileId: string,
     source?: Pick<Profile, 'userId' | 'guestId'>, recipientId?: number): Promise<Result> {
     /** Reissuance and consumption serialize on the same profile, with no request or policy dependency. */
     async function lockProfile(manager: EntityManager): Promise<Result> {
-        // A transfer's owner rows precede the profile, matching account/guest
-        // deletion's FK updates. Stable User ordering also serializes reciprocal
-        // transfers without each holding the other's destination FK parent.
-        const userIds = [...new Set([source?.userId, recipientId].filter((id): id is number => typeof id === 'number'))].sort((a, b) => a - b);
-        for (const id of userIds) {
-            await manager.getRepository(User).findOne({where: {id}, lock: {mode: 'pessimistic_write'}});
-        }
-        if (source?.guestId) {
-            await manager.getRepository(Guest).findOne({where: {id: source.guestId}, lock: {mode: 'pessimistic_write'}});
-        }
-        const profile = await manager.getRepository(Profile).findOne({where: {id: profileId}, lock: {mode: 'pessimistic_write'}});
+        // Share the established lock order with manager-bound profile editing;
+        // this standalone migration entry retains its original transaction.
+        const profile = await lockProfileForOwner(profileId, manager, source, recipientId);
         return operation(manager, profile);
     }
     return AppDataSource.transaction('READ COMMITTED', lockProfile);
+}
+
+/** Lock supplied owner rows before the selected Profile on an existing transaction.
+ * Business callers decide whether the returned profile still belongs to that owner. */
+export async function lockProfileForOwner(profileId: string, manager: EntityManager,
+    source?: Pick<Profile, 'userId' | 'guestId'>, recipientId?: number): Promise<Profile | null> {
+    // Transfers and edits share owner-before-profile ordering with deletion's
+    // FK writes. Stable User order also serializes reciprocal transfers.
+    const userIds = [...new Set([source?.userId, recipientId].filter((id): id is number => typeof id === 'number'))].sort((a, b) => a - b);
+    for (const id of userIds) {
+        await manager.getRepository(User).findOne({where: {id}, lock: {mode: 'pessimistic_write'}});
+    }
+    if (source?.guestId) {
+        await manager.getRepository(Guest).findOne({where: {id: source.guestId}, lock: {mode: 'pessimistic_write'}});
+    }
+    return manager.getRepository(Profile).findOne({where: {id: profileId}, lock: {mode: 'pessimistic_write'}});
 }
 
 /** Read/retain an identity owner lock on the caller's transaction. */
@@ -990,16 +998,18 @@ export async function getProfilesForUser(userId: number, manager: EntityManager 
     return await repo.findBy({user: {id: userId}});
 }
 
-export async function updateProfileName(profileId: string, name: string) {
-    const repo = AppDataSource.getRepository(Profile);
+/** Update the exact supplied name on the caller's connection. */
+export async function updateProfileName(profileId: string, name: string, manager: EntityManager = AppDataSource.manager) {
+    // Atomic editing supplies its completion manager; other callers retain the
+    // ordinary sparse write without starting another transaction.
+    const repo = manager.getRepository(Profile);
     await repo.update({id: profileId}, {name: name});
 }
 
 /** Change a profile's default flag atomically, clearing peer defaults only when selecting it. */
-export async function updateProfileDefault(profileId: string, isDefault: boolean) {
-    await AppDataSource.transaction(
+export async function updateProfileDefault(profileId: string, isDefault: boolean, manager?: EntityManager) {
     /** Clear defaults for this profile's stored account/guest owner before updating the selected row. */
-    async em => {
+    async function saveDefault(em: EntityManager): Promise<void> {
         const repo = em.getRepository(Profile);
         if (isDefault) {
             // Remove all other defaults for the owner of this profile if a new one is set
@@ -1014,7 +1024,11 @@ export async function updateProfileDefault(profileId: string, isDefault: boolean
         // Unselecting skips peer lookups/updates entirely; selecting preserves
         // the existing user and guest owner branches in their original order.
         await repo.update({id: profileId}, {defaultForOwner: isDefault});
-    })
+    }
+    // A supplied manager is already inside the approved editing transaction.
+    // Direct DBAL callers retain the existing standalone default transaction.
+    if (manager) await saveDefault(manager);
+    else await AppDataSource.transaction(saveDefault);
 }
 
 export async function createProfile(userId: number, name: string) {

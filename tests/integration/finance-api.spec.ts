@@ -4,7 +4,7 @@ import path from 'node:path';
 import http from 'node:http';
 import express from 'express';
 import session from 'express-session';
-import type {Request} from 'express';
+import type {Request, Router} from 'express';
 import invoices, {
     admitEventInvoiceSubmission, closeEventInvoice, readEventFinance, readEventFinanceBreakdown,
     readEventInvoiceProof, retractEventInvoice, createEventFinancePool, updateEventFinanceSettings,
@@ -21,7 +21,6 @@ import {decodeApiMultipartData} from '../../src/backend/modules/api/transport';
 import {PERM} from '../../src/backend/modules/lib/permissions';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
 import settings from '../../src/backend/modules/settings';
-import eventRouter from '../../src/backend/routes/api/v1/events';
 import {handleApiProblem} from '../../src/backend/modules/api/problem';
 import {createTranslator} from '../../src/common/localization/translator';
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
@@ -37,6 +36,7 @@ let owner: Profile;
 let participant: Profile;
 let other: Profile;
 let editor: Profile;
+let eventRouter: Router;
 const proofPaths = new Set<string>();
 const sendEmail = vi.spyOn(mailer, 'sendEmail').mockResolvedValue(undefined);
 
@@ -66,6 +66,11 @@ async function submit(event: Event, poolId: string, profile: Profile, descriptio
 
 beforeAll(async function prepareFinanceDatabase() {
     await initializeIntegrationDatabase();
+    // Production selects settings before constructing routers and their upload
+    // storage. Preserve that ordering so this HTTP fixture uses its isolated root.
+    const routes = await vi.importActual<typeof import('../../src/backend/routes/api/v1/events.js')>(
+        '../../src/backend/routes/api/v1/events.js');
+    eventRouter = routes.default;
     owner = await persistIntegrationProfile({name: 'Finance organizer'});
     participant = await persistIntegrationProfile({name: 'Own payer'});
     other = await persistIntegrationProfile({name: 'Private other payer'});

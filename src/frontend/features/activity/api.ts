@@ -40,7 +40,7 @@ type Metadata = components['schemas']['ActivityMetadata'];
 
 /** Feature operations own their generated validators; transport and actor admission are shared. */
 export class ActivityApi {
-    constructor(private transport: FrontendApi) {}
+    constructor(private readonly transport: FrontendApi) {}
 
     /** Requirements are independently private; reads preserve cancellation and shared cooldowns. */
     async requirements(planId: string, scope: FrontendRequestScope, signal?: AbortSignal,

@@ -333,11 +333,11 @@ describe('bounded event-card overview', () => {
         ]) {
             await expect(userController.getOverviewRegion(session, {...query, ...invalid})).rejects.toMatchObject({status: 400});
         }
-        const initial = await userController.getOverviewPage(session);
-        expect(initial.owner.hidden.loaded).toBe(false);
-        expect(initial.owner.hidden.items).toEqual([]);
-        const loaded = await userController.getOverviewPage(session, {owner_hidden_open: '1'});
-        expect(loaded.owner.hidden.loaded).toBe(true);
+        const hidden = await userController.getOverviewRegion(session, {collection: 'owner', region: 'hidden'});
+        expect(hidden.loaded).toBe(true);
+        expect(hidden.items).toEqual([]);
+        expect(new URL(hidden.canonicalUrl, 'http://surveyor.test').searchParams.get('owner_hidden_open')).toBe('1');
+        expect(hidden.searchFields).toContainEqual({name: 'owner_hidden_open', value: '1'});
         const selected = await userController.getOverviewRegion(session, {
             ...query, owner_main_event: eventId.toUpperCase(), owner_main_page: '999',
             participant_main_q: 'Keep this separate', owner_hidden_open: '1',

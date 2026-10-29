@@ -12,6 +12,7 @@ import {asyncHandler} from '../modules/lib/asyncHandler';
 import {createGuestFlowHeaderRouter, createGuestFlowRouter} from '../middleware/guestFlowFactory';
 import {activityFlow} from './activityFlow';
 import {captureApiActor} from '../modules/api/session';
+import {renderNativeDocument} from '../middleware/frontendDocuments';
 
 const router = createGuestFlowRouter(activityFlow);
 
@@ -42,7 +43,7 @@ router.get('/:id/export/schedule', asyncHandler(async function admitSchedule(req
 }), requirePermission(activityPermission, PERM.DATA_EXPORT), asyncHandler(async function exportSchedule(req, res) {
     // Print remains an independent output with its established data and stylesheet.
     const data = await activityController.getScheduleExport(getResource(req, 'activity'), req.query.windowStart);
-    res.render('activity/export/schedule', {data});
+    await renderNativeDocument(req, res, 'activity/export/schedule', {data});
 }));
 
 export default router;

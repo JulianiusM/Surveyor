@@ -41,7 +41,10 @@ beforeAll(async () => {
         // Native output rendering already initializes flash storage. Establish
         // that existing state before measuring request-local actor hydration.
         req.flash('fixture');
-        await userController.loginUser(req.body, req.session);
+        const actor = await captureApiActor(req);
+        const committed = await userController.loginUserWithSession(req.body, req,
+            {context: actor.context, prepareResult: () => req.sessionID});
+        req.session = committed.session;
         res.json({sid: req.sessionID});
     }));
     app.post('/guest-login', asyncHandler(async function guestLogin(req, res) {

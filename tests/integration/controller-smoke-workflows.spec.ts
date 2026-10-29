@@ -56,9 +56,11 @@ describe('remaining high-value controller workflows', () => {
         const [packingId] = await createPackingListWithItem(owner.id);
         const [surveyId] = await createSurveyWithCombinations(owner.id);
 
-        const dashboard = await userController.getOverviewPage({profile: owner, auth: {user: owner.user!}});
+        const dashboard = await userController.getOverviewRegion(
+            {profile: owner, auth: {user: owner.user!}}, {collection: 'owner', region: 'main'},
+        );
 
-        expect(dashboard.owner.main.items).toEqual(expect.arrayContaining([
+        expect(dashboard.items).toEqual(expect.arrayContaining([
             expect.objectContaining({type: 'event', id: eventId}),
             expect.objectContaining({type: 'activity', id: planId}),
             expect.objectContaining({type: 'drivers', id: driversId}),
@@ -83,9 +85,11 @@ describe('remaining high-value controller workflows', () => {
         expect((await packingService.getPackingListByParticipant(participant.id)).map(list => list.id)).toContain(packingId);
         await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: 'yes'});
 
-        const dashboard = await userController.getOverviewPage({profile: participant, auth: {user: participant.user!}});
+        const dashboard = await userController.getOverviewRegion(
+            {profile: participant, auth: {user: participant.user!}}, {collection: 'participant', region: 'main'},
+        );
 
-        expect(dashboard.participant.main.items).toEqual(expect.arrayContaining([
+        expect(dashboard.items).toEqual(expect.arrayContaining([
             expect.objectContaining({type: 'event', id: eventId}),
             expect.objectContaining({type: 'activity', id: planId}),
             expect.objectContaining({type: 'drivers', id: driversId}),
@@ -165,7 +169,7 @@ describe('remaining high-value controller workflows', () => {
         const survey = await surveyService.getSurveyById(surveyId);
         await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: 'yes'});
 
-        const view = await surveyController.fetchForView(survey!, {} as Request);
+        const view = await surveyController.fetchForView(survey!);
 
         expect(view.combinations).toHaveLength(2);
         expect(view.responses[participant.id]).toMatchObject([{answer: 'yes'}]);

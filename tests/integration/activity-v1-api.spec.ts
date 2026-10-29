@@ -129,7 +129,7 @@ describe('versioned Activity production operations', () => {
         const storedMember = await AppDataSource.getRepository(Profile).findOneByOrFail({id: member.id});
         await activity.createActivityRole(id, {name: 'Mixed identity coordinator'}, actor(owner));
         const role = (await activityService.getAllRoles(id)).find(candidate => candidate.title === 'Mixed identity coordinator')!;
-        await nativeActivity.addSlotRole(slot.id, {roles: [role.id]});
+        await activityService.addActivitySlotRoles(slot.id, [role.id]);
         const baseline = await activity.readActivitySlotBaseline(id, slot.id, actor(owner));
         const alias = await activity.readActivitySlotBaseline(id.toUpperCase(), slot.id.toUpperCase(), actor(owner));
         expect(alias.values.roles).toEqual([String(role.id)]);
@@ -193,7 +193,7 @@ describe('versioned Activity production operations', () => {
         await activity.createActivityRole(id, {name: 'Removable helper'}, actor(owner));
         const roles = (await activityService.getAllRoles(id)).filter(role => role.title !== 'default');
         const selected = roles.map(role => role.id);
-        await nativeActivity.addSlotRole(slot.id, {roles: selected});
+        await activityService.addActivitySlotRoles(slot.id, selected);
         const repository = AppDataSource.getRepository(ActivitySlotRole);
         const mappings = await repository.find({where: {item: {id: slot.id}}});
         // Make mapping identities observably different from role identities. A
@@ -338,7 +338,7 @@ describe('versioned Activity production operations', () => {
         const {id, slot} = await fixture(eventId);
         await activity.createActivityRole(id, {name: 'Coordinator'}, actor(owner));
         const role = (await activityService.getAllRoles(id)).find(candidate => candidate.title === 'Coordinator')!;
-        await nativeActivity.addSlotRole(slot.id, {roles: [role.id]});
+        await activityService.addActivitySlotRoles(slot.id, [role.id]);
         await activity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(participant));
         await activity.saveActivityRequirements(id, {
             assignmentMode: 'REQUIRED', generalRequiredShifts: 2, roundingMode: 'FLOOR', bindingDeadline: null,
@@ -736,7 +736,7 @@ describe('versioned Activity production operations', () => {
         await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
         await activity.createActivityRole(id, {name: 'Coordinator'}, actor(owner));
         const role = (await activityService.getAllRoles(id)).find(candidate => candidate.title === 'Coordinator')!;
-        await nativeActivity.addSlotRole(slot.id, {roles: [role.id]});
+        await activityService.addActivitySlotRoles(slot.id, [role.id]);
         await activity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(participant));
 
         const hidden = (await activity.readActivityPlan(id, actor(other))).data;
@@ -796,7 +796,7 @@ describe('versioned Activity production operations', () => {
         const {id, slot} = await fixture();
         await activity.createActivityRole(id, {name: 'Coordinator'}, actor(owner));
         const role = (await activityService.getAllRoles(id)).find(candidate => candidate.title === 'Coordinator')!;
-        await nativeActivity.addSlotRole(slot.id, {roles: [role.id]});
+        await activityService.addActivitySlotRoles(slot.id, [role.id]);
         await activity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(participant));
         await expect(activity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(other))).rejects.toMatchObject({status: 409});
         // Releasing a sole named role ends membership. An ordinary signup plus a
@@ -816,7 +816,7 @@ describe('versioned Activity production operations', () => {
         const {id, slot} = await fixture();
         await activity.createActivityRole(id, {name: 'Single coordinator'}, actor(owner));
         const role = (await activityService.getAllRoles(id)).find(candidate => candidate.title === 'Single coordinator')!;
-        await nativeActivity.addSlotRole(slot.id, {roles: [role.id]});
+        await activityService.addActivitySlotRoles(slot.id, [role.id]);
         const results = await Promise.allSettled([participant, other].map(profile =>
             activity.setActivityAssignment(id, slot.id, {assigned: true, role: role.title}, actor(profile))));
         expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);

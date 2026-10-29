@@ -296,6 +296,8 @@ describe('durable invoice proof ownership', () => {
         await expect(fs.promises.access(saved.file)).rejects.toThrow();
     });
 
+    // Real directory removal/restoration took 7.5 seconds on the measured Windows
+    // host. Keep that filesystem fixture and its assertions within a bounded budget.
     it('retries an external unlink failure and retains ownership while the root is unavailable', async () => {
         const caseDirectory = directory;
         const saved = await savedProof();
@@ -315,7 +317,7 @@ describe('durable invoice proof ownership', () => {
         await cleanupInvoiceProofs(100, new Date(Date.now() + 3_600_000));
         expect(await AppDataSource.getRepository(InvoiceProofFile).count()).toBe(0);
         await expect(fs.promises.access(saved.file)).rejects.toThrow();
-    });
+    }, 30_000);
 
     it('recovers an abandoned earlier-process upload without touching active uploads', async () => {
         const active = await stagedProof();

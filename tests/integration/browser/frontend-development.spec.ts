@@ -44,6 +44,9 @@ test.describe('actual frontend development runtime', () => {
 
         // A successful SSR response alone does not prove client boot. The real form
         // must refresh its results through the router and retain this document marker.
+        // Help's SSR form intentionally supports native GET before hydration;
+        // wait for client ownership before asserting Router-only navigation.
+        await waitForFrontendHydration(page);
         await page.evaluate(() => { document.documentElement.dataset.developmentDocument = 'original'; });
         await page.getByRole('searchbox').fill('packing');
         await page.getByRole('button', {name: 'Search help', exact: true}).click();

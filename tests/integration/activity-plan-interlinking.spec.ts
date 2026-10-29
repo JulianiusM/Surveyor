@@ -1,3 +1,4 @@
+import {quickAddSlot} from '../../src/backend/modules/activity/slots';
 import {getAssignmentWarningPreview} from '../../src/backend/modules/activity/recommendations';
 import {applyRecommendations, getRecommendationWarningPreview} from '../../src/backend/modules/activity/recommendations';
 import {buildPlanRecommendationContext, saveGeneratedRecommendations} from '../../src/backend/modules/activity/autoAssignment';
@@ -87,7 +88,7 @@ describe('activity plan interlinking', () => {
         await assign(second.slot.id);
         const plan = (await activityService.getActivityPlanById(first.id))!;
         const [role] = await activityController.addActivityRole(plan, {name: 'Coordinator'});
-        await activityController.addSlotRole(first.slot.id, {roles: [role.id]});
+        await activityService.addActivitySlotRoles(first.slot.id, [role.id]);
         await expect(activityController.getRoleAccessMapping().assign({itemId: first.slot.id, role: 'Coordinator'}, participant.id))
             .rejects.toMatchObject({status: 409});
         const preview = await getAssignmentWarningPreview(first.id, first.slot.id, participantSession());
@@ -136,7 +137,7 @@ describe('activity plan interlinking', () => {
         }]);
         expect((await getAssignmentWarningPreview(first.id, first.slot.id, participantSession())).overlapConfirmation).toBeDefined();
         const plan = (await activityService.getActivityPlanById(second.id))!;
-        await activityController.quickAddSlot(plan, {
+        await quickAddSlot(plan, {
             date: '2027-06-02', title: 'Proposed destination', startTime: '11:00', endTime: '12:00',
         }, {profile: owner} as never);
         const target = (await activityService.getActivitySlotsFlat(second.id)).find((slot) => slot.title === 'Proposed destination')!;

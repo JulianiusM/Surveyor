@@ -28,7 +28,7 @@ type Metadata = components['schemas']['EventMetadata'];
 
 /** Events select generated operations while the existing transport owns captured actor admission. */
 export class EventApi {
-    constructor(private transport: FrontendApi) {}
+    constructor(private readonly transport: FrontendApi) {}
 
     /** Obtain permitted root fields and usable comparison evidence together.
      * Missing/malformed ETags cannot authorize an editor, even when the body

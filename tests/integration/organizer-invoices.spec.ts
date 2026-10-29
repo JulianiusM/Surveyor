@@ -75,8 +75,12 @@ describe('organizer invoice entries without event attendance', () => {
     it('migrates existing participant invoices without changing proofs, shares, payments, or calculation revisions', async () => {
         // Run the reversible legacy-schema check before this suite creates any organizer entries.
         const {event, poolId, firstId} = await context();
+        // Use an owned file under the configured root, so this legacy migration
+        // fixture preserves proof bytes without depending on a default directory.
+        const proof = await proofFile();
+        const proofBytes = await fs.promises.readFile(proof.path);
         const invoiceId = await invoiceOperations.persistSubmittedInvoice(poolId, firstId, 100, 'Participant receipt', {
-            path: 'uploads/invoices/legacy-proof.pdf', originalName: 'legacy-proof.pdf', mimeType: 'application/pdf',
+            path: path.relative(process.cwd(), proof.path), originalName: 'legacy-proof.pdf', mimeType: 'application/pdf',
         });
         await invoiceOperations.acceptSavedInvoice(poolId, invoiceId);
         await eventPoolController.closePool(event, poolId, {sendEmails: false});
@@ -96,6 +100,7 @@ describe('organizer invoice entries without event attendance', () => {
             expect(after.calculationRevision).toBe(before.calculationRevision);
             expect(after.calculationSnapshot).toEqual(before.calculationSnapshot);
             expect(after.needsRecalculation).toBe(before.needsRecalculation);
+            expect(await fs.promises.readFile(proof.path)).toEqual(proofBytes);
             expect((await runner.getTable('event_invoices'))!.findColumnByName('registration_id')!.isNullable).toBe(true);
         } finally {
             await migration.up(runner);

@@ -565,7 +565,9 @@ async function save(): Promise<void> {
             previewing.value = false;
             await applyFrozen();
         }
-    } catch (failure) {
+    } catch {
+        // Preview failure uses the existing localized warning; raw transport
+        // diagnostics never replace the review's safe, feature-owned feedback.
         // A retired response cannot clear another visit's frozen draft or
         // publish feedback after that observer has lost its read authority.
         if (active && !revoked.value && context.isCurrent(scope)) {
@@ -586,7 +588,12 @@ async function applyFrozen(): Promise<void> {
     confirmation.value = false;
     frozen.value = null;
     const value = await command.run(scope => advancedCommand(api.applyRecommendations(props.planId, body, scope), scope), false, true);
-    if (!active || !value) { if (!command.uncertain.value && active && !revoked.value) await updateWarnings(); return; }
+    if (!active || !value) {
+        // An admitted known failure refreshes warnings; uncertainty or retired
+        // authority keeps its existing command/recovery owner without another read.
+        if (!command.uncertain.value && active && !revoked.value) await updateWarnings();
+        return;
+    }
     // A confirmed application releases only this submitted review. A later read
     // failure cannot turn it into another apply attempt or clear sibling drafts.
     result.value = value;

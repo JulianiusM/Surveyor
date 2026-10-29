@@ -26,7 +26,7 @@ export function overviewQueryParameters(values: LocationQuery, collection: compo
 
 /** Feature operations own their generated validators; transport and actor admission are shared. */
 export class OverviewApi {
-    constructor(private transport: FrontendApi) {}
+    constructor(private readonly transport: FrontendApi) {}
 
     /** Fetch only the requested collection/region/filter projection. The query
      * identifies its recovery deadline; the mounted region separately fences

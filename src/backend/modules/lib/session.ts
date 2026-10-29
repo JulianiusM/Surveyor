@@ -31,7 +31,26 @@ export function createSessionStore(manager: EntityManager): TypeormStore {
     // These are the existing application options. Cleanup runs only on set;
     // the library remains the owner of TTL, soft-delete and JSON semantics.
     const repository = manager.getRepository(Session);
-    const store = new TypeormStore({cleanupLimit: 2, limitSubquery: false, ttl: 60 * 60 * 24}).connect(repository);
+    const ttl = 60 * 60 * 24;
+    const store = new TypeormStore({cleanupLimit: 2, limitSubquery: false, ttl}).connect(repository);
+
+    /** Acknowledge ordinary renewal once, after the existing expiry update settles. */
+    store.touch = function renewStoredSession(sessionId, _session, callback): void {
+        // connect-typeorm 2.0.0 acknowledges expiry-cookie sessions before this
+        // write, then calls back again. Keep its fixed TTL and expiry-only SQL.
+        // The promise boundary also catches synchronous query-builder failures.
+        void Promise.resolve().then(function updateExpiration() {
+            return repository.createQueryBuilder()
+                .update({expiredAt: Date.now() + ttl * 1000})
+                .whereInIds([sessionId])
+                .execute();
+        }).then(function renewed(): void {
+            callback?.();
+        }, function renewalFailed(error: unknown): void {
+            callback?.(error);
+            store.emit('disconnect', error);
+        });
+    };
 
     /** Complete destruction only when the same repository's soft deletion settles.
      * connect-typeorm 2.0.0 drops these promises from Promise.all, acknowledging

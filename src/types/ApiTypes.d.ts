@@ -1,5 +1,5 @@
 import type {SessionLike} from './PermissionTypes';
-import type {components, operations} from './api/v1';
+import type {components} from './api/v1';
 
 /** Identity admitted once for a request. It is never replaced midway through a command. */
 export interface ApiActor extends SessionLike {

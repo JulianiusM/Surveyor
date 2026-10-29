@@ -170,7 +170,7 @@ describe('survey user stories', () => {
         const [surveyId] = await createSurveyWithCombinations(owner.id);
 
         const survey = await surveyService.getSurveyById(surveyId);
-        await surveyController.deleteEntity(survey!, {} as never);
+        await surveyController.deleteEntity(survey!);
         expect((await surveyService.getSurveysByProfileId(owner.id)).map((survey) => survey.id)).not.toContain(surveyId);
     });
 

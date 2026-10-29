@@ -7550,39 +7550,64 @@ implementation_defects:
     package: production-readiness-review
     title: Residual diagnostic maintainability warnings require bounded semantic review
     evidence:
-      - Fresh SonarQube MCP analysis of 429 current source/changed script files returned 745 notices before
-        this pass of equivalent cleanup; this scope differs from the earlier 372-file inventory and is not a
-        trend comparison.
-      - Category/source review inspected 291 frontend notices and 400 backend/common notices. Several
-        duplicate-ID and label findings refer to valid component label/control pairs; native checkbox state,
-        reactive dependency reads, sequential locks and deterministic lexical ordering also explain
-        conservative warnings.
+      - The SonarQube server snapshot available through MCP is the ts-migration analysis dated 2026-10-25,
+        with 323 open issues and 12 duplicated files covering 360 lines. Several reported paths have since
+        moved or retired; these server counts do not establish findings in the current checkout.
+      - Current SonarQube for IDE MCP analysis of 378 executable source files, including migrations, returns
+        638 notices. Analyzer output requires source classification; the count does not establish accepted
+        defects or a trend across differently scoped earlier scans.
+      - Current notices are classified against backend/frontend source owners. Several duplicate-ID and
+        label findings refer to valid component label/control pairs; native checkbox state, reactive
+        dependency reads, sequential locks and deterministic lexical ordering also explain conservative
+        warnings. Classification is not a claim that every analyzer warning is resolved.
       - Confirmed unused/duplicate imports are corrected across frontend/backend owners. Eight unattached
         decorative captions now use neutral spans with equivalent display; actual control names and handlers
         remain intact.
       - All eight direct/versioned/description Packing/Drivers metadata saves now adopt one lists/metadata
         feature owner. Matching business checks and sparse writes are shared while DBAL keeps Event/root locks
         and Drivers preparation stays inside its transaction.
+      - The unreferenced account-deletion implementation and its controller forwarding export, plus six
+        unused identity registration/login/recovery/reset/activation variants, are retired. All live routes
+        already use the retained completion owners. Tests now exercise their real guards, stored identity
+        transitions and prepared-mail boundaries; existing input, link, recipient, default-profile and rollback
+        assertions remain. Independent source/caller review confirms unchanged production behavior; the
+        focused 20-test deletion-diagnostics file passes.
+      - Seven constructor-bound feature transports now declare their unchanged references readonly.
+        Activity recommendation failure guards and the proof-reference ENOENT catch are expanded without
+        changing condition order, recovery reads, filesystem authority or cleanup. Independent source review
+        confirms the existing shared owners and live callers are retained.
       - Two historical migration helpers repeat physical identifier metadata mechanics with different
         nullability and DDL order. Their wider consolidation remains a maintainability candidate;
         IMP-205/IMP-206 own the independently established migration failures.
       - Residual cognitive-complexity and expression-style notices are not proven runtime defects or claimed
         fixed. Current source review did not establish an additional remote regex exploit; reported sites
         concern operator configuration, trusted shipped Help or legacy mail normalization.
-      - WebStorm MCP again returned timedOut on the new identity-admission source, so it supplies no complete
-        usable IDE problem inventory.
-      - The proper-baseline full Vitest run passed 2959 and hit three unchanged five-second deadlines. A
-        serial seven-file rerun passed all 292, including those three cases and actual caption rendering.
-        Build and test/client/SSR typechecks pass; this is not a clean full-invocation result.
-      - The complete built E2E run reported 262 passes, two failures and one configuration skip. A calendar
-        worker exited with Windows code 3221226505; its focused rerun passed. Stronger detail-heading
-        readiness corrected the lifecycle fixture race, and all four lifecycle cases passed. The
-        disabled-authentication configuration case also passed separately. These runs do not establish a clean
-        complete invocation or the native exit cause.
-      - Targeted SonarQube MCP analysis of the three repaired migration/helper files returns 69 notices;
-        independent source review accepts the actual preservation boundaries and classifies remaining
-        style/complexity notices without treating them as resolved runtime defects. WebStorm MCP again timed
-        out on the helper; no complete IDE result is claimed.
+      - Current WebStorm MCP lint_files requested 441 source paths and returned 47 items with more=true,
+        including timedOut=true entries. Focused file requests also timed out. Confirmed unused declarations
+        and parameters are removed; the matching Packing/Drivers permitted-field projection now has one
+        implementation in its existing administration owner. This remains an incomplete IDE inventory.
+      - Fresh local Sonar analysis of all 24 changed source files reports 91 remaining notices, classified
+        against actual owners and DOM. Lock-order awaits, consumed component IDs, explicit Promise callbacks
+        and retained lifecycle behavior do not justify changing their contracts to silence diagnostics.
+      - The complete serial database-free invocation passes all 2262 cases in 88 files on Node.js 24.15.0,
+        retaining every individual deadline. Full build and server/client/SSR/test typechecks pass. Failed
+        attempts and fixture corrections remain in ignored verification artifacts rather than being hidden
+        by the current result; no test deadline or application behavior was relaxed.
+      - The complete guarded database-backed project passes all 765 cases in 38 files on Node.js 24.15.0
+        and MariaDB 10.11.14. Real router, owned proof, unchanged bytes, filesystem recovery and lock assertions
+        remain intact. The bounded feedback suite separately passes all 16 cases, including both profile-switch
+        race orders added after the full project invocation.
+      - The complete current built E2E invocation passes 264 cases with one configuration skip and no worker
+        exits. The disabled-authentication configuration case passes separately. Actual source-development
+        browser integration passes all three existing cases with unchanged 30-second deadlines; its Help
+        case now awaits the existing hydration signal before asserting Router-only navigation, preserving
+        the intentional pre-hydration native GET and every original assertion. These are distinct boundaries,
+        not official-release operational certification.
+      - Source review on 2026-10-29 confirms disposal of query subscriptions, the guarded identity timer,
+        browser listeners and update/command leases in the existing queryCache, context, updateCoordinator
+        and command owners. The two recorded native worker exits have code 3221226505 and signal=null,
+        without an application stack identifying a source defect. Neither this inventory nor the passing
+        follow-up identifies the reported persistent browser hang in IMP-117.
     impact: An unclassified warning inventory cannot establish production readiness or justify blanket rewrites
       that change locks, canonical ordering, draft ownership or feature behavior.
     closes_when:
@@ -7596,9 +7621,10 @@ implementation_defects:
         decisions.
       - Independent source review and appropriate production checks verify actual changes; diagnostic timeouts
         are not clean results.
-    disposition: The confirmed metadata/import/caption corrections are implemented and independently reviewed.
-      Remaining style/complexity candidates and the unavailable IDE inventory stay visible; no blanket
-      algorithm rewrite or production certification is inferred.
+    disposition: Confirmed equivalent ownership, duplication, readability and fixture corrections are
+      implemented and independently reviewed. Remaining style/complexity candidates, the incomplete IDE
+      inventory and unexplained native worker exits stay visible; session defects are owned separately by
+      IMP-207 and IMP-209. No blanket algorithm rewrite or production certification is inferred.
   - id: IMP-205
     status: resolved
     discovered_on: 2026-10-28
@@ -7694,6 +7720,140 @@ implementation_defects:
       limits: No ambiguous ownership is repaired automatically, and reverse migration is not a substitute for the
         canonical paired restore. The official v0.2.3-rc.12 archive was not altered or certified by
         checkout-only execution.
+  - id: IMP-207
+    status: resolved
+    resolved_on: 2026-10-29
+    discovered_on: 2026-10-28
+    severity: high
+    owner: identity/session maintainers
+    package: production-readiness-review
+    title: Ordinary session renewal acknowledges a pending expiry write and invokes completion twice
+    related_findings:
+      - ARCH-005
+    implementation_evidence:
+      - src/backend/app.ts
+      - src/backend/modules/lib/session.ts
+      - package-lock.json
+      - tests/unit/session-store-completion.spec.ts
+      - tests/integration/session-renewal.spec.ts
+    evidence:
+      - The configured connect-typeorm 2.0.0 touch method invokes its callback immediately when the Session
+        cookie has expires, then still starts the expiry UPDATE and invokes the callback again when it settles.
+        The application's one-day maxAge produces that normal cookie shape; at discovery createSessionStore
+        overrode destruction only, leaving this touch implementation live.
+      - A controlled asynchronous repository gate through the actual configured store reproduces one success
+        callback before the pending UPDATE, followed by another success after completion. Rejected UPDATE
+        instead produces success followed by the controlled error and one disconnect event.
+      - A controlled synchronous query-construction failure likewise occurs after the premature success
+        callback, escaping as a thrown error without the store's normal disconnect notification.
+      - Express-session response completion invokes its response-ending continuation on each touch callback
+        and forwards a later error. This is an adapter callback reproduction and source/caller inspection;
+        it does not establish real database failure frequency or an observed duplicate HTTP response.
+    impact: Ordinary stored-session reads can acknowledge renewal before its write settles, then signal
+      completion or failure again after the response has already continued.
+    closes_when:
+      - The existing expiry UPDATE completes before exactly one success or failure callback.
+      - Existing one-day TTL, expiry writes, identity JSON, destruction and disconnect reporting are preserved.
+      - Controlled pending, successful, failed and synchronous-failure adapter cases protect callback timing.
+      - Actual Express response completion and appropriate isolated persistence checks verify the live owner.
+    disposition: The configured factory now acknowledges its existing expiry-only update exactly once after
+      completion, including synchronous failures, retaining TTL, identity JSON, cookie policy and disconnect
+      reporting. Nine controlled adapter cases and two real MariaDB/Express cases pass, including a held SQL
+      renewal and a rejected update. The repair does not guarantee an HTTP error after bytes were sent or
+      certify broader session lifecycles.
+  - id: IMP-208
+    status: resolved
+    resolved_on: 2026-10-28
+    discovered_on: 2026-10-28
+    severity: medium
+    owner: Activity feature maintainers
+    package: production-readiness-review
+    title: Activity slot editing business rules remain owned by the request controller
+    implementation_evidence:
+      - src/backend/controller/activityController.ts
+      - src/backend/modules/activity/slots.ts
+      - src/backend/modules/database/services/ActivityService.ts
+      - src/backend/routes/api/v1/activity.ts
+      - tests/integration/activity-workflows.spec.ts
+      - tests/integration/activity-v1-api.spec.ts
+    evidence:
+      - At discovery, controller-owned updateSlotAttr performed field authority, form-value normalization,
+        actual slot-plan role validation, scalar-save error decisions and later role replacement.
+        patchActivitySlot was its live versioned caller, while direct operation tests used the same implementation.
+      - The same validatePlanRoleIds guard also served quickAddSlot and addSlotRole. Existing Activity modules
+        covered assignment proposals, automatic assignment/context, availability and time calculations;
+        no existing feature module owned ordinary slot editing and selected-role validation.
+      - The 2026-10-28 engineering boundary assigns shared business checks to feature modules and request
+        coordination to controllers. Scalar writes currently finish under the plan transaction before a
+        separate role-replacement transaction; this ownership finding does not establish a new atomicity defect.
+    impact: The controller combines transport coordination and shared slot business implementation, making
+      independent reuse and verification of its authority and normalization boundaries harder.
+    closes_when:
+      - Actual slot editing callers share one feature-owned business implementation without forwarding copies.
+      - Shared role-plan validation remains adopted by every matching slot creation and role-selection caller.
+      - Controllers retain admission and response coordination; DBAL retains queries, locks and transactions.
+      - Field grants, error order, numeric and empty values, locked admission, scalar-first persistence and
+        separate role replacement retain their current behavior and focused real-persistence coverage.
+      - Independent source review verifies actual production adoption and the complete ownership boundary.
+    disposition: Slot creation/editing and the shared role guard now live in the actual slots feature owner;
+      controllers adopt its operations and private-policy accessor without forwarding copies. Independent
+      source and root review confirm unchanged admission, value/error order and split persistence. The
+      unused role-attachment export is retired; both live role-validation consumers share the feature guard,
+      and the meaningful role-configuration workflow uses the live edit operation. After that final retirement,
+      all 110 cases in the three affected Activity ORM suites pass on Node.js 24.15.0 and MariaDB 10.11.14
+      with the guarded disposable target. Server, client and SSR typechecks and scoped engineering checks
+      pass. This resolves the bounded ownership defect without certifying every Activity controller responsibility.
+  - id: IMP-209
+    status: resolved
+    resolved_on: 2026-10-29
+    discovered_on: 2026-10-28
+    severity: critical
+    owner: identity/session maintainers
+    package: production-readiness-review
+    title: Delayed document flash consumption can overwrite a later stored Session generation
+    related_findings:
+      - ARCH-005
+    implementation_evidence:
+      - src/backend/middleware/frontendDocuments.ts
+      - src/backend/modules/api/session.ts
+      - src/backend/modules/lib/session.ts
+      - src/backend/app.ts
+      - package-lock.json
+      - src/backend/controller/userController.ts
+      - src/backend/routes/users.ts
+      - src/backend/routes/activity.ts
+      - tests/integration/frontend-document-feedback.spec.ts
+    evidence:
+      - Before repair bootstrap consumed native flash messages by mutating the middleware Session. Ordinary
+        Express response completion persisted its changed JSON; earlier generation admission did not serialize
+        this feedback save with later identity transitions.
+      - A controlled HTTP fixture with actual Express, native Session/flash middleware, production bootstrap
+        and real TypeORM sessions reproduces the race on Node.js 24.15.0 and MariaDB 10.11.14. A held
+        document consumes a valid notice under a real account/profile, while the actual local-logout owner
+        commits a new anonymous generation and returns HTTP 200.
+      - Completing the held document restores the original account, profile and generation in the actual
+        Session.json row. A fresh HTTP captureApiActor request accepts the restored persisted principal.
+        The isolated target/account and denied cross-schema access were verified before its guarded reset.
+      - This controller-driven fixture uses real login/logout completion, prepared contract-validated
+        receipts and the configured store. It does not establish full versioned-router CSRF/input-admission
+        or built-browser reproduction; the discovery fixture changed no application or library implementation.
+    impact: A delayed feedback-bearing document can restore accepted authenticated authority after confirmed
+      local logout, breaking session invalidation and potentially undoing another identity transition.
+    closes_when:
+      - Flash production and consumption cannot overwrite a later principal, profile or generation.
+      - Intentional anonymous feedback and cookie-free first reads retain their existing boundaries.
+      - Same-actor one-time consumption, context-bound private links and delivery-failure behavior remain explicit.
+      - Actual Express and guarded real-persistence cases cover delayed feedback across logout, login and profile
+        transitions without treating browser evidence or a second writable Session as authority.
+      - The reviewed remedy adopts existing ownership and obtains individual approval for changed persistence
+        or concurrency guarantees before dependent implementation.
+    disposition: The existing completion owner now guards document feedback consumption, redirect carryover
+      and completed logout/expiry notices against their originating generation, adopting sealed staged
+      completion or omitting stale feedback without a newer actor. Activity print adopts guarded all-channel
+      consumption and avoids a second native getter. Sixteen actual HTTP/ORM regressions pass across both
+      logout/profile-switch race orders, concurrent once-only reads, private links, legacy data, native output, redirects,
+      render/network failure and refused feedback SQL. No-feedback visits remain uninitialized; ordinary
+      identity/provider saves and the broader ARCH-005 lifecycle remain separately scoped.
 findings:
   - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
     status: closed
@@ -8086,7 +8246,8 @@ findings:
       and root review preserve live phase contracts, approved exclusions and
       original decision owners.
   - id: DOC-PERMISSION-POLICY-REVIEW
-    status: open
+    status: resolved
+    resolved_on: 2026-10-29
     severity: medium
     category: design-follow-up
     owner: permission-system maintainers
@@ -8114,6 +8275,34 @@ findings:
       revocation denial, later revocation waiting, active-manager writers and intentional public/participant
       separation. The broad suite passes the complete file; wider cross-feature policy review remains a
       distinct open follow-up.
+    source_review_2026_10_29:
+      - Current Event, Activity, Packing, Drivers and Survey flow configurations, versioned adapters,
+        controller projections and live Vue consumers were traced against the shared engine. Ownership
+        grants all bits; individual and active audience grants accumulate. Child grants remain separate
+        from explicit operation-specific parent fallbacks. No additional grant/projection mismatch was
+        established.
+      - Event and Survey detail require an admitted profile. Linked Activity, Packing and Drivers detail
+        additionally requires participation or the child's ACCESS_VIEW; standalone detail admits an active
+        profile. Independent public method grants and minimal baselines deliberately do not imply page
+        admission, profile-required membership, creation or root ownership.
+      - Shared field/method declarations govern Packing and Drivers command checks and capabilities.
+        Activity preserves its separate description action, mixed-slot metadata admission and per-field
+        grants, plus distinct browser role-creation admission. Event participant export requires both
+        DATA_EXPORT and ACCESS_PARTICIPANTS; settings access does not substitute for permission management.
+      - Survey remains outside the general audience/administrator model; admitted profiles may vote and
+        extend choices, while settings, duplication, header writes and deletion require ownership. This
+        source inventory preserves intentional feature policy; it is not approval for a permission redesign
+        or complete runtime concurrency verification of every operation.
+      - Packing and Drivers expose assignee names as admitted list content, while removable assignment IDs
+        require their management grant. Activity separately filters names/attendance/participants through
+        ACCESS_PARTICIPANTS. Survey deliberately exposes named ballots to admitted profiles while excluding
+        account/guest secrets; Event detail and its separately guarded roster/invoice reads remain distinct.
+    disposition: The finite current actor, page, method, field and private-projection review is complete
+      across all five features, with independent and root source acceptance and exercised persistence/browser
+      coverage. No unintended grant/projection mismatch or permission rework was established. Deliberate
+      public powers, parent fallbacks and feature exceptions remain unchanged. The reference's obsolete
+      activity-role attachment label is corrected; separate lifecycle findings remain under ARCH-005. This
+      does not certify every concurrency schedule or a production deployment.
   - id: DOC-ENTITY-PROPERTIES-VISUAL
     severity: low
     category: visual-maintenance
@@ -8377,6 +8566,52 @@ findings:
     desired_outcome: Establish one reviewed current session and flash concept with existing shared
       implementation owners and explicit transport differences, preserving server-owned authentication
       and authorization.
+    current_source_review_2026_10_29:
+      - One Express Session uses the configured TypeORM store, resave=false, saveUninitialized=false and
+        a one-day cookie/store TTL. Read-only actor capture compares stored identity/generation and hydrates
+        separate server-only relations; public first reads do not initialize transport metadata.
+      - Explicit identity completion locks the Session row, rechecks current evidence and stages detached
+        writes/receipts on that transaction. Current-profile editing now adopts this owner. Provider
+        callback/logout and deactivation retain separately scoped ordinary identity saves; no application-wide
+        concurrent-save guarantee is established.
+      - Current flash producers are activation, capability-link login, page-entry redirects, document logout
+        and expiry. Bootstrap consumes existing frontend, frontend-notice and context-bound frontend-link
+        channels; no current frontend-link producer was found. Expiry also writes a legacy error channel.
+      - The sole isLoggedIn caller follows Event export profile admission, making its legacy info redirect
+        branch unreachable for normally admitted actors. Activity print now consumes every native channel
+        through the completion owner and calls Express rendering without the second express-flash getter;
+        Vue SSR retains send.
+      - Bounded document feedback now uses locked completion and acknowledged staged saves; superseded
+        feedback cannot autosave an old principal. Its confirmed repair is recorded once as IMP-209 and
+        does not supply a general merger for other ordinary saves.
+      - Before repair, real ORM regressions confirmed current-profile editing could restore its captured
+        identity after actual logout and could leave fields/defaults committed when Session persistence
+        failed. Editing now checks generation/locked ownership and commits fields, required Profile reload,
+        Session refresh and prepared receipt together. Actual account/guest, transfer, logout/profile-switch,
+        peer-default, legacy and rollback cases pass without generation, wire or creation-boundary changes.
+      - The confirmed renewal callback repair is recorded once as IMP-207. Whole-session and provider
+        concurrency verification remains open beyond these bounded current owners.
+    remaining_source_review_2026_10_29:
+      - OIDC entry stores its application return, PKCE verifier/state and optional nonce before one ordinary
+        save. Callback validates provider evidence, resolves/link-provisions the local account, installs
+        identity/tokens and clears transient protocol state before an ordinary save. Local-first provider
+        logout clears/saves authority before provider discovery; explicit outcome callers alone convert
+        subsequent provider failure into a warning. These paths do not use the locked identity completion
+        coordinator, and this source review establishes no general concurrent-save guarantee.
+      - A real-ORM regression confirmed that a formerly admitted deactivation could detach the recipient's
+        Profile after actual capability transfer. The current operation rechecks ownership under the existing
+        User/Guest-before-Profile locks and detaches on that same manager. Stale ownership is rejected before
+        writes, preserving recipient ownership, account/domain rows and Session snapshots. Only the feature's
+        exact pre-detach guard rejection remains a known denial; same-code later failures retain their
+        uncertain outcome. Cleanup/mail, profile selection and ordinary local save remain separate steps.
+      - Former-owner cleanup still reads the remaining roster and deletes the account separately, while
+        additional-profile creation independently inserts its owner relationship. A creation committing
+        between an empty-roster read and deletion could encounter the Profile foreign key's SET NULL
+        behavior. This is an unreproduced source-derived cleanup/creation concurrency candidate, not
+        established runtime loss or a selected remedy.
+      - The bounded renewal, document-feedback and profile-edit work has separate current evidence; it does
+        not cover provider protocol completion, whole-deactivation coordination, profile creation or a
+        general Session merger. The deactivation ownership fence does not establish those broader guarantees.
     acceptance_criteria:
       - Inventory session creation, reads, mutation, persistence, expiry, invalidation and cookie
         handling across current documents and API requests, account/guest/profile transitions and OIDC
@@ -8510,12 +8745,15 @@ findings:
       migration history, triggers, application startup, and repeatability, and record any discrepancy as a
       separate defect.
     status: open
-    current_evidence_2026_10_28: The unchanged official v0.2.3-rc.12 rehearsal failed at IMP-205. After the
+    current_evidence_2026_10_29: The unchanged official v0.2.3-rc.12 rehearsal failed at IMP-205. After the
       current-source repairs, a new isolated Node.js 24.15.0/MariaDB 10.11.14 checkout rehearsal completes
       synchronization, all 25 migrations, migration status and trigger inspection. A separate seeded
       numeric-owner target completes the full chain while retaining all 38 original table digests and five
-      ownership joins. Official corrected-release startup and full operational repeatability remain
-      unverified; no failed target or history was bypassed.
+      ownership joins. Fresh GitHub MCP inspection identifies v0.2.3 as the latest official release, with a
+      published asset digest and available matching tag. Its tagged migrations retain the IMP-205/IMP-206
+      assumptions; the archive was not downloaded, independently hashed or executed. A corrected matching
+      released installation and full operational repeatability remain unverified; no failed target or history
+      was bypassed.
     verification_only: true
     blocks_documentation_migration: false
   - id: OPSV-003
@@ -8760,13 +8998,14 @@ work_packages:
       - upgrade and rollback both finish with health, authentication, representative data, and file checks
       - discovered runtime defects are registered once and are not copied into product documentation
       - runbook corrections are made only where observed behavior disproves the current working contract
-    execution_note: Current checkout source repairs for IMP-205/IMP-206 now pass empty and seeded full migration
-      rehearsals on separate disposable targets. The original official archive is unchanged and still has its
-      observed bootstrap failure; a corrected matching official release/source pair is unavailable for
-      complete released-installation verification. Service/proxy/TLS, controlled SMTP/OIDC, persistent-file,
-      paired restore and full rollback evidence remains outstanding. This does not block documentation
-      delivery. Retain the canonical supported runtime, dedicated schemas/storage and controlled side-effect
-      prerequisites.
+    execution_note: Current checkout repairs for IMP-205/IMP-206 pass empty and seeded full migration
+      rehearsals; the unchanged official v0.2.3-rc.12 retains its observed bootstrap failure. Fresh GitHub MCP
+      inspection finds official v0.2.3 metadata, a published digest and matching source, but that tag retains
+      the known migration defects; no corrected matching release pair or independently verified payload is
+      established. Already-running Ubuntu 24.04.3 with systemd and Docker's Linux engine are available, so
+      missing Windows commands do not establish a runtime blocker. Controlled service/proxy/TLS, SMTP/OIDC,
+      persistent-file, paired restore and full rollback evidence remains outstanding. This does not block
+      documentation delivery or authorize release publication or shared deployment.
   - id: D05
     status: done
     title: Events and registration

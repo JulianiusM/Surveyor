@@ -12,7 +12,6 @@ import mailer, {prepareDeletionEmail, prepareMigrationEmail, resolveEmailRecipie
 import {ExpectedError, ValidationError} from './lib/errors';
 import {ApiProblem} from './api/problem';
 import {uuidKey} from './lib/util';
-import * as oidc from './oidc';
 import {isNewPasswordValid} from '../../common/lib/frontendIdentity';
 import {createTranslator} from '../../common/localization/translator';
 import {contractValidator} from './api/contracts';
@@ -79,6 +78,35 @@ export function requireCurrentProfileOwner(profile: Profile | null, actor: Sessi
         || uuidKey(profile.guestId) !== uuidKey(guest.id))) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
 }
 
+/** Edit only the captured active profile on its existing completion transaction.
+ * Keep exact names and default-field semantics; reject transferred ownership
+ * under the shared owner/profile locks before either profile write begins. */
+export async function updateProfile(body: any, actor: SessionLike, manager: EntityManager): Promise<Profile> {
+    const {name, isDefault} = body;
+    // Preserve blank-name diagnostics before the shared code-point bound, and
+    // permit internal omission without trimming or inventing a replacement name.
+    if (name?.trim()?.length === 0) {
+        throw new ValidationError('users/profile/view', 'Invalid profile name', {}, {cause: 'PROFILE_NAME_REQUIRED'});
+    }
+    if (name !== undefined) requireIdentityName(name);
+
+    // The Session owner has already locked/revalidated its generation. Serialize
+    // this owner's default selection with transfer/deletion before the profile,
+    // then let business ownership decide whether that fresh row is still usable.
+    const profile = await userService.lockProfileForOwner(actor.profile!.id, manager,
+        {userId: actor.auth?.user?.id, guestId: actor.auth?.guest?.id});
+    requireCurrentProfileOwner(profile, actor);
+
+    // Retain rename-before-default ordering and the existing false/omitted
+    // default coercion, using one manager rather than nested transactions.
+    if (name) await userService.updateProfileName(profile.id, name, manager);
+    await userService.updateProfileDefault(profile.id, !!isDefault, manager);
+
+    // Required Session presentation and response preparation consume this saved
+    // row before their common commit. A later failure rolls all these writes back.
+    return (await userService.getProfileById(profile.id, manager))!;
+}
+
 /** Issue exactly once after the owning transaction has rechecked the captured principal. */
 export async function issueMigrationToken<Result>(actor: SessionLike,
     prepareResult: (result: {token: string}) => Result | Promise<Result>): Promise<Result> {
@@ -119,20 +147,6 @@ export function requireAccountDeletion(body: {username?: unknown}, session: Sess
     if (!account) throw new ExpectedError('Invalid session. Log out and try again', 'error', 500);
 }
 
-/** Retain provider-bearing deletion's existing delete, immediate-mail and provider-logout order. */
-export async function deleteAccount(body: {username?: unknown}, session: Request['session']): Promise<string> {
-    requireAccountDeletion(body, session);
-    const deleted = session.auth?.user ? await userService.deleteUser(session.auth.user.id)
-        : await userService.deleteGuest(session.auth!.guest!.id);
-    // This path intentionally keeps its established later failures/unknown outcome.
-    // Token-free callers use prepared deletion inside the shared Session transaction instead.
-    if (deleted?.email) {
-        await mailer.sendDeletionEmail({name: resolveEmailRecipientName(deleted instanceof User ? deleted.name : undefined, deleted.username),
-            address: deleted.email}, deleted);
-    }
-    return oidc.logout(session);
-}
-
 /** Prepare a removed account's existing notification without sending during a transaction. */
 function deletionEmail(account: User | Guest): PreparedIdentityEmail[] {
     if (!account.email) return [];
@@ -142,8 +156,9 @@ function deletionEmail(account: User | Guest): PreparedIdentityEmail[] {
 
 /** Remove only a former owner made redundant by this transfer, preparing all fallible notification data. */
 async function cleanupFormerOwner(owner: User | Guest | null | undefined, manager?: EntityManager): Promise<PreparedOwnerCleanup> {
-    // The caller holds the former owner row before checking remaining profiles.
-    // Distinct transfers therefore cannot both skip the eventual last-account cleanup.
+    // Manager-bound transfer retains its former-owner lock through this check.
+    // Deactivation arrives after its short detach commit; its existing cleanup
+    // and mail remain separate and gain no whole-workflow serialization here.
     if (!owner || (owner instanceof User && (await userService.getProfilesForUser(owner.id, manager)).length !== 0)) {
         return {cleanup: 'none', emails: []};
     }
@@ -159,6 +174,16 @@ async function cleanupFormerOwner(owner: User | Guest | null | undefined, manage
     return {cleanup: owner instanceof User ? 'account-deleted' : 'guest-deleted', emails};
 }
 
+// Only the exact shared-guard rejection before detach may remain a known denial.
+// Weak membership retains neither a request nor a growing failed-operation log.
+const deactivationOwnershipRejections = new WeakSet<ApiProblem>();
+
+/** Recognize only this feature's pre-detach ownership rejection, never another
+ * failure which happens to carry the same public API code after mutation. */
+export function isDeactivationOwnershipRejection(error: unknown): boolean {
+    return error instanceof ApiProblem && deactivationOwnershipRejections.has(error);
+}
+
 /** Detach the selected profile, preserving its domain rows and deactivation's existing partial failures. */
 export async function deactivateProfile(body: {name?: unknown}, session: Request['session']): Promise<ProfileOwnerCleanup> {
     const {name} = body;
@@ -167,9 +192,26 @@ export async function deactivateProfile(body: {name?: unknown}, session: Request
             {cause: 'PROFILE_DEACTIVATION_CONFIRMATION_INVALID'});
     }
     if (!session.profile) throw new ExpectedError('No active profile!', 'error', 401);
-    // No whole-operation transaction is added: detach, required cleanup and its
-    // existing mail complete before the controller selects a remaining profile or signs out.
-    const previousOwner = await userService.removeProfileFromOwner(session.profile.id);
+
+    /** Recheck captured ownership and detach under the same owner/Profile locks. */
+    async function detachOwnedProfile(manager: EntityManager, profile: Profile | null) {
+        // Tag only the synchronous business guard's own expected rejection.
+        // SQL, transaction and later cleanup failures never acquire this identity.
+        try {
+            requireCurrentProfileOwner(profile, session);
+        } catch (error) {
+            if (error instanceof ApiProblem && error.code === 'SESSION_CONTEXT_CHANGED') {
+                deactivationOwnershipRejections.add(error);
+            }
+            throw error;
+        }
+        return userService.removeProfileFromOwner(profile.id, manager);
+    }
+    const previousOwner = await userService.withMigrationProfileTransaction(session.profile.id, detachOwnedProfile,
+        {userId: session.auth?.user?.id, guestId: session.auth?.guest?.id});
+
+    // Only guard/detach share that commit. Existing cleanup/mail and the later
+    // controller selection/local save retain their order and partial failures.
     return (await cleanupFormerOwner(previousOwner)).cleanup;
 }
 
@@ -178,8 +220,11 @@ export async function deliverPreparedIdentityEmails(emails: PreparedIdentityEmai
     // All recipient/template/result work already completed. Each external delivery is independent.
     let delivered = true;
     for (const email of emails) {
-        try { if (!await email.deliver()) delivered = false; }
-        catch { delivered = false; }
+        try {
+            if (!await email.deliver()) delivered = false;
+        } catch {
+            delivered = false;
+        }
     }
     return delivered;
 }

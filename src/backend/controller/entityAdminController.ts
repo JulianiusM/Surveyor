@@ -51,6 +51,23 @@ type ListType = 'packing' | 'drivers';
 type ListReadRoot = EntityBase & {archivedAt?: Date | null; event?: Event | null};
 type ListReadItem = {id: string; pos: number};
 
+/** Select only canonical item fields admitted by the feature's existing method policy.
+ * Keep value and editable-field order aligned for disclosure and comparison tokens. */
+export function projectListItemEditValues<Values extends object>(current: Values, permissions: PermView,
+    mayEditField: (permissions: PermView, field: keyof Values & string) => boolean):
+    {values: Partial<Values>; editableFields: (keyof Values & string)[]} {
+    const values: Partial<Values> = {};
+    const editableFields: (keyof Values & string)[] = [];
+    // Feature-owned literal values define the complete ordered field set. No
+    // request keys or display-only capability flags expand this projection.
+    for (const field of Object.keys(current) as (keyof Values & string)[]) {
+        if (!mayEditField(permissions, field)) continue;
+        editableFields.push(field);
+        values[field] = current[field];
+    }
+    return {values, editableFields};
+}
+
 /** Patch only freshly authorized fields of a locked, root-scoped item.
  * Feature callbacks retain their field set, disclosure/token owner and sparse persistence rules. */
 export async function updateListItem<Type extends ListPersistenceType, Patch extends object, Values extends object>(

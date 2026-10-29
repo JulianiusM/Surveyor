@@ -1,3 +1,4 @@
+import {quickAddSlot} from '../../src/backend/modules/activity/slots';
 import {describe, expect, it} from 'vitest';
 import activityController from '../../src/backend/controller/activityController';
 import {classifyArchiveCommandError} from '../../src/backend/modules/entityArchival';
@@ -5,7 +6,7 @@ import type {ActivityPlan} from '../../src/backend/modules/database/entities/act
 import {APIError, ExpectedError} from '../../src/backend/modules/lib/errors';
 import {ApiProblem, classifyApiError, declaredApiProblem, validatedProblemBody} from '../../src/backend/modules/api/problem';
 
-/** These actual controller checks reject before persistence. No datasource,
+/** These actual feature/controller checks reject before persistence. No datasource,
  * repository, transaction or business operation is replaced for these cases. */
 async function rejection(operation: () => Promise<unknown>): Promise<APIError> {
     try { await operation(); } catch (error) {
@@ -23,7 +24,7 @@ describe('Actionable controller rejection diagnostics', () => {
         {body: {date: '2030-06-02', title: 'Group talk', startTime: '15:00', endTime: '14:00'},
             code: 'ACTIVITY_TIME_ORDER_INVALID', message: 'End time must be after start time'},
     ])('identifies $code from the existing Activity creation rule', async ({body, code, message}) => {
-        const error = await rejection(() => activityController.quickAddSlot(plan, body, {}));
+        const error = await rejection(() => quickAddSlot(plan, body, {}));
         expect(error).toMatchObject({message, status: 400, data: body, cause: code});
         const problem = classifyApiError(error);
         for (const locale of ['en', 'de']) {

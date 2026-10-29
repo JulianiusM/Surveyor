@@ -4,7 +4,7 @@ documentation-metadata
 audience: maintainers; developers; AI agents
 owner: project maintainers
 status: current
-last-verified: 2026-10-28
+last-verified: 2026-10-29
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: direct maintainer decisions and scope; not implementation or execution certification
 source-anchors: docs/policies/DEVELOPMENT_POLICY.md; docs/policies/DOCUMENTATION_POLICY.md; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md; docs/backlog/documentation-remediation.yml; src/backend/; src/frontend/; .github/workflows/ci.yml
@@ -159,3 +159,47 @@ mutation when a conversion, partial state or reversal cannot preserve informatio
 ownership, account/profile merging, populated identifier coercion, destructive rollback, migration-history bypass,
 released-archive edits or a production deployment. Preserve the original decisions above and use the existing paired
 restore procedure whenever safe reversal cannot be established.
+
+## Approved bounded session completion repairs (2026-10-29)
+
+The maintainer explicitly approves **R1**, **R2** and **R3** from the immediately preceding production-audit
+answer and instructs full implementation of its prose plan. These identifiers belong to that answer only.
+Preserve the original choices above and the October 14 A2 correction recorded in the development guide.
+
+R1 extends A3's destruction-only adapter correction to ordinary renewal: the existing expiry update must settle
+before exactly one success or failure callback, preserving TTL, identity JSON, cookie policy and disconnect reporting.
+Response bytes may already have been sent; renewal failure does not roll back a business commit.
+
+R2 extends the existing identity-completion/staging owner only to document feedback consumption and persistence:
+Vue bootstrap, private-link feedback, redirect carryover, retained Activity print's complete native flash consumption,
+and notices saved after document/expiry logout. Guard the originating generation, omit superseded feedback without adopting
+another actor, and prevent later stale autosave. Expiry feedback uses its completed logout's generation and retains
+log-only delivery failure; the preceding ordinary logout is unchanged. No-feedback visits remain read-only and
+public visits without feedback stay uninitialized. Ordinary expiry renewal and best-effort delivery remain.
+
+R3 makes a bounded exception to the October 14 A2 native-edit persistence correction and A10's no-wider-profile-
+transaction exclusion: current-profile name/default edits, ownership/generation checks, required Session refresh
+and prepared acknowledgement share the existing completion transaction and its manager. Reuse the identity feature's
+business ownership and UserService's established owner-before-Profile locking responsibility. Preserve exact names,
+shared bounds, required API fields, internal omission/default semantics, account/guest rights, generation and wire
+contracts. This deliberately replaces partial database/session failure with atomic completion for editing only.
+
+These decisions do not authorize a general Session merger, ordinary provider/deactivation identity redesign,
+profile-creation strengthening, release publication or shared deployment. The remaining audit and conditional A19
+verification continue within their existing boundaries; successful tests do not certify those broader lifecycles.
+
+## Approved deactivation ownership fence (2026-10-29)
+
+The maintainer explicitly approves **R4** from the immediately preceding production-audit answer and instructs
+full implementation and related review. This identifier names that answer's deactivation ownership decision only.
+
+Before detaching a profile, the existing identity feature must check the captured owner's current ownership under
+UserService's established owner-before-Profile locks and detach on the same short transaction manager. The existing
+controller passes through only that known pre-detach ownership rejection; failures after detachment retain their
+uncertain outcome. This prevents a former owner's admitted request from detaching a subsequently transferred profile.
+
+Preserve R16's original choice: confirmation, account/guest rights, retained domain rows, later former-owner
+cleanup/mail, remaining-profile selection or local sign-out and their partial failures keep their existing order
+outside that short transaction. R4 does not authorize whole-workflow atomicity, a general Session merger or provider
+redesign. Establish the real-persistence regression before dependent product changes and reassess any unreproduced
+claim. The original decisions above remain historical; conditional A19 and its external prerequisites are unchanged.

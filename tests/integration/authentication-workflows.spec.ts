@@ -18,10 +18,11 @@ import {createSessionStore, persistSession, readStoredSession} from '../../src/b
 import {rotateFrontendSessionContext} from '../../src/backend/modules/lib/frontendSession';
 import {captureApiActor, prepareAccountRegistrationReplies, prepareGuestIdentityReplies, prepareIdentityReply, sessionView} from '../../src/backend/modules/api/session';
 import {prepareValidatedJson, sendPreparedJson} from '../../src/backend/modules/api/transport';
+import {ApiProblem} from '../../src/backend/modules/api/problem';
 import type {PreparedApiJsonResponse} from '../../src/types/ApiTransportTypes';
 import type {AccountRegistrationTransactionOptions, GuestRegistrationTransactionOptions, IdentityCompletionOptions} from '../../src/types/IdentityTypes';
 import type {components} from '../../src/types/api/v1';
-import {persistIntegrationProfile, registerLocalAccount,} from '../keywords/coreDomainKeywords';
+import {createPackingListWithItem, persistIntegrationProfile, registerLocalAccount,} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 import * as identity from '../../src/backend/modules/identity';
 import * as oidc from '../../src/backend/modules/oidc';
@@ -62,15 +63,13 @@ describe('configured Session destruction persistence', () => {
     });
 });
 
-describe.each(['direct', 'prepared'] as const)('shared guest-name bounds through %s creation', completion => {
+describe('shared guest-name bounds through committed creation', () => {
     it('rejects an overlong guest before either related row or Session changes', async () => {
         const req = await atomicGuestRequest();
         const before = JSON.stringify(req.session);
         const guests = await AppDataSource.getRepository(Guest).count();
         const profiles = await AppDataSource.getRepository(Profile).count();
-        const operation = completion === 'direct'
-            ? userController.registerGuest('😀'.repeat(51), undefined, req.session)
-            : userController.registerGuestWithSession('😀'.repeat(51), undefined, req, atomicGuestOptions(req));
+        const operation = userController.registerGuestWithSession('😀'.repeat(51), undefined, req, atomicGuestOptions(req));
         await expect(operation).rejects.toMatchObject({code: 'VALIDATION_FAILED'});
         expect(await AppDataSource.getRepository(Guest).count()).toBe(guests);
         expect(await AppDataSource.getRepository(Profile).count()).toBe(profiles);
@@ -80,11 +79,8 @@ describe.each(['direct', 'prepared'] as const)('shared guest-name bounds through
     it('persists fifty supplementary code points exactly in both guest and profile', async () => {
         const req = await atomicGuestRequest();
         const name = '😀'.repeat(50);
-        if (completion === 'direct') await userController.registerGuest(name, undefined, req.session);
-        else {
-            const committed = await userController.registerGuestWithSession(name, undefined, req, atomicGuestOptions(req));
-            req.session = committed.session;
-        }
+        const committed = await userController.registerGuestWithSession(name, undefined, req, atomicGuestOptions(req));
+        req.session = committed.session;
         const guest = (await userService.getGuestInternal(req.session.auth!.guest!.id))!;
         expect(guest.username).toBe(name);
         expect(guest.profile.name).toBe(name);
@@ -99,7 +95,7 @@ describe('shared profile-name bounds', () => {
         const before = JSON.stringify(req.session);
         await expect(userController.createProfile({name: '😀'.repeat(51)}, req.session.auth!.user!.id))
             .rejects.toMatchObject({code: 'VALIDATION_FAILED'});
-        await expect(userController.updateProfile({name: '😀'.repeat(51), isDefault: false}, req.session))
+        await expect(userController.updateProfileWithSession({name: '😀'.repeat(51), isDefault: false}, req, profileEditOptions(req)))
             .rejects.toMatchObject({code: 'VALIDATION_FAILED'});
         expect(await AppDataSource.getRepository(Profile).count()).toBe(profiles);
         expect(await userService.getProfileById(original.id)).toMatchObject({name: original.name,
@@ -108,10 +104,181 @@ describe('shared profile-name bounds', () => {
 
         const name = '😀'.repeat(48) + 'e\u0301';
         const created = await userController.createProfile({name}, req.session.auth!.user!.id);
-        await userController.updateProfile({name, isDefault: false}, req.session);
+        const completed = await userController.updateProfileWithSession({name, isDefault: false}, req, profileEditOptions(req));
+        req.session = completed.session;
         expect((await userService.getProfileById(created.id))!.name).toBe(name);
         expect((await userService.getProfileById(original.id))!.name).toBe(name);
         expect(req.session.profile!.name).toBe(name);
+    });
+});
+
+describe('atomic current-profile editing', () => {
+    it('retains a completed logout and rejects the earlier admitted edit before profile writes', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const original = JSON.stringify(req.session);
+        const profile = (await userService.getProfileById(req.session.profile!.id))!;
+
+        // Two requests captured the same real stored account. Complete logout
+        // through its production owner before resuming the first admitted edit.
+        const logout = identityRequest();
+        logout.sessionID = req.sessionID;
+        logout.sessionStore = req.sessionStore;
+        logout.sessionStore.createSession(logout, (await readStoredSession(req.sessionStore, req.sessionID))!);
+        const actor = await captureApiActor(logout);
+        const completed = await userController.logoutUserWithSession(logout, {context: actor.context,
+            prepareResult: staged => prepareIdentityReply(logout, staged, 'logoutIdentity')});
+        logout.session = completed.session;
+        const later = (await readStoredSession(req.sessionStore, req.sessionID))!;
+        expect(later.auth).toBeUndefined();
+        expect(later.frontendContext).not.toBe(req.apiActor!.context);
+
+        let rejected: unknown;
+        try {
+            await userController.updateProfileWithSession({name: 'Retired profile edit', isDefault: false}, req, profileEditOptions(req));
+        } catch (error) { rejected = error; }
+
+        // Assert the durable and request-local boundaries together, so a later
+        // rejection alone cannot hide profile writes or restored authentication.
+        const stored = (await readStoredSession(req.sessionStore, req.sessionID))!;
+        const saved = (await userService.getProfileById(profile.id))!;
+        // Exact serialized equality is reported as a boolean so a failure never
+        // prints authentication, CSRF or private capability fields into test logs.
+        expect({code: (rejected as {code?: string} | undefined)?.code,
+            name: saved.name, defaultForOwner: saved.defaultForOwner,
+            laterSessionRetained: JSON.stringify(stored) === JSON.stringify(later),
+            originalUnchanged: JSON.stringify(req.session) === original})
+            .toEqual({code: 'SESSION_CONTEXT_CHANGED', name: profile.name,
+                defaultForOwner: profile.defaultForOwner, laterSessionRetained: true, originalUnchanged: true});
+    });
+
+    it('rolls back the name and peer defaults when required Session persistence fails', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const profile = (await userService.getProfileById(req.session.profile!.id))!;
+        const sibling = await userService.createProfile(req.session.auth!.user!.id, 'Existing default sibling');
+        await userService.updateProfileDefault(sibling.id, true);
+        const original = JSON.stringify(req.session);
+        const stored = JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID));
+
+        // A real database rejection exercises the configured store and the
+        // operation's transaction, without replacing repositories or save logic.
+        await AppDataSource.query("CREATE TRIGGER reject_profile_edit_session BEFORE UPDATE ON `session` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Controlled profile Session failure'");
+        try {
+            expect(await AppDataSource.getRepository(Session).existsBy({id: req.sessionID})).toBe(true);
+            expect(await AppDataSource.query("SHOW TRIGGERS WHERE `Trigger` = 'reject_profile_edit_session'")).toHaveLength(1);
+            // Installed connect-typeorm catches the rejected UPDATE and tries
+            // INSERT for this existing SID, exposing the real duplicate-key error.
+            await expect(userController.updateProfileWithSession({name: 'Uncommitted profile name', isDefault: true}, req, profileEditOptions(req)))
+                .rejects.toMatchObject({name: 'QueryFailedError', code: 'ER_DUP_ENTRY', errno: 1062, sqlState: '23000'});
+        } finally {
+            await AppDataSource.query('DROP TRIGGER reject_profile_edit_session');
+        }
+
+        expect.soft((await userService.getProfileById(profile.id))!).toMatchObject({name: profile.name, defaultForOwner: false});
+        expect.soft((await userService.getProfileById(sibling.id))!).toMatchObject({defaultForOwner: true});
+        expect.soft(JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID)) === stored,
+            'Stored Session must remain byte-for-byte unchanged').toBe(true);
+        expect.soft(JSON.stringify(req.session) === original,
+            'Original request Session must remain byte-for-byte unchanged').toBe(true);
+    });
+
+    it.each(['account', 'guest'] as const)('preserves internal omitted fields and acknowledged saves for %s edits', async kind => {
+        const {req} = await ordinaryLogoutFixture(kind);
+        const original = req.session;
+        const originalJson = JSON.stringify(original);
+        const profile = original.profile!;
+        const completed = await userController.updateProfileWithSession({}, req, profileEditOptions(req));
+
+        // Internal omission keeps the exact name and coerces the absent default
+        // flag to false. The public API separately requires both input fields.
+        expect(completed.session.profile).toMatchObject({id: profile.id, name: profile.name, defaultForOwner: false});
+        expect(JSON.parse(completed.result.json)).toEqual({changed: true});
+        expect(completed.result.context).toBe(req.apiActor!.context);
+        expect(completed.session.frontendContext).toBe(original.frontendContext);
+        expect(completed.session.frontendCsrfToken).toBe(original.frontendCsrfToken);
+        expect(req.session).toBe(original);
+        expect(JSON.stringify(original) === originalJson).toBe(true);
+
+        // An adopted response acknowledges its completed write. Saving that old
+        // receipt after a later real logout cannot reinstall the earlier actor.
+        req.session = completed.session;
+        const loggedOut = await userController.logoutUserWithSession(req, {context: req.apiActor!.context,
+            prepareResult: staged => prepareIdentityReply(req, staged, 'logoutIdentity')});
+        req.session = loggedOut.session;
+        const later = JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID));
+        await persistSession(completed.session);
+        expect(JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID)) === later,
+            'An acknowledged profile edit must not overwrite later logout').toBe(true);
+    });
+
+    it('rolls back profile and defaults when generated acknowledgement preparation fails', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const profile = (await userService.getProfileById(req.session.profile!.id))!;
+        const sibling = await userService.createProfile(req.session.auth!.user!.id, 'Default before rejected receipt');
+        await userService.updateProfileDefault(sibling.id, true);
+        const original = JSON.stringify(req.session);
+        const stored = JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID));
+
+        /** Exercise actual output validation after the required business writes. */
+        function prepareInvalidResult() {
+            return prepareValidatedJson(req, 'updateIdentityProfile', 200,
+                {changed: 'invalid'} as unknown as components['schemas']['MutationResult']);
+        }
+        await expect(userController.updateProfileWithSession({name: 'Uncommitted acknowledgement', isDefault: true}, req,
+            {context: req.apiActor!.context, prepareResult: prepareInvalidResult}))
+            .rejects.toMatchObject({code: 'INTERNAL_ERROR'});
+        expect(await userService.getProfileById(profile.id)).toMatchObject({name: profile.name, defaultForOwner: false});
+        expect(await userService.getProfileById(sibling.id)).toMatchObject({defaultForOwner: true});
+        expect(JSON.stringify(req.session) === original).toBe(true);
+        expect(JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID)) === stored).toBe(true);
+    });
+
+    it('rechecks transferred profile ownership before editing a still-matching Session generation', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const original = JSON.stringify(req.session);
+        const profile = req.session.profile!;
+        const recipient = await registerLocalAccount('profile-edit-recipient');
+        await userService.moveProfileToUserTx(profile.id, recipient.id);
+        const stored = JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID));
+
+        await expect(userController.updateProfileWithSession({name: 'Former owner edit', isDefault: true}, req, profileEditOptions(req)))
+            .rejects.toMatchObject({code: 'SESSION_CONTEXT_CHANGED'});
+        expect(await userService.getProfileById(profile.id)).toMatchObject({name: profile.name, userId: recipient.id});
+        expect(JSON.stringify(req.session) === original).toBe(true);
+        expect(JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID)) === stored).toBe(true);
+    });
+
+    it('rejects a prior profile edit after the same Session selects another owned profile', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const profile = req.session.profile!;
+        const sibling = await userService.createProfile(req.session.auth!.user!.id, 'Later selected profile');
+        const selected = await userController.changeActiveProfileWithSession(sibling.id, req,
+            {context: req.apiActor!.context, prepareResult: staged => prepareIdentityReply(req, staged, 'switchIdentityProfile')});
+        const later = JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID));
+
+        // The request deliberately retains its original admitted snapshot. The
+        // matching principal alone cannot authorize editing after profile change.
+        expect(selected.session.profile!.id).toBe(sibling.id);
+        await expect(userController.updateProfileWithSession({name: 'Old selected profile edit', isDefault: false}, req, profileEditOptions(req)))
+            .rejects.toMatchObject({code: 'SESSION_CONTEXT_CHANGED'});
+        expect(await userService.getProfileById(profile.id)).toMatchObject({name: profile.name, defaultForOwner: true});
+        expect(JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID)) === later).toBe(true);
+    });
+
+    it.each(['absent', 'partial'] as const)('retains %s legacy transport metadata without generation rotation', async kind => {
+        const {req} = await ordinaryLogoutFixture('account');
+        if (kind === 'absent') delete req.session.frontendContext;
+        delete req.session.frontendCsrfToken;
+        await persistSession(req.session);
+        req.apiActor = undefined;
+        const actor = await captureApiActor(req);
+        const rawContext = req.session.frontendContext;
+        const completed = await userController.updateProfileWithSession({name: 'Legacy profile edit', isDefault: false}, req, profileEditOptions(req));
+
+        expect(completed.result.context).toBe(actor.context);
+        expect(completed.session.frontendContext).toBe(rawContext);
+        expect(completed.session.frontendCsrfToken).toBeUndefined();
+        expect(completed.session.profile!.name).toBe('Legacy profile edit');
+        expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe(rawContext);
     });
 });
 
@@ -168,42 +335,35 @@ describe('exact provider identity and bounded display provisioning', () => {
     });
 });
 
-describe.each(['direct', 'prepared'] as const)('local registration name bounds through %s completion', completion => {
+describe('local registration name bounds through committed completion', () => {
     it('rejects either overlength name before account/profile writes or mail preparation', async () => {
         const req = await initialIdentityRequest();
         const originalSession = JSON.stringify(req.session);
         const userCount = await AppDataSource.getRepository(User).count();
         const profileCount = await AppDataSource.getRepository(Profile).count();
-        const directMail = vi.spyOn(email, 'sendActivationEmail').mockResolvedValue();
-        const {prepared, deliver} = activationDelivery(true);
+        const {prepared, deliver} = preparedMailDelivery(true);
         try {
             for (const field of ['username', 'displayname']) {
                 const input = {...accountRegistrationInput(`name-limit-${randomUUID().slice(0, 8)}`), [field]: '😀'.repeat(51)};
-                const operation = completion === 'direct' ? userController.registerUser(input)
-                    : userController.registerUserWithSession(input, req, atomicAccountOptions(req));
+                const operation = userController.registerUserWithSession(input, req, atomicAccountOptions(req));
                 await expect(operation).rejects.toMatchObject({name: 'ValidationError', cause: 'VALIDATION_FAILED', data: {}});
                 expect(await AppDataSource.getRepository(User).count()).toBe(userCount);
                 expect(await AppDataSource.getRepository(Profile).count()).toBe(profileCount);
             }
-            expect(directMail).not.toHaveBeenCalled();
             expect(prepared).not.toHaveBeenCalled();
             expect(deliver).not.toHaveBeenCalled();
             expect(JSON.stringify(req.session)).toBe(originalSession);
-        } finally { directMail.mockRestore(); prepared.mockRestore(); }
+        } finally { prepared.mockRestore(); }
     });
 
     it('persists fifty Unicode code points exactly in the account and default profile', async () => {
         const suffix = randomUUID().slice(0, 8);
         const input = {...accountRegistrationInput('😀'.repeat(42) + suffix),
             displayname: '😀'.repeat(50), email: `unicode-${suffix}@example.test`};
-        const directMail = vi.spyOn(email, 'sendActivationEmail').mockResolvedValue();
-        const {prepared} = activationDelivery(true);
+        const {prepared} = preparedMailDelivery(true);
         try {
-            if (completion === 'direct') await userController.registerUser(input);
-            else {
-                const req = await initialIdentityRequest();
-                await userController.registerUserWithSession(input, req, atomicAccountOptions(req));
-            }
+            const req = await initialIdentityRequest();
+            await userController.registerUserWithSession(input, req, atomicAccountOptions(req));
             const account = await AppDataSource.getRepository(User).findOneOrFail({
                 where: {username: input.username}, relations: {profiles: true},
             });
@@ -211,18 +371,17 @@ describe.each(['direct', 'prepared'] as const)('local registration name bounds t
             expect(account.name).toBe(input.displayname);
             expect(account.profiles).toHaveLength(1);
             expect(account.profiles[0].name).toBe(input.displayname);
-        } finally { directMail.mockRestore(); prepared.mockRestore(); }
+        } finally { prepared.mockRestore(); }
     });
 });
 
-describe.each(['direct', 'prepared'] as const)('approved new-password admission through %s completion', completion => {
+describe('approved new-password admission through committed completion', () => {
     it('rejects short Unicode and over-limit byte inputs before registration writes or mail preparation', async () => {
         const req = await initialIdentityRequest();
         const originalSession = JSON.stringify(req.session);
         const userCount = await AppDataSource.getRepository(User).count();
         const profileCount = await AppDataSource.getRepository(Profile).count();
-        const directMail = vi.spyOn(email, 'sendActivationEmail').mockResolvedValue();
-        const {prepared, deliver} = activationDelivery(true);
+        const {prepared, deliver} = preparedMailDelivery(true);
         // Fourteen astral characters exceed the old UTF-16 minimum but are still
         // too short. Both ASCII and multibyte 73-byte inputs exceed bcrypt's bound.
         const rejected = ['😀'.repeat(14), 'a'.repeat(73), '😀'.repeat(18) + 'a'];
@@ -230,19 +389,17 @@ describe.each(['direct', 'prepared'] as const)('approved new-password admission 
             for (const password of rejected) {
                 const input = {...accountRegistrationInput(`rejected-password-${randomUUID().slice(0, 8)}`),
                     password, password_repeat: password};
-                const operation = completion === 'direct' ? userController.registerUser(input)
-                    : userController.registerUserWithSession(input, req, atomicAccountOptions(req));
+                const operation = userController.registerUserWithSession(input, req, atomicAccountOptions(req));
                 await expect(operation).rejects.toMatchObject({name: 'ValidationError', cause: 'VALIDATION_FAILED', data: {}});
                 await expect(operation).rejects.toHaveProperty('data', {});
                 expect(await AppDataSource.getRepository(User).count()).toBe(userCount);
                 expect(await AppDataSource.getRepository(Profile).count()).toBe(profileCount);
             }
-            expect(directMail).not.toHaveBeenCalled();
             expect(prepared).not.toHaveBeenCalled();
             expect(deliver).not.toHaveBeenCalled();
             expect(JSON.stringify(req.session)).toBe(originalSession);
             expect(await readStoredSession(req.sessionStore, req.sessionID)).toBeUndefined();
-        } finally { directMail.mockRestore(); prepared.mockRestore(); }
+        } finally { prepared.mockRestore(); }
     });
 
     it('rejects invalid replacement passwords without changing the hash, reset capability or stored session', async () => {
@@ -257,8 +414,7 @@ describe.each(['direct', 'prepared'] as const)('approved new-password admission 
         const prepareResult = vi.fn(() => prepareValidatedJson(req, 'resetAccountPassword', 200, {changed: true}));
         for (const password of ['😀'.repeat(14), 'a'.repeat(73), '😀'.repeat(18) + 'a']) {
             const input = {password, confirmPassword: password};
-            const operation = completion === 'direct' ? userController.resetPassword(token, input)
-                : userController.resetPasswordWithSession(token, input, req, {context: req.apiActor!.context, prepareResult});
+            const operation = userController.resetPasswordWithSession(token, input, req, {context: req.apiActor!.context, prepareResult});
             await expect(operation).rejects.toMatchObject({name: 'ValidationError', cause: 'VALIDATION_FAILED', data: {}});
             await expect(operation).rejects.toHaveProperty('data', {});
             const after = await AppDataSource.getRepository(User).findOneByOrFail({id: account.id});
@@ -281,15 +437,11 @@ describe.each(['direct', 'prepared'] as const)('approved new-password admission 
     ])('registers and resets the exact $label input', async ({password}) => {
         const username = `exact-password-${randomUUID().slice(0, 8)}`;
         const input = {...accountRegistrationInput(username), password, password_repeat: password};
-        const directMail = vi.spyOn(email, 'sendActivationEmail').mockResolvedValue();
-        const {prepared} = activationDelivery(true);
+        const {prepared} = preparedMailDelivery(true);
         try {
-            if (completion === 'direct') await userController.registerUser(input);
-            else {
-                const req = await initialIdentityRequest();
-                await userController.registerUserWithSession(input, req, atomicAccountOptions(req));
-            }
-        } finally { directMail.mockRestore(); prepared.mockRestore(); }
+            const req = await initialIdentityRequest();
+            await userController.registerUserWithSession(input, req, atomicAccountOptions(req));
+        } finally { prepared.mockRestore(); }
 
         const registered = await AppDataSource.getRepository(User).findOneByOrFail({username});
         expect(registered.password).not.toBe(password);
@@ -302,12 +454,9 @@ describe.each(['direct', 'prepared'] as const)('approved new-password admission 
 
         const token = await userService.generatePasswordResetToken(username);
         const replacement = {password, confirmPassword: password};
-        if (completion === 'direct') await userController.resetPassword(token, replacement);
-        else {
-            const req = await atomicGuestRequest();
-            await userController.resetPasswordWithSession(token, replacement, req, {context: req.apiActor!.context,
-                prepareResult: () => prepareValidatedJson(req, 'resetAccountPassword', 200, {changed: true})});
-        }
+        const req = await atomicGuestRequest();
+        await userController.resetPasswordWithSession(token, replacement, req, {context: req.apiActor!.context,
+            prepareResult: () => prepareValidatedJson(req, 'resetAccountPassword', 200, {changed: true})});
         const reset = await AppDataSource.getRepository(User).findOneByOrFail({id: registered.id});
         expect(reset.password).not.toBe(registered.password);
         expect(await userService.verifyPassword(registered.id, password)).toBe(true);
@@ -460,11 +609,12 @@ function accountRegistrationInput(username: string) {
         password: 'registration-secret', password_repeat: 'registration-secret'};
 }
 
-/** Replace only SMTP; recipient validation and both actual activation templates still run. */
-function activationDelivery(accepted: boolean) {
-    const render = emailOwner.prepareActivationEmail;
+/** Replace only SMTP; the selected production recipient and template preparation still run. */
+function preparedMailDelivery(accepted: boolean,
+    method: 'prepareActivationEmail' | 'preparePasswordResetEmail' | 'prepareGuestLinkEmail' = 'prepareActivationEmail') {
+    const render = emailOwner[method];
     const deliver = vi.fn().mockResolvedValue(accepted);
-    const prepared = vi.spyOn(emailOwner, 'prepareActivationEmail').mockImplementation(function prepareMail(recipient, link) {
+    const prepared = vi.spyOn(emailOwner, method).mockImplementation(function prepareMail(recipient, link) {
         render(recipient, link);
         return {deliver};
     });
@@ -477,6 +627,14 @@ function activationOptions(req: Request, persistCompletion = false): IdentityCom
         return prepareValidatedJson(req, 'activateIdentity', 200, {changed: true});
     }
     return {context: req.apiActor!.context, persistCompletion, prepareResult};
+}
+
+/** Keep profile-edit regressions on the live route's generated acknowledgement. */
+function profileEditOptions(req: Request): IdentityCompletionOptions<PreparedApiJsonResponse> {
+    function prepareResult() {
+        return prepareValidatedJson(req, 'updateIdentityProfile', 200, {changed: true});
+    }
+    return {context: req.apiActor!.context, prepareResult};
 }
 
 type OrdinaryIdentityKind = 'account' | 'guest' | 'profile';
@@ -641,7 +799,7 @@ describe('read-only frontend session admission', () => {
         // Signup and activation use the actual locked transaction, generated
         // response preparation and mail renderer. Only SMTP delivery is replaced.
         const username = `partial-legacy-${kind}-${randomUUID().slice(0, 8)}`;
-        const {prepared} = activationDelivery(true);
+        const {prepared} = preparedMailDelivery(true);
         try {
             const signup = await userController.registerUserWithSession(accountRegistrationInput(username), req, atomicAccountOptions(req));
             expect(signup.result.context).toBe(actor.context);
@@ -935,7 +1093,7 @@ describe('atomic versioned account registration', () => {
         const req = await initialIdentityRequest();
         const original = JSON.stringify(req.session);
         const username = `first-account-${randomUUID().slice(0, 8)}`;
-        const {prepared, deliver} = activationDelivery(true);
+        const {prepared, deliver} = preparedMailDelivery(true);
         try {
             const committed = await userController.registerUserWithSession(accountRegistrationInput(username), req, atomicAccountOptions(req));
             expect(JSON.parse(committed.result.json)).toEqual({changed: true, emailDelivery: 'sent'});
@@ -954,7 +1112,7 @@ describe('atomic versioned account registration', () => {
         const original = req.session;
         const originalJson = JSON.stringify(original);
         const username = `atomic-account-${randomUUID().slice(0, 8)}`;
-        const {prepared, deliver} = activationDelivery(accepted);
+        const {prepared, deliver} = preparedMailDelivery(accepted);
         try {
             const committed = await userController.registerUserWithSession(accountRegistrationInput(username), req, atomicAccountOptions(req));
             const result = JSON.parse(committed.result.json) as components['schemas']['RegistrationResult'];
@@ -981,7 +1139,7 @@ describe('atomic versioned account registration', () => {
         const req = await atomicGuestRequest();
         const originalJson = JSON.stringify(req.session);
         const username = `invalid-account-${randomUUID().slice(0, 8)}`;
-        const {prepared, deliver} = activationDelivery(true);
+        const {prepared, deliver} = preparedMailDelivery(true);
         const options = atomicAccountOptions(req);
         function prepareInvalidResult() {
             // Exercise the production generated validator after record/token
@@ -1019,7 +1177,7 @@ describe('atomic versioned account registration', () => {
         const username = `stale-account-${randomUUID().slice(0, 8)}`;
         const later = {...JSON.parse(JSON.stringify(req.session)), frontendContext: 'later-account-context'};
         await AppDataSource.getRepository(Session).update({id: req.sessionID}, {json: JSON.stringify(later)});
-        const {prepared, deliver} = activationDelivery(true);
+        const {prepared, deliver} = preparedMailDelivery(true);
         try {
             await expect(userController.registerUserWithSession(accountRegistrationInput(username), req, atomicAccountOptions(req)))
                 .rejects.toMatchObject({code: 'SESSION_CONTEXT_CHANGED'});
@@ -1399,10 +1557,9 @@ describe('atomic frontend password-reset consumption', () => {
         expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe('later-reset-actor');
     });
 
-    it('preserves native and frontend mismatch-before-invalid-token diagnostics', async () => {
+    it('preserves mismatch-before-invalid-token diagnostics at the live completion', async () => {
         const req = await atomicGuestRequest();
         const body = {password: 'first-value', confirmPassword: 'other-value'};
-        await expect(userController.resetPassword('invalid-token', body)).rejects.toMatchObject({cause: 'PASSWORD_MISMATCH'});
         function unusedResult(): PreparedApiJsonResponse { throw new Error('Mismatch must precede preparation'); }
         await expect(userController.resetPasswordWithSession('invalid-token', body, req,
             {context: req.apiActor!.context, prepareResult: unusedResult})).rejects.toMatchObject({cause: 'PASSWORD_MISMATCH'});
@@ -1522,38 +1679,45 @@ describe('authentication user stories', () => {
     it('rechecks transport admission after credential verification before replacing an identity', async () => {
         const {id, username} = await registerLocalAccount('frontend-stale-login');
         await userService.activateUser(id);
-        const session = {frontendContext: 'old-context', frontendCsrfToken: 'old-csrf'} as Request['session'];
-        const rejected = new Error('identity changed during verification');
-        const beforeTransition = vi.fn(async () => { throw rejected; });
-        await expect(userController.loginUser({username, password: 'initial-secret'}, session, {beforeTransition})).rejects.toBe(rejected);
-        expect(beforeTransition).toHaveBeenCalledOnce();
-        expect(session.auth).toBeUndefined();
-        expect(session.profile).toBeUndefined();
-        expect(session.frontendContext).toBe('old-context');
-        expect(session.frontendCsrfToken).toBe('old-csrf');
+        const req = await atomicGuestRequest();
+        const original = JSON.stringify(req.session);
+        // Another tab changes the actual stored generation. Credential success
+        // cannot replace that newer authority through a stale request snapshot.
+        const later = {...JSON.parse(original), frontendContext: 'later-login-context'};
+        await AppDataSource.getRepository(Session).update({id: req.sessionID}, {json: JSON.stringify(later)});
+        await expect(userController.loginUserWithSession({username, password: 'initial-secret'}, req,
+            {context: req.apiActor!.context, prepareResult: staged => prepareIdentityReply(req, staged, 'loginIdentity')}))
+            .rejects.toMatchObject({code: 'SESSION_CONTEXT_CHANGED'});
+        expect(JSON.stringify(req.session)).toBe(original);
+        expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe('later-login-context');
     });
 
     it('uses one controller workflow for frontend account and guest email links with bounded return destinations', async () => {
-        const activation = vi.spyOn(email, 'sendActivationEmail').mockResolvedValue(undefined);
-        const reset = vi.spyOn(email, 'sendPasswordResetEmail').mockResolvedValue(undefined);
-        const guestMail = vi.spyOn(email, 'sendLinkEmail').mockResolvedValue(undefined);
+        const {prepared: activation} = preparedMailDelivery(true);
+        const {prepared: reset} = preparedMailDelivery(true, 'preparePasswordResetEmail');
+        const {prepared: guestMail} = preparedMailDelivery(true, 'prepareGuestLinkEmail');
         const recovery = vi.spyOn(email, 'sendGuestRecoveryEmail').mockResolvedValue(undefined);
         try {
             const next = '/packing/example?locale=de#items';
-            await userController.registerUser({username: 'frontend-link-account', displayname: 'Frontend Name',
+            const accountReq = await initialIdentityRequest();
+            await userController.registerUserWithSession({username: 'frontend-link-account', displayname: 'Frontend Name',
                 email: 'frontend-links@example.test', password: 'registration-secret', password_repeat: 'registration-secret'},
-                undefined, {frontend: true, next});
+                accountReq, {...atomicAccountOptions(accountReq), next});
             const activateUrl = new URL(activation.mock.calls[0][1]);
             expect(activateUrl.pathname).toMatch(/^\/users\/activate\/[^/]+$/);
             expect(activateUrl.searchParams.get('next')).toBe(next);
-            await userController.sendPasswordForgotMail('frontend-link-account', {frontend: true, next: '//outside.invalid'});
+            await userController.requestPasswordResetWithSession('frontend-link-account', accountReq,
+                {context: accountReq.apiActor!.context, frontend: true, next: '//outside.invalid',
+                    prepareResult: () => prepareValidatedJson(accountReq, 'requestPasswordReset', 200, {changed: true})});
             const resetUrl = new URL(reset.mock.calls[0][1]);
             expect(resetUrl.pathname).toMatch(/^\/users\/reset-password\/[^/]+$/);
             expect(resetUrl.searchParams.get('next')).toBe('/users/dashboard');
 
-            const session = {} as Request['session'];
-            const link = await userController.registerGuest('Frontend Guest', '  FRONTEND-GUEST@example.test  ', session,
-                {frontend: true, next});
+            const guestReq = await initialIdentityRequest();
+            const committed = await userController.registerGuestWithSession('Frontend Guest', '  FRONTEND-GUEST@example.test  ', guestReq,
+                {...atomicGuestOptions(guestReq), next});
+            const session = committed.session;
+            const link = JSON.parse(committed.result.json).personalLink as string;
             expect(session.auth?.guest?.username).toBe('Frontend Guest');
             expect(session.profile?.guestId).toBe(session.auth?.guest?.id);
             expect(session.frontendContext).toBeTruthy();
@@ -1572,12 +1736,13 @@ describe('authentication user stories', () => {
         ['blank-name-account', '   ', 'blank-name-account'],
         ['spaced-name-account', '  Morgan\r\n  Example  ', 'Morgan Example'],
     ])('normalizes the display name before persisting and emailing account %s', async (username, displayname, expectedName) => {
-        const activation = vi.spyOn(email, 'sendActivationEmail').mockResolvedValue(undefined);
+        const {prepared: activation} = preparedMailDelivery(true);
         try {
-            await userController.registerUser({
+            const req = await initialIdentityRequest();
+            await userController.registerUserWithSession({
                 username, displayname, email: `${username}@example.test`,
                 password: 'test-password-1', password_repeat: 'test-password-1',
-            });
+            }, req, atomicAccountOptions(req));
             const account = (await userService.getUserByUsername(username))!;
             expect(account.name).toBe(expectedName);
             expect(account.profiles[0].name).toBe(expectedName);
@@ -1589,9 +1754,11 @@ describe('authentication user stories', () => {
 
     it('falls back to an existing account username for password recovery when its stored name is blank', async () => {
         const profile = await persistIntegrationProfile({name: ' \r\n ', username: 'legacy-blank-name', email: 'legacy-name@example.test'});
-        const recovery = vi.spyOn(email, 'sendPasswordResetEmail').mockResolvedValue(undefined);
+        const {prepared: recovery} = preparedMailDelivery(true, 'preparePasswordResetEmail');
         try {
-            await userController.sendPasswordForgotMail(profile.user!.username);
+            const req = await initialIdentityRequest();
+            await userController.requestPasswordResetWithSession(profile.user!.username, req,
+                {context: req.apiActor!.context, prepareResult: () => prepareValidatedJson(req, 'requestPasswordReset', 200, {changed: true})});
             expect(recovery).toHaveBeenCalledWith({name: 'legacy-blank-name', address: 'legacy-name@example.test'}, expect.any(String));
         } finally {
             recovery.mockRestore();
@@ -1599,17 +1766,19 @@ describe('authentication user stories', () => {
     });
 
     it('addresses activation and password recovery to the saved account name', async () => {
-        const activation = vi.spyOn(email, 'sendActivationEmail').mockResolvedValue(undefined);
-        const recovery = vi.spyOn(email, 'sendPasswordResetEmail').mockResolvedValue(undefined);
+        const {prepared: activation} = preparedMailDelivery(true);
+        const {prepared: recovery} = preparedMailDelivery(true, 'preparePasswordResetEmail');
         try {
-            await userController.registerUser({
+            const req = await initialIdentityRequest();
+            await userController.registerUserWithSession({
                 username: 'named-email-account', displayname: 'Morgan Example', email: 'named-account@example.test',
                 password: 'test-password-1', password_repeat: 'test-password-1',
-            });
+            }, req, atomicAccountOptions(req));
             expect(activation).toHaveBeenCalledWith(
                 {name: 'Morgan Example', address: 'named-account@example.test'}, expect.stringContaining('/users/activate/'),
             );
-            await userController.sendPasswordForgotMail('named-email-account');
+            await userController.requestPasswordResetWithSession('named-email-account', req,
+                {context: req.apiActor!.context, prepareResult: () => prepareValidatedJson(req, 'requestPasswordReset', 200, {changed: true})});
             expect(recovery).toHaveBeenCalledWith(
                 {name: 'Morgan Example', address: 'named-account@example.test'}, expect.stringContaining('/users/reset-password/'),
             );
@@ -1659,17 +1828,20 @@ describe('authentication user stories', () => {
         // registration/reset minimum. Login must keep accepting its saved hash.
         const {id: userId, username, email: accountEmail} = await registerLocalAccount('local-login');
         await userService.activateUser(userId);
-        const session = {} as Request['session'];
-
-        await userController.loginUser({username, password: 'initial-secret'}, session);
+        const req = await initialIdentityRequest();
+        const committed = await userController.loginUserWithSession({username, password: 'initial-secret'}, req,
+            {context: req.apiActor!.context, prepareResult: staged => prepareIdentityReply(req, staged, 'loginIdentity')});
+        const session = committed.session;
 
         // Canary: the existing username credential must continue to establish the user and default-profile session.
         expect(session.auth?.user?.id).toBe(userId);
         expect(session.profile?.id).toBe(session.auth?.user?.profiles[0].id);
         // A fresh session proves email login establishes its own identity rather
         // than accidentally retaining the preceding username login's state.
-        const emailSession = {} as Request['session'];
-        await userController.loginUser({username: accountEmail, password: 'initial-secret'}, emailSession);
+        const emailReq = await initialIdentityRequest();
+        const emailCommitted = await userController.loginUserWithSession({username: accountEmail, password: 'initial-secret'}, emailReq,
+            {context: emailReq.apiActor!.context, prepareResult: staged => prepareIdentityReply(emailReq, staged, 'loginIdentity')});
+        const emailSession = emailCommitted.session;
 
         // Regression: local users who enter their email must receive the same authenticated session as username users.
         expect(emailSession.auth?.user?.id).toBe(userId);
@@ -1681,7 +1853,8 @@ describe('authentication user stories', () => {
 
         const token = await userService.generateActivationToken(userId);
         expect((await userService.verifyActivationToken(token))?.id).toBe(userId);
-        await userController.activateAccount(token);
+        const req = await initialIdentityRequest();
+        await userController.activateAccountWithSession(token, req, activationOptions(req));
         expect(Boolean((await userService.getUserById(userId))?.isActive)).toBe(true);
         expect(await userService.verifyActivationToken(token)).toBeNull();
     });
@@ -1694,10 +1867,12 @@ describe('authentication user stories', () => {
         // Both native GET and v1 preflight call this non-consuming controller admission.
         await expect(userController.checkPasswordForgotToken(token)).resolves.toBeUndefined();
         await expect(userController.checkPasswordForgotToken(token)).resolves.toBeUndefined();
-        await userController.resetPassword(token, {
+        const req = await initialIdentityRequest();
+        await userController.resetPasswordWithSession(token, {
             password: 'replacement-secret',
             confirmPassword: 'replacement-secret'
-        });
+        }, req, {context: req.apiActor!.context,
+            prepareResult: () => prepareValidatedJson(req, 'resetAccountPassword', 200, {changed: true})});
         await expect(userService.verifyPassword(userId, 'replacement-secret')).resolves.toBe(true);
         expect(await userService.verifyPasswordResetToken(token)).toBeNull();
         await expect(userController.checkPasswordForgotToken(token)).rejects.toMatchObject({status: 401, cause: 'TOKEN_INVALID'});
@@ -1897,11 +2072,56 @@ function deletionDelivery(accepted = true) {
 }
 
 describe('approved local identity deletion and provider outcome', () => {
-    it('preserves deactivation partial failure without introducing a whole-operation transaction', async () => {
+    it('rejects an admitted former-owner deactivation after actual transfer without detaching the recipient profile', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const profile = req.session.profile!;
+        const original = JSON.stringify(req.session);
+        const [listId, item] = await createPackingListWithItem(profile.id);
+        const recipient = await ordinaryLogoutFixture('account');
+        const recipientId = recipient.req.session.auth!.user!.id;
+        const {token} = await userController.requestProfileMigrationToken(req.apiActor!);
+
+        // The original request remains admitted under its captured owner. Finish
+        // a real capability transfer through the production feature/controller
+        // before allowing that old deactivation to resume; no DBAL is substituted.
+        await userController.executeIdentityProfileMigration(recipient.req, token);
+        expect(await userService.getProfileById(profile.id)).toMatchObject({userId: recipientId, guestId: null});
+        const recipientBefore = JSON.stringify(await userService.getUserById(recipientId));
+        const storedBefore = JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID));
+        const domainBefore = {
+            list: await AppDataSource.query('SELECT * FROM packing_lists WHERE id = ?', [listId]),
+            item: await AppDataSource.query('SELECT * FROM packing_items WHERE id = ?', [item.id]),
+        };
+
+        let rejected: unknown;
+        try {
+            await userController.deactivateIdentityProfile(req, {name: profile.name});
+        } catch (error) { rejected = error; }
+
+        // Safe diagnostics compare entire serialized identity snapshots without
+        // printing password hashes, CSRF values or private capabilities on failure.
+        const current = await userService.getProfileById(profile.id);
+        expect.soft({code: (rejected as {code?: string} | undefined)?.code,
+            userId: current?.userId, guestId: current?.guestId})
+            .toEqual({code: 'SESSION_CONTEXT_CHANGED', userId: recipientId, guestId: null});
+        expect.soft(JSON.stringify(await userService.getUserById(recipientId)) === recipientBefore,
+            'The recipient account and owned profiles must remain unchanged').toBe(true);
+        expect.soft(JSON.stringify(req.session) === original, 'The admitted request must stay untouched').toBe(true);
+        expect.soft(JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID)) === storedBefore,
+            'Rejected deactivation must not save its old Session').toBe(true);
+        expect.soft({list: await AppDataSource.query('SELECT * FROM packing_lists WHERE id = ?', [listId]),
+            item: await AppDataSource.query('SELECT * FROM packing_items WHERE id = ?', [item.id])}).toEqual(domainBefore);
+    });
+
+    it.each(['ordinary', 'same-code'] as const)('preserves %s deactivation mail failure without a whole-operation transaction', async kind => {
         const {req} = await ordinaryLogoutFixture('account');
         const user = req.session.auth!.user!;
         const profile = req.session.profile!;
-        const delivery = vi.spyOn(email, 'sendDeletionEmail').mockRejectedValueOnce(new Error('Controlled deactivation mail failure'));
+        // Only SMTP delivery is replaced. A later error cannot borrow the
+        // earlier ownership guard's provenance merely by sharing its API code.
+        const failure = kind === 'same-code' ? new ApiProblem('SESSION_CONTEXT_CHANGED')
+            : new Error('Controlled deactivation mail failure');
+        const delivery = vi.spyOn(email, 'sendDeletionEmail').mockRejectedValueOnce(failure);
         try {
             await expect(userController.deactivateIdentityProfile(req, {name: profile.name}))
                 .rejects.toMatchObject({code: 'WORKFLOW_OUTCOME_UNKNOWN'});
@@ -1909,6 +2129,83 @@ describe('approved local identity deletion and provider outcome', () => {
             expect(await userService.getProfileById(profile.id)).toMatchObject({userId: null});
             expect(req.session.auth?.user?.id).toBe(user.id);
         } finally { delivery.mockRestore(); }
+    });
+
+    it.each(['detached', 'missing'] as const)('rejects an already %s profile before cleanup or Session changes', async kind => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const profile = req.session.profile!;
+        const userId = req.session.auth!.user!.id;
+        const original = JSON.stringify(req.session);
+        if (kind === 'detached') await userService.removeProfileFromOwner(profile.id);
+        else await AppDataSource.getRepository(Profile).delete(profile.id);
+        const stored = JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID));
+
+        await expect(userController.deactivateIdentityProfile(req, {name: profile.name}))
+            .rejects.toMatchObject({code: 'SESSION_CONTEXT_CHANGED'});
+        expect(await userService.getUserById(userId)).not.toBeNull();
+        if (kind === 'detached') expect(await userService.getProfileById(profile.id)).toMatchObject({userId: null});
+        else expect(await userService.getProfileById(profile.id)).toBeNull();
+        expect(JSON.stringify(req.session) === original).toBe(true);
+        expect(JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID)) === stored).toBe(true);
+    });
+
+    it('serializes two admitted deactivations and rejects only the later detach', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const profile = req.session.profile!;
+        const second = identityRequest();
+        second.sessionID = req.sessionID;
+        second.sessionStore = req.sessionStore;
+        second.sessionStore.createSession(second, (await readStoredSession(req.sessionStore, req.sessionID))!);
+        await captureApiActor(second);
+
+        // Both captured requests enter the real operation. The shared owner and
+        // Profile locks permit one detach; no synthetic gate replaces persistence.
+        const results = await Promise.allSettled([req, second].map(request =>
+            userController.deactivateIdentityProfile(request, {name: profile.name})));
+        expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+        expect(results.filter(result => result.status === 'rejected'))
+            .toEqual([expect.objectContaining({reason: expect.objectContaining({code: 'SESSION_CONTEXT_CHANGED'})})]);
+        expect(await userService.getProfileById(profile.id)).toMatchObject({userId: null});
+        expect(await userService.getUserById(req.apiActor!.auth!.user!.id)).toBeNull();
+        expect((await readStoredSession(req.sessionStore, req.sessionID))?.auth).toBeUndefined();
+    });
+
+    it('retains shared guest deactivation rights without extending the account-only API', async () => {
+        const {req} = await ordinaryLogoutFixture('guest');
+        const profile = req.session.profile!;
+        const guestId = req.session.auth!.guest!.id;
+        await expect(identity.deactivateProfile({name: profile.name}, req.session)).resolves.toBe('guest-deleted');
+        expect(await userService.getProfileById(profile.id)).toMatchObject({guestId: null, defaultForOwner: false});
+        expect(await AppDataSource.getRepository(Guest).findOneBy({id: guestId})).toBeNull();
+    });
+
+    it('retains detach and cleanup when the later local Session save fails', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const profile = req.session.profile!;
+        const userId = req.session.auth!.user!.id;
+        const stored = JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID));
+        const storeFailures: string[] = [];
+        function observeStoreFailure(error: unknown): void {
+            storeFailures.push((error as {code?: string})?.code ?? 'unclassified');
+        }
+        req.sessionStore.on('disconnect', observeStoreFailure);
+        // The real store must fail after the approved short detach transaction
+        // and existing account cleanup; this remains an unknown partial outcome.
+        await AppDataSource.query("CREATE TRIGGER reject_deactivation_save BEFORE UPDATE ON `session` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Controlled deactivation Session failure'");
+        try {
+            await expect(userController.deactivateIdentityProfile(req, {name: profile.name}))
+                .rejects.toMatchObject({code: 'WORKFLOW_OUTCOME_UNKNOWN'});
+        } finally {
+            req.sessionStore.off('disconnect', observeStoreFailure);
+            await AppDataSource.query('DROP TRIGGER reject_deactivation_save');
+        }
+        // The installed store reports the failed UPDATE's duplicate INSERT
+        // fallback. This proves the test reached local save, rather than failing
+        // earlier during optional mail delivery or completion preparation.
+        expect(storeFailures).toContain('ER_DUP_ENTRY');
+        expect(await userService.getProfileById(profile.id)).toMatchObject({userId: null});
+        expect(await userService.getUserById(userId)).toBeNull();
+        expect(JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID)) === stored).toBe(true);
     });
 
     it.each([false, true])('leaves account and Session intact when mail preparation fails (provider=%s)', async provider => {

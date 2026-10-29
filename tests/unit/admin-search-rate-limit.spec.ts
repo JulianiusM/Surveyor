@@ -83,7 +83,7 @@ describe('shared versioned administrator search rate limit', () => {
             expect(result.status).toBe(429);
             expect(result.type).toBe('application/problem+json');
             expect(result.body).toMatchObject({code: 'RATE_LIMITED', status: 429, params: {},
-                messageKey: 'api:errors.RATE_LIMITED', detail: 'Zu viele Suchanfragen. Versuche es später erneut.'});
+                messageKey: 'api:errors.RATE_LIMITED', detail: 'Zu viele Anfragen. Versuche es später erneut.'});
             expect(contractValidator('Problem')(result.body)).toBe(true);
             expect(result.headers['x-surveyor-context']).toBe('admitted-search-context');
             expect(result.headers['ratelimit-remaining']).toBe('0');

@@ -12,7 +12,7 @@ import {frontendIdentityPageEntry, frontendOverviewPageEntry, safeFrontendReturn
 import {persistSession} from '../modules/lib/session';
 import {ExpectedError} from '../modules/lib/errors';
 import settings from '../modules/settings';
-import {bootstrap, applyPageEntry, applyPresentationLocale, documentErrorStatus} from '../middleware/frontendDocuments';
+import {bootstrap, applyPageEntry, applyPresentationLocale, documentErrorStatus, persistCompletedWorkflowFeedback} from '../middleware/frontendDocuments';
 
 const router = Router();
 
@@ -129,9 +129,9 @@ router.get('/logout', addNextQuery('/users/logout', '/users'), asyncHandler(asyn
     const result = await userController.logoutUserOidc(req.session, 'outcome');
     // Saved logout bookmarks keep the existing confirmation in the current
     // catalog-backed flash channel after the identity owner has completed.
-    req.flash('frontend-notice', JSON.stringify(result.providerLogout === 'unconfirmed'
+    await persistCompletedWorkflowFeedback(req, result.providerLogout === 'unconfirmed'
         ? {kind: 'info', messageKey: 'auth.providerLogoutUnconfirmed'}
-        : {kind: 'success', messageKey: 'auth.logoutDone'}));
+        : {kind: 'success', messageKey: 'auth.logoutDone'});
     // Provider logout may leave the application; an explicit application return
     // still passes through the same bounded destination owner as SPA logout.
     res.redirect(typeof req.query.next === 'string' ? safeFrontendReturn(req.query.next) : result.redirect);

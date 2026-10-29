@@ -2,21 +2,26 @@
 import {getEventLinkOptions} from '../../src/backend/modules/event/linkage';
 import {describe, expect, it} from 'vitest';
 import eventController from '../../src/backend/controller/eventController';
-import {createProfile, deactivateProfile, deleteAccount, updateProfile} from '../../src/backend/controller/userController';
+import {createProfile, deactivateProfile} from '../../src/backend/controller/userController';
+import {isDeactivationOwnershipRejection, requireAccountDeletion, updateProfile} from '../../src/backend/modules/identity';
+import {DataSource} from 'typeorm';
 import {normalizeBasicProperties} from '../../src/backend/controller/entityAdminController';
 import type {Event} from '../../src/backend/modules/database/entities/event/Event';
 import {APIError, ValidationError} from '../../src/backend/modules/lib/errors';
-import {classifyApiError, declaredApiProblem, validatedProblemBody} from '../../src/backend/modules/api/problem';
+import {ApiProblem, classifyApiError, declaredApiProblem, validatedProblemBody} from '../../src/backend/modules/api/problem';
 import {contractValidator} from '../../src/backend/modules/api/contracts';
 import type {PermView, SessionLike} from '../../src/types/PermissionTypes';
 
 const event = {id: '11111111-1111-4111-8111-111111111111'} as Event;
 const actor = {profile: {id: event.id, name: 'Saved profile name'},
     auth: {user: {id: 1, username: 'saved-username'}}};
+// Construct a real manager without initializing a connection. The early input
+// guard must reject before metadata lookup, SQL or any persistence is attempted.
+const manager = new DataSource({type: 'mariadb'}).manager;
 const permissions: PermView = {mask: 0, parentMask: 0, bits: {},
     has: () => true, allow: () => true, all: () => true, any: () => true};
 
-/** Exercise original controller guards before their first persistence call.
+/** Exercise original feature/controller guards before their first persistence call.
  * No repository, transaction, validator or business operation is substituted. */
 async function rejection(operation: () => Promise<unknown>): Promise<APIError | ValidationError> {
     try { await operation(); } catch (error) {
@@ -45,6 +50,13 @@ function localizedRejection(error: APIError | ValidationError, code: string): vo
 }
 
 describe('Remaining reachable controller rejection diagnostics', () => {
+    it('does not classify an unrelated same-code error as a pre-detach ownership rejection', () => {
+        // Mail, selection or local-save errors cannot borrow a known rejection
+        // merely by carrying its public code or shape after detach has committed.
+        expect(isDeactivationOwnershipRejection(new ApiProblem('SESSION_CONTEXT_CHANGED'))).toBe(false);
+        expect(isDeactivationOwnershipRejection({code: 'SESSION_CONTEXT_CHANGED'})).toBe(false);
+    });
+
     it.each([
         {query: {cursor: 'PRIVATE_MODIFIED_CURSOR'}, code: 'EVENT_SEARCH_EXPIRED',
             message: 'Search expired or changed. Reset filters and try again.'},
@@ -80,9 +92,10 @@ describe('Remaining reachable controller rejection diagnostics', () => {
     });
 
     it.each(['account', 'profile'] as const)('explains an incorrect %s deletion confirmation before any write', async kind => {
-        const session = actor as Parameters<typeof deleteAccount>[1];
+        const session = actor as Parameters<typeof deactivateProfile>[1];
         const body = kind === 'account' ? {username: 'PRIVATE_WRONG_USERNAME'} : {name: 'PRIVATE_WRONG_NAME'};
-        const error = await rejection(() => kind === 'account' ? deleteAccount(body, session) : deactivateProfile(body, session));
+        const error = await rejection(async () => kind === 'account'
+            ? requireAccountDeletion(body, session) : deactivateProfile(body, session));
         expect(error).toBeInstanceOf(ValidationError);
         expect(error).toMatchObject({data: body, message: kind === 'account'
             ? 'Invalid account deletion verification' : 'Invalid profile deactivation verification'});
@@ -93,7 +106,7 @@ describe('Remaining reachable controller rejection diagnostics', () => {
         const body = {name: '   ', ...(kind === 'update' ? {isDefault: false} : {})};
         expect(contractValidator(kind === 'create' ? 'ProfileCreateInput' : 'ProfileUpdateInput')(body)).toBe(true);
         const error = await rejection(() => kind === 'create' ? createProfile(body, 1)
-            : updateProfile(body, actor as Parameters<typeof updateProfile>[1]));
+            : updateProfile(body, actor, manager));
         expect(error).toBeInstanceOf(ValidationError);
         expect(error).toMatchObject({message: 'Invalid profile name', data: kind === 'create' ? body : {}});
         localizedRejection(error, 'PROFILE_NAME_REQUIRED');

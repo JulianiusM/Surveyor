@@ -15,7 +15,6 @@
  */
 
 import {hasAccountProfile} from './userController';
-import {Request} from "express";
 import {QueryFailedError} from 'typeorm';
 import {getEntityPropertyPresentation, normalizeBasicProperties, requireEntityPropertyUpdate} from './entityAdminController';
 import {assertEntityPropertyContext} from '../modules/event/linkage';
@@ -140,17 +139,19 @@ async function afterCreateItems() {
 }
 
 /** Preserve the independent read order for both presentation consumers. */
-async function fetchForView(survey: Survey, req?: Request) {
+async function fetchForView(survey: Survey) {
     const combinations = await surveyService.getCombinationsBySurveyId(survey.id);
     const responses = await surveyService.getResponsesSorted(survey.id);
     return {survey, combinations, responses};
 }
 
-async function fetchForDuplicate(survey: Survey, session: SessionLike) {
+/** Read recurring choices after the calling adapter has admitted duplication. */
+async function fetchForDuplicate(survey: Survey) {
     return await surveyService.getCombinationsBySurveyId(survey.id);
 }
 
-async function deleteEntity(survey: Survey, session: SessionLike) {
+/** Preserve standalone deletion after the calling adapter has admitted the Survey. */
+async function deleteEntity(survey: Survey) {
     return await surveyService.deleteSurvey(survey.id);
 }
 
@@ -305,7 +306,7 @@ export async function createSurvey(body: components['schemas']['SurveyCreateInpu
 export async function readSurveyDuplicate(id: string, session: SessionLike): Promise<components['schemas']['SurveyDuplicate']> {
     const survey = await requireSurvey(id);
     requireSurveyOwner(survey, session);
-    const combinations = await fetchForDuplicate(survey, session);
+    const combinations = await fetchForDuplicate(survey);
     return {title: survey.title, description: survey.description ?? null,
         combinations: combinations.map(combination => ({weekday: combination.weekday, nthWeek: combination.nthWeek}))};
 }
@@ -455,7 +456,7 @@ export async function deleteSurvey(id: string, session: SessionLike,
     const survey = await requireSurvey(id);
     requireSurveyOwner(survey, session);
     prepare?.({changed: true});
-    await deleteEntity(survey, session);
+    await deleteEntity(survey);
     if (survey.headerImg) removeImage(survey.headerImg);
     return {changed: true};
 }

@@ -25,7 +25,7 @@ import {saveListMetadata, listMetadataResult, listPermissions, assertListContext
 import {
     readListItemEditBaseline, readListHeaderBaseline, readListHeaderPath, listHeaderToken,
     readListMetadata, readListDescription, readListOrderBaseline, readListSettings,
-    authorizeListRead, listItemPermissions,
+    authorizeListRead, listItemPermissions, projectListItemEditValues,
     listHeaderProjection, mayOpenListSettings, listSettingsToken,
     readEntityDefaultsBaseline, updateEntityDefaults, readEntityAdministratorBaseline, updateEntityAdministrator,
     updateListItem, deleteListItem, reorderListItems, requireListAssignmentHandle, deleteListAssignment,
@@ -138,7 +138,8 @@ async function fetchForView(list: DriversList, req: Request) {
     };
 }
 
-async function fetchForDuplicate(list: DriversList, session: Request['session']) {
+/** Read source offers after the calling adapter has admitted duplication. */
+async function fetchForDuplicate(list: DriversList) {
     return await driverService.getDriversItems(list.id);
 }
 
@@ -563,22 +564,7 @@ function itemEditValues(item: DriversItem): Required<components['schemas']['Driv
  * asymmetry. The stored title appears only in an independently permitted edit baseline. */
 function itemEditProjection(item: DriversItem, permissions: PermView):
     Pick<components['schemas']['DriversItemEditBaseline'], 'values' | 'editableFields'> {
-    const current = itemEditValues(item);
-    const values: components['schemas']['DriversItemEditBaseline']['values'] = {};
-    const editableFields: components['schemas']['DriversItemEditBaseline']['editableFields'] = [];
-    if (mayEditItemField(permissions, 'title')) {
-        editableFields.push('title');
-        values.title = current.title;
-    }
-    if (mayEditItemField(permissions, 'description')) {
-        editableFields.push('description');
-        values.description = current.description;
-    }
-    if (mayEditItemField(permissions, 'maxAssignees')) {
-        editableFields.push('maxAssignees');
-        values.maxAssignees = current.maxAssignees;
-    }
-    return {values, editableFields};
+    return projectListItemEditValues(itemEditValues(item), permissions, mayEditItemField);
 }
 
 /** Scope and actor stay identical across baseline adapters. A minimal baseline

@@ -1,3 +1,4 @@
+import {quickAddSlot, updateSlotAttr} from '../../src/backend/modules/activity/slots';
 import {getAssignmentWarnings} from '../../src/backend/modules/activity/recommendations';
 import {getRecommendations, getRecommendationWarningPreview, updateRecommendations, applyRecommendations} from '../../src/backend/modules/activity/recommendations';
 import {randomUUID} from 'node:crypto';
@@ -110,8 +111,8 @@ describe('activity plan user stories', () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
         const plan = await activityService.getActivityPlanById(planId);
-        await activityController.quickAddSlot(plan!, {date: '2027-06-01', title: 'Lunch'}, {profile: owner} as never);
-        await activityController.quickAddSlot(plan!, {date: '2027-06-01', title: 'Dinner'}, {profile: owner} as never);
+        await quickAddSlot(plan!, {date: '2027-06-01', title: 'Lunch'}, {profile: owner} as never);
+        await quickAddSlot(plan!, {date: '2027-06-01', title: 'Dinner'}, {profile: owner} as never);
         expect((await activityService.getActivitySlotsFlat(planId)).map((slot) => slot.title)).toEqual(['Morning activity', 'Lunch', 'Dinner']);
     });
 
@@ -119,8 +120,8 @@ describe('activity plan user stories', () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
         const plan = await activityService.getActivityPlanById(planId);
-        await activityController.quickAddSlot(plan!, {date: '2027-06-01', title: 'Late', startTime: '18:00'}, {profile: owner} as never);
-        await activityController.quickAddSlot(plan!, {date: '2027-06-01', title: 'Middle', startTime: '12:00'}, {profile: owner} as never);
+        await quickAddSlot(plan!, {date: '2027-06-01', title: 'Late', startTime: '18:00'}, {profile: owner} as never);
+        await quickAddSlot(plan!, {date: '2027-06-01', title: 'Middle', startTime: '12:00'}, {profile: owner} as never);
         expect((await activityService.getActivitySlotsFlat(planId)).map((slot) => slot.title)).toEqual(['Morning activity', 'Middle', 'Late']);
     });
 
@@ -128,7 +129,7 @@ describe('activity plan user stories', () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
         const plan = await activityService.getActivityPlanById(planId);
-        await activityController.quickAddSlot(plan!, {date: '2027-06-02', title: 'Second day'}, {profile: owner} as never);
+        await quickAddSlot(plan!, {date: '2027-06-02', title: 'Second day'}, {profile: owner} as never);
         expect(Object.keys(await activityService.getActivitySlots(planId))).toEqual(['2027-06-01', '2027-06-02']);
     });
 
@@ -137,8 +138,8 @@ describe('activity plan user stories', () => {
 
         const [slot] = await activityService.getActivitySlotsFlat(planId);
         const permissions = {itemAllow: () => true} as never;
-        await activityController.updateSlotAttr(slot.id, {field: 'title', value: 'Updated activity'}, permissions);
-        await activityController.updateSlotAttr(slot.id, {field: 'maxAssignees', value: 8}, permissions);
+        await updateSlotAttr(slot.id, {field: 'title', value: 'Updated activity'}, permissions);
+        await updateSlotAttr(slot.id, {field: 'maxAssignees', value: 8}, permissions);
         expect(await activityService.getActivitySlotById(slot.id)).toMatchObject({title: 'Updated activity', maxAssignees: 8});
     });
 
@@ -161,7 +162,7 @@ describe('activity plan user stories', () => {
             ownerId: slot.profileId,
         }], {profile: participant});
 
-        await activityController.updateSlotAttr(slot.id, {
+        await updateSlotAttr(slot.id, {
             startTime: '10:00',
             endTime: '11:00',
         }, permissions);
@@ -176,13 +177,13 @@ describe('activity plan user stories', () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
         const plan = await activityService.getActivityPlanById(planId);
-        await activityController.quickAddSlot(plan!, {
+        await quickAddSlot(plan!, {
             date: '2027-06-01', title: 'First after reorder', startTime: '08:00', endTime: '09:00',
         }, {profile: owner} as never);
         const slots = await activityService.getActivitySlotsFlat(planId);
         await assignActivitySlot(slots[0].id, participant.id);
         const assignmentId = (await activityService.getActivitySlotAssigneeRows(planId).then(projectActivityAssignees))[slots[0].id][0].id;
-        await activityController.updateSlotAttr(slots[0].id, {field: 'title', value: 'Updated activity'}, {itemAllow: () => true} as never);
+        await updateSlotAttr(slots[0].id, {field: 'title', value: 'Updated activity'}, {itemAllow: () => true} as never);
         await activityController.reorderSlots(planId, [{slotId: slots[0].id, pos: 2}, {slotId: slots[1].id, pos: 1}]);
         expect(await activityService.getActivitySlotsFlat(planId)).toMatchObject([
             {title: 'First after reorder', pos: 1, assignedCount: 0},
@@ -246,7 +247,12 @@ describe('activity plan user stories', () => {
         await assignActivitySlot(slot.id, participant.id);
         const plan = await activityService.getActivityPlanById(planId);
         const [role] = await activityController.addActivityRole(plan!, {name: 'Coordinator'});
-        await activityController.addSlotRole(slot.id, {roles: [role.id]});
+        // Configure the slot through its live shared edit operation with the
+        // owner's actual grants before exercising named-role assignment.
+        const permissions = await buildPermBundle({
+            entityType: 'activity', entityId: planId, ownerId: plan!.ownerId,
+        }, [{entityType: 'activitySlot', entityId: slot.id, ownerId: slot.profileId}], {profile: owner});
+        await updateSlotAttr(slot.id, {roles: [role.id]}, permissions);
         await activityController.getRoleAccessMapping().assign({itemId: slot.id, role: 'Coordinator'}, participant.id);
         const [participantRoles] = await activityService.getParticipantRolesForPlan(planId);
         expect(participantRoles.participantKey).toBe(`profile:${participant.id}`);
@@ -297,7 +303,7 @@ describe('activity schedule participant counts', () => {
     it('counts one profile assigned to several standalone slots once', async () => {
         const planId = await createActivityPlanWithSlot(owner.id);
         const plan = await activityService.getActivityPlanById(planId);
-        await activityController.quickAddSlot(plan!, {date: '2027-06-02', title: 'Second day'}, {profile: owner} as never);
+        await quickAddSlot(plan!, {date: '2027-06-02', title: 'Second day'}, {profile: owner} as never);
         const slots = await activityService.getActivitySlotsFlat(planId);
         await assignActivitySlot(slots[0].id, participant.id);
         await assignActivitySlot(slots[1].id, participant.id);
@@ -871,7 +877,7 @@ describe('automatic activity assignment user stories', () => {
         await registerEventAttendance(eventId, secondParticipant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         const planId = await createEventActivityPlan(owner.id, eventId);
         const plan = await activityService.getActivityPlanById(planId);
-        await activityController.quickAddSlot(plan!, {
+        await quickAddSlot(plan!, {
             date: '2027-06-02', title: 'Lunch cleanup', startTime: '12:00', endTime: '13:00', maxAssignees: 1,
         }, {profile: owner} as never);
         const slots = await activityService.getActivitySlotsFlat(planId);
@@ -923,7 +929,7 @@ describe('automatic activity assignment user stories', () => {
         await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         const planId = await createEventActivityPlan(owner.id, eventId);
         const plan = await activityService.getActivityPlanById(planId);
-        await activityController.quickAddSlot(plan!, {
+        await quickAddSlot(plan!, {
             date: '2027-06-02', title: 'Lunch cleanup', startTime: '12:00', endTime: '13:00',
         }, {profile: owner} as never);
         await updateRequirements(planId, {
@@ -980,7 +986,7 @@ describe('automatic activity assignment user stories', () => {
         await registerEventAttendance(eventId, secondParticipant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         const planId = await createEventActivityPlan(owner.id, eventId);
         const plan = await activityService.getActivityPlanById(planId);
-        await activityController.quickAddSlot(plan!, {
+        await quickAddSlot(plan!, {
             date: '2027-06-02', title: 'Lunch cleanup', startTime: '12:00', endTime: '13:00', maxAssignees: 1,
         }, {profile: owner} as never);
         const slots = await activityService.getActivitySlotsFlat(planId);

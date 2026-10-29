@@ -585,6 +585,8 @@ coordinates generation and guarded persistence, and supplies callbacks to the si
 coordinator. The existing `recommendations.ts` owns review, application and warning operations. Both use pure
 normalization/warning rules in `availability.ts`; business modules do not import the controller. Database services
 retain transactions and stored rows; the common requirements engine and fair allocator remain the sole calculations.
+The `slots.ts` feature owns slot creation/editing and plan-role validation; controller capabilities consume its
+field-permission accessor, while scalar changes and follow-up role replacement retain separate persistence boundaries.
 The previous six business extraction modules and separate schedule presentation module were consolidated under
 the maintainer's further 2026-10-26 existing-owner instruction, preserving algorithm and queue behavior.
 

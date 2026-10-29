@@ -10,7 +10,7 @@ type HelpQuery = NonNullable<operations['getHelpPage']['parameters']['query']>;
 
 /** Feature operations own their generated validators; transport and actor admission are shared. */
 export class HelpApi {
-    constructor(private transport: FrontendApi) {}
+    constructor(private readonly transport: FrontendApi) {}
 
     /** Help bodies belong to the captured interface locale as well as the actor.
      * Validate both before adoption, including visible fallback/source metadata;

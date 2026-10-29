@@ -162,17 +162,6 @@ export interface OverviewRegionView extends OverviewQuery {
     searchFields: Array<{name: string; value: string}>;
 }
 
-export interface OverviewCollectionView {
-    main: OverviewRegionView;
-    hidden: OverviewRegionView;
-    total: number;
-}
-
-export interface OverviewPageView {
-    participant: OverviewCollectionView;
-    owner: OverviewCollectionView;
-}
-
 export type GuestLinkData = Guest & { link: string }
 
 /** Shared document admission; attached roots are checked before standalone guest entry. */

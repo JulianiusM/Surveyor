@@ -4,9 +4,9 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: developer-experience maintainers
 status: current
-last-verified: 2026-10-28
+last-verified: 2026-10-29
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: completed frontend cutover and controller/feature/DBAL ownership reconciled; existing contract, shared controls, compiler and proof guidance retained without deployment or exhaustive verification claim
+verification-scope: approved bounded renewal, document-feedback and current-profile completion guidance reconciled; existing ownership, contract, compiler and proof guidance retained without deployment or exhaustive verification claim
 source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/check-development-policy.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: development-workflow-or-help-tooling-change
 -->
@@ -1312,6 +1312,15 @@ notice owner, so language changes translate an already visible notice. Never par
 decision in the adapter/component. Newly authored interface and validation text uses the shared catalog. Retire
 unused document-only Vue adapters after actual consumers move, while retaining explicit compatibility entries.
 
+The approved October 29 R4 exception fences deactivation's ownership check and detach only. The identity feature
+checks the captured account/guest against the fresh Profile under UserService's established owner-before-Profile
+locks and detaches on that same short transaction manager. Only its exact pre-detach ownership rejection passes
+through the deactivation controller as a known denial; a later failure with the same API code remains uncertain.
+Cleanup/mail, remaining-profile selection and local Session saving still follow after the detach commit, preserving
+R16's partial-failure boundaries and retained domain rows. This does not add a general Session-generation fence,
+provider coordination or whole-deactivation atomicity; [DEC-007](decisions/DEC-007-APPLICATION-ARCHITECTURE-REMEDIATION.md)
+retains the original choice and bounded exception.
+
 Guest registration, API account signup and activation use the existing user controller's `commitIdentityCompletion`
 through `UserService.withIdentitySessionTransaction`. The controller owns expiry/context checks, staged identity and
 result preparation; pure DBAL owns the manager, row lock and persistence. Prepare required projections and serialized
@@ -1344,13 +1353,30 @@ remain shared. An inactive account's activation resend belongs before the identi
 token must survive intended login rejection. Provider logout keeps its separate operation boundary.
 
 Profile administration uses `getIdentityProfile` for account/guest fields and `getIdentityProfiles` for the account-only
-roster. The original frontend implementation wrapped field editing and additional-profile creation in the identity
-completion transaction. The maintainer's A2 correction (2026-10-14) restores direct reuse of `updateProfile` and
-`createProfile`, with their native persistence/session-save behavior. Prepare the simple generated `MutationResult`
-before invoking either operation; deliver it without another context read, projection or save. This does not extend
-registration/login/profile-switch atomicity to ordinary profile fields. Shared confirmed navigation refreshes session
-display after acknowledgement and retains read/navigation-only Retry. Retire old profile/roster snapshots before
-adopting fresh settings; display failure never rejects, repeats or reopens the confirmed write.
+roster. The October 14 A2 correction retained native edit/create persistence, and A10 retained that lifecycle when
+adding name bounds. The approved October 29 R3 exception changes editing only: `updateProfileWithSession` uses the
+existing completion transaction, while the identity feature owns exact name/default rules and fresh ownership checks.
+UserService locks owners before the Profile and keeps both field writes and the required Profile reload/Session refresh on that same
+manager. Prepare the generated `MutationResult` before commit, then adopt the acknowledged staged Session and deliver
+without another context read, projection or save. Profile editing preserves its generation and rolls back field,
+peer-default and Session changes together on failure. Additional-profile creation retains `createProfile` and its
+separate persistence boundary. Shared confirmed navigation refreshes session display after acknowledgement and retains
+read/navigation-only Retry. Retire old profile/roster snapshots before adopting fresh settings; display failure never
+rejects, repeats or reopens the confirmed write. The original decisions and bounded exception remain recorded in
+[DEC-007](decisions/DEC-007-APPLICATION-ARCHITECTURE-REMEDIATION.md).
+
+Document feedback uses the same completion owner through `completeDocumentFeedback`. Bootstrap consumes its three
+existing channels together on fresh locked Session evidence; superseded feedback is omitted without replacing the
+captured actor. Redirect carryover and completed document logout/expiry notices adopt the same acknowledged Session,
+so later response completion cannot save an obsolete identity snapshot. Completed-workflow feedback failure stays
+log-only and never rejects or repeats its preceding operation. No-feedback visits remain read-only and uninitialized
+public visits gain no cookie or row. Retained Activity print uses `renderNativeDocument` for native all-channel
+consumption and direct Express rendering, avoiding a second express-flash getter or empty-state write. This bounded
+extension is approved in DEC-007; ordinary provider/deactivation identity writes retain their own boundaries.
+
+The configured session store acknowledges ordinary renewal exactly once after its expiry-only update settles.
+Renewal preserves the one-day TTL and identity JSON. Response bytes may already be sent when a storage error is
+reported; renewal failure does not undo a business commit or guarantee a replacement HTTP error response.
 
 Explicit API logout uses `logoutUserWithSession` only when `session.tokens` is not truthy; an empty object still
 selects the protected provider path. Recheck that classification on locked staging before clearing authority.

@@ -154,7 +154,7 @@ async function readSettings(actor: Actor) {
     return response.json() as Promise<components['schemas']['ProfileSettings']>;
 }
 
-describe('versioned profile administration reuses native persistence', () => {
+describe('versioned profile administration shares current business rules', () => {
     it('returns a private acknowledgement and reads native saved name/default/session fields separately', async function savesNativeFields() {
         const actor = await accountActor();
         const name = '  Renamed account profile  ';
@@ -175,7 +175,7 @@ describe('versioned profile administration reuses native persistence', () => {
         expect(html).toContain('data-frontend-initial-loading');
     });
 
-    it('keeps the existing sibling-default transaction and native profile creation without switching identity', async function createsNativeProfile() {
+    it('keeps sibling-default semantics and separate profile creation without switching identity', async function createsNativeProfile() {
         const actor = await accountActor();
         const name = `Additional ${randomUUID().slice(0, 8)}`;
         const response = await profileCommand(actor, 'POST', {name});
@@ -225,11 +225,13 @@ describe('versioned profile administration reuses native persistence', () => {
         const invalidCsrf = {...actor.session, csrfToken: 'invalid-profile-csrf-1234567890'};
         expect((await profileCommand(actor, 'POST', {name: 'Invalid CSRF creation'}, invalidCsrf)).status).toBe(403);
         expect((await profileCommand(actor, 'POST', {name: 'Extra field creation', userId: actor.user.id})).status).toBe(400);
+        expect((await profileCommand(actor, 'PATCH', {isDefault: false})).status).toBe(400);
+        expect((await profileCommand(actor, 'PATCH', {name: 'Missing default field'})).status).toBe(400);
         expect((await profileCommand(actor, 'PATCH', {name: 'Invalid checkbox', isDefault: 'false'})).status).toBe(400);
         expect((await userService.getProfilesForUser(actor.user.id)).map(profile => profile.name)).toEqual([actor.session.activeProfile!.name]);
     });
 
-    it('uses the native default transaction for simultaneous independent sessions selecting different defaults', async function sharesNativeDefaultTransaction() {
+    it('serializes independent sessions selecting different defaults within complete profile edits', async function sharesNativeDefaultTransaction() {
         const first = await accountActor();
         const sibling = await userService.createProfile(first.user.id, 'Independent sibling');
         const second = await accountActor(first.user);

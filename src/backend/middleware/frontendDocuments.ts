@@ -1,6 +1,7 @@
 // Shared document admission and response preparation belong to middleware;
 // domain routers and composed entity middleware consume this same implementation.
 import type {NextFunction, Request, Response} from 'express';
+import {response as expressResponse} from 'express';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {captureApiActor, sessionView} from '../modules/api/session';
 import {ApiProblem, classifyApiError, validatedProblemBody} from '../modules/api/problem';
@@ -11,7 +12,6 @@ import type {FrontendBootstrap} from '../../types/FrontendTypes';
 import * as userController from '../controller/userController';
 import {frontendIdentityFeedback, safeFrontendReturn} from '../../common/lib/frontendIdentity';
 import {readGuestLinkHandoff} from '../modules/lib/frontendSession';
-import {persistSession} from '../modules/lib/session';
 import {APIError, ExpectedError, ValidationError} from '../modules/lib/errors';
 import type {components} from '../../types/api/v1';
 
@@ -42,8 +42,7 @@ async function admitFrontendDocument(req, res, next) {
 
         // Persist the bounded frontend notice after logout, then deliver its chosen
         // destination. No submitted text or provider evidence enters the notice.
-        req.flash('frontend-notice', JSON.stringify({kind: 'error', messageKey: 'auth.sessionExpired'}));
-        await persistCompletedWorkflowFeedback(req);
+        await persistCompletedWorkflowFeedback(req, {kind: 'error', messageKey: 'auth.sessionExpired'});
         res.redirect(destination);
     }
 });
@@ -65,12 +64,25 @@ export function applyPresentationLocale(req: Request): void {
 export async function bootstrap(req: Request): Promise<FrontendBootstrap> {
     applyPresentationLocale(req);
     const session = await sessionView(req);
-    const flashes = readFrontendFlash(req, 'frontend');
+    // Ordinary visits never lock, stage or persist an empty feedback object.
+    if (!hasStoredFeedback(req.session, ['frontend', 'frontend-notice', 'frontend-link'])) return {session};
+    const completed = await userController.completeDocumentFeedback(req, function prepareFeedback(staged) {
+        return prepareFrontendFeedback(req, staged, session);
+    });
+    return completed ?? {session};
+}
+
+/** Consume the existing Vue channels together on the completion owner's isolated Session. */
+function prepareFrontendFeedback(req: Request, staged: Request['session'],
+    session: components['schemas']['SessionView']): FrontendBootstrap {
+    // The public projection remains the captured document's actor. A newer actor
+    // can omit feedback but is never substituted into this prepared page.
+    const flashes = readFrontendFlash(req, 'frontend', staged);
     const feedback = frontendIdentityFeedback.find(key => Array.isArray(flashes) && flashes.includes(key));
     const state: FrontendBootstrap = {session, ...(feedback ? {identityFeedback: feedback} : {})};
     // Flash storage remains an untyped boundary. Accept only a known plain catalog
     // message, never submitted text or interpolation/options through this channel.
-    const notices = readFrontendFlash(req, 'frontend-notice');
+    const notices = readFrontendFlash(req, 'frontend-notice', staged);
     if (Array.isArray(notices)) {
         for (const notice of notices) {
             if (typeof notice !== 'string') continue;
@@ -82,7 +94,7 @@ export async function bootstrap(req: Request): Promise<FrontendBootstrap> {
             } catch { /* Ignore malformed stored feedback rather than treating it as page authority. */ }
         }
     }
-    const links = readFrontendFlash(req, 'frontend-link');
+    const links = readFrontendFlash(req, 'frontend-link', staged);
     if (session.context && Array.isArray(links)) {
         // A different tab can change identity between the committed redirect and
         // this GET. Only its admitted matching context receives that private link.
@@ -99,16 +111,48 @@ export async function bootstrap(req: Request): Promise<FrontendBootstrap> {
  * Its getter creates `session.flash` even when no message exists; avoid that
  * mutation on public first visits while preserving actual one-time consumption.
  */
-function readFrontendFlash(req: Request, channel: string): unknown[] {
-    const flash = (req.session as Request['session'] & {flash?: Record<string, unknown>}).flash;
+function readFrontendFlash(req: Request, channel: string, session = req.session): unknown[] {
+    const flash = (session as Request['session'] & {flash?: Record<string, unknown>}).flash;
     const values = flash?.[channel];
     if (!Array.isArray(values) || !values.length) return [];
 
     // The installed getter returns arrays although its declaration differs.
     // Keep the established library as the owner of consuming stored messages.
     const readFlash: (this: Request, type: string) => unknown = req.flash;
-    const consumed = readFlash.call(req, channel);
+    const consumed = readFlash.call({session} as Request, channel);
     return Array.isArray(consumed) ? consumed : [];
+}
+
+/** Avoid the native getter's empty-state mutation while retaining existing nonempty channels. */
+function hasStoredFeedback(session: Request['session'], channels?: readonly string[]): boolean {
+    const flash = (session as Request['session'] & {flash?: Record<string, unknown>}).flash;
+    if (!flash) return false;
+    // Native rendering consumes every channel, including legacy ones. Vue only
+    // consumes its three established channels and leaves unrelated feedback alone.
+    return (channels ?? Object.keys(flash)).some(function nonempty(channel) {
+        const values = flash[channel];
+        return Array.isArray(values) ? values.length > 0 : values !== undefined;
+    });
+}
+
+/** Render retained native output with guarded all-channel feedback, bypassing the library's second getter. */
+export async function renderNativeDocument(req: Request, res: Response, view: string, options: object): Promise<void> {
+    let messages: Record<string, string[]> = {};
+    if (hasStoredFeedback(req.session)) {
+        const completed = await userController.completeDocumentFeedback(req, function consumeNativeFeedback(staged) {
+            // Reuse connect-flash's complete getter on staged state, exactly as
+            // express-flash did, so legacy channels retain their native rendering.
+            const consume: (this: Request) => Record<string, string[]> = req.flash;
+            return consume.call({session: staged} as Request);
+        });
+        messages = completed ?? {};
+    }
+    // Common render infrastructure retains the established locals contract. Call
+    // Express's renderer directly: express-flash's wrapper would consume again,
+    // including manufacturing dirty empty state when there was no feedback.
+    res.locals.messages = messages;
+    const render = expressResponse.render.bind(res);
+    render(view, options);
 }
 
 /** Apply shared admission at the existing HTTP boundary; Vue consumes this same declaration. */
@@ -123,8 +167,9 @@ export async function applyPageEntry(req: Request, res: Response, state: Fronten
     if (notice) {
         // Match existing flash delivery even for a previously sessionless visitor:
         // this notice deliberately creates an anonymous Session before redirect.
-        flashPageNotice(req, notice);
-        await persistSession(req.session);
+        await userController.completeDocumentFeedback(req, function carryNotice(staged) {
+            flashPageNotice(req, notice, staged);
+        });
     }
     res.redirect(frontendReturn(req, entry.url));
     return true;
@@ -141,12 +186,13 @@ export function flashPageNotice(req: Request, notice: components['schemas']['Ent
  * that operation's completed business work. Its existing outcome/redirect wins;
  * storage failure is logged without exposing identity or replaying the command.
  */
-async function persistCompletedWorkflowFeedback(req: Request): Promise<void> {
-    // Keep this normal Express save after required business continuations. It
-    // acknowledges the exact operation's feedback, without a second persistence
-    // protocol or a lock/merge of some independently loaded Session snapshot.
+export async function persistCompletedWorkflowFeedback(req: Request, notice: components['schemas']['EntryNotice']): Promise<void> {
+    // Logout has already saved its own rotated generation. Only its bounded
+    // notice belongs here; never revive it over another completed transition.
     try {
-        await persistSession(req.session);
+        await userController.completeDocumentFeedback(req, function queueCompletedNotice(staged) {
+            flashPageNotice(req, notice, staged);
+        });
     } catch {
         // The bounded category is operational evidence, never submitted data,
         // private session contents or an exception that may include SQL values.

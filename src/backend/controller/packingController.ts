@@ -25,7 +25,7 @@ import {saveListMetadata, listPermissions, assertListContext,
 import {
     readListItemEditBaseline, readListHeaderBaseline, readListHeaderPath, listHeaderToken,
     readListMetadata, readListDescription, readListOrderBaseline, readListSettings,
-    authorizeListRead, listItemPermissions,
+    authorizeListRead, listItemPermissions, projectListItemEditValues,
     listHeaderProjection, mayOpenListSettings, listSettingsToken,
     readEntityDefaultsBaseline, updateEntityDefaults, readEntityAdministratorBaseline, updateEntityAdministrator,
     updateListItem, deleteListItem, reorderListItems, requireListAssignmentHandle, deleteListAssignment,
@@ -183,9 +183,9 @@ async function fetchForView(list: PackingList, req: Request) {
     };
 }
 
-/** Duplication copies item content through the existing form hook;
+/** Read admitted duplication content through the existing form hook;
  * assignments and their identities remain attached to the original list. */
-async function fetchForDuplicate(list: PackingList, session: Request['session']) {
+async function fetchForDuplicate(list: PackingList) {
     return await packingService.getPackingItems(list.id);
 }
 
@@ -644,26 +644,7 @@ function itemEditValues(item: PackingItem): Required<components['schemas']['Pack
  * asymmetry. Display-only title/capacity grants must not reveal an edit baseline. */
 function itemEditProjection(item: PackingItem, permissions: PermView):
     Pick<components['schemas']['PackingItemEditBaseline'], 'values' | 'editableFields'> {
-    const current = itemEditValues(item);
-    const values: components['schemas']['PackingItemEditBaseline']['values'] = {};
-    const editableFields: components['schemas']['PackingItemEditBaseline']['editableFields'] = [];
-    if (mayEditItemField(permissions, 'title')) {
-        editableFields.push('title');
-        values.title = current.title;
-    }
-    if (mayEditItemField(permissions, 'description')) {
-        editableFields.push('description');
-        values.description = current.description;
-    }
-    if (mayEditItemField(permissions, 'maxAssignees')) {
-        editableFields.push('maxAssignees');
-        values.maxAssignees = current.maxAssignees;
-    }
-    if (mayEditItemField(permissions, 'requiredByAll')) {
-        editableFields.push('requiredByAll');
-        values.requiredByAll = current.requiredByAll;
-    }
-    return {values, editableFields};
+    return projectListItemEditValues(itemEditValues(item), permissions, mayEditItemField);
 }
 
 /** Scope and actor stay identical across baseline adapters. A minimal baseline
