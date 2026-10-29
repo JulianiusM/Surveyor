@@ -44,7 +44,7 @@ function deferredResponse() {
 
 function json(value: unknown, status = 200, responseContext = session.context): Response {
     return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
-        'X-Surveyor-Context': responseContext}});
+            'X-Surveyor-Context': responseContext}});
 }
 
 afterEach(async () => {
@@ -58,28 +58,28 @@ afterEach(async () => {
 /** The production wrapper, generated response validators, query owner and real router remain
  * intact. Only HTTP delivery is replaced; fixtures carry server-owned entry decisions. */
 async function mounted(path: string, handler: (request: Request) => Promise<Response>, detailIsDestination = false,
-                       initial: Omit<FrontendBootstrap, 'session'> = {}) {
+    initial: Omit<FrontendBootstrap, 'session'> = {}) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
     const context = createFrontendContext({...initial, session}, true, request);
     context.hydrated.value = true;
     const Destination = defineComponent({template: '<p>Admitted destination</p>'});
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/packing/:listId/guest', component: PackingEntry},
-        {path: '/packing/:listId/duplicate', component: Destination},
-        {path: '/packing/:listId', component: detailIsDestination ? Destination : PackingEntry},
-        {path: '/users/login', component: IdentityPage, meta: {identityMode: 'login'}},
-        {path: '/users/register', component: Destination},
-        {path: '/guest/recovery', component: IdentityPage, meta: {identityMode: 'recovery'}},
-        {path: '/help', component: Destination},
-        {path: '/', component: Destination},
-    ]});
+            {path: '/packing/:listId/guest', component: PackingEntry},
+            {path: '/packing/:listId/duplicate', component: Destination},
+            {path: '/packing/:listId', component: detailIsDestination ? Destination : PackingEntry},
+            {path: '/users/login', component: IdentityPage, meta: {identityMode: 'login'}},
+            {path: '/users/register', component: Destination},
+            {path: '/guest/recovery', component: IdentityPage, meta: {identityMode: 'recovery'}},
+            {path: '/help', component: Destination},
+            {path: '/', component: Destination},
+        ]});
     await router.push(path);
     await router.isReady();
     const stopInitialDocument = observeInitialDocument(context, router);
     const wrapper = mount(App, {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+        }});
     cleanups.push(async () => {
         wrapper.unmount();
         stopInitialDocument();
@@ -99,9 +99,9 @@ async function confirmedReadVisit(read: (request: Request) => Promise<Response>)
     let completion!: ReturnType<typeof useConfirmedNavigation>;
     const showOwner = ref(true);
     const ConfirmedOwner = defineComponent({template: '<p>Confirmed command</p>', setup() {
-        completion = useConfirmedNavigation();
-        return {};
-    }});
+            completion = useConfirmedNavigation();
+            return {};
+        }});
     const ConfirmedHost = defineComponent({components: {ConfirmedOwner},
         template: '<div><ConfirmedOwner v-if="showOwner" /></div>', setup() { return {showOwner}; }});
     visit.router.addRoute({path: '/confirmed-read-fixture', component: ConfirmedHost});
@@ -123,9 +123,9 @@ async function freshEntryVisit(read: () => Promise<{entry: components['schemas']
     });
     let admission!: ReturnType<typeof usePageEntry<{entry: components['schemas']['PageEntryOutcome']}>>;
     const EntryOwner = defineComponent({template: '<p>Shared admission visit</p>', setup() {
-        admission = usePageEntry({key: computed(() => ['fresh-entry-fixture']), read});
-        return {};
-    }});
+            admission = usePageEntry({key: computed(() => ['fresh-entry-fixture']), read});
+            return {};
+        }});
     visit.router.addRoute({path: '/fresh-entry-fixture', component: EntryOwner});
     await visit.router.push('/fresh-entry-fixture');
     await flushPromises();
@@ -293,8 +293,8 @@ describe('server-owned page entry and canonical navigation', () => {
         }));
         let finishDelivery!: (component: Component) => void;
         router.addRoute({path: '/packing/slow-destination', component: function loadDestination() {
-            return new Promise<Component>(resolve => { finishDelivery = resolve; });
-        }});
+                return new Promise<Component>(resolve => { finishDelivery = resolve; });
+            }});
         context.pageNotice.value = {kind: 'success', messageKey: 'auth.loginDone'};
         context.personalLink.value = 'https://fixture.test/guest/private-token';
         const delivery = navigatePageEntry(context, router,
@@ -338,9 +338,9 @@ describe('server-owned page entry and canonical navigation', () => {
         }));
         let completion!: ReturnType<typeof useConfirmedNavigation>;
         const ConfirmedOwner = defineComponent({template: '<p>Confirmed command</p>', setup() {
-            completion = useConfirmedNavigation();
-            return {};
-        }});
+                completion = useConfirmedNavigation();
+                return {};
+            }});
         const Destination = defineComponent({template: '<p>Confirmed destination</p>'});
         let deliveries = 0;
 
@@ -417,7 +417,7 @@ describe('server-owned page entry and canonical navigation', () => {
 
                 holdRead = false;
                 held.resolve(new Response('{}', {status: 503, headers: {'Content-Type': 'application/json',
-                    'X-Surveyor-Context': session.context}}));
+                        'X-Surveyor-Context': session.context}}));
                 expect(await delivery).toBe(false);
                 await flushPromises();
                 expect(visit.context.pageNotice.value).toEqual(disposition === 'replaced' ? replacement : null);
@@ -444,7 +444,7 @@ describe('server-owned page entry and canonical navigation', () => {
         let unavailable = true;
         const visit = await confirmedReadVisit(async () => unavailable
             ? new Response('{}', {status: 429, headers: {'Content-Type': 'application/json',
-                'Retry-After': '1', 'X-Surveyor-Context': session.context}}) : json(session));
+                    'Retry-After': '1', 'X-Surveyor-Context': session.context}}) : json(session));
         const family = ['confirmed-dependency', session.context] as const;
         const key = [...family, 'visible'];
         const hiddenKey = [...family, 'another-locale'];
@@ -484,8 +484,8 @@ describe('server-owned page entry and canonical navigation', () => {
             return new Response(JSON.stringify({type: 'about:blank', title: 'Read unavailable', status: 429,
                 code: 'RATE_LIMITED', messageKey: 'api:errors.RATE_LIMITED', params: {},
                 detail: 'Please wait.', requestId: 'confirmed-read-cooldown'}),
-            {status: 429, headers: {'Content-Type': 'application/problem+json', 'Retry-After': '1',
-                'X-Surveyor-Context': session.context}});
+                {status: 429, headers: {'Content-Type': 'application/problem+json', 'Retry-After': '1',
+                        'X-Surveyor-Context': session.context}});
         });
         const family = ['confirmed-dependency', session.context] as const;
         const observer = new QueryObserver(visit.context.queryClient, {queryKey: [...family, 'visible'],
@@ -622,9 +622,9 @@ describe('server-owned page entry and canonical navigation', () => {
         }));
         let completion!: ReturnType<typeof useConfirmedNavigation>;
         const ConfirmedOwner = defineComponent({template: '<p>Confirmed command</p>', setup() {
-            completion = useConfirmedNavigation();
-            return {};
-        }});
+                completion = useConfirmedNavigation();
+                return {};
+            }});
         const Destination = defineComponent({template: '<p>Confirmed destination</p>'});
         let finishDelivery!: (page: typeof Destination) => void;
         const held = new Promise<typeof Destination>(resolve => { finishDelivery = resolve; });
@@ -827,9 +827,9 @@ describe('server-owned page entry and canonical navigation', () => {
         const {wrapper, context, router} = await mounted(path, async request => {
             if (!new URL(request.url).pathname.endsWith('/entry')) return json(guest);
             if (decision === 'redirect') return json({entry: {kind: 'redirect',
-                url: '/users/login', notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, guest: null});
+                    url: '/users/login', notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, guest: null});
             if (decision === 'denied') return json({entry: {kind: 'denied', status: 400,
-                messageKey: 'packing.eventRegistrationRequired'}, guest: null});
+                    messageKey: 'packing.eventRegistrationRequired'}, guest: null});
             return json({entry: {kind: 'render'}, guest});
         });
         const input = wrapper.get<HTMLInputElement>('#guest-name');

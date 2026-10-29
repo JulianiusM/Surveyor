@@ -207,24 +207,24 @@ function finishOverviewRead(value: components['schemas']['OverviewRegion'], upda
 }
 
 watch(overview.data,
-/** Adopt this observer's admitted receipt without overwriting a newer typed
+    /** Adopt this observer's admitted receipt without overwriting a newer typed
  * search or target navigation. Its scoped timestamp/counts remain read evidence,
  * independently of command or image authority. */
-(value) => {
-    if (value && !deniedRead.value) {
-        // Bookmarked reads render the server's normalized query. Adopt it
-        // only while this field still represents the route's unchanged input;
-        // a newer typed draft or target navigation owns its separate confirmation.
-        // Equal text leaves the focused input and its selection untouched.
-        if (!searchPending.value && !pendingRead.value && search.value === (query.value.q ?? '')
-            && search.value !== value.q) search.value = value.q;
-        lastConfirmed.value = {scope: context.capture(), data: value, updatedAt: overview.dataUpdatedAt.value};
-        // Initial SSR/cached delivery is already admitted by this observer's scope.
-        // Subsequent network receipts advance independently through finishOverviewRead.
-        const scope = context.capture();
-        emit('counts', {scope, key: overviewKey.value, updatedAt: overview.dataUpdatedAt.value}, scope);
-    }
-}, {immediate: true});
+    (value) => {
+        if (value && !deniedRead.value) {
+            // Bookmarked reads render the server's normalized query. Adopt it
+            // only while this field still represents the route's unchanged input;
+            // a newer typed draft or target navigation owns its separate confirmation.
+            // Equal text leaves the focused input and its selection untouched.
+            if (!searchPending.value && !pendingRead.value && search.value === (query.value.q ?? '')
+                && search.value !== value.q) search.value = value.q;
+            lastConfirmed.value = {scope: context.capture(), data: value, updatedAt: overview.dataUpdatedAt.value};
+            // Initial SSR/cached delivery is already admitted by this observer's scope.
+            // Subsequent network receipts advance independently through finishOverviewRead.
+            const scope = context.capture();
+            emit('counts', {scope, key: overviewKey.value, updatedAt: overview.dataUpdatedAt.value}, scope);
+        }
+    }, {immediate: true});
 watch([overview.dataUpdatedAt, overview.isFetching, overview.error], restoreCommittedFocus, {flush: 'post'});
 const retryAvailable = useReadRetry(() => navigationError.value ?? readError.value);
 const retryAt = useReadRetryAt(() => navigationError.value ?? readError.value, retryAvailable);
@@ -317,7 +317,7 @@ async function loadOverview(signal: AbortSignal): Promise<components['schemas'][
 
 /** Both route-owned refreshes and enhanced navigation share the same captured read fence. */
 async function readRegion(requested: Query, scope: FrontendRequestScope, generation: number,
-                          signal: AbortSignal): Promise<components['schemas']['OverviewRegion']> {
+    signal: AbortSignal): Promise<components['schemas']['OverviewRegion']> {
     try {
         const result = await api.overview(requested, scope, signal);
         if (!mayPresentRead(scope, generation)) throw new ObsoleteRequestError();
@@ -395,8 +395,8 @@ function retireReads(): void {
     navigationError.value = null;
     pendingFocus = undefined;
     void context.queryClient.cancelQueries({queryKey: overviewKeys.regionFamily(
-        context.session.value?.context, context.locale.value, props.collection, props.region,
-    )});
+            context.session.value?.context, context.locale.value, props.collection, props.region,
+        )});
 }
 
 function editSearch(event: Event): void {
@@ -453,7 +453,7 @@ function retirePresentation(): void {
 
 /** Keep saved-link/new-tab semantics before the shared region navigation owns an ordinary click. */
 function followNavigation(event: MouseEvent, values: Record<string, string | undefined>,
-                          history: 'push' | 'replace' = 'push', action: NavigationAction = 'filter'): void {
+    history: 'push' | 'replace' = 'push', action: NavigationAction = 'filter'): void {
     if (!isOrdinaryNavigation(event)) return;
     event.preventDefault();
     void navigate(values, history, action);
@@ -461,7 +461,7 @@ function followNavigation(event: MouseEvent, values: Record<string, string | und
 
 function navigationKey(parameters: Query): string {
     return JSON.stringify([parameters.q || '', parameters.type || 'all', parameters.page || '1',
-        parameters.childPage || '1', parameters.eventId || '']);
+    parameters.childPage || '1', parameters.eventId || '']);
 }
 
 function filterKey(parameters: Query): string {
@@ -471,7 +471,7 @@ function filterKey(parameters: Query): string {
 /** Read the target first, then commit only this region's URL parameters. A failed Next
  * leaves its cards, focus and browser history unchanged; Retry retains the exact target. */
 async function navigate(values: Record<string, string | undefined>, history: 'push' | 'replace' = 'push',
-                        action: NavigationAction = 'filter'): Promise<void> {
+    action: NavigationAction = 'filter'): Promise<void> {
     if (!navigationAction.isAvailable()) return;
     const parameters = regionParameters(navigationQuery(values));
     searchPending.value = false;

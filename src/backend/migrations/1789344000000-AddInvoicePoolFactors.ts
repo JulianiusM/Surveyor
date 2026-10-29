@@ -6,8 +6,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
-import {addColumnIfNotExists, columnExists, dropColumnIfExists, tableExists} from "../modules/database/utils/migration-helper";
+import {MigrationInterface, QueryRunner} from 'typeorm';
+import {addColumnIfNotExists, columnExists, dropColumnIfExists, tableExists} from '../modules/database/utils/migration-helper';
 
 export class AddInvoicePoolFactors1789344000000 implements MigrationInterface {
     name = "AddInvoicePoolFactors1789344000000";

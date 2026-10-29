@@ -6,7 +6,7 @@ import type {FrontendCommandDraft, FrontendPlainMessageKey, FrontendRead} from '
 import type {components} from '../../types/api/v1';
 import {refreshInterval, useActionState, useFrontend} from '../app/context';
 import {belongsToQueryFamily} from '../app/queryKeys';
-import {evictQueryFamilies, refetchFreshQuery, useQueryAdmission} from '../app/queryCache';
+import {evictQueryFamilies, refetchFreshQuery, useQueryAdmission, useQuerySnapshotRetention} from '../app/queryCache';
 import {isReadDenial, ObsoleteRequestError} from '../app/transport';
 import {useCommand} from './command';
 import {useReadRetry, useReadRetryAt} from './feedback';
@@ -18,8 +18,9 @@ export function useListDetail<T>(source: FrontendListSource<T>) {
     const context = useFrontend();
     const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
     let active = true;
-    const previous = shallowRef<{query: Parameters<typeof belongsToQueryFamily>[0]; result: FrontendRead<T>} | null>(null);
     const revoked = shallowRef(false);
+    const previous = useQuerySnapshotRetention<FrontendRead<T>>(context.queryClient,
+        query => !revoked.value && belongsToQueryFamily(query, source.resourceFamily()));
     onBeforeUnmount(() => { active = false; });
     const admission = useQueryAdmission(context, source.queryKey,
         computed(() => context.hydrated.value && context.visible.value && !revoked.value));
@@ -31,22 +32,20 @@ export function useListDetail<T>(source: FrontendListSource<T>) {
             ? refreshInterval(query.state.error, query.state.fetchFailureCount, jitter) : false,
         refetchIntervalInBackground: false,
         placeholderData(value, query) {
-            if (!value || !query || !belongsToQueryFamily(query, source.resourceFamily())) {
-                previous.value = null;
+            if (!value || !query || !previous.retain(query)) {
+                previous.release();
                 return undefined;
             }
-            // TanStack releases placeholders after terminal failure. Preserve only
-            // this actor/resource's confirmed projection until an actual denial.
-            previous.value = {query, result: value};
+            // TanStack releases placeholders after terminal failure. The shared
+            // cache lease preserves only this actor/resource's registered Query.
             return value;
         },
     });
     const denied = computed(() => revoked.value || isReadDenial(list.error.value));
     const data = computed(() => {
         if (denied.value) return null;
-        if (list.data.value) return list.data.value.data;
-        return previous.value && belongsToQueryFamily(previous.value.query, source.resourceFamily())
-            ? previous.value.result.data : undefined;
+        if (list.data.value && !list.isPlaceholderData.value) return list.data.value.data;
+        return previous.data.value?.data;
     });
 
     /** A fresh admitted response alone restores authority after a denied read.
@@ -72,13 +71,17 @@ export function useListDetail<T>(source: FrontendListSource<T>) {
             () => active && resource === source.resourceId.value && context.mayRead(scope));
     }
 
-    watch(source.resourceId, () => { revoked.value = false; previous.value = null; });
+    watch(source.resourceId, () => { revoked.value = false; previous.release(); });
+    watch([list.data, list.isPlaceholderData], releaseReplacedSnapshot, {flush: 'sync'});
+    function releaseReplacedSnapshot(): void {
+        if (list.data.value && !list.isPlaceholderData.value) previous.release();
+    }
     watch(list.error, failure => {
         if (!isReadDenial(failure)) return;
         // Feature policy retires its settings/overview and personal state only
         // after the shared read owner has synchronously closed stale fallback.
         revoked.value = true;
-        previous.value = null;
+        previous.release();
         source.denied(failure);
     }, {flush: 'sync'});
 

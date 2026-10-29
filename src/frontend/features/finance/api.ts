@@ -221,7 +221,7 @@ export class FinanceApi {
     /** Submit the exact chosen proof once, retaining progress separately from
      * confirmation. File and draft lifetime remain with the participant form. */
     async submit(eventId: string, poolId: string, input: components['schemas']['FinanceInvoiceInput'], proof: File,
-                 scope: FrontendRequestScope, progress: (loaded: number, total: number | null, complete?: boolean) => void) {
+        scope: FrontendRequestScope, progress: (loaded: number, total: number | null, complete?: boolean) => void) {
         if (!validateFinanceInvoiceInput(input)) throw generatedInputError(validateFinanceInvoiceInput.errors, financeInputField);
         // Required participant proof retains its generated validation and draft
         // lifetime while sharing the existing multipart serialization owner.

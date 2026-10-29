@@ -34,8 +34,8 @@ vi.mock('../../src/common/localization/generated/manifest.json', async importOri
     // directly from generated output rather than a handwritten catalog contract.
     const original = await importOriginal<{default: typeof import('../../src/common/localization/generated/manifest.json')}>();
     return {default: {...original.default,
-        locales: [...original.default.locales, {locale: 'nl', nativeName: 'Nederlands', direction: 'ltr'}],
-        helpSources: {...original.default.helpSources, nl: 'nl'}}};
+            locales: [...original.default.locales, {locale: 'nl', nativeName: 'Nederlands', direction: 'ltr'}],
+            helpSources: {...original.default.helpSources, nl: 'nl'}}};
 });
 
 import {

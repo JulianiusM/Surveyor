@@ -40,9 +40,9 @@ export async function submitFinanceInvoiceFixture(request: APIRequestContext, pa
 export async function createFinancePoolFixture(request: APIRequestContext, eventId: string,
     input: Pick<components['schemas']['FinancePoolCreateInput'], 'name'> & Partial<components['schemas']['FinancePoolCreateInput']>): Promise<string> {
     const response = await financeFixtureRequest(request, 'POST', `/api/v1/events/${eventId}/finance/pools`, {data: {
-        distribution: 'EQUAL', status: 'OPEN', isDefault: false, assignAll: true, subtractPersonalInvoices: true,
-        sendCalculationEmails: false, roundUpShares: false, registrations: [], ...input,
-    }});
+            distribution: 'EQUAL', status: 'OPEN', isDefault: false, assignAll: true, subtractPersonalInvoices: true,
+            sendCalculationEmails: false, roundUpShares: false, registrations: [], ...input,
+        }});
     expect(response.status()).toBe(200);
     const read = await financeFixtureRequest(request, 'GET', `/api/v1/events/${eventId}/finance/organizer`);
     expect(read.status()).toBe(200);

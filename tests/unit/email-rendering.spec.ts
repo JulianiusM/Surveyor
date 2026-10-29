@@ -51,7 +51,7 @@ describe('transactional email rendering', () => {
                 details: [{label: 'Attendance <units>', value: '3 & 4'}],
                 formula: {
                     terms: [{label: 'Settled <payer> & credit', value: '15.00', operator: '−'},
-                        {label: 'Rebate <input>', value: '-2.00', operator: '−'}],
+                    {label: 'Rebate <input>', value: '-2.00', operator: '−'}],
                     result: {label: 'Balance <refund>', value: '-13.00'}, note,
                 },
             }],
@@ -95,10 +95,10 @@ describe('transactional email rendering', () => {
         const rendered = renderEmail('Calculation', createStructuredEmailContent({
             sections: [{title: 'Saved facts', items: ['Actual <payer> & saved fact']}],
             sectionGroups: [{title: 'Explanation <payer> & detail', disclosure: true, sections: [{
-                title: 'Signed balance', details: [{label: 'Nights', value: '3'}],
-                formula: {terms: [{label: 'Earlier <credit>', value: '15.00', operator: '−'}],
-                    result: {label: 'Refund <balance>', value: '-15.00'}, note: 'Saved <rounding> & explanation'},
-            }]}],
+                    title: 'Signed balance', details: [{label: 'Nights', value: '3'}],
+                    formula: {terms: [{label: 'Earlier <credit>', value: '15.00', operator: '−'}],
+                        result: {label: 'Refund <balance>', value: '-15.00'}, note: 'Saved <rounding> & explanation'},
+                }]}],
         }), recipient);
         const start = rendered.html.indexOf('<details');
         const disclosure = rendered.html.slice(start, rendered.html.indexOf('</details>', start) + '</details>'.length);

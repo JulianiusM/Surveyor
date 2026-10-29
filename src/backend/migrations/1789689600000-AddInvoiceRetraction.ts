@@ -6,8 +6,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
-import {tableExists} from "../modules/database/utils/migration-helper";
+import {MigrationInterface, QueryRunner} from 'typeorm';
+import {tableExists} from '../modules/database/utils/migration-helper';
 
 export class AddInvoiceRetraction1789689600000 implements MigrationInterface {
     name = "AddInvoiceRetraction1789689600000";

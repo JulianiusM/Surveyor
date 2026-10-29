@@ -15,8 +15,8 @@
  */
 
 // src/backend/modules/lib/permissions.ts
-import type {PermData, PermMeta, PermPreset} from "../../../types/PermissionTypes";
-import type {CombEntityType} from "../../../types/UtilTypes";
+import type {PermData, PermMeta, PermPreset} from '../../../types/PermissionTypes';
+import type {CombEntityType} from '../../../types/UtilTypes';
 
 export const PERM = {
     EDIT_TITLE: 1,

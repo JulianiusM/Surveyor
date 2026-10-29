@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {Column, CreateDateColumn, PrimaryGeneratedColumn, UpdateDateColumn} from "typeorm";
+import {Column, CreateDateColumn, PrimaryGeneratedColumn, UpdateDateColumn} from 'typeorm';
 
 export class ModifyTracking {
     @CreateDateColumn({type: "timestamp", name: "created_at"})

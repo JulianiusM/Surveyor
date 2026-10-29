@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
-import {addColumnIfNotExists, dropColumnIfExists} from "../modules/database/utils/migration-helper";
+import {MigrationInterface, QueryRunner} from 'typeorm';
+import {addColumnIfNotExists, dropColumnIfExists} from '../modules/database/utils/migration-helper';
 
 export class AddRegistrationDeadlineSettings1786335515684 implements MigrationInterface {
     name = 'AddRegistrationDeadlineSettings1786335515684'
@@ -31,9 +31,9 @@ export class AddRegistrationDeadlineSettings1786335515684 implements MigrationIn
     public async down(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`ALTER TABLE \`activity_plans\`
             CHANGE \`allow_overfill_after_full\` \`allow_overfill_after_full\` tinyint NOT NULL DEFAULT 0`);
-        await dropColumnIfExists(queryRunner, 'evente', 'allow_reg_diet_update');
-        await dropColumnIfExists(queryRunner, 'evente', 'allow_reg_cancel');
-        await dropColumnIfExists(queryRunner, 'evente', 'allow_reg_date_update');
+        await dropColumnIfExists(queryRunner, 'events', 'allow_reg_diet_update');
+        await dropColumnIfExists(queryRunner, 'events', 'allow_reg_cancel');
+        await dropColumnIfExists(queryRunner, 'events', 'allow_reg_date_update');
     }
 
 }

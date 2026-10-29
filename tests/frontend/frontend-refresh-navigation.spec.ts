@@ -62,7 +62,7 @@ afterEach(async () => {
 
 function json(value: unknown, status = 200): Response {
     return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
-        'X-Surveyor-Context': session.context}});
+            'X-Surveyor-Context': session.context}});
 }
 
 function deferred<T>() {
@@ -126,19 +126,19 @@ async function mounted(component: Component, props: Record<string, unknown>,
     prepare?.(context);
     const componentProps = reactive({...props});
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/users/dashboard', component, props: () => componentProps},
-        {path: '/packing/:listId', component, props: () => componentProps},
-        {path: '/help', component, props: () => componentProps},
-        {path: '/before', component: defineComponent({template: '<p>Before overview</p>'})},
-    ]});
+            {path: '/users/dashboard', component, props: () => componentProps},
+            {path: '/packing/:listId', component, props: () => componentProps},
+            {path: '/help', component, props: () => componentProps},
+            {path: '/before', component: defineComponent({template: '<p>Before overview</p>'})},
+        ]});
     await router.push(previous);
     await router.push(path);
     const root = mount(shell ?? defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}],
-            [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-        stubs: {AppDialog: defineComponent({template: '<section><slot /><slot name="footer" /></section>'})},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}],
+                [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+            stubs: {AppDialog: defineComponent({template: '<section><slot /><slot name="footer" /></section>'})},
+        }});
     await flushPromises();
     cleanups.push(async () => {
         root.unmount();
@@ -225,81 +225,81 @@ describe('Overview contextual menu progress', () => {
         {label: 'Hide for me', method: 'PUT', suffix: 'visibility'},
     ].flatMap(gesture => [false, true].map(failed => ({...gesture, failed}))))(
         'keeps only the initiating card visible through $label and its fresh read (failed=$failed)', async gesture => {
-        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
-        vi.stubGlobal('confirm', vi.fn(() => true));
-        const write = deferred<Response>();
-        const read = deferred<Response>();
-        const selected = {...card, type: 'event' as const, title: 'Menu Event', url: `/event/${otherId}`,
-            capabilities: {...card.capabilities, archive: true}, automation: {paused: false, canManage: true}};
-        // A sibling family deliberately shares the UUID. Presentation belongs to
-        // the typed card that initiated the operation, rather than every match.
-        const sibling = {...card, type: 'packing' as const, title: 'Menu Packing', url: `/packing/${otherId}`,
-            capabilities: {...card.capabilities, archive: true}};
-        let writes = 0;
-        let freshRead = false;
-        let recovery = false;
-        const {wrapper, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
-            async function deliverCardGesture(captured): Promise<Response> {
-                if (captured.method !== 'GET') {
-                    writes++;
-                    expect(captured.method).toBe(gesture.method);
-                    expect(new URL(captured.url).pathname.endsWith('/' + gesture.suffix)).toBe(true);
-                    return write.promise;
-                }
-                if (writes && !recovery) { freshRead = true; return read.promise; }
-                return json({...region(captured), availableTypes: ['event', 'packing'], pageSize: 12,
-                    hasNext: false, items: [selected, sibling]});
-            });
-        const initiating = wrapper.get('article[data-type="event"]');
-        const adjacent = wrapper.get('article[data-type="packing"]');
-        const input = wrapper.get<HTMLInputElement>('input[type="search"]');
-        await input.setValue('Menu');
-        const button = initiating.findAll('button.dropdown-item').find(value => value.text() === gesture.label)!;
-        const details = button.element.closest('details') as HTMLDetailsElement;
+            vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
+            vi.stubGlobal('confirm', vi.fn(() => true));
+            const write = deferred<Response>();
+            const read = deferred<Response>();
+            const selected = {...card, type: 'event' as const, title: 'Menu Event', url: `/event/${otherId}`,
+                capabilities: {...card.capabilities, archive: true}, automation: {paused: false, canManage: true}};
+            // A sibling family deliberately shares the UUID. Presentation belongs to
+            // the typed card that initiated the operation, rather than every match.
+            const sibling = {...card, type: 'packing' as const, title: 'Menu Packing', url: `/packing/${otherId}`,
+                capabilities: {...card.capabilities, archive: true}};
+            let writes = 0;
+            let freshRead = false;
+            let recovery = false;
+            const {wrapper, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+                async function deliverCardGesture(captured): Promise<Response> {
+                    if (captured.method !== 'GET') {
+                        writes++;
+                        expect(captured.method).toBe(gesture.method);
+                        expect(new URL(captured.url).pathname.endsWith('/' + gesture.suffix)).toBe(true);
+                        return write.promise;
+                    }
+                    if (writes && !recovery) { freshRead = true; return read.promise; }
+                    return json({...region(captured), availableTypes: ['event', 'packing'], pageSize: 12,
+                        hasNext: false, items: [selected, sibling]});
+                });
+            const initiating = wrapper.get('article[data-type="event"]');
+            const adjacent = wrapper.get('article[data-type="packing"]');
+            const input = wrapper.get<HTMLInputElement>('input[type="search"]');
+            await input.setValue('Menu');
+            const button = initiating.findAll('button.dropdown-item').find(value => value.text() === gesture.label)!;
+            const details = button.element.closest('details') as HTMLDetailsElement;
 
-        try {
-            details.open = true;
-            await button.trigger('click');
-            await flushPromises();
-            expect(details.open).toBe(false);
-            expect(initiating.get('summary .frontend-card-action-progress').text()).toBe(context.messages.value.t('common.pending'));
-            expect(adjacent.find('.frontend-card-action-progress').exists()).toBe(false);
-            expect((button.element as HTMLButtonElement).disabled).toBe(true);
-            (button.element as HTMLButtonElement).click();
-            expect(writes).toBe(1);
+            try {
+                details.open = true;
+                await button.trigger('click');
+                await flushPromises();
+                expect(details.open).toBe(false);
+                expect(initiating.get('summary .frontend-card-action-progress').text()).toBe(context.messages.value.t('common.pending'));
+                expect(adjacent.find('.frontend-card-action-progress').exists()).toBe(false);
+                expect((button.element as HTMLButtonElement).disabled).toBe(true);
+                (button.element as HTMLButtonElement).click();
+                expect(writes).toBe(1);
 
-            // Confirmed writes retain their visible initiating progress until the
-            // existing command's authoritative follow-up read finishes.
-            write.resolve(json(gesture.suffix === 'visibility'
-                ? {visibility: 'hidden', overviewHidden: true, archived: false} : {changed: true}));
-            await flushPromises();
-            expect(freshRead).toBe(true);
-            expect(initiating.find('.frontend-card-action-progress').exists()).toBe(true);
-            expect(adjacent.find('.frontend-card-action-progress').exists()).toBe(false);
-            expect(input.element.value).toBe('Menu');
-            expect(wrapper.get('article[data-type="event"]').element).toBe(initiating.element);
+                // Confirmed writes retain their visible initiating progress until the
+                // existing command's authoritative follow-up read finishes.
+                write.resolve(json(gesture.suffix === 'visibility'
+                    ? {visibility: 'hidden', overviewHidden: true, archived: false} : {changed: true}));
+                await flushPromises();
+                expect(freshRead).toBe(true);
+                expect(initiating.find('.frontend-card-action-progress').exists()).toBe(true);
+                expect(adjacent.find('.frontend-card-action-progress').exists()).toBe(false);
+                expect(input.element.value).toBe('Menu');
+                expect(wrapper.get('article[data-type="event"]').element).toBe(initiating.element);
 
-            // Either fresh-read outcome clears progress without replaying the
-            // confirmed operation. A failure preserves its warning and old card.
-            read.resolve(gesture.failed ? readFailure(429, 'html') : json({...region(new Request('http://localhost/')),
-                availableTypes: ['event', 'packing'], pageSize: 12, hasNext: false, items: [selected, sibling]}));
-            await flushPromises();
-            expect(wrapper.find('.frontend-card-action-progress').exists()).toBe(false);
-            if (gesture.failed) expect(wrapper.text()).toContain(context.messages.value.t('state.savedRefreshFailed'));
-            expect(input.element.value).toBe('Menu');
-            expect(wrapper.get('article[data-type="event"]').element).toBe(initiating.element);
-            recovery = true;
-            await context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
-            await flushPromises();
-            expect(wrapper.find('.frontend-card-action-progress').exists()).toBe(false);
-            expect(request.mock.calls.filter(([value]) => (value as Request).method !== 'GET')).toHaveLength(1);
-            expect(input.element.value).toBe('Menu');
-        } finally {
-            write.resolve(json({changed: false}));
-            read.resolve(json({...region(new Request('http://localhost/')), items: [selected, sibling]}));
-            await flushPromises();
-        }
-    });
+                // Either fresh-read outcome clears progress without replaying the
+                // confirmed operation. A failure preserves its warning and old card.
+                read.resolve(gesture.failed ? readFailure(429, 'html') : json({...region(new Request('http://localhost/')),
+                    availableTypes: ['event', 'packing'], pageSize: 12, hasNext: false, items: [selected, sibling]}));
+                await flushPromises();
+                expect(wrapper.find('.frontend-card-action-progress').exists()).toBe(false);
+                if (gesture.failed) expect(wrapper.text()).toContain(context.messages.value.t('state.savedRefreshFailed'));
+                expect(input.element.value).toBe('Menu');
+                expect(wrapper.get('article[data-type="event"]').element).toBe(initiating.element);
+                recovery = true;
+                await context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
+                await flushPromises();
+                expect(wrapper.find('.frontend-card-action-progress').exists()).toBe(false);
+                expect(request.mock.calls.filter(([value]) => (value as Request).method !== 'GET')).toHaveLength(1);
+                expect(input.element.value).toBe('Menu');
+            } finally {
+                write.resolve(json({changed: false}));
+                read.resolve(json({...region(new Request('http://localhost/')), items: [selected, sibling]}));
+                await flushPromises();
+            }
+        });
 });
 
 describe('Overview independent schedule controls', () => {
@@ -604,7 +604,7 @@ describe('visible resource recovery', () => {
         let denied = true;
         let reads = 0;
         const siblings = defineComponent({components: {OverviewRegion}, template:
-            '<section><OverviewRegion collection="owner" region="main" /><OverviewRegion collection="owner" region="main" :active="false" /></section>'});
+                '<section><OverviewRegion collection="owner" region="main" /><OverviewRegion collection="owner" region="main" :active="false" /></section>'});
         async function readSharedRegion(request: Request): Promise<Response> {
             reads++;
             return denied ? readFailure(403, 'future') : json(region(request));
@@ -667,7 +667,7 @@ describe('visible resource recovery', () => {
         expect(request).toHaveBeenCalledTimes(2);
         bootstrap.resolve(new Response(JSON.stringify({type: 'urn:future:unavailable', title: 'Unavailable',
             status: 503, detail: 'Bootstrap is temporarily unavailable.', requestId: 'resume-session-cooldown'}),
-        {status: 503, headers: {'Content-Type': 'application/json', 'Retry-After': '60'}}));
+            {status: 503, headers: {'Content-Type': 'application/json', 'Retry-After': '60'}}));
         await flushPromises();
         window.dispatchEvent(new Event('focus'));
         await flushPromises();
@@ -1315,7 +1315,7 @@ describe('visible resource recovery', () => {
             {prefix: 'background-picker', inline: true, modelValue: null, source: pickerSource(search)});
         function pagingButtons() {
             return wrapper.findAll('button').filter(button => [context.messages.value.t('eventPicker.nextPage'),
-                context.messages.value.t('eventPicker.previousPage')].includes(button.text()));
+            context.messages.value.t('eventPicker.previousPage')].includes(button.text()));
         }
         await pagingButtons()[0]!.trigger('click');
         await flushPromises();
@@ -2579,7 +2579,7 @@ describe('mixed-family Overview integration', () => {
             if (path.endsWith('/header')) {
                 imageReads.push(path);
                 return new Response(new Blob([path]), {headers: {'Content-Type': 'image/png',
-                    'X-Surveyor-Context': session.context}});
+                        'X-Surveyor-Context': session.context}});
             }
             return json(mixedRegion(request, cards));
         }
@@ -2590,7 +2590,7 @@ describe('mixed-family Overview integration', () => {
         expect(wrapper.findAll('article.js-item')).toHaveLength(5);
         expect(imageReads.sort()).toEqual(families.map(family => `/api/v1/${family.endpoint}/${otherId}/header`).sort());
         const images = new Map(families.map(family => [family.type,
-            wrapper.get(`article[data-type="${family.type}"] img`).attributes('src')]));
+        wrapper.get(`article[data-type="${family.type}"] img`).attributes('src')]));
         for (const family of families) {
             const rendered = wrapper.get(`article[data-type="${family.type}"]`);
             expect(rendered.get('a.card-body').attributes('href')).toBe(`/${family.type}/${otherId}`);

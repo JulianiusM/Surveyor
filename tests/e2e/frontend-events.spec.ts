@@ -8,7 +8,6 @@ import {addEntityAdministratorForE2E, expectUsableFrontendLayout, loginForE2E,
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
 import {PERM} from '../../src/backend/modules/lib/permissions';
-import {getGuestRegistrationNags} from '../../src/backend/modules/lib/guestRegistrationNags';
 import {createTranslator} from '../../src/common/localization/translator';
 
 /** Establish a distinct guest through the real Event identity boundary, then
@@ -165,8 +164,8 @@ test('creates and duplicates an Event through multipart SPA commands with native
     // copying. Both the empty destination and unchanged source must be proved;
     // a zero-count assertion against an empty source would be vacuous.
     expect((await page.request.put(`/api/v1/events/${id}/registration`, {headers: await frontendEventHeaders(page.request), data: {
-        arrivalDate: detail.startDate, departureDate: detail.endDate, dietary: ['MEAT'],
-    }})).status()).toBe(200);
+            arrivalDate: detail.startDate, departureDate: detail.endDate, dietary: ['MEAT'],
+        }})).status()).toBe(200);
     const sourceAttendance = await (await page.request.get(`/api/v1/events/${id}`, {
         headers: await frontendEventHeaders(page.request),
     })).json() as components['schemas']['EventView'];
@@ -254,7 +253,7 @@ test('carries a late-registration token through guest entry and spends it only o
         // creation; accepting it must still leave this registration token unused.
         const confirmation = page.waitForEvent('dialog').then(async function acceptEventGuest(dialog) {
             expect(dialog.type()).toBe('confirm');
-            expect(dialog.message()).toBe(getGuestRegistrationNags('event').submitConfirmation);
+            expect(dialog.message()).toBe(createTranslator('en').t('auth.eventGuestConfirmation'));
             await dialog.accept();
         });
         await Promise.all([confirmation, page.getByRole('button', {name: 'Continue as guest', exact: true}).click()]);

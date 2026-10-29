@@ -1,6 +1,5 @@
-import {quickAddSlot} from '../../src/backend/modules/activity/slots';
+import {quickAddSlot, addActivityRole} from '../../src/backend/modules/activity/slots';
 import {describe, expect, it} from 'vitest';
-import activityController from '../../src/backend/controller/activityController';
 import {classifyArchiveCommandError} from '../../src/backend/modules/entityArchival';
 import type {ActivityPlan} from '../../src/backend/modules/database/entities/activity/ActivityPlan';
 import {APIError, ExpectedError} from '../../src/backend/modules/lib/errors';
@@ -38,7 +37,7 @@ describe('Actionable controller rejection diagnostics', () => {
 
     it('explains a reserved role name without changing the existing native rejection', async () => {
         const body = {name: 'default', description: 'Private entered description'};
-        const error = await rejection(() => activityController.addActivityRole(plan, body));
+        const error = await rejection(() => addActivityRole(plan, body));
         expect(error).toMatchObject({message: 'Missing name', status: 400, data: body, cause: 'ACTIVITY_ROLE_NAME_INVALID'});
         const response = validatedProblemBody(classifyApiError(error), 'de', 'reserved-role');
         expect(response.code).toBe('ACTIVITY_ROLE_NAME_INVALID');

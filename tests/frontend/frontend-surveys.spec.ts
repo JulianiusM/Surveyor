@@ -42,7 +42,7 @@ afterEach(async () => {
 
 function json(value: unknown, status = 200): Response {
     return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
-        'X-Surveyor-Context': session.context, ETag: '"survey-fixture"'}});
+            'X-Surveyor-Context': session.context, ETag: '"survey-fixture"'}});
 }
 
 /** Mount production components, query owners and generated transport. Only
@@ -53,18 +53,18 @@ async function mounted(component: Component, handler: (request: Request) => Prom
     const context = createFrontendContext({session}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/survey/create', component},
-        {path: '/survey/:surveyId/duplicate', component},
-        {path: '/survey/:surveyId', component: path.endsWith('/duplicate') || path.endsWith('/create')
-            ? defineComponent({template: '<p>Created survey</p>'}) : component},
-        {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
-    ]});
+            {path: '/survey/create', component},
+            {path: '/survey/:surveyId/duplicate', component},
+            {path: '/survey/:surveyId', component: path.endsWith('/duplicate') || path.endsWith('/create')
+                    ? defineComponent({template: '<p>Created survey</p>'}) : component},
+            {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
+        ]});
     await router.push(path);
     const stopInitial = observeInitialDocument(context, router);
     const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+        }});
     await flushPromises();
     cleanups.push(async () => {root.unmount(); stopInitial(); await context.queryClient.cancelQueries(); context.queryClient.clear();});
     if (component === SurveyPage) {
@@ -80,8 +80,8 @@ describe('Survey production frontend consumers', () => {
         let body: unknown;
         const {wrapper} = await mounted(SurveyPage, async request => {
             if (request.method === 'GET') return json({...survey, responses: [
-                {profileId: copyId, name: 'Another participant', answers: {'11': 'maybe'}},
-            ]});
+                    {profileId: copyId, name: 'Another participant', answers: {'11': 'maybe'}},
+                ]});
             body = await request.json();
             return json({changed: true});
         });
@@ -230,8 +230,8 @@ describe('Survey production frontend consumers', () => {
         await wrapper.get('#surveyForm').trigger('submit');
         await flushPromises();
         expect(submitted).toEqual({title: 'Recurring survey', description: 'Choose one day', combinations: [
-            {weekday: 'MON', nthWeek: '1'}, {weekday: 'FRI', nthWeek: 'LAST'},
-        ]});
+                {weekday: 'MON', nthWeek: '1'}, {weekday: 'FRI', nthWeek: 'LAST'},
+            ]});
         expect(router.currentRoute.value.path).toBe(`/survey/${copyId}`);
     });
 

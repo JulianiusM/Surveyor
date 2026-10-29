@@ -36,7 +36,7 @@ import type {
 } from '../../types/EntityPropertyTypes';
 
 import {hasAccountProfile} from './userController';
-import {Request} from "express";
+import {Request} from 'express';
 import type {EntityManager} from 'typeorm';
 import {comparisonToken, comparisonActor, requireFieldComparison, entityTag} from '../modules/api/transport';
 import {classifyArchiveCommandError, archiveEntity, restoreEntity} from '../modules/entityArchival';
@@ -50,18 +50,19 @@ import type {LockedArchiveContext} from '../../types/ArchiveTypes';
 
 import type {Event} from '../modules/database/entities/event/Event';
 import Joi from 'joi';
-import {PackingItem} from "../modules/database/entities/packing/PackingItem";
-import {PackingList} from "../modules/database/entities/packing/PackingList";
+import {PackingItem} from '../modules/database/entities/packing/PackingItem';
+import {PackingList} from '../modules/database/entities/packing/PackingList';
 
 import * as packingService from '../modules/database/services/PackingService';
 import * as lifecycleService from '../modules/database/services/EntityLifecycleService';
 import * as adminService from '../modules/database/services/EntityAdminService';
 
 import {ApiProblem} from '../modules/api/problem';
+import {requireApiProfileId} from '../modules/api/session';
 import {APIError, ValidationError} from '../modules/lib/errors';
-import {performImageSwap, checkNewImage, removeImage} from "../modules/lib/fileCommons";
+import {performImageSwap, checkNewImage, removeImage} from '../modules/lib/fileCommons';
 import {ENTITIES, generateUniqueId, sameUuid, uuidKey, groupByUuid, countListItems} from '../modules/lib/util';
-import type {EntityBase} from "../../types/UserTypes";
+import type {EntityBase} from '../../types/UserTypes';
 import type {PackingMethod} from '../../types/PackingTypes';
 
 // Template constant for create errors
@@ -70,7 +71,7 @@ const CREATE_TEMPLATE = 'packing/packing-create';
 /** Decode the established form before its creation hook runs. Keep its
  * JSON item collector, Joi coercion and renderer diagnostics separate from v1's
  * generated request validation; both adapters later use the same creation owner. */
-function preprocessCreate(body: any): Omit<Partial<PackingList>, 'items' | 'eventId'> & { items: Partial<PackingItem>[]; eventId: string | null } {
+export function preprocessCreate(body: any): Omit<Partial<PackingList>, 'items' | 'eventId'> & { items: Partial<PackingItem>[]; eventId: string | null } {
     // Form item controls submit one serialized collection. Decode it before
     // coercion so malformed JSON retains the form's contextual diagnostic.
     let items;
@@ -126,7 +127,7 @@ function preprocessCreate(body: any): Omit<Partial<PackingList>, 'items' | 'even
  * explicit positions. A supplied manager keeps rows inside v1's parent/defaults
  * transaction, while the direct creation hook retains its established transaction.
  */
-async function createEntity(
+export async function createEntity(
     ownerId: string,
     listData: Omit<Partial<PackingList>, 'items' | 'eventId'> & { items: Partial<PackingItem>[]; eventId?: string | null },
     manager?: EntityManager,
@@ -160,14 +161,14 @@ async function createEntity(
 }
 
 /** Direct creation initializes submitted audience grants after its existing row transaction. */
-async function afterCreateItems(id: string, data: any) {
+export async function afterCreateItems(id: string, data: any) {
     await updateSettings(id, data._body);
 }
 
 /** Assemble shared presentation data through its existing reads. Shared counters
  * consume the same row/assignee evidence as v1 without changing read order
  * or making this compatibility hook adopt the versioned snapshot protocol. */
-async function fetchForView(list: PackingList, req: Request) {
+export async function fetchForView(list: PackingList, req: Request) {
     const items = await packingService.getPackingItems(list.id);
     const session = req.session;
 
@@ -185,13 +186,13 @@ async function fetchForView(list: PackingList, req: Request) {
 
 /** Read admitted duplication content through the existing form hook;
  * assignments and their identities remain attached to the original list. */
-async function fetchForDuplicate(list: PackingList) {
+export async function fetchForDuplicate(list: PackingList) {
     return await packingService.getPackingItems(list.id);
 }
 
 /** The common hard-delete owner checks profile ownership before the simple
  * repository deletion. A supplied manager retains the versioned caller's lock. */
-async function deleteEntity(list: PackingList, session: SessionLike, manager?: EntityManager) {
+export async function deleteEntity(list: PackingList, session: SessionLike, manager?: EntityManager) {
     // Deletion is profile-owned, including guest owners; an administrator's full
     // permission mask does not transfer ownership. Both transports use this check.
     if (!isOwner(session, list.ownerId)) throw new APIError('Forbidden', {}, 403);
@@ -203,21 +204,21 @@ async function deleteEntity(list: PackingList, session: SessionLike, manager?: E
 // operations live below and reuse the same business operations.
 /** Keep the description collector and success text, while the shared
  * metadata owner checks the captured parent and persists the normalized field. */
-async function updateDescription(id: string, body: any, expectedEventId?: string | null) {
+export async function updateDescription(id: string, body: any, expectedEventId?: string | null) {
     await saveListMetadata('packing', id, normalizeBasicProperties({description: body.description}), {kind: 'direct', expectedEventId});
     return 'Description updated';
 }
 
 /** Direct order payloads retain their partial/non-dense per-row behavior.
  * Versioned callers validate their complete order first and supply their manager. */
-async function reorderItems(id: string, order: any, manager?: EntityManager) {
+export async function reorderItems(id: string, order: any, manager?: EntityManager) {
     await packingService.reorderPackingItems(id, order, manager);
     return 'Order saved';
 }
 
 /** Preserve Quick Add's title check and numeric fallback. Its admitted
  * profile becomes the item creator through the same owner used by v1 creation. */
-async function quickAddItem(list: PackingList, body: any, session: SessionLike) {
+export async function quickAddItem(list: PackingList, body: any, session: SessionLike) {
     const {title = '', description = '', maxAssignees = '1'} = body;
     if (!title) throw new APIError('Title required', body, 400);
 
@@ -231,14 +232,14 @@ async function quickAddItem(list: PackingList, body: any, session: SessionLike) 
 
 /** The description method forwards its raw draft and original errors;
  * sparse item persistence and vanished-row handling stay in the shared owner. */
-async function updateItemDescription(itemId: string, body: any) {
+export async function updateItemDescription(itemId: string, body: any) {
     await applyPackingItemPatch(itemId, {description: body.description}, {kind: 'direct', body});
     return 'Description updated';
 }
 
 /** Restrict the direct attribute collector to its original three fields.
  * Raw number-control strings reach the shared persistence boundary unchanged. */
-async function updateItemAttr(itemId: string, body: any) {
+export async function updateItemAttr(itemId: string, body: any) {
     const {field, value} = body;
     const allowed: Record<string, boolean> = {title: true, description: true, maxAssignees: true};
 
@@ -250,7 +251,7 @@ async function updateItemAttr(itemId: string, body: any) {
 
 /** Everyone is a distinct direct adapter: preserve the raw flag and its
  * successful acknowledgement when the item has disappeared. */
-async function updateRequired(itemId: string, body: any) {
+export async function updateRequired(itemId: string, body: any) {
     const {flag} = body;
     // This direct action acknowledges a vanished row and forwards its raw flag.
     // The shared operation preserves that outcome through the adapter option.
@@ -260,41 +261,34 @@ async function updateRequired(itemId: string, body: any) {
 
 /** Direct and versioned removal share the simple assignment deletion. V1 supplies
  * its transaction after authorizing the selected item and root relationship. */
-async function deleteAssignment(assignId: string, manager?: EntityManager) {
+export async function deleteAssignment(assignId: string, manager?: EntityManager) {
     await packingService.deletePackingAssignment(assignId, manager);
     return 'Assignment removed';
 }
 
 /** Route both audience collectors to the established permission-matrix owner.
  * Form input uses permission keys; only validated v1 commands opt into masks. */
-async function updateSettings(id: string, body: any, manager?: EntityManager, inputFormat?: 'permissionKeys' | 'masks') {
+export async function updateSettings(id: string, body: any, manager?: EntityManager, inputFormat?: 'permissionKeys' | 'masks') {
     await saveDefaultPermsFromBody(ENTITIES.PACKING, id, body, {manager, inputFormat});
     return 'Settings saved';
 }
 
 /** Share hard item deletion without routing it through archival operations.
  * The existing foreign-key cascades, rather than this adapter, remove assignments. */
-async function deleteItem(itemId: string, manager?: EntityManager) {
+export async function deleteItem(itemId: string, manager?: EntityManager) {
     await packingService.deletePackingItem(itemId, manager);
     return 'Item deleted';
 }
 
-/** Image replacement uses the shared file-swap policy and keeps its
- * existing direct persistence callback and literal success response. */
-async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
-    await performImageSwap(entity, packingService.updateHeaderImage, file);
-    return 'Image updated';
-}
-
 /** Direct removal is the same image-swap operation with no new upload. */
-async function deleteHeaderImg(entity: EntityBase) {
+export async function deleteHeaderImg(entity: EntityBase) {
     await performImageSwap(entity, packingService.updateHeaderImage);
     return 'Image deleted';
 }
 
 /** Bind the direct assignment operations to its body-shaped compatibility
  * adapters; versioned desired-membership commands use the shared owner directly. */
-function getAssignmentAccessMapping() {
+export function getAssignmentAccessMapping() {
     return {
         assign: assignDirectItem,
         unassign: unassignItem,
@@ -324,34 +318,9 @@ async function assignItem(itemId: string, profileId: string): Promise<void> {
 }
 
 /** Normalize all submitted fields before acquiring a lock; omitted fields remain unchanged. */
-async function updateProperties(entity: EntityBase, body: unknown) {
+export async function updateProperties(entity: EntityBase, body: unknown) {
     await saveListMetadata('packing', entity.id, normalizeBasicProperties(body), {kind: 'direct', expectedEventId: entity.eventId ?? null});
     return 'Properties updated';
-}
-
-export default {
-    updateProperties,
-    preprocessCreate,
-    createEntity,
-    afterCreateItems,
-    fetchForView,
-    fetchForDuplicate,
-    deleteEntity,
-
-    updateDescription,
-    reorderItems,
-    quickAddItem,
-    updateItemDescription,
-    updateItemAttr,
-    deleteAssignment,
-    updateSettings,
-    deleteItem,
-    updateRequired,
-
-    updateHeaderImg,
-    deleteHeaderImg,
-
-    getAssignmentAccessMapping,
 }
 
 /**
@@ -403,12 +372,6 @@ function mayEditItemField(permissions: PermView, field: keyof components['schema
     return mayPerformPackingMethod(permissions, itemFieldMethods[field]);
 }
 
-/** Require the already admitted actor; this module never re-reads a mutable Express session. */
-function actorId(session: SessionLike): string {
-    if (!session.profile?.id) throw new ApiProblem('AUTH_REQUIRED');
-    return session.profile.id;
-}
-
 /** Interpret nullable DB evidence here, keeping missing-resource policy outside the DBAL. */
 function requireList(list: PackingList | null): PackingList {
     if (!list) throw new ApiProblem('NOT_FOUND');
@@ -437,7 +400,7 @@ export async function readPackingList(id: string, session: SessionLike) {
         const {items, assignments} = await packingService.getPackingSnapshotRows(manager, id);
         const assignmentsByItem = groupByUuid(assignments, assignment => assignment.itemId);
 
-        const profileId = actorId(session);
+        const profileId = requireApiProfileId(session);
         const itemRows: components['schemas']['PackingItemView'][] = [];
         for (const item of items) {
             const itemPermissions = await listItemPermissions('packing', manager, list, item, session, caches);
@@ -494,7 +457,7 @@ export async function readPackingList(id: string, session: SessionLike) {
 const packingListReadOperations: ListReadOperations<PackingList, PackingItem, components['schemas']['EntityDescriptionBaseline']> = {
     withSnapshot: packingService.withPackingReadSnapshot,
     requireRoot: requireList,
-    requireProfile: actorId,
+    requireProfile: requireApiProfileId,
     mayPerform: mayPerformPackingMethod,
     descriptionBaseline: (list, session) => listDescriptionBaseline('packing', list, session),
     items: packingService.getPackingSnapshotItems,
@@ -530,7 +493,7 @@ export async function readPackingItemOrderBaseline(id: string, session: SessionL
  * Form Joi diagnostics remain in their compatibility decoder.
  */
 export async function patchPackingMetadata(id: string, patch: components['schemas']['BasicEntityMetadataPatch'], ifMatch: string | undefined, session: SessionLike) {
-    actorId(session);
+    requireApiProfileId(session);
     return saveListMetadata('packing', id, patch, {kind: 'versioned', ifMatch, session});
 }
 
@@ -552,7 +515,7 @@ export async function patchPackingDescription(id: string, patch: components['sch
  * relinking and capacity, while a repeated successful assignment remains valid even when now full.
  */
 export async function setPackingSelfAssignment(listId: string, itemId: string, assigned: boolean, session: SessionLike): Promise<components['schemas']['ListAssignmentResult']> {
-    const profileId = actorId(session);
+    const profileId = requireApiProfileId(session);
     /** Recheck the captured actor against the locked relationship before reading
      * item/count evidence and applying the common desired-membership policy. */
     async function assignLocked(manager: EntityManager, context: LockedArchiveContext) {
@@ -685,7 +648,7 @@ const listItemCommandOperations: ListItemCommandOperations<'packing', components
 
 /** Creation POST requires an account, including when a public/guest duplicate GET supplied its draft. */
 export function requirePackingCreation(session: SessionLike): void {
-    actorId(session);
+    requireApiProfileId(session);
     if (!hasAccountProfile(session)) throw new ApiProblem('FORBIDDEN');
 }
 
@@ -715,7 +678,7 @@ export async function createPackingList(
         // Direct submission and versioned commands use the event controller's same attachment
         // policy. The v1 adapter supplies its already locked parent and manager.
         await authorizeEventLink(body.eventId, session, manager, event);
-        const id = await createEntity(actorId(session), {...body, headerImg: file?.path}, manager, 'versioned');
+        const id = await createEntity(requireApiProfileId(session), {...body, headerImg: file?.path}, manager, 'versioned');
         await updateSettings(id, {defaultPerms: body.defaultPermissions}, manager, 'masks');
         return {id};
     }
@@ -725,27 +688,27 @@ export async function createPackingList(
 /** Duplicate GET depends only on DATA_DUPLICATE, independently of detail admission and creation POST. */
 export async function readPackingDuplicate(id: string, session: SessionLike, eventId?: unknown): Promise<components['schemas']['PackingDuplicate']> {
     return packingService.withPackingReadSnapshot(id,
-    /** Read the granted duplication form/defaults in this source snapshot;
+        /** Read the granted duplication form/defaults in this source snapshot;
      * a destination parent comes solely from its independently admitted URL selection. */
-    async function readDuplicate(manager, row) {
-        const list = requireList(row);
-        const permissions = await evaluateSubject({kind: 'entity', entity: {
-            entityType: 'packing', entityId: list.id, ownerId: list.ownerId, eventId: list.eventId,
-        }}, session, undefined, manager);
-        if (!mayPerformPackingMethod(permissions, 'duplicate')) throw new ApiProblem('FORBIDDEN');
+        async function readDuplicate(manager, row) {
+            const list = requireList(row);
+            const permissions = await evaluateSubject({kind: 'entity', entity: {
+                    entityType: 'packing', entityId: list.id, ownerId: list.ownerId, eventId: list.eventId,
+                }}, session, undefined, manager);
+            if (!mayPerformPackingMethod(permissions, 'duplicate')) throw new ApiProblem('FORBIDDEN');
 
-        // Copy the form surface only. Assignments, administrators, header,
-        // archive state and event membership remain associated with the source.
-        const items = await packingService.getPackingSnapshotItems(manager, id);
-        const selected = await readEventLinkSelection(eventId, session);
-        return {title: list.title, description: list.description ?? null, eventId: null,
-            items: items.map(item => ({title: item.title, description: item.description ?? null, maxAssignees: item.maxAssignees ?? null, requiredByAll: Boolean(item.requiredByAll)})),
-            defaultPermissions: completeDefaults(await adminService.getDefaultPerms('packing', id, manager)),
-            // The source's parent is deliberately excluded. Only a separately
-            // admitted URL selection may seed the destination creation draft.
-            formContext: packingFormContext(),
-            ...(eventId !== undefined ? {selectedEvent: selected ? projectEntityEventOption(selected) : null} : {})};
-    });
+            // Copy the form surface only. Assignments, administrators, header,
+            // archive state and event membership remain associated with the source.
+            const items = await packingService.getPackingSnapshotItems(manager, id);
+            const selected = await readEventLinkSelection(eventId, session);
+            return {title: list.title, description: list.description ?? null, eventId: null,
+                items: items.map(item => ({title: item.title, description: item.description ?? null, maxAssignees: item.maxAssignees ?? null, requiredByAll: Boolean(item.requiredByAll)})),
+                defaultPermissions: completeDefaults(await adminService.getDefaultPerms('packing', id, manager)),
+                // The source's parent is deliberately excluded. Only a separately
+                // admitted URL selection may seed the destination creation draft.
+                formContext: packingFormContext(),
+                ...(eventId !== undefined ? {selectedEvent: selected ? projectEntityEventOption(selected) : null} : {})};
+        });
 }
 
 /** Project settings separately, omitting the administrator matrix entirely without MANAGE_PERMISSIONS. */
@@ -768,10 +731,10 @@ async function addPackingItem(id: string, fields: Partial<PackingItem>, profileI
 
 /** A versioned add has method authority independently of linked detail-page admission. */
 export async function createPackingItem(id: string, body: components['schemas']['PackingNewItem'], session: SessionLike): Promise<components['schemas']['EntityCreationResult']> {
-    actorId(session);
+    requireApiProfileId(session);
     return withPackingManagement(id, session, async function addItem(manager, list, permissions) {
         if (!mayPerformPackingMethod(permissions, 'addItem')) throw new ApiProblem('FORBIDDEN');
-        const itemId = await addPackingItem(id, body, actorId(session), 'versioned', manager);
+        const itemId = await addPackingItem(id, body, requireApiProfileId(session), 'versioned', manager);
         return {id: itemId};
     });
 }
@@ -896,7 +859,7 @@ export async function changePackingEvent(
     session: SessionLike,
     token?: string
 ): Promise<components['schemas']['EntityEventChangeResult']> {
-    actorId(session);
+    requireApiProfileId(session);
     const list = requireList(await packingService.getPackingListById(id));
     try {
         /** The shared relink owner already checked source/target method authority;
@@ -928,7 +891,7 @@ export async function changePackingEvent(
  * retain their separate recovery codes. This operation never performs hard deletion.
  */
 export async function setPackingArchived(id: string, archived: boolean, session: SessionLike): Promise<components['schemas']['MutationResult']> {
-    actorId(session);
+    requireApiProfileId(session);
 
     /** Preserve the existing command acknowledgement, including harmless repeated archive requests. */
     function prepareArchiveCompletion(): components['schemas']['MutationResult'] {
@@ -956,20 +919,20 @@ export async function setPackingHeader(
      * path after commit; the shared swap owner retains upload-failure cleanup. */
     async function persistApprovedHeader(listId: string, path?: string | null) {
         return withPackingManagement(listId, session,
-        /** Compare the locked header grant/evidence before writing only its stored reference. */
-        async function replaceHeader(manager, list, permissions) {
-            // A valid upload still needs current method authority and the
-            // captured actor-bound comparison before its reference is persisted.
-            if (!mayPerformPackingMethod(permissions, 'editHeader')) throw new ApiProblem('FORBIDDEN');
-            requireFieldComparison(token, listHeaderToken('packing', list, session), ['header']);
+            /** Compare the locked header grant/evidence before writing only its stored reference. */
+            async function replaceHeader(manager, list, permissions) {
+                // A valid upload still needs current method authority and the
+                // captured actor-bound comparison before its reference is persisted.
+                if (!mayPerformPackingMethod(permissions, 'editHeader')) throw new ApiProblem('FORBIDDEN');
+                requireFieldComparison(token, listHeaderToken('packing', list, session), ['header']);
 
-            await packingService.updateHeaderImage(listId, path, manager);
+                await packingService.updateHeaderImage(listId, path, manager);
 
-            // The receipt leaves this callback only after commit. The existing
-            // image-swap owner can then remove the confirmed previous file, and
-            // retains its file cleanup of this upload when persistence fails.
-            return {previousImage: list.headerImg, changed: Boolean(file || list.headerImg)};
-        });
+                // The receipt leaves this callback only after commit. The existing
+                // image-swap owner can then remove the confirmed previous file, and
+                // retains its file cleanup of this upload when persistence fails.
+                return {previousImage: list.headerImg, changed: Boolean(file || list.headerImg)};
+            });
     }
 
     const result = await performImageSwap({id}, persistApprovedHeader, file);
@@ -990,7 +953,7 @@ export async function readPackingHeaderPath(id: string, session: SessionLike): P
 
 /** Hard deletion stays the simple feature repository operation, separate from archival coordination. */
 export async function deletePackingList(id: string, session: SessionLike, expectedEventId?: string): Promise<components['schemas']['MutationResult']> {
-    actorId(session);
+    requireApiProfileId(session);
     const oldPath = await withListRootLock('packing', id, async function removeList(manager, row) {
         const list = requireList(row);
         // An Event-hosted command must still address this parent when the existing

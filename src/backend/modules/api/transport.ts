@@ -2,7 +2,7 @@ import type {Request, RequestHandler, Response} from 'express';
 import fs from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import type {SessionLike} from '../../../types/PermissionTypes';
-import type {ApiOperationId, ApiSuccessStatus, ApiResponseBody, PreparedApiJsonResponse} from '../../../types/ApiTransportTypes';
+import type {ApiOperationId, ApiSuccessStatus, ApiResponseBody, PreparedApiJsonResponse, PreparedApiCommand} from '../../../types/ApiTransportTypes';
 import {contractValidator, operationContract} from './contracts';
 import {ApiProblem} from './problem';
 import {requestLocale} from '../lib/http';
@@ -176,13 +176,28 @@ export function prepareValidatedJson<Operation extends ApiOperationId, Status ex
         locale: requestLocale(req), context: context ?? undefined, json: JSON.stringify(data)});
 }
 
+/** Capture a command's receipt at its existing callback boundary, then await completion once.
+ * The caller owns when preparation runs and how the completed result is delivered;
+ * this helper adds no transaction, admission, replay or missing-callback rejection. */
+export async function executePreparedJson<Data, Result>(prepare: (data: Data) => PreparedApiJsonResponse,
+    execute: (capture: (data: Data) => void) => Promise<Result>): Promise<PreparedApiCommand<Result>> {
+    let prepared: PreparedApiJsonResponse | undefined;
+    /** Preserve every preparation call, including its failure and last-receipt semantics. */
+    function capture(data: Data): void { prepared = prepare(data); }
+
+    // Only the supplied operation chooses the preparation point and controls its
+    // persistence lifecycle. Headers, file ownership and sending remain callers' work.
+    const operationResult = await execute(capture);
+    return {operationResult, prepared};
+}
+
 /** Prepare every finite postcommit outcome while its owning transaction can still roll back.
  * Identity delivery and domain follow-up work use the same validation/serialization
  * procedure; after commit they select only an already prepared immutable receipt. */
 export function prepareValidatedJsonVariants<Variant extends string, Operation extends ApiOperationId,
     Status extends ApiSuccessStatus<NoInfer<Operation>>>(req: Request, operationId: Operation, status: Status,
-    variants: Readonly<Record<Variant, ApiResponseBody<NoInfer<Operation>, NoInfer<Status>>>>,
-    context: string | null | undefined = req.apiActor?.context): Readonly<Record<Variant, PreparedApiJsonResponse>> {
+        variants: Readonly<Record<Variant, ApiResponseBody<NoInfer<Operation>, NoInfer<Status>>>>,
+        context: string | null | undefined = req.apiActor?.context): Readonly<Record<Variant, PreparedApiJsonResponse>> {
     const prepared = {} as Record<Variant, PreparedApiJsonResponse>;
     // Enumeration order belongs to the explicit caller-supplied alternatives;
     // a failed variant prevents the entire transaction from committing.

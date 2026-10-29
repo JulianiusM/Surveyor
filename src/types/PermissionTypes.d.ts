@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-import type {Request} from "express";
+import type {Request} from 'express';
 import type {EntityManager} from 'typeorm';
-import type {Guest} from "../backend/modules/database/entities/user/Guest";
-import type {Profile} from "../backend/modules/database/entities/user/Profile";
-import type {User} from "../backend/modules/database/entities/user/User";
-import type {PERM} from "../backend/modules/lib/permissions";
-import type {EntityItemType, EntityType, PartialRecord} from "./UtilTypes";
+import type {Guest} from '../backend/modules/database/entities/user/Guest';
+import type {Profile} from '../backend/modules/database/entities/user/Profile';
+import type {User} from '../backend/modules/database/entities/user/User';
+import type {PERM} from '../backend/modules/lib/permissions';
+import type {EntityItemType, EntityType, PartialRecord} from './UtilTypes';
 
 export type PermType = keyof typeof PERM;
 
@@ -39,6 +39,10 @@ export type EntityAdministratorCommand = {
 
 /** Domain evidence; each transport retains its own existing error presentation. */
 export type EntityAdministratorOutcome = 'saved' | 'profile-missing' | 'mask-required';
+
+/** Compare a loaded grant without selecting persistence or changing request authority.
+ * A real row with a zero mask remains distinct from an absent grant. */
+export type EntityAdministratorGrantReview = (mask: number | null, exists: boolean) => void;
 
 export type GetResource = (req: Request) => any;
 export type GetAdditional = (req: Request) => any[];

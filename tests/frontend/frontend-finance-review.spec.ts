@@ -383,7 +383,7 @@ describe('P8A organizer finance forms', () => {
             return new Response(JSON.stringify({type: 'urn:surveyor:problem:validation-failed', title: 'Invalid input',
                 status: 400, code: 'VALIDATION_FAILED', messageKey: 'api:errors.VALIDATION_FAILED', params: {},
                 detail: 'Check the submitted values.', requestId: 'rejected-pool'}),
-            {status: 400, headers: {'Content-Type': 'application/problem+json'}});
+                {status: 400, headers: {'Content-Type': 'application/problem+json'}});
         });
         await mounted.dialog.get('input[name="name"]').setValue('Retained pool');
         await mounted.dialog.get('form').trigger('submit');

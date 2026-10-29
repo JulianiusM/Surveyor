@@ -35,7 +35,7 @@ afterEach(async () => {
 
 function json(value: unknown, status = 200, responseContext = session.context): Response {
     return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
-        'X-Surveyor-Context': responseContext}});
+            'X-Surveyor-Context': responseContext}});
 }
 
 function rejected(status: 400 | 403): Response {
@@ -43,13 +43,13 @@ function rejected(status: 400 | 403): Response {
         code: status === 400 ? 'VALIDATION_FAILED' : 'FORBIDDEN',
         messageKey: status === 400 ? 'api:errors.VALIDATION_FAILED' : 'api:errors.FORBIDDEN',
         params: {}, detail: 'This request was rejected.', requestId: 'profile-rejection'}),
-    {status, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
+        {status, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
 }
 
 /** Actual mounted reads, generated validators and identity completion; only HTTP is substituted. */
 async function mounted(path: string, handler: (request: Request) => Promise<Response>,
-                       entry: components['schemas']['PageEntryOutcome'] = {kind: 'render'}, initialSession = session,
-                       withShell = false) {
+    entry: components['schemas']['PageEntryOutcome'] = {kind: 'render'}, initialSession = session,
+    withShell = false) {
     const request = vi.fn(function deliverRequest(input: RequestInfo | URL): Promise<Response> {
         const received = input as Request;
         // Identity completion legitimately rechecks admission under its newly captured actor.
@@ -61,18 +61,18 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
     context.hydrated.value = true;
     context.visible.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/users/profile', component: ProfileAdministrationPage, meta: {profileMode: 'edit'}},
-        {path: '/users/profile/manage', component: ProfileAdministrationPage, meta: {profileMode: 'manage'}},
-        {path: '/users/profile/create', component: ProfileAdministrationPage, meta: {profileMode: 'create'}},
-        {path: '/users/dashboard', component: defineComponent({template: '<p>Overview destination</p>'})},
-        {path: '/users/login', component: defineComponent({template: '<p>Account login destination</p>'})},
-    ]});
+            {path: '/users/profile', component: ProfileAdministrationPage, meta: {profileMode: 'edit'}},
+            {path: '/users/profile/manage', component: ProfileAdministrationPage, meta: {profileMode: 'manage'}},
+            {path: '/users/profile/create', component: ProfileAdministrationPage, meta: {profileMode: 'create'}},
+            {path: '/users/dashboard', component: defineComponent({template: '<p>Overview destination</p>'})},
+            {path: '/users/login', component: defineComponent({template: '<p>Account login destination</p>'})},
+        ]});
     const stopDocument = observeInitialDocument(context, router);
     await router.push(path);
     const wrapper = mount(withShell ? App : defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+        }});
     cleanups.push(async function disposeFixture() {
         context.epoch.value++;
         stopDocument();
@@ -264,8 +264,8 @@ describe('profile administration consumers', () => {
                 reads++;
                 return unavailable ? new Response(JSON.stringify({type: 'urn:future:session-read', title: 'Session unavailable',
                     status: 503, detail: 'Wait before reading the session again.', requestId: 'profile-session-cooldown'}),
-                {status: 503, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context,
-                    'Retry-After': '5'}}) : json(session);
+                    {status: 503, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context,
+                            'Retry-After': '5'}}) : json(session);
             }
             return json({profiles: [profile], activeProfileId: profileId});
         }, {kind: 'render'}, session, true);

@@ -24,7 +24,7 @@ export function readPacked(storage: Pick<Storage, 'getItem'> | undefined, listId
 /** Persist only this explicit personal checkbox change, reporting failure to its owning page.
  * False leaves that item pending in memory; background list reads never retry the write. */
 export function writePacked(storage: Pick<Storage, 'setItem' | 'removeItem'> | undefined, listId: string,
-                            itemId: string, packed: boolean): boolean {
+    itemId: string, packed: boolean): boolean {
     if (!storage) return false;
 
     try {

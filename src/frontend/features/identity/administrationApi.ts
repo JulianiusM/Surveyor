@@ -16,7 +16,7 @@ export class IdentityAdministrationApi {
     /** Admit a warm workflow visit without issuing a token or executing a command.
      * Read retries and Query refresh therefore remain free of mutation effects. */
     async workflowEntry(kind: operations['getProfileWorkflowEntry']['parameters']['query']['kind'], returnTo: string,
-                        scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['ProfileWorkflowEntry']> {
+        scope: FrontendRequestScope, signal?: AbortSignal): Promise<components['schemas']['ProfileWorkflowEntry']> {
         const transport = this.transport;
         function readWorkflowEntry() {
             return transport.client.GET('/profiles/workflow-entry', {
@@ -70,7 +70,7 @@ export class IdentityAdministrationApi {
 
     /** Resolve page admission before requesting private account/profile projections. */
     async entry(view: operations['getProfileAdministrationEntry']['parameters']['query']['view'], returnTo: string, scope: FrontendRequestScope,
-                signal?: AbortSignal): Promise<components['schemas']['PageEntryOutcome']> {
+        signal?: AbortSignal): Promise<components['schemas']['PageEntryOutcome']> {
         const transport = this.transport;
         function readProfileEntry() {
             // An account-only redirect is navigation, not authentication loss for a valid guest.

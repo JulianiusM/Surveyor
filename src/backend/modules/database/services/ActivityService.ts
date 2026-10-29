@@ -20,22 +20,22 @@ import type {
 import type {CivilDateWindow} from '../../../../types/CivilDateTypes';
 
 
-import {Between, EntityManager, In, Not} from "typeorm";
+import {Between, EntityManager, Equal, In, Not} from 'typeorm';
 
-import {toParticipantKey} from "../../../../common/activity/requirements";
-import {generateUniqueId, sameUuid, uuidKey} from "../../lib/util";
-import {AppDataSource} from "../dataSource";
-import {ActivityAssignment} from "../entities/activity/ActivityAssignment";
-import {ActivityAssignmentRole} from "../entities/activity/ActivityAssignmentRole";
-import {ActivityPlan} from "../entities/activity/ActivityPlan";
-import {ActivityPlanTextField} from "../entities/activity/ActivityPlanTextField";
-import {ActivityRole} from "../entities/activity/ActivityRole";
-import {ActivitySlot} from "../entities/activity/ActivitySlot";
-import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
-import {EventRegistration} from "../entities/event/EventRegistration";
+import {toParticipantKey} from '../../../../common/activity/requirements';
+import {generateUniqueId, sameUuid, uuidKey} from '../../lib/util';
+import {AppDataSource} from '../dataSource';
+import {ActivityAssignment} from '../entities/activity/ActivityAssignment';
+import {ActivityAssignmentRole} from '../entities/activity/ActivityAssignmentRole';
+import {ActivityPlan} from '../entities/activity/ActivityPlan';
+import {ActivityPlanTextField} from '../entities/activity/ActivityPlanTextField';
+import {ActivityRole} from '../entities/activity/ActivityRole';
+import {ActivitySlot} from '../entities/activity/ActivitySlot';
+import {ActivitySlotRole} from '../entities/activity/ActivitySlotRole';
+import {EventRegistration} from '../entities/event/EventRegistration';
 import {Event} from '../entities/event/Event';
 import {ActivityAssignmentRecommendation} from '../entities/activity/ActivityAssignmentRecommendation';
-import * as entityAdminService from "./EntityAdminService";
+import * as entityAdminService from './EntityAdminService';
 
 /**
  * Transaction ownership stays at the database boundary; the named callback belongs to
@@ -213,10 +213,10 @@ export async function ensureAssignment(
     // Discover the stored slot-to-plan relationship before locating membership.
     const repo = AppDataSource.getRepository(ActivityAssignment);
     const slot = await AppDataSource.getRepository(ActivitySlot).findOne({
-            where: {id: itemId},
-            relations: {entity: true},
-            select: {id: true, entity: {id: true}},
-        });
+        where: {id: itemId},
+        relations: {entity: true},
+        select: {id: true, entity: {id: true}},
+    });
     if (!slot) return null;
     const planId = slot.entity.id;
 
@@ -284,48 +284,48 @@ export async function createActivityPlanTx(
     complete?: ActivityCreationCompletion,
 ) {
     return await AppDataSource.transaction(
-    /** Persist generated root/slot identities and prepare optional caller output before this transaction commits. */
-    async (manager) => {
-        const id = generateUniqueId();
-        const planRepo = manager.getRepository(ActivityPlan);
-        const slotRepo = manager.getRepository(ActivitySlot);
+        /** Persist generated root/slot identities and prepare optional caller output before this transaction commits. */
+        async (manager) => {
+            const id = generateUniqueId();
+            const planRepo = manager.getRepository(ActivityPlan);
+            const slotRepo = manager.getRepository(ActivitySlot);
 
-        // Create the same root metadata and optional event relationship first.
-        await planRepo.insert({
-            id,
-            owner: {id: ownerId},
-            title,
-            description: desc,
-            startDate,
-            endDate,
-            headerImg,
-            ...(eventId !== undefined ? {event: {id: eventId}} : {}),
+            // Create the same root metadata and optional event relationship first.
+            await planRepo.insert({
+                id,
+                owner: {id: ownerId},
+                title,
+                description: desc,
+                startDate,
+                endDate,
+                headerImg,
+                ...(eventId !== undefined ? {event: {id: eventId}} : {}),
+            });
+
+            if (slots.length) {
+                // New slot identities belong to this plan rather than a duplicated
+                // source's existing assignments or transient draft identities.
+                const slotEntities = slots.map((s) =>
+                    slotRepo.create({
+                        id: generateUniqueId(),
+                        entity: {id: id},
+                        title: s.title,
+                        description: s.description,
+                        day: s.day,
+                        pos: s.pos,
+                        startTime: s.startTime,
+                        endTime: s.endTime,
+                        maxAssignees: s.maxAssignees,
+                    })
+                );
+                await slotRepo.save(slotEntities);
+            }
+
+            // The optional caller prepares its result while this existing transaction
+            // can still roll back. Persistence order and direct callers are unchanged.
+            complete?.(id);
+            return id;
         });
-
-        if (slots.length) {
-            // New slot identities belong to this plan rather than a duplicated
-            // source's existing assignments or transient draft identities.
-            const slotEntities = slots.map((s) =>
-                slotRepo.create({
-                    id: generateUniqueId(),
-                    entity: {id: id},
-                    title: s.title,
-                    description: s.description,
-                    day: s.day,
-                    pos: s.pos,
-                    startTime: s.startTime,
-                    endTime: s.endTime,
-                    maxAssignees: s.maxAssignees,
-                })
-            );
-            await slotRepo.save(slotEntities);
-        }
-
-        // The optional caller prepares its result while this existing transaction
-        // can still roll back. Persistence order and direct callers are unchanged.
-        complete?.(id);
-        return id;
-    });
 }
 
 export async function getActivityPlanById(id: string, manager: EntityManager = AppDataSource.manager) {
@@ -392,8 +392,7 @@ export async function hasActivitySlotsOutsideRange(
     manager: EntityManager, planId: string, startDate: string, endDate: string,
 ): Promise<boolean> {
     return manager.getRepository(ActivitySlot).createQueryBuilder('slot')
-        .where('slot.entity_id = :planId', {planId})
-        .andWhere('(slot.day < :startDate OR slot.day > :endDate)', {startDate, endDate})
+        .where({entity: {id: Equal(planId)}, day: Not(Between(startDate, endDate))})
         .getExists();
 }
 
@@ -493,18 +492,18 @@ export async function getActivitySlotsFlat(planId: string, manager: EntityManage
     const query = repo
         .createQueryBuilder("s")
         .addSelect((qb) =>
-                qb.select("COUNT(*)")
-                    .from("activity_assignments", "a")
-                    .where("a.item_id = s.id"),
+            qb.select("COUNT(*)")
+                .from("activity_assignments", "a")
+                .where("a.item_id = s.id"),
             "assignedCount"
         )
-        .where("s.entity_id = :planId", {planId})
+        .where({entity: {id: Equal(planId)}})
         .orderBy("s.day", "ASC")
         .addOrderBy("s.start_time IS NULL", "ASC")
         .addOrderBy("s.start_time", "ASC")
         .addOrderBy("s.pos", "ASC");
     // Restrict SQL before hydration; never load a multi-year schedule just to slice its projection.
-    if (window) query.andWhere('s.day BETWEEN :windowStart AND :windowEnd', {windowStart: window.startDate, windowEnd: window.endDate});
+    if (window) query.andWhere({day: Between(window.startDate, window.endDate)});
     const {entities: slots, raw} = await query.getRawAndEntities();
 
     // Raw counts align with the ordered hydrated entities. MariaDB scalar
@@ -660,8 +659,8 @@ export async function getActivitySlotAssigneeRows(planId: string, manager: Entit
         .leftJoinAndSelect('aa.profile', 'profile')
         .leftJoinAndSelect('aa.activityAssignmentRoles', 'aar')
         .leftJoinAndSelect('aar.role', 'role')
-        .where('aa.entity_id = :planId', {planId});
-    if (window) query.andWhere('slot.day BETWEEN :windowStart AND :windowEnd', {windowStart: window.startDate, windowEnd: window.endDate});
+        .where({entity: {id: Equal(planId)}});
+    if (window) query.andWhere({item: {day: Between(window.startDate, window.endDate)}});
     const assignments = await query.getMany();
 
     return assignments;
@@ -702,9 +701,9 @@ export async function countActivityPlanParticipants(planId: string, eventId: str
  * no identity, and eligibility rules remain outside this projection. */
 export async function getParticipantRolesForPlan(planId: string, manager: EntityManager = AppDataSource.manager,
     window?: Pick<CivilDateWindow, 'startDate' | 'endDate'>): Promise<{
-    participantKey: string;
-    roleIds: number[]
-}[]> {
+        participantKey: string;
+        roleIds: number[]
+    }[]> {
     // Read the selected plan's assignments and their existing role relationships.
     const assignments = await manager
         .getRepository(ActivityAssignment)
@@ -762,9 +761,9 @@ export async function getActivitySlotRoles(planId: string, window?: Pick<CivilDa
         .innerJoinAndSelect('sr.item', 'slot')
         .innerJoinAndSelect('sr.role', 'role')
         .innerJoin('slot.entity', 'plan')
-        .where('plan.id = :planId', {planId});
+        .where({item: {entity: {id: Equal(planId)}}});
 
-    if (window) qb.andWhere('slot.day BETWEEN :windowStart AND :windowEnd', {windowStart: window.startDate, windowEnd: window.endDate});
+    if (window) qb.andWhere({item: {day: Between(window.startDate, window.endDate)}});
     const slotRoles = await qb.getMany();
 
     // Count distinct assignments per slot/nondefault role separately from quota
@@ -775,14 +774,13 @@ export async function getActivitySlotRoles(planId: string, window?: Pick<CivilDa
         .innerJoin('assignmentRole.assignment', 'assignment')
         .innerJoin('assignment.item', 'slot')
         .innerJoin('assignmentRole.role', 'assignedRole')
-        .where('assignment.entity_id = :planId', {planId})
-        .andWhere('assignedRole.is_default = :isDefault', {isDefault: false})
+        .where({assignment: {entity: {id: Equal(planId)}}, role: {isDefault: Equal(false)}})
         .select('slot.id', 'slotId')
         .addSelect('assignedRole.id', 'roleId')
         .addSelect('COUNT(DISTINCT assignment.id)', 'assignedQty')
         .groupBy('slot.id')
         .addGroupBy('assignedRole.id');
-    if (window) assignmentQuery.andWhere('slot.day BETWEEN :windowStart AND :windowEnd', {windowStart: window.startDate, windowEnd: window.endDate});
+    if (window) assignmentQuery.andWhere({assignment: {item: {day: Between(window.startDate, window.endDate)}}});
     const assignedRows: Array<{slotId: string; roleId: string; assignedQty: string}> = await assignmentQuery.getRawMany();
     // MariaDB counts arrive as text. Key both identifiers before joining these
     // counts to the configured quota rows without loading assignment profiles.
@@ -824,40 +822,40 @@ export async function addActivitySlotRoles(slotId: string, roles: number[]) {
  * mappings, and new links start with the existing quantity of one. */
 export async function updateActivitySlotRoles(slotId: string, roles: number[]) {
     await AppDataSource.transaction(
-    /** Compare related role identities for both sides of the replacement. */
-    async (manager) => {
-        const repo = manager.getRepository(ActivitySlotRole);
+        /** Compare related role identities for both sides of the replacement. */
+        async (manager) => {
+            const repo = manager.getRepository(ActivitySlotRole);
 
-        // Read this slot's current mapping rows and related role IDs before
-        // calculating either side of the existing replacement operation.
-        const currentRoles = await repo.find({
-            // The normal mapping read includes the role foreign key required by
-            // @RelationId. A partial relation selection omits that identity.
-            where: {item: {id: slotId}},
+            // Read this slot's current mapping rows and related role IDs before
+            // calculating either side of the existing replacement operation.
+            const currentRoles = await repo.find({
+                // The normal mapping read includes the role foreign key required by
+                // @RelationId. A partial relation selection omits that identity.
+                where: {item: {id: slotId}},
+            });
+
+            // The submitted identities name plan roles, never slot-role mapping rows.
+            // In particular, an empty selected set deliberately removes every link.
+            const selectedRoleIds = new Set(roles);
+            const currentRoleIds = new Set(currentRoles.map(row => row.roleId));
+            const toDelete = currentRoles.filter(row => !selectedRoleIds.has(row.roleId));
+            const toCreate = [...selectedRoleIds].filter(id => !currentRoleIds.has(id));
+
+            // Remove selected mapping rows before creating missing role links on
+            // the same manager, retaining the operation's original write order.
+            if (toDelete.length > 0) {
+                await repo.remove(toDelete);
+            }
+
+            // Each new relationship retains its initial quota. Saving the batch
+            // completes this transaction without changing existing retained quotas.
+            const newRoles: ActivitySlotRole[] = [];
+            for (const roleId of toCreate) {
+                newRoles.push(repo.create({item: {id: slotId}, role: {id: roleId}, maxQty: 1}));
+            }
+
+            await repo.save(newRoles);
         });
-
-        // The submitted identities name plan roles, never slot-role mapping rows.
-        // In particular, an empty selected set deliberately removes every link.
-        const selectedRoleIds = new Set(roles);
-        const currentRoleIds = new Set(currentRoles.map(row => row.roleId));
-        const toDelete = currentRoles.filter(row => !selectedRoleIds.has(row.roleId));
-        const toCreate = [...selectedRoleIds].filter(id => !currentRoleIds.has(id));
-
-        // Remove selected mapping rows before creating missing role links on
-        // the same manager, retaining the operation's original write order.
-        if (toDelete.length > 0) {
-            await repo.remove(toDelete);
-        }
-
-        // Each new relationship retains its initial quota. Saving the batch
-        // completes this transaction without changing existing retained quotas.
-        const newRoles: ActivitySlotRole[] = [];
-        for (const roleId of toCreate) {
-            newRoles.push(repo.create({item: {id: slotId}, role: {id: roleId}, maxQty: 1}));
-        }
-
-        await repo.save(newRoles);
-    });
 }
 
 /** Delete one already selected role link without deciding whether its signup should survive. */

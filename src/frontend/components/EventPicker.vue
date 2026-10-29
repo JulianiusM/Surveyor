@@ -306,8 +306,8 @@ function details(event: FrontendEventPickerOption): string {
         event.startDate > today
             ? 'eventPicker.upcoming'
             : event.endDate < today
-              ? 'eventPicker.ended'
-              : 'eventPicker.ongoing';
+                ? 'eventPicker.ended'
+                : 'eventPicker.ongoing';
 
     return [
         event.startDate && event.endDate ? event.startDate + ' – ' + event.endDate : '',

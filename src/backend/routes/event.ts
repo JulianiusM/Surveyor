@@ -1,8 +1,10 @@
 
 import {eventMethodPermission} from '../modules/permissionEngine';
 import type {Request} from 'express';
-import eventController, {createParticipantsPdf} from '../controller/eventController';
-import invoiceController, {readEventInvoiceProof} from '../controller/eventPoolController';
+import * as eventController from '../controller/eventController';
+
+import * as invoiceController from '../controller/eventPoolController';
+
 import {paramHandler} from '../middleware/paramHandler';
 import {isLoggedIn, requirePermission} from '../middleware/permissionMiddleware';
 import * as eventService from '../modules/database/services/EventService';
@@ -28,7 +30,7 @@ router.use(createGuestFlowHeaderRouter(eventFlow));
 router.get('/:eventId/invoice-pools/:poolId/invoices/:invoiceId/proof',
     asyncHandler(async function downloadInvoiceProof(req, res) {
         const actor = await captureApiActor(req);
-        const file = await readEventInvoiceProof(String(req.params.eventId), String(req.params.poolId), String(req.params.invoiceId), actor);
+        const file = await invoiceController.readEventInvoiceProof(String(req.params.eventId), String(req.params.poolId), String(req.params.invoiceId), actor);
         // Proof contents remain private and are never retained by shared caches.
         res.set('Cache-Control', 'private, no-store').sendFile(file);
     }), handleApiProblem);
@@ -51,7 +53,7 @@ router.get('/:id/export/participants', requirePermission(eventPermission, eventM
     asyncHandler(async function exportParticipants(req, res) {
         // Read the existing projection; exporting never changes registrations.
         const data = await eventController.getParticipantsExtended(getResource(req, 'event'));
-        res.contentType('application/pdf').send(await createParticipantsPdf(data).getBuffer());
+        res.contentType('application/pdf').send(await eventController.createParticipantsPdf(data).getBuffer());
     }));
 
 router.get('/:id/export/invoice-pools/:poolId/shares', isLoggedIn,

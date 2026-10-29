@@ -52,9 +52,9 @@ function invoicePdfCalculationMetric(metric: InvoiceCalculationMetric, result = 
 /** Keep contextual counts and transfer totals compact while naming every visible value. */
 function invoicePdfInlineMetric(metric: InvoiceCalculationMetric): Column {
     return {width: '*', text: [
-        {text: metric.label, fontSize: FONT_SIZE_SMALL, color: '#4b5563'},
-        {text: `: ${metric.value}`, bold: true, fontSize: FONT_SIZE_BASE},
-    ]};
+            {text: metric.label, fontSize: FONT_SIZE_SMALL, color: '#4b5563'},
+            {text: `: ${metric.value}`, bold: true, fontSize: FONT_SIZE_BASE},
+        ]};
 }
 
 /** Separate invoice sections with the same plain heading convention used by the participants PDF. */
@@ -83,9 +83,9 @@ function invoicePdfCalculationFormula(formula: InvoiceCalculationFormula): Conte
 function invoicePdfCalculationSection(section: InvoiceCalculationSection): Content {
     // Every step owns its heading and occupies a separate row; independent equations are never side by side.
     const stack: Content[] = [{text: [
-        {text: wrapInvoicePdfText(section.title), bold: true},
-        ...(section.formula?.note ? [{text: `  ${section.formula.note}`, fontSize: FONT_SIZE_SMALL, color: '#6b7280'}] : []),
-    ], margin: [0, 0, 0, 3]}];
+            {text: wrapInvoicePdfText(section.title), bold: true},
+            ...(section.formula?.note ? [{text: `  ${section.formula.note}`, fontSize: FONT_SIZE_SMALL, color: '#6b7280'}] : []),
+        ], margin: [0, 0, 0, 3]}];
     // The presenter selects which features apply; this adapter only controls their PDF arrangement.
     if (section.formula) stack.push(...invoicePdfCalculationFormula(section.formula));
     if (section.metrics?.length) {

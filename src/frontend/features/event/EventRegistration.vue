@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {fieldAttributes as registrationFields} from "../../../../.generated/api/v1/browser/validateEventRegistrationInput.mjs";
+import {fieldAttributes as registrationFields} from '../../../../.generated/api/v1/browser/validateEventRegistrationInput.mjs';
 import {computed, reactive, ref, watch} from 'vue';
 import {useRoute} from 'vue-router';
 import type {components} from '../../../types/api/v1';

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import {InvoicePoolDistributions} from "../backend/modules/database/entities/event/EventInvoicePool";
-import type {EventInvoiceShare} from "../backend/modules/database/entities/event/EventInvoiceShare";
+import {InvoicePoolDistributions} from '../backend/modules/database/entities/event/EventInvoicePool';
+import type {EventInvoiceShare} from '../backend/modules/database/entities/event/EventInvoiceShare';
 import type {Event} from '../backend/modules/database/entities/event/Event';
 import type {EventInvoicePool} from '../backend/modules/database/entities/event/EventInvoicePool';
 import type {SessionLike} from './PermissionTypes';
@@ -322,7 +322,7 @@ export interface InvoiceSharesPdfData {
     savedAdjustments?: readonly InvoiceAdjustmentInput[];
     shares: Array<Pick<EventInvoiceShare, 'registrationId' | 'baseShareAmount' | 'extraAmount' | 'invoiceCreditAmount'
         | 'paymentCreditAmount' | 'shareAmount' | 'isPaid' | 'paidAt' | 'note'> & {name: string;
-        settledShareNotice?: InvoiceSettledShareNoticePresentation | null}>;
+            settledShareNotice?: InvoiceSettledShareNoticePresentation | null}>;
     generatedAt: string;
     pdfOptions?: InvoiceSharesPdfOptions;
 }

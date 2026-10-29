@@ -35,9 +35,9 @@ async function visit(path: string, handler: (request: Request) => unknown, local
     await router.push(path);
     await router.isReady();
     const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+        }});
     cleanups.push(async () => {
         root.unmount();
         await context.queryClient.cancelQueries();

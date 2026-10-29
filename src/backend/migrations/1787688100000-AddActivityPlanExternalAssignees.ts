@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
+import {MigrationInterface, QueryRunner} from 'typeorm';
 import {
     addColumnIfNotExists,
     dropColumnIfExists,
     tableExists,
-} from "../modules/database/utils/migration-helper";
+} from '../modules/database/utils/migration-helper';
 
 const TABLE = "activity_plans";
 const COLUMN = "allow_external_assignees";

@@ -220,14 +220,14 @@ describe('shared invoice calculation explanation', () => {
         expect(display.description).toContain('example name');
         expect(display.sections.map(section => section.key)).toEqual(['costs', 'distribution-rule', 'base-1']);
         expect(display.sections.find(section => section.key === 'base-1')).toMatchObject({title: 'Base share for Participant A', formula: {
-            terms: [
-                {label: 'Base to distribute', value: '100.00'},
-                {label: 'Nights stayed', value: '3', operator: '×'},
-                {label: 'Share factor', value: '2', operator: '×'},
-                {label: 'Total weight', value: '8', operator: '÷'},
-            ],
-            result: {label: 'Base share', value: '75.00'}, note: 'Rounded up to cents.',
-        }});
+                terms: [
+                    {label: 'Base to distribute', value: '100.00'},
+                    {label: 'Nights stayed', value: '3', operator: '×'},
+                    {label: 'Share factor', value: '2', operator: '×'},
+                    {label: 'Total weight', value: '8', operator: '÷'},
+                ],
+                result: {label: 'Base share', value: '75.00'}, note: 'Rounded up to cents.',
+            }});
         const text = JSON.stringify(display);
         expect(text).not.toContain('Private payer name');
         expect(text).not.toContain('Another private name');
@@ -296,13 +296,13 @@ describe('shared invoice calculation explanation', () => {
             extraAmount: 25, shareAmount: 92.5})], savedAdjustments);
         expect(display.sections.find(section => section.key === 'costs')!.formula).toEqual({
             terms: [{label: 'Invoice costs', value: '100.00'},
-                {label: 'Redistributed surcharges', value: '20.00', operator: '−'},
-                {label: 'Redistributed rebates', value: '-10.00', operator: '−'}],
+            {label: 'Redistributed surcharges', value: '20.00', operator: '−'},
+            {label: 'Redistributed rebates', value: '-10.00', operator: '−'}],
             result: {label: 'Base to distribute', value: '90.00'},
         });
         expect(display.sections.find(section => section.key === 'on-top')!.formula).toEqual({
             terms: [{label: 'Invoice costs', value: '100.00'},
-                {label: 'On-top surcharges', value: '5.00', operator: '+'}],
+            {label: 'On-top surcharges', value: '5.00', operator: '+'}],
             result: {label: 'Full pool total', value: '105.00'},
         });
         expect(JSON.stringify(display)).not.toMatch(/on-top rebates/iu);
@@ -358,7 +358,7 @@ describe('shared invoice calculation explanation', () => {
         explanation.contributions[0].baseShareAmount = 0;
         explanation.contributions[1].baseShareAmount = 100;
         const display = invoicePoolCalculation(explanation, [calculationShare({baseShareAmount: 0, shareAmount: 0}),
-            calculationShare({registrationId: 2, baseShareAmount: 100, shareAmount: 100})]);
+        calculationShare({registrationId: 2, baseShareAmount: 100, shareAmount: 100})]);
         const context = invoicePoolCalculationBreakdown(explanation, []);
         expectFiguresOnly(context);
         expect(context.sections.find(section => section.key === 'attendance')!.metrics).toEqual([
@@ -458,7 +458,7 @@ describe('shared invoice calculation explanation', () => {
             {registrationId: 2, amount: -5, subtractFromPool: false},
         ];
         const shares = [calculationShare({baseShareAmount: 60, shareAmount: 60}),
-            calculationShare({registrationId: 2, baseShareAmount: 40, shareAmount: 40})];
+        calculationShare({registrationId: 2, baseShareAmount: 40, shareAmount: 40})];
         const before = structuredClone({explanation, shares, adjustments});
         const display = invoicePoolCalculation(explanation, shares, adjustments);
         expect(display.sections.find(section => section.key.startsWith('base-'))!.key).toBe('base-2');
@@ -479,8 +479,8 @@ describe('shared invoice calculation explanation', () => {
             {registrationId: 2, amount: 5, subtractFromPool: false},
         ];
         const shares = [calculationShare({baseShareAmount: 54, extraAmount: 10, shareAmount: 64}),
-            calculationShare({registrationId: 2, baseShareAmount: 36, extraAmount: 5,
-                invoiceCreditAmount: 5, paymentCreditAmount: 5, shareAmount: 31})];
+        calculationShare({registrationId: 2, baseShareAmount: 36, extraAmount: 5,
+            invoiceCreditAmount: 5, paymentCreditAmount: 5, shareAmount: 31})];
         const display = invoicePoolCalculation(explanation, shares, adjustments);
         // The own surcharge explains the shared-base deduction and its later addition to this participant.
         expect(display.sections.find(section => section.key.startsWith('base-'))!.key).toBe('base-1');
@@ -518,7 +518,7 @@ describe('shared invoice calculation explanation', () => {
     it('breaks feature ties by saved registration independently of array order and profile names', () => {
         const explanation = ordinaryCalculationExplanation();
         const shares = [calculationShare({baseShareAmount: 60, shareAmount: 60}),
-            calculationShare({registrationId: 2, baseShareAmount: 40, shareAmount: 40})];
+        calculationShare({registrationId: 2, baseShareAmount: 40, shareAmount: 40})];
         const expected = invoicePoolCalculation(explanation, shares);
         const reordered = structuredClone(explanation);
         reordered.contributions.reverse();
@@ -532,7 +532,7 @@ describe('shared invoice calculation explanation', () => {
         const explanation = calculationExplanation();
         explanation.contributions.push({...explanation.contributions[0], registrationId: 3, payerRegistrationId: 3,
             name: 'Exempt name', isExempt: true, effectiveWeight: 0, weightNumerator: '0', baseShareAmount: 0},
-        {...explanation.contributions[0], registrationId: 4, payerRegistrationId: 1, name: 'Covered name'});
+            {...explanation.contributions[0], registrationId: 4, payerRegistrationId: 1, name: 'Covered name'});
         const display = invoicePoolCalculation(explanation, [
             calculationShare({extraAmount: 50, invoiceCreditAmount: 75, paymentCreditAmount: 55, shareAmount: -5}),
             calculationShare({registrationId: 3, baseShareAmount: 0, extraAmount: 5, shareAmount: 5}),
@@ -548,7 +548,7 @@ describe('shared invoice calculation explanation', () => {
         const explanation = calculationExplanation();
         Object.assign(explanation.contributions[0], {factor: 0, effectiveWeight: 0, weightNumerator: '0', baseShareAmount: 0});
         const shares = [calculationShare({baseShareAmount: 0, extraAmount: 20, invoiceCreditAmount: 5, shareAmount: 15}),
-            calculationShare({registrationId: 2, baseShareAmount: 25, shareAmount: 25})];
+        calculationShare({registrationId: 2, baseShareAmount: 25, shareAmount: 25})];
         expect(invoicePoolCalculation(explanation, shares).sections.find(section => section.key.startsWith('base-'))!.key).toBe('base-2');
     });
 
@@ -634,15 +634,15 @@ describe('concrete payer calculation explanation', () => {
         });
         expect(display.sections.find(section => section.key === 'coverage')!.formula).toEqual({
             terms: [{label: 'Base share for Private payer name', value: '75.00'},
-                {label: 'Base share for Another private name', value: '25.00', operator: '+'}],
+            {label: 'Base share for Another private name', value: '25.00', operator: '+'}],
             result: {label: 'Base share', value: '100.00'},
         });
         expect(display.sections.find(section => section.key === 'balance')!).toMatchObject({
             title: 'Calculated balance for Private payer name', formula: {
                 terms: [{label: 'Base share', value: '100.00'},
-                    {label: 'On-top rebates', value: '-5.00', operator: '+'},
-                    {label: 'Invoice credit', value: '20.00', operator: '−'},
-                    {label: 'Previously settled', value: '30.00', operator: '−'}],
+                {label: 'On-top rebates', value: '-5.00', operator: '+'},
+                {label: 'Invoice credit', value: '20.00', operator: '−'},
+                {label: 'Previously settled', value: '30.00', operator: '−'}],
                 result: {label: 'Calculated balance', value: '45.00'},
             },
         });
@@ -709,10 +709,10 @@ describe('concrete payer calculation explanation', () => {
         expect(display.sections.map(section => section.key)).toEqual(['base-1', 'balance']);
         expect(display.sections[0].description).toContain('exempt');
         expect(display.sections[1].formula).toEqual({terms: [
-            {label: 'On-top surcharges', value: '5.00'},
-            {label: 'Invoice credit', value: '10.00', operator: '−'},
-            {label: 'Previously settled', value: '20.00', operator: '−'},
-        ], result: {label: 'Calculated balance', value: '-25.00'}});
+                {label: 'On-top surcharges', value: '5.00'},
+                {label: 'Invoice credit', value: '10.00', operator: '−'},
+                {label: 'Previously settled', value: '20.00', operator: '−'},
+            ], result: {label: 'Calculated balance', value: '-25.00'}});
         expect(JSON.stringify(display)).not.toMatch(/Base to distribute|Nights stayed|Total nights|Total weight|Another private name/u);
         expect({explanation, share, adjustments}).toEqual(before);
     });
@@ -742,13 +742,13 @@ describe('concrete payer calculation explanation', () => {
 
     it.each([
         {reason: 'zero share factor', attendance: 3, factor: 0, totalAttendance: 5, metrics: [
-            {label: 'Nights stayed', value: '3'}, {label: 'Share factor', value: '0'},
-            {label: 'Distribution weight', value: '0'}, {label: 'Base share', value: '0.00'},
-        ]},
+                {label: 'Nights stayed', value: '3'}, {label: 'Share factor', value: '0'},
+                {label: 'Distribution weight', value: '0'}, {label: 'Base share', value: '0.00'},
+            ]},
         {reason: 'zero attendance', attendance: 0, factor: 1, totalAttendance: 2, metrics: [
-            {label: 'Nights stayed', value: '0'}, {label: 'Distribution weight', value: '0'},
-            {label: 'Base share', value: '0.00'},
-        ]},
+                {label: 'Nights stayed', value: '0'}, {label: 'Distribution weight', value: '0'},
+                {label: 'Base share', value: '0.00'},
+            ]},
     ])('names the actual saved inputs behind $reason without inventing a base formula', (scenario) => {
         const explanation = calculationExplanation();
         explanation.attendanceUnits = scenario.totalAttendance;
@@ -784,7 +784,7 @@ describe('concrete payer calculation explanation', () => {
         const display = invoicePayerCalculation(explanation, calculationShare({baseShareAmount: 0, shareAmount: 0}));
         const base = display.sections.find(section => section.key === 'base-1')!;
         expect(base.metrics).toEqual([{label: 'Nights stayed', value: '3'}, {label: 'Share factor', value: '0'},
-            {label: 'Distribution weight', value: '0'}, {label: 'Base share', value: '0.00'}]);
+        {label: 'Distribution weight', value: '0'}, {label: 'Base share', value: '0.00'}]);
         expect(base.formula).toBeUndefined();
         expect(display.sections.find(section => section.key === 'balance')!.metrics)
             .toEqual([{label: 'Calculated balance', value: '0.00'}]);
@@ -808,8 +808,8 @@ describe('concrete payer calculation explanation', () => {
         const display = invoicePayerCalculation(explanation, share);
         expect(display.sections.map(section => section.key)).toEqual(['balance']);
         expect(display.sections[0].formula).toEqual({terms: [
-            {label: 'Previously settled', value: '25.00', operator: '−'},
-        ], result: {label: 'Calculated balance', value: '-25.00'}});
+                {label: 'Previously settled', value: '25.00', operator: '−'},
+            ], result: {label: 'Calculated balance', value: '-25.00'}});
         expect(JSON.stringify(display)).not.toMatch(/Base to distribute|Total weight|Nights stayed|Distribution weight|Invoice costs/u);
     });
 
@@ -836,7 +836,7 @@ describe('saved global calculation breakdown', () => {
         });
         expect(context.sections.find(section => section.key === 'attendance')).toMatchObject({
             metrics: [{label: 'Participants', value: '2'}, {label: 'Total nights', value: '5'},
-                {label: 'Total weight', value: '8'}],
+            {label: 'Total weight', value: '8'}],
         });
         const example = invoicePoolCalculation(explanation, [], []);
         expect(example.sections.map(section => section.key)).toEqual(['costs', 'distribution-rule']);
@@ -874,11 +874,11 @@ describe('saved global calculation breakdown', () => {
         expect(example.sections.find(section => section.key === 'costs')!.description)
             .toContain('both the full pool total and the base to distribute');
         expect(example.sections.find(section => section.key === 'base-1')).toMatchObject({title: 'Base share for Participant A', formula: {
-            terms: [{label: 'Base to distribute', value: '100.00'},
+                terms: [{label: 'Base to distribute', value: '100.00'},
                 {label: scenario.attendanceLabel, value: '3', operator: '×'},
                 {label: scenario.divisorLabel, value: '5', operator: '÷'}],
-            result: {label: 'Base share', value: '60.00'},
-        }});
+                result: {label: 'Base share', value: '60.00'},
+            }});
 
         // A participant's own disclosure remains self-contained and uses only their actual saved identity.
         expect(personal.sections.map(section => section.key)).toEqual(['costs', 'attendance', 'base-1', 'balance']);
@@ -904,8 +904,8 @@ describe('saved global calculation breakdown', () => {
             base: '110.00', full: '100.00', redistributed: [{label: 'Redistributed rebates', value: '-10.00'}],
             onTop: [], unused: /surcharge|on-top/iu},
         {mode: 'cancelling redistributed categories', adjustments: [
-            {registrationId: 1, amount: 10, subtractFromPool: true}, {registrationId: 2, amount: -10, subtractFromPool: true},
-        ], base: '100.00', full: '100.00', redistributed: [{label: 'Redistributed surcharges', value: '10.00'},
+                {registrationId: 1, amount: 10, subtractFromPool: true}, {registrationId: 2, amount: -10, subtractFromPool: true},
+            ], base: '100.00', full: '100.00', redistributed: [{label: 'Redistributed surcharges', value: '10.00'},
             {label: 'Redistributed rebates', value: '-10.00'}], onTop: [], unused: /on-top/iu},
         {mode: 'on-top surcharge', adjustments: [{registrationId: 1, amount: 5, subtractFromPool: false}],
             base: '100.00', full: '105.00', redistributed: [],
@@ -914,17 +914,17 @@ describe('saved global calculation breakdown', () => {
             base: '100.00', full: '95.00', redistributed: [],
             onTop: [{label: 'On-top rebates', value: '-5.00'}], unused: /surcharge|redistribut/iu},
         {mode: 'both cancelling on-top categories', adjustments: [
-            {registrationId: 1, amount: 5, subtractFromPool: false}, {registrationId: 2, amount: -5, subtractFromPool: false},
-        ], base: '100.00', full: '100.00', redistributed: [], onTop: [{label: 'On-top surcharges', value: '5.00'},
+                {registrationId: 1, amount: 5, subtractFromPool: false}, {registrationId: 2, amount: -5, subtractFromPool: false},
+            ], base: '100.00', full: '100.00', redistributed: [], onTop: [{label: 'On-top surcharges', value: '5.00'},
             {label: 'On-top rebates', value: '-5.00'}], unused: /redistribut/iu},
         {mode: 'both adjustment modes', adjustments: [
-            {registrationId: 1, amount: 10, subtractFromPool: true}, {registrationId: 2, amount: 5, subtractFromPool: false},
-        ], base: '90.00', full: '105.00', redistributed: [{label: 'Redistributed surcharges', value: '10.00'}],
+                {registrationId: 1, amount: 10, subtractFromPool: true}, {registrationId: 2, amount: 5, subtractFromPool: false},
+            ], base: '90.00', full: '105.00', redistributed: [{label: 'Redistributed surcharges', value: '10.00'}],
             onTop: [{label: 'On-top surcharges', value: '5.00'}], unused: /rebate/iu},
         {mode: 'both modes with cancelling gross categories', adjustments: [
-            {registrationId: 1, amount: 10, subtractFromPool: true}, {registrationId: 2, amount: -10, subtractFromPool: true},
-            {registrationId: 1, amount: 5, subtractFromPool: false}, {registrationId: 2, amount: -5, subtractFromPool: false},
-        ], base: '100.00', full: '100.00', redistributed: [{label: 'Redistributed surcharges', value: '10.00'},
+                {registrationId: 1, amount: 10, subtractFromPool: true}, {registrationId: 2, amount: -10, subtractFromPool: true},
+                {registrationId: 1, amount: 5, subtractFromPool: false}, {registrationId: 2, amount: -5, subtractFromPool: false},
+            ], base: '100.00', full: '100.00', redistributed: [{label: 'Redistributed surcharges', value: '10.00'},
             {label: 'Redistributed rebates', value: '-10.00'}], onTop: [{label: 'On-top surcharges', value: '5.00'},
             {label: 'On-top rebates', value: '-5.00'}], unused: /Unavailable/iu},
     ])('lists signed figures globally and explains the cost equations in the example for $mode', (scenario) => {
@@ -958,7 +958,7 @@ describe('saved global calculation breakdown', () => {
         if (scenario.redistributed.length) {
             expect(costs.formula).toEqual({terms: [{label: 'Invoice costs', value: '100.00'},
                 ...scenario.redistributed.map(row => ({...row, operator: '−'}))],
-            result: {label: 'Base to distribute', value: scenario.base}});
+                result: {label: 'Base to distribute', value: scenario.base}});
             expect(costs.metrics).toBeUndefined();
         } else {
             expect(costs.metrics).toEqual([{label: scenario.onTop.length ? 'Base to distribute' : 'Invoice costs', value: scenario.base}]);
@@ -967,7 +967,7 @@ describe('saved global calculation breakdown', () => {
         if (scenario.onTop.length) {
             expect(onTop!.formula).toEqual({terms: [{label: 'Invoice costs', value: '100.00'},
                 ...scenario.onTop.map(row => ({...row, operator: '+'}))],
-            result: {label: 'Full pool total', value: scenario.full}});
+                result: {label: 'Full pool total', value: scenario.full}});
             expect(onTop!.description).toContain('do not enter the base to distribute');
             expect(example.sections.map(section => section.key).indexOf('on-top'))
                 .toBeLessThan(example.sections.map(section => section.key).indexOf('costs'));
@@ -1027,7 +1027,7 @@ describe('saved global calculation breakdown', () => {
         ]);
         expect(example.sections.find(section => section.key === 'costs')!.formula).toEqual({
             terms: [{label: 'Invoice costs', value: '100.00'},
-                {label: 'Redistributed adjustments', value: `${scenario.net}.00`, operator: '−'}],
+            {label: 'Redistributed adjustments', value: `${scenario.net}.00`, operator: '−'}],
             result: {label: 'Base to distribute', value: scenario.base},
         });
         expect(example.sections.some(section => section.key === 'on-top')).toBe(false);
@@ -1042,7 +1042,7 @@ describe('saved global calculation breakdown', () => {
         explanation.adjustmentTotals = {redistributedSurcharges: 10, redistributedRebates: 0,
             additionalSurcharges: 0, additionalRebates: -5};
         const fallback = [{registrationId: 1, amount: 5, subtractFromPool: true},
-            {registrationId: 2, amount: 20, subtractFromPool: false}];
+        {registrationId: 2, amount: 20, subtractFromPool: false}];
         const before = structuredClone({explanation, fallback});
         const context = invoicePoolCalculationBreakdown(explanation, fallback);
         const example = invoicePoolCalculation(explanation, [], fallback);
@@ -1054,12 +1054,12 @@ describe('saved global calculation breakdown', () => {
         ]);
         expect(example.sections.find(section => section.key === 'costs')!.formula).toEqual({
             terms: [{label: 'Invoice costs', value: '100.00'},
-                {label: 'Redistributed surcharges', value: '10.00', operator: '−'}],
+            {label: 'Redistributed surcharges', value: '10.00', operator: '−'}],
             result: {label: 'Base to distribute', value: '90.00'},
         });
         expect(example.sections.find(section => section.key === 'on-top')!.formula).toEqual({
             terms: [{label: 'Invoice costs', value: '100.00'},
-                {label: 'On-top rebates', value: '-5.00', operator: '+'}],
+            {label: 'On-top rebates', value: '-5.00', operator: '+'}],
             result: {label: 'Full pool total', value: '95.00'},
         });
         expect(JSON.stringify({context, example})).not.toMatch(/On-top surcharges|20\.00/u);
@@ -1129,8 +1129,8 @@ describe('retained settlement responsibility notices', () => {
 
     it('uses explicit participant data or a localized identity when a saved covering payer has no name', () => {
         const pool: InvoiceAppliedTakeoversInput = {status: 'CLOSED', calculationSnapshot: {
-            settledRegistrationIds: [1], takeovers: [{payerRegistrationId: 2, beneficiaryRegistrationId: 1}],
-        }};
+                settledRegistrationIds: [1], takeovers: [{payerRegistrationId: 2, beneficiaryRegistrationId: 1}],
+            }};
         expect(invoiceSettledShareNotice(pool, calculationShare(), [{id: 2, name: 'Known payer'}])!.label)
             .toBe('Covered by Known payer · settlement retained');
         expect(invoiceSettledShareNotice(pool, calculationShare())!.label)
@@ -1149,9 +1149,9 @@ describe('retained settlement responsibility notices', () => {
 
     it.each(['exempt', 'covered'] as const)('addresses the %s participant directly while leaving organizer wording unchanged', (reason) => {
         const pool: InvoiceAppliedTakeoversInput = {status: 'CLOSED', calculationSnapshot: {
-            settledRegistrationIds: [1], assignments: [{registrationId: 1, isExempt: true}],
-            takeovers: reason === 'covered' ? [{payerRegistrationId: 2, beneficiaryRegistrationId: 1}] : [],
-        }};
+                settledRegistrationIds: [1], assignments: [{registrationId: 1, isExempt: true}],
+                takeovers: reason === 'covered' ? [{payerRegistrationId: 2, beneficiaryRegistrationId: 1}] : [],
+            }};
         const participant = invoiceSettledShareNotice(pool, calculationShare(), [{id: 2, name: 'Known payer'}], 'participant')!;
         expect(participant.description).toContain(reason === 'covered' ? 'Known payer now covers your share' : 'You are now exempt');
         expect(participant.description).toContain('Your previously recorded payments or refunds stay with you');
@@ -1243,13 +1243,13 @@ describe('applied invoice coverage', () => {
 
     it('compares pair identity instead of order, duplicate entries or unrelated current participant names', () => {
         const pool: InvoiceAppliedTakeoversInput = {status: 'CLOSED', takeovers: [
-            {payerRegistrationId: 5, beneficiaryRegistrationId: 3},
-            {payerRegistrationId: 1, beneficiaryRegistrationId: 4},
-            {payerRegistrationId: 1, beneficiaryRegistrationId: 4},
-        ], calculationSnapshot: {takeovers: [
-            {payerRegistrationId: 1, beneficiaryRegistrationId: 4},
-            {payerRegistrationId: 5, beneficiaryRegistrationId: 3},
-        ]}};
+                {payerRegistrationId: 5, beneficiaryRegistrationId: 3},
+                {payerRegistrationId: 1, beneficiaryRegistrationId: 4},
+                {payerRegistrationId: 1, beneficiaryRegistrationId: 4},
+            ], calculationSnapshot: {takeovers: [
+                    {payerRegistrationId: 1, beneficiaryRegistrationId: 4},
+                    {payerRegistrationId: 5, beneficiaryRegistrationId: 3},
+                ]}};
         const before = structuredClone(pool);
         expect(invoiceHasPendingTakeovers(pool)).toBe(false);
         expect(invoiceAppliedTakeovers(pool)).toEqual(before.calculationSnapshot!.takeovers);
@@ -1287,9 +1287,9 @@ describe('contextual invoice pool summaries', () => {
     it('retains all gross adjustment categories and a distinct base when each mode nets to zero', () => {
         const summary = invoicePoolSummary({status: 'OPEN', totalAmount: 100, invoiceAmount: 100, payableAmount: 100,
             surcharges: [{registrationId: 1, amount: 10, subtractFromPool: true},
-                {registrationId: 2, amount: -10, subtractFromPool: true},
-                {registrationId: 1, amount: 5, subtractFromPool: false},
-                {registrationId: 2, amount: -5, subtractFromPool: false}]});
+            {registrationId: 2, amount: -10, subtractFromPool: true},
+            {registrationId: 1, amount: 5, subtractFromPool: false},
+            {registrationId: 2, amount: -5, subtractFromPool: false}]});
         expect(summary.primary.map(row => [row.key, row.amount])).toEqual([['totalAmount', 100], ['payableAmount', 100]]);
         expect(summary.details.map(row => [row.key, row.amount])).toEqual([
             ['invoiceAmount', 100], ['redistributedSurcharges', 10], ['redistributedRebates', -10],
@@ -1315,9 +1315,9 @@ describe('contextual invoice pool summaries', () => {
 
     it('preserves zero due totals and recorded payments or refunds after every share is settled', () => {
         const summary = invoicePoolSummary({status: 'CLOSED', totalAmount: 10, shares: [
-            calculationShare({shareAmount: 10, isPaid: true}),
-            calculationShare({registrationId: 2, shareAmount: -5, isPaid: true}),
-        ]});
+                calculationShare({shareAmount: 10, isPaid: true}),
+                calculationShare({registrationId: 2, shareAmount: -5, isPaid: true}),
+            ]});
         expect(summary.primary.map(row => [row.key, row.amount])).toEqual([
             ['totalAmount', 10], ['outstandingAmount', 0], ['creditAmount', 0],
         ]);
@@ -1326,9 +1326,9 @@ describe('contextual invoice pool summaries', () => {
 
     it('counts only transfers recorded in this calculation and retains opposing prior credits separately', () => {
         const shares = [calculationShare({shareAmount: '15.00', paymentCreditAmount: 20, invoiceCreditAmount: 2, isPaid: 1}),
-            calculationShare({registrationId: 2, shareAmount: '-5.00', paymentCreditAmount: -20, isPaid: true}),
-            calculationShare({registrationId: 3, shareAmount: 7, isPaid: false}),
-            calculationShare({registrationId: 4, shareAmount: -3, isPaid: 0})];
+        calculationShare({registrationId: 2, shareAmount: '-5.00', paymentCreditAmount: -20, isPaid: true}),
+        calculationShare({registrationId: 3, shareAmount: 7, isPaid: false}),
+        calculationShare({registrationId: 4, shareAmount: -3, isPaid: 0})];
         const before = structuredClone(shares);
         expect(invoiceSettlementRows(shares)).toEqual([
             {key: 'outstandingAmount', label: 'Payments due', amount: 7},
@@ -1344,7 +1344,7 @@ describe('contextual invoice pool summaries', () => {
     it('aggregates decimal strings in cents and omits inapplicable settlement detail rows', () => {
         expect(invoiceSettlementRows([calculationShare({shareAmount: '0.10'}), calculationShare({shareAmount: '0.20'})]))
             .toEqual([{key: 'outstandingAmount', label: 'Payments due', amount: 0.3},
-                {key: 'creditAmount', label: 'Refunds due', amount: 0}]);
+            {key: 'creditAmount', label: 'Refunds due', amount: 0}]);
         expect(invoiceSettlementRows([])).toEqual([]);
     });
 });

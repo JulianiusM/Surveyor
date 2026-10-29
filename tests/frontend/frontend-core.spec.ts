@@ -41,7 +41,7 @@ function sessionless(): components['schemas']['SessionView'] {
 }
 function response(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
     return new Response(JSON.stringify(data), {status, headers: {'content-type': 'application/json',
-        'X-Surveyor-Context': scope.context, ...headers}});
+            'X-Surveyor-Context': scope.context, ...headers}});
 }
 function deferred<T>() {
     let resolve!: (result: T) => void;
@@ -70,7 +70,7 @@ describe('sessionless initial frontend scope', () => {
         // Public recovery can finish without creating a session. Its document
         // completion belongs to this same null scope and still survives hydration.
         const completed = {...bootstrap, pageCompletion: {context: null, destination: '/help',
-            messageKey: 'auth.recoverySent' as const, kind: 'success' as const}};
+                messageKey: 'auth.recoverySent' as const, kind: 'success' as const}};
         expect(await decodeBootstrap(JSON.parse(serializeBootstrap(completed)))).toEqual(completed);
     });
 
@@ -297,7 +297,7 @@ describe('typed frontend transport', () => {
             status: 400, confirmed: false},
         {name: 'mismatched rejection status', body: {...rejection, status: 401}, status: 400, confirmed: false},
         {name: 'known server failure', body: {...rejection, status: 500, code: 'INTERNAL_ERROR',
-            messageKey: 'api:errors.INTERNAL_ERROR'}, status: 500, confirmed: false},
+                messageKey: 'api:errors.INTERNAL_ERROR'}, status: 500, confirmed: false},
     ])('classifies $name through the generated mutation client', async ({body, status, confirmed}) => {
         const send = vi.fn(async () => response(body, status));
         const api = new PackingApi(new FrontendApi(() => true, vi.fn(), send));
@@ -316,9 +316,9 @@ describe('typed frontend transport', () => {
     it.each([
         {name: 'malformed unauthorized response', body: {}, invalidate: false},
         {name: 'safe future unauthorized response', body: {...rejection, status: 401, code: 'FUTURE_CODE',
-            messageKey: 'api:errors.FUTURE_CODE'}, invalidate: false},
+                messageKey: 'api:errors.FUTURE_CODE'}, invalidate: false},
         {name: 'known authentication rejection', body: {...rejection, status: 401, code: 'AUTH_REQUIRED',
-            messageKey: 'api:errors.AUTH_REQUIRED'}, invalidate: true},
+                messageKey: 'api:errors.AUTH_REQUIRED'}, invalidate: true},
     ])('uses machine-code authority for $name', async ({body, invalidate: losesIdentity}) => {
         const invalidate = vi.fn();
         const api = new FrontendApi(() => true, invalidate, vi.fn(async () => response(body, 401)));
@@ -435,13 +435,13 @@ describe('typed frontend transport', () => {
             // Headers can arrive before a native body stream completes. Keep that
             // actual generated decoder active; an early fetch-only guard is insufficient.
             const stream = new ReadableStream<Uint8Array>({start(controller) {
-                finishBody = function deliverBody(): void {
-                    controller.enqueue(new TextEncoder().encode(JSON.stringify(body)));
-                    controller.close();
-                };
-            }});
+                    finishBody = function deliverBody(): void {
+                        controller.enqueue(new TextEncoder().encode(JSON.stringify(body)));
+                        controller.close();
+                    };
+                }});
             const initial = new Response(stream, {status, headers: {'Content-Type': 'application/json',
-                'X-Surveyor-Context': scope.context, ...headers}});
+                    'X-Surveyor-Context': scope.context, ...headers}});
             const decode = vi.spyOn(initial, 'text');
             const invalidate = vi.fn();
             const request = vi.fn(async function readFixture(_input: RequestInfo | URL): Promise<Response> {
@@ -693,17 +693,17 @@ describe('identity, refresh and local state boundaries', () => {
     it('evicts denied-list projections and containing query families while retaining unrelated resources and actors', async () => {
         const context = createFrontendContext({session: session()}, false);
         const removed = [packingKeys.detail(scope.context, listId),
-            packingKeys.metadata(scope.context, listId), packingKeys.profiles(scope.context, listId, 'organizer'),
-            packingKeys.guest(scope.context, listId),
-            overviewKeys.region(scope.context, 'en', {collection: 'owner', region: 'main'}),
-            overviewKeys.region(scope.context, 'de', {collection: 'participant', region: 'hidden'}),
-            packingKeys.eventPage(scope.context, 'en', '', {selectedId: listId})];
+        packingKeys.metadata(scope.context, listId), packingKeys.profiles(scope.context, listId, 'organizer'),
+        packingKeys.guest(scope.context, listId),
+        overviewKeys.region(scope.context, 'en', {collection: 'owner', region: 'main'}),
+        overviewKeys.region(scope.context, 'de', {collection: 'participant', region: 'hidden'}),
+        packingKeys.eventPage(scope.context, 'en', '', {selectedId: listId})];
         const retained = [packingKeys.detail(scope.context, itemId),
-            packingKeys.detail('other-actor', listId), overviewKeys.all('other-actor'),
-            ['v1', scope.context, 'en', 'help']];
+        packingKeys.detail('other-actor', listId), overviewKeys.all('other-actor'),
+        ['v1', scope.context, 'en', 'help']];
         for (const key of [...removed, ...retained]) context.queryClient.setQueryData(key, 'private snapshot');
         await evictQueryFamilies(context.queryClient, [packingKeys.resource(scope.context, listId),
-            packingKeys.events(scope.context), overviewKeys.all(scope.context)]);
+        packingKeys.events(scope.context), overviewKeys.all(scope.context)]);
         for (const key of removed) expect(context.queryClient.getQueryData(key)).toBeUndefined();
         for (const key of retained) expect(context.queryClient.getQueryData(key)).toBe('private snapshot');
         context.queryClient.clear();
@@ -715,11 +715,11 @@ describe('identity, refresh and local state boundaries', () => {
         const key = overviewKeys.region(scope.context, 'en', {collection: 'owner', region: 'main'});
         let signal!: AbortSignal;
         const pending = context.queryClient.fetchQuery({queryKey: key, queryFn: (query) => {
-            signal = query.signal;
-            return result.promise;
-        }}).catch(() => undefined);
+                signal = query.signal;
+                return result.promise;
+            }}).catch(() => undefined);
         await evictQueryFamilies(context.queryClient, [packingKeys.resource(scope.context, listId),
-            packingKeys.events(scope.context), overviewKeys.all(scope.context)]);
+        packingKeys.events(scope.context), overviewKeys.all(scope.context)]);
         expect(signal.aborted).toBe(true);
         result.resolve({title: 'Private title from before revocation'});
         await pending;
@@ -905,7 +905,7 @@ describe('identity, refresh and local state boundaries', () => {
 
     it('serializes hostile text as inert bootstrap JSON without changing the decoded value', () => {
         const bootstrap = {session: {...session(), kind: 'account' as const,
-            activeProfile: {id: itemId, name: '</script><script>alert(1)</script>&\u2028'}}};
+                activeProfile: {id: itemId, name: '</script><script>alert(1)</script>&\u2028'}}};
         const encoded = serializeBootstrap(bootstrap);
         expect(encoded).not.toContain('<');
         expect(encoded).not.toContain('&');

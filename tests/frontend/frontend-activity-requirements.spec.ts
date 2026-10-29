@@ -10,6 +10,7 @@ import I18NextVue from 'i18next-vue';
 import type {components} from '../../src/types/api/v1';
 import {createFrontendContext, observeInitialDocument, frontendContextKey} from '../../src/frontend/app/context';
 import {activityKeys} from '../../src/frontend/app/queryKeys';
+import {ApiFailure} from '../../src/frontend/app/transport';
 import ActivityRequirements from '../../src/frontend/features/activity/ActivityRequirements.vue';
 import ActivityPage from '../../src/frontend/features/activity/ActivityPage.vue';
 import {analyzeRequirementDraft, createRequirementDraft, requirementInput, requirementAnalysisInput} from '../../src/frontend/features/activity/requirements';
@@ -70,6 +71,7 @@ function linkedPlan(config: components['schemas']['ActivityRequirements']): comp
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
     for (const cleanup of cleanups.splice(0)) await cleanup();
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     document.body.innerHTML = '';
@@ -86,15 +88,15 @@ async function mounted(handler: (request: Request) => Promise<Response>, compone
     const context = createFrontendContext({session}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/activity/:planId', component, props: component === ActivityRequirements},
-        {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
-    ]});
+            {path: '/activity/:planId', component, props: component === ActivityRequirements},
+            {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
+        ]});
     await router.push('/activity/' + planId);
     const stopInitial = observeInitialDocument(context, router);
     const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+        }});
     cleanups.push(async () => { root.unmount(); stopInitial(); await context.queryClient.cancelQueries(); context.queryClient.clear(); });
     await flushPromises();
     await vi.waitFor(() => expect(root.find(readySelector).exists()).toBe(true));
@@ -103,6 +105,96 @@ async function mounted(handler: (request: Request) => Promise<Response>, compone
 }
 
 describe('Activity requirements production frontend', () => {
+    it('retains the actual prior page through cache GC and releases it on explicit eviction', async () => {
+        const saved = configuration();
+        const {root, context, request} = await mounted(readPage, ActivityRequirements, '[data-requirement-readonly]');
+        const previousKey = activityKeys.requirements(session.context, planId);
+        const snapshot = context.queryClient.getQueryData(previousKey);
+        context.queryClient.setQueryDefaults(previousKey, {retry: false});
+        await root.findAll('button').find(button => button.text() === 'Next page')!.trigger('click');
+        await flushPromises();
+        expect(root.find('[data-requirement-readonly]').exists()).toBe(true);
+
+        // A replacement failure may outlast inactive GC. The retained Query is
+        // still registered and has a disabled lease, without starting more GETs.
+        context.visible.value = false;
+        await flushPromises();
+        const reads = request.mock.calls.length;
+        vi.useFakeTimers();
+        await vi.advanceTimersByTimeAsync(61_000);
+        expect(context.queryClient.getQueryData(previousKey)).toBe(snapshot);
+        expect(root.find('[data-requirement-readonly]').exists()).toBe(true);
+        expect(request).toHaveBeenCalledTimes(reads);
+
+        // Explicit retirement owns the snapshot lifetime, even while the new
+        // page is idle after failure. A detached DTO cannot revive that table.
+        context.queryClient.removeQueries({queryKey: previousKey, exact: true});
+        await flushPromises();
+        expect(context.queryClient.getQueryData(previousKey)).toBeUndefined();
+        expect(root.find('[data-requirement-readonly]').exists()).toBe(false);
+
+        async function readPage(input: Request): Promise<Response> {
+            if (Number(new URL(input.url).searchParams.get('page')) > 1) throw new TypeError('Temporary page failure');
+            return json({...saved, paging: {readOnly: true, section: 'stays', page: 1, pages: 2,
+                    total: 105, pageSize: 100, maxDurationDays: 366}});
+        }
+    });
+
+    it('retires a pending page placeholder on eviction and accepts only its fresh replacement', async () => {
+        const saved = configuration();
+        let complete!: (response: Response) => void;
+        const nextPage = new Promise<Response>(resolve => { complete = resolve; });
+        const fresh = {...saved, stayRequirements: [{stayDays: 101, requiredShifts: 3}],
+            paging: {readOnly: true, section: 'stays', page: 2, pages: 2, total: 105, pageSize: 100, maxDurationDays: 366}};
+        const {root, context, request} = await mounted(async input => Number(new URL(input.url).searchParams.get('page')) > 1
+            ? nextPage : json({...saved, paging: {...fresh.paging, page: 1}}), ActivityRequirements, '[data-requirement-readonly]');
+        try {
+            await root.findAll('button').find(button => button.text() === 'Next page')!.trigger('click');
+            await flushPromises();
+            expect(request).toHaveBeenCalledTimes(2);
+            expect(root.find('[data-requirement-readonly]').exists()).toBe(true);
+            context.queryClient.removeQueries({queryKey: activityKeys.requirements(session.context, planId), exact: true});
+            await flushPromises();
+            expect(root.find('[data-requirement-readonly]').exists()).toBe(false);
+            complete(json(fresh));
+            await flushPromises();
+            expect(root.get('[data-requirement-readonly] tbody').text()).toContain('101');
+            expect(root.findAll('[data-requirement-readonly] tbody tr')).toHaveLength(1);
+        } finally { complete(json(fresh)); }
+    });
+
+    it.each(['denial', 'cleared', 'actor', 'resource', 'unmount'] as const)(
+        'releases the registered prior-page lease after %s retirement', async retirement => {
+            const saved = configuration();
+            const {root, context, router} = await mounted(readPage, ActivityRequirements, '[data-requirement-readonly]');
+            const previousKey = activityKeys.requirements(session.context, planId);
+            const previous = context.queryClient.getQueryCache().find({queryKey: previousKey, exact: true})!;
+            context.queryClient.setQueryDefaults(previousKey, {retry: false});
+            await root.findAll('button').find(button => button.text() === 'Next page')!.trigger('click');
+            await flushPromises();
+            expect(root.find('[data-requirement-readonly]').exists()).toBe(true);
+            expect(previous.getObserversCount()).toBe(1);
+
+            // Exercise real cache-state and mounted scope transitions. These
+            // fixture changes never replace the production retention owner.
+            if (retirement === 'denial') previous.setState({error: new ApiFailure(403, null, null, 'Denied', true), status: 'error'});
+            if (retirement === 'cleared') previous.setState({data: undefined});
+            if (retirement === 'actor') context.session.value = {...session, context: 'replacement-requirement-actor'};
+            if (retirement === 'resource') await router.push('/activity/' + outsideId);
+            if (retirement === 'unmount') await router.push('/');
+            await flushPromises();
+            expect(root.find('[data-requirement-readonly]').exists()).toBe(false);
+            expect(previous.getObserversCount()).toBe(0);
+
+            async function readPage(input: Request): Promise<Response> {
+                const url = new URL(input.url);
+                if (Number(url.searchParams.get('page')) > 1 || !url.pathname.includes(planId)) throw new TypeError('Temporary page failure');
+                return json({...saved, paging: {readOnly: true, section: 'stays', page: 1, pages: 2,
+                        total: 105, pageSize: 100, maxDurationDays: 366}});
+            }
+        },
+    );
+
     it('reads only requested 100-row pages and never creates an oversized editable duration table', async () => {
         // Observe the real allocation boundary without substituting its result.
         // Hidden DOM alone cannot prove that a huge draft was never allocated.
@@ -479,7 +571,7 @@ describe('Activity requirements production frontend', () => {
             writes.push(await request.json() as components['schemas']['ActivityRequirementsInput']);
             return new Response(JSON.stringify({type: 'about:blank', title: 'Invalid settings', status: 400,
                 detail: 'Reload these requirements before saving.', requestId: 'override-removal-rejected'}),
-            {status: 400, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
+                {status: 400, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
         });
         await wrapper.get('.override-row button').trigger('click');
         await wrapper.get('[data-requirements-save]').trigger('click');
@@ -546,7 +638,7 @@ describe('Activity requirements production frontend', () => {
             if (!denied) return json(configuration());
             return new Response(JSON.stringify({type: 'about:blank', title: 'Forbidden', status: 403, detail: 'Not allowed',
                 requestId: 'fixture', code: 'FORBIDDEN', messageKey: 'api:errors.FORBIDDEN', params: {}}),
-            {status: 403, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
+                {status: 403, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
         });
         await wrapper.get('#stayRequirement-2').setValue('7');
         denied = true;

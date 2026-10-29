@@ -52,7 +52,7 @@ async function expectActivityRequirementWording(requirements: Locator, days: num
             value: day === 1 ? '0' : day === days ? '2' : '1', disabled: false}]);
     }
     for (const [label, control] of [[requirements.locator('label[for="requiredShifts"]'), baseline],
-        [requirements.getByText('Required shifts', {exact: true}), override]] as const) {
+    [requirements.getByText('Required shifts', {exact: true}), override]] as const) {
         const labelBounds = (await label.boundingBox())!;
         const controlBounds = (await control.boundingBox())!;
         expect(labelBounds.width).toBeGreaterThan(0);
@@ -180,7 +180,7 @@ for (const width of [1280, 390]) {
             await expect(page.locator('#recommendationScheduleView [data-rec-id]')).toHaveCount(1);
             await captureAdvancedActivityPresentation(page, info, `${prefix}-advanced-rules`,
                 page.locator('#requirementPanel'), ['.card-header', 'p', 'strong', 'small', 'h6', 'label',
-                    'input:not([type="hidden"])', 'select', 'button', '.badge']);
+                'input:not([type="hidden"])', 'select', 'button', '.badge']);
             await captureAdvancedActivityPresentation(page, info, `${prefix}-advanced-coverage`,
                 page.locator('#requirement-participant-status'), ['p', 'input', 'button', '.badge', '.participant-status-cell']);
             // Protect this known warning's rendered readiness independently of
@@ -189,7 +189,7 @@ for (const width of [1280, 390]) {
                 .getByText('This slot is on your arrival day.', {exact: true})).toBeVisible();
             await captureAdvancedActivityPresentation(page, info, `${prefix}-advanced-recommendations`,
                 page.locator('#recommendationPanel'), ['.card-header', 'h5', 'p', '.status-notice', 'small', '.badge', 'th', 'button',
-                    '[data-slot-id]', '[data-rec-id]', '[data-recommendation-warnings]']);
+                '[data-slot-id]', '[data-rec-id]', '[data-recommendation-warnings]']);
 
             const opener = page.locator(`.slot[data-slot-id="${plan.view.slots[1]!.id}"] [data-add-recommendation]`);
             const modal = page.locator('#addRecommendationModal');
@@ -662,8 +662,8 @@ test('relinks an Event with live advanced drafts and retires those workspaces on
     const plan = await createAdvancedActivityForE2E(page.request, {assigned: true, recommendation: true});
     const destination = await createFrontendEventFixture(page.request);
     expect((await page.request.put(`/api/v1/events/${destination.id}/registration`, {headers: await commandHeadersForE2E(page.request), data: {
-        arrivalDate: plan.attendance.startDate, departureDate: plan.attendance.endDate, dietary: ['MEAT'],
-    }})).status()).toBe(200);
+            arrivalDate: plan.attendance.startDate, departureDate: plan.attendance.endDate, dietary: ['MEAT'],
+        }})).status()).toBe(200);
     await openActivityRulesForE2E(page, plan);
     await page.locator('#requiredShifts').fill('7');
     const requirementInput = await page.locator('#requiredShifts').elementHandle();

@@ -1,5 +1,5 @@
-import {DataSource} from "typeorm";
-import {entities, migrations, subscribers} from "./src/backend/modules/database/__index__";
+import {DataSource} from 'typeorm';
+import {entities, migrations, subscribers} from './src/backend/modules/database/__index__';
 
 export const AppDataSource = new DataSource({
     type: (process.env.DB_TYPE as "mariadb" | "mysql") || 'mysql',

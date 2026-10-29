@@ -21,33 +21,33 @@ router.get('/recovery', asyncHandler(async function renderGuestRecovery(req, res
 router.get('/:guestId/login/:token', asyncHandler(/** Complete the emailed GET
  * capability login through the existing identity owner. Render only known token
  * denial; adopt durable feedback/session before redirect without another save. */
-async function enterFrontendGuest(req, res) {
-    applyPresentationLocale(req);
-    const destination = frontendReturn(req, req.query.next);
-    let committed: IdentityCompletionReceipt<string>;
-    try {
-        // Emailed capability links have always authenticated on GET. Keep that workflow
-        // with its established completion and destination.
-        /** Prepare feedback after token admission on isolated staging, preserving the existing 302. */
-        function prepareGuestCompletion(staged: Request['session']): string {
-            flashPageNotice(req, {kind: 'success', messageKey: 'auth.loginDone'}, staged);
-            return destination;
+    async function enterFrontendGuest(req, res) {
+        applyPresentationLocale(req);
+        const destination = frontendReturn(req, req.query.next);
+        let committed: IdentityCompletionReceipt<string>;
+        try {
+            // Emailed capability links have always authenticated on GET. Keep that workflow
+            // with its established completion and destination.
+            /** Prepare feedback after token admission on isolated staging, preserving the existing 302. */
+            function prepareGuestCompletion(staged: Request['session']): string {
+                flashPageNotice(req, {kind: 'success', messageKey: 'auth.loginDone'}, staged);
+                return destination;
+            }
+            const actor = await captureApiActor(req);
+            committed = await userController.loginGuestWithSession(String(req.params.guestId), String(req.params.token), req,
+                {context: actor.context, prepareResult: prepareGuestCompletion});
+        } catch (error) {
+            if (!(error instanceof ExpectedError) || error.cause !== 'TOKEN_INVALID') throw error;
+            const state = await bootstrap(req);
+            state.pageEntry = {kind: 'denied', status: 401, messageKey: 'auth.invalidGuestLink'};
+            res.status(401);
+            await renderFrontend(res, req.originalUrl, state);
+            return;
         }
-        const actor = await captureApiActor(req);
-        committed = await userController.loginGuestWithSession(String(req.params.guestId), String(req.params.token), req,
-            {context: actor.context, prepareResult: prepareGuestCompletion});
-    } catch (error) {
-        if (!(error instanceof ExpectedError) || error.cause !== 'TOKEN_INVALID') throw error;
-        const state = await bootstrap(req);
-        state.pageEntry = {kind: 'denied', status: 401, messageKey: 'auth.invalidGuestLink'};
-        res.status(401);
-        await renderFrontend(res, req.originalUrl, state);
-        return;
-    }
-    // The admitted identity and notice are already durable; do not resave a
-    // possibly superseded actor or classify redirect delivery as token rejection.
-    req.session = committed.session;
-    res.redirect(committed.result);
-}));
+        // The admitted identity and notice are already durable; do not resave a
+        // possibly superseded actor or classify redirect delivery as token rejection.
+        req.session = committed.session;
+        res.redirect(committed.result);
+    }));
 
 export default router;

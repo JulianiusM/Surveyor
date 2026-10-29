@@ -43,7 +43,7 @@ export class PackingApi {
      * The transport validates actor scope before accepting a 304; the feature
      * query owner ensures that previous belongs to this same resource family. */
     async packing(listId: string, scope: FrontendRequestScope, signal?: AbortSignal,
-                  previous?: FrontendRead<List>): Promise<FrontendRead<List>> {
+        previous?: FrontendRead<List>): Promise<FrontendRead<List>> {
         const transport = this.transport;
         function readPacking() {
             return transport.client.GET('/packing-lists/{listId}', {
@@ -57,7 +57,7 @@ export class PackingApi {
      * Missing/malformed ETags cannot authorize an editor, even when the body
      * passed its generated shape validator or a previous snapshot is available. */
     async metadata(listId: string, scope: FrontendRequestScope, signal?: AbortSignal,
-                   previous?: FrontendRead<Metadata>): Promise<FrontendRead<Metadata>> {
+        previous?: FrontendRead<Metadata>): Promise<FrontendRead<Metadata>> {
         const transport = this.transport;
         function readMetadata() {
             return transport.client.GET('/packing-lists/{listId}/metadata', {
@@ -73,7 +73,7 @@ export class PackingApi {
      * A confirmed response must include newly admitted header evidence as well as
      * valid field data; neither the previous token nor saved values renew authority. */
     async saveMetadata(listId: string, patch: components['schemas']['BasicEntityMetadataPatch'], etag: string,
-                       scope: FrontendRequestScope): Promise<FrontendRead<Metadata>> {
+        scope: FrontendRequestScope): Promise<FrontendRead<Metadata>> {
         // Structural validation precedes transport; business/field checks remain server-owned.
         if (!validateBasicEntityMetadataPatch(patch)) throw generatedInputError(validateBasicEntityMetadataPatch.errors, path => packingInputField(path));
 
@@ -109,7 +109,7 @@ export class PackingApi {
     /** Creation admission is distinct from the public duplication projection. The caller supplies
      * its exact return destination; the server owns account admission and bounded destination policy. */
     async createEntry(scope: FrontendRequestScope, signal?: AbortSignal,
-                      returnTo?: string, eventId?: string): Promise<components['schemas']['EntityCreationEntry']> {
+        returnTo?: string, eventId?: string): Promise<components['schemas']['EntityCreationEntry']> {
         const transport = this.transport;
         function readCreationEntry() {
             return transport.client.GET('/packing-lists/create-entry', {
@@ -122,7 +122,7 @@ export class PackingApi {
     /** Detail and explicit guest routes deliberately have different admission. Never
      * infer either route from session presence or from permissions on the other projection. */
     async resourceEntry(listId: string, view: 'detail' | 'guest', scope: FrontendRequestScope,
-                        signal?: AbortSignal): Promise<components['schemas']['EntityResourceEntry']> {
+        signal?: AbortSignal): Promise<components['schemas']['EntityResourceEntry']> {
         const transport = this.transport;
         function readResourceEntry() {
             return transport.client.GET('/packing-lists/{listId}/entry', {
@@ -136,7 +136,7 @@ export class PackingApi {
      * is independently admitted and part of this read's key. Source assignments,
      * administrator grants and files stay excluded; copied values grant no creation permission. */
     async duplicate(listId: string, scope: FrontendRequestScope, signal?: AbortSignal,
-                    eventId?: string): Promise<components['schemas']['PackingDuplicate']> {
+        eventId?: string): Promise<components['schemas']['PackingDuplicate']> {
         const transport = this.transport;
         function readDuplicate() {
             return transport.client.GET('/packing-lists/{listId}/duplicate', {
@@ -151,7 +151,7 @@ export class PackingApi {
      * Only a validated creation receipt confirms success, and uncertain delivery is left to
      * the shared command owner without replaying this non-idempotent request. */
     async createPacking(input: components['schemas']['PackingCreateInput'], image: File | null,
-                        scope: FrontendRequestScope, itemRows?: readonly number[]): Promise<components['schemas']['EntityCreationResult']> {
+        scope: FrontendRequestScope, itemRows?: readonly number[]): Promise<components['schemas']['EntityCreationResult']> {
         // Validate machine data before adapting it to the established multipart envelope.
         // The image is a separate part rather than a second handwritten creation schema.
         if (!validatePackingCreateInput(input)) {
@@ -179,7 +179,7 @@ export class PackingApi {
     /** Existing-item edits retain their own scalar rules and comparison token;
      * field feedback does not replace the shared conflict/draft lifecycle. */
     async updateItem(listId: string, itemId: string, patch: components['schemas']['PackingItemPatch'], token: string,
-                     scope: FrontendRequestScope) {
+        scope: FrontendRequestScope) {
         if (!validatePackingItemPatch(patch)) throw generatedInputError(validatePackingItemPatch.errors, path => packingInputField(path));
         return this.transport.read('updatePackingItem', await this.transport.client.PATCH('/packing-lists/{listId}/items/{itemId}', {
             params: {path: {listId, itemId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: patch, cache: 'no-store',
@@ -208,7 +208,7 @@ export class PackingApi {
      * The picker receives validated presentation only; eligibility and the final
      * relationship change remain independently checked by existing server owners. */
     async events(query: FrontendEventPickerQuery,
-                  scope: FrontendRequestScope, signal?: AbortSignal) {
+        scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
         function readEventOptions() {
             return transport.client.GET('/packing-lists/events', {

@@ -30,22 +30,23 @@ import type {
 } from '../../types/EntityPropertyTypes';
 import type {components} from '../../types/api/v1';
 import {ApiProblem} from '../modules/api/problem';
+import {requireApiProfileId} from '../modules/api/session';
 import {archiveKey} from '../modules/archive/policy';
 import {getArchivePresentations} from '../modules/entityArchival';
 import {getEntityViewAdmission, projectCurrentEntityEvent, projectEntitySettingsEvent} from '../modules/event/linkage';
 import type {EntityManager} from 'typeorm';
-import {Profile} from "../modules/database/entities/user/Profile";
+import {Profile} from '../modules/database/entities/user/Profile';
 import type {Event} from '../modules/database/entities/event/Event';
 import * as entityAdminService from '../modules/database/services/EntityAdminService';
 import * as eventService from '../modules/database/services/EventService';
 import * as lifecycleService from '../modules/database/services/EntityLifecycleService';
 import * as userService from '../modules/database/services/UserService';
 import {APIError} from '../modules/lib/errors';
-import {getInitialPerms, getPresetMask, PERM, toMask} from "../modules/lib/permissions";
+import {getInitialPerms, getPresetMask, PERM, toMask} from '../modules/lib/permissions';
 import {requireSessionProfileId} from '../modules/lib/session';
-import {assertEditableEntityFields, entityMethodPermission, entityPropertyFields, entityPropertyPermission, permissionDefinitions, evaluateEntities, evaluateSubject, isOwner, saveDefaultPermsFromBody, entityPermissionKey} from '../modules/permissionEngine';
-import type {EntityAdministratorCommand, EntityAdministratorOutcome, PermView, SessionLike} from '../../types/PermissionTypes';
-import type {CombEntityType, EntityType} from "../../types/UtilTypes";
+import {assertEditableEntityFields, entityMethodPermission, entityPropertyFields, entityPropertyPermission, permissionDefinitions, evaluateEntities, evaluateSubject, isOwner, entityPermissionKey, applyEntityAdministrator, saveReviewedEntityAdministrator, saveReviewedEntityDefaults} from '../modules/permissionEngine';
+import type {EntityAdministratorGrantReview, EntityAdministratorOutcome, PermView, SessionLike} from '../../types/PermissionTypes';
+import type {CombEntityType, EntityType} from '../../types/UtilTypes';
 
 type ListType = 'packing' | 'drivers';
 type ListReadRoot = EntityBase & {archivedAt?: Date | null; event?: Event | null};
@@ -157,7 +158,7 @@ export function normalizeListMetadataPatch(body: unknown): unknown {
 /** Page reads require an actor and the existing feature admission before any detail projection. */
 export async function authorizeListRead(type: ListType, manager: EntityManager, list: EntityBase,
     session: SessionLike, caches?: import('../../types/PermissionTypes').PermEngineCaches): Promise<PermView> {
-    if (!session.profile?.id) throw new ApiProblem('AUTH_REQUIRED');
+    requireApiProfileId(session);
     const permissions = await listPermissions(type, manager, list, session, caches);
     if (await getEntityViewAdmission(type, list, session, manager, permissions) !== 'render') throw new ApiProblem('FORBIDDEN');
     return permissions;
@@ -168,8 +169,8 @@ export function listItemPermissions(type: ListType, manager: EntityManager, list
     item: {id: string; profileId: string}, session: SessionLike,
     caches?: import('../../types/PermissionTypes').PermEngineCaches): Promise<PermView> {
     return evaluateSubject({kind: 'item', item: {entityType: `${type}Item`, entityId: item.id,
-        ownerId: item.profileId, eventId: list.eventId}, parent: {entityType: type, entityId: list.id,
-        ownerId: list.ownerId, eventId: list.eventId}}, session, caches, manager);
+            ownerId: item.profileId, eventId: list.eventId}, parent: {entityType: type, entityId: list.id,
+            ownerId: list.ownerId, eventId: list.eventId}}, session, caches, manager);
 }
 
 /** Project authorized header addresses and opaque versions, never stored filesystem paths. */
@@ -426,11 +427,9 @@ export async function updateEntityDefaults(type: EntityType, id: string,
         : comparisonToken(`${type}-settings`, uuidKey(comparison.comparisonId ?? id), session, defaultPermissionValues(current));
     requireFieldComparison(token, currentToken, Object.keys(defaults).map(audience => `default:${audience}`));
 
-    // The existing collector retains all storage semantics; this owner shares only
-    // the versioned review and result policy, without adding a transaction or lock.
-    await saveDefaultPermsFromBody(type, id, {defaultPerms: defaults}, {manager, inputFormat: 'masks'});
-    return {changed: Object.keys(defaults).some(audience => defaults[audience as keyof typeof defaults]
-        !== current[audience as keyof typeof current])};
+    // Admission is complete. The feature retains sparse persistence and the
+    // existing changed result without adding a read, transaction or lock.
+    return saveReviewedEntityDefaults(type, id, defaults, current, manager);
 }
 
 /** Keep existing zero grants distinct from an absent row in every feature's comparison scope. */
@@ -461,27 +460,16 @@ export async function readEntityAdministratorBaseline(type: EntityType, id: stri
 export async function updateEntityAdministrator(type: EntityType, id: string, profileId: string,
     mask: number | null, session: SessionLike, token?: string, manager?: EntityManager,
     comparison: EntityAdministratorReviewOptions = {}) {
-    let previousMask: number | null = null;
-    /** Compare exactly the existing row or new-grant marker before selecting persistence. */
-    async function reviewGrant(): Promise<EntityAdministratorCommand> {
-        const current = await entityAdminService.getAdminGrant(type, id, profileId, manager);
-        previousMask = current?.perms ?? null;
+    /** Compare exactly the existing row or new-grant marker at the feature's selected stage. */
+    const reviewGrant: EntityAdministratorGrantReview = (previousMask, exists) => {
         requireFieldComparison(token, entityAdministratorToken(type, comparison.comparisonId ?? id, profileId, previousMask, session),
-            [current ? 'mask' : 'newAdmin']);
-        return mask === null ? {kind: 'remove'}
-            : {kind: current ? 'update' : 'add', mask, createdBy: session.profile?.userId};
-    }
+            [exists ? 'mask' : 'newAdmin']);
+    };
 
-    // The caller explicitly selects its recorded validation order. In particular,
-    // sharing this implementation must not add locking to Activity's direct path.
-    const initial: EntityAdministratorCommand = mask === null ? {kind: 'remove'}
-        : {kind: 'add', mask, createdBy: session.profile?.userId};
-    const outcome = comparison.reviewOrder === 'review-first'
-        ? await applyEntityAdministrator(type, id, profileId, await reviewGrant(), manager)
-        : await applyEntityAdministrator(type, id, profileId, initial, manager, reviewGrant);
-    if (outcome === 'profile-missing') throw new ApiProblem('NOT_FOUND');
-    if (outcome === 'mask-required') throw new ApiProblem('VALIDATION_FAILED');
-    return {changed: previousMask !== mask};
+    // The feature owns target validity, command selection and changed outcomes.
+    // This adapter keeps only comparison projection and the caller's explicit order.
+    return saveReviewedEntityAdministrator(type, id, profileId, mask, session, reviewGrant,
+        manager, comparison.reviewOrder);
 }
 
 /** Render a valid instant as edit-parser wall time, falling back to UTC for an
@@ -508,9 +496,14 @@ export function deadlineInputValue(value: unknown, timezone: unknown): string | 
     return `${parts.get('year')}-${parts.get('month')}-${parts.get('day')}T${parts.get('hour')}:${parts.get('minute')}:${parts.get('second')}`;
 }
 
+/** Supply fresh shared scalar rules while each feature retains its whole-object validation. */
+export function basicEntityPropertyRules() {
+    return {title: Joi.string().trim().min(1).max(255), description: Joi.string().max(16000).allow('', null)};
+}
+
 /** Shared title/description normalization for the otherwise undated root features. */
 export function normalizeBasicProperties(body: unknown): BasicEntityPropertyPatch {
-    const schema = Joi.object({title: Joi.string().trim().min(1).max(255), description: Joi.string().max(16000).allow('', null)})
+    const schema = Joi.object(basicEntityPropertyRules())
         .min(1).unknown(false).required();
     const {value, error} = schema.validate(body, {abortEarly: false});
     if (error) {
@@ -530,9 +523,9 @@ export function normalizeBasicProperties(body: unknown): BasicEntityPropertyPatc
 export async function requireEntityPropertyUpdate(type: EntityType, entity: EntityBase, body: unknown, session: SessionLike) {
     requireSessionProfileId(session);
     const permissions = await evaluateSubject({kind: 'entity', entity: {
-        entityType: type, entityId: entity.id, ownerId: entity.ownerId,
-        eventId: type === 'event' ? entity.id : entity.eventId,
-    }}, session);
+            entityType: type, entityId: entity.id, ownerId: entity.ownerId,
+            eventId: type === 'event' ? entity.id : entity.eventId,
+        }}, session);
     assertEditableEntityFields(type, body, permissions, isOwner(session, entity.ownerId));
 }
 
@@ -542,9 +535,9 @@ export async function requireEntityPropertyUpdate(type: EntityType, entity: Enti
 export async function getEntityPropertyPresentation(type: EntityType, entity: EntityBase, session: SessionLike,
     manager?: EntityManager, fieldScope: 'page' | 'method' = 'page'): Promise<EntityPropertyPresentation> {
     const permissions = await evaluateSubject({kind: 'entity', entity: {
-        entityType: type, entityId: entity.id, ownerId: entity.ownerId,
-        eventId: type === 'event' ? entity.id : entity.eventId,
-    }}, session, undefined, manager);
+            entityType: type, entityId: entity.id, ownerId: entity.ownerId,
+            eventId: type === 'event' ? entity.id : entity.eventId,
+        }}, session, undefined, manager);
     const owner = isOwner(session, entity.ownerId);
     const editableFields: EntityPropertyField[] = [];
     const values: EntityPropertyPresentation['values'] = {};
@@ -569,8 +562,8 @@ export async function getEntityPropertyPresentation(type: EntityType, entity: En
         const event = await eventService.getEventById(entity.eventId, manager);
         if (event) {
             const parentPermissions = await evaluateSubject({kind: 'entity', entity: {
-                entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
-            }}, session, undefined, manager);
+                    entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
+                }}, session, undefined, manager);
             currentEvent = projectCurrentEntityEvent(event, parentPermissions);
         }
     }
@@ -598,36 +591,6 @@ export function requiredAdminManagePerm() {
     return PERM[entityMethodPermission('managePermissions')];
 }
 
-/** One controller-owned administrator operation for normalized direct/versioned intent.
- * The profile check and required mask have one owner. A versioned caller may
- * compare its reviewed grant and choose add/update inside its existing locked
- * transaction; direct callers retain their direct command and persistence defaults.
- * Domain outcomes leave each adapter's established error/feedback shape unchanged. */
-export async function applyEntityAdministrator(
-    entityType: CombEntityType, entityId: string, profileId: string,
-    command: EntityAdministratorCommand, manager?: EntityManager,
-    reviewCurrentGrant?: () => Promise<EntityAdministratorCommand | void>,
-): Promise<EntityAdministratorOutcome> {
-    // Both adapters retain profile-first diagnostics. The optional review callback
-    // runs only after this evidence and inside the supplied caller transaction.
-    const profile = await userService.getProfileById(profileId, manager);
-    if (!profile) return 'profile-missing';
-
-    const approved = await reviewCurrentGrant?.() ?? command;
-    if (approved.kind !== 'remove' && approved.mask === undefined) return 'mask-required';
-
-    // Persist normalized intent through the existing DBAL. Zero is a stored mask;
-    // only an explicit remove command selects deletion.
-    if (approved.kind === 'remove') {
-        await entityAdminService.removeAdmin(entityType, entityId, profileId, manager);
-    } else if (approved.kind === 'add') {
-        await entityAdminService.addAdmin(entityType, entityId, profile.id, approved.mask!, approved.createdBy, manager);
-    } else {
-        await entityAdminService.updateAdminPerms(entityType, entityId, profileId, approved.mask!, manager);
-    }
-    return 'saved';
-}
-
 /** Direct adapters preserve the original profile-first errors and operation receipts. */
 function requireAdministratorOutcome(outcome: EntityAdministratorOutcome): void {
     if (outcome === 'profile-missing') throw new Error('Not Found');
@@ -651,8 +614,7 @@ export async function addAdmin(entityType: CombEntityType, entityId: string, bod
     if (typeof value.mask === 'number') mask = value.mask;
     else if (Array.isArray(value.perms)) mask = toMask(value.perms);
     else if (value.preset) {
-        const presetMask = (getPresetMask(value.preset)) ?? 0;
-        mask = presetMask;
+        mask = getPresetMask(value.preset) ?? 0;
     }
 
     const outcome = await applyEntityAdministrator(entityType, entityId, value.profileId,

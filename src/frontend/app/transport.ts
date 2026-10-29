@@ -31,7 +31,7 @@ export class ApiFailure extends Error {
     // behavior or claiming that a temporary server error definitively rejected a write.
     readonly safeDetail: string | null;
     constructor(readonly status: number, readonly problem: Problem | null, readonly retryAfter: number | null = null,
-                detail?: string, validatedDetails = false) {
+        detail?: string, validatedDetails = false) {
         super(problem?.detail ?? detail ?? problem?.title ?? `HTTP ${status}`);
         this.retryAt = retryAfter === null ? null : Date.now() + retryAfter;
         this.safeDetail = problem?.detail ?? (validatedDetails ? detail ?? null : null);
@@ -67,14 +67,14 @@ export class UnconfirmedResponseError extends Error {
  * diagnostic text never becomes user feedback or implies a dispatched command. */
 export class InvalidInputError extends Error {
     constructor(message?: string, readonly messageKey?: FrontendPlainMessageKey,
-                readonly diagnostic?: InputDiagnostic) { super(message); }
+        readonly diagnostic?: InputDiagnostic) { super(message); }
 }
 
 /** Project a generated rejection onto a feature's visible field without copying
  * constraints or exposing validator messages, payloads or schema locations.
  * Call immediately after validation: generated validators reuse their errors. */
 export function generatedInputError(errors: readonly ErrorObject[] | null | undefined,
-                                    field: (path: string, error: ErrorObject) => FrontendInputField | FrontendPlainMessageKey | undefined): InvalidInputError {
+    field: (path: string, error: ErrorObject) => FrontendInputField | FrontendPlainMessageKey | undefined): InvalidInputError {
     // Prefer feature-specific fields and their actual row/day identities. Keep
     // a generated generic field only as a fallback, without publishing raw paths.
     let fallback: InputDiagnostic | undefined;
@@ -124,16 +124,16 @@ export class FrontendTransport {
     /** Keep the generated client's public API while routing every HTTP method
      * through the same pre-dispatch runtime admission boundary. */
     constructor(protected isCurrent: (scope: FrontendRequestScope, checkLocale?: boolean) => boolean,
-                protected identityLost: () => void, requestFetch: typeof fetch = globalThis.fetch,
-                private mayRead?: (scope: FrontendRequestScope) => boolean) {
+        protected identityLost: () => void, requestFetch: typeof fetch = globalThis.fetch,
+        private mayRead?: (scope: FrontendRequestScope) => boolean) {
         const client = createClient<paths>({baseUrl: `${globalThis.location?.origin ?? 'http://localhost'}/api/v1`, fetch: requestFetch});
         const transport = this;
         // Capture the original serialized Request before caller middleware runs.
         // Its per-dispatch marker never enters headers, URLs or retained state.
         client.use({onRequest({request, params}) {
-            const capture = (params as {[dispatchRequest]?: {request?: Request}})[dispatchRequest];
-            if (capture) capture.request = request;
-        }});
+                const capture = (params as {[dispatchRequest]?: {request?: Request}})[dispatchRequest];
+                if (capture) capture.request = request;
+            }});
         // Binding happens when a method is read, without loading a feature or
         // replacing the generated client's request/serialization implementation.
         this.client = new Proxy(client, {
@@ -188,12 +188,12 @@ export class FrontendTransport {
                 return serialized;
             },
             middleware: [...(options.middleware ?? []), {onRequest: ({request}) => {
-                check();
-                // Request bodies are streams. Require the original serializer's
-                // object rather than clone/read uploaded proof bytes to revalidate.
-                if (capture.request !== request) throw new InvalidInputError();
-                this.validateDispatchParameters(contract, request, parameters, headers);
-            }}],
+                    check();
+                    // Request bodies are streams. Require the original serializer's
+                    // object rather than clone/read uploaded proof bytes to revalidate.
+                    if (capture.request !== request) throw new InvalidInputError();
+                    this.validateDispatchParameters(contract, request, parameters, headers);
+                }}],
         };
     }
 
@@ -205,8 +205,8 @@ export class FrontendTransport {
         check();
         try {
             const validators = await Promise.all([loadInputValidator(contract.parametersValidator),
-                contract.bodyValidator ? loadInputValidator(contract.bodyValidator) : Promise.resolve(null),
-                loadInputValidator(contract.headersValidator)]);
+            contract.bodyValidator ? loadInputValidator(contract.bodyValidator) : Promise.resolve(null),
+            loadInputValidator(contract.headersValidator)]);
             check();
             return validators;
         } catch {
@@ -220,7 +220,7 @@ export class FrontendTransport {
     /** Validate multipart metadata and presence without reading, cloning or
      * retaining file bytes. The original FormData is sent by its existing owner. */
     private validateSerializedBody(contract: typeof operationInputs[number], serialized: unknown,
-                                   validate: Awaited<ReturnType<typeof loadInputValidator>> | null): void {
+        validate: Awaited<ReturnType<typeof loadInputValidator>> | null): void {
         if (!validate) return;
         let value: unknown;
         if (contract.mediaType === 'multipart/form-data') {
@@ -252,8 +252,8 @@ export class FrontendTransport {
      * binding does. Unknown query fields remain visible to the closed schema;
      * infrastructure and policy headers retain their separate admission owner. */
     private validateDispatchParameters(contract: typeof operationInputs[number], request: Request,
-                                       validate: Awaited<ReturnType<typeof loadInputValidator>>,
-                                       validateHeaders: Awaited<ReturnType<typeof loadInputValidator>>): void {
+        validate: Awaited<ReturnType<typeof loadInputValidator>>,
+        validateHeaders: Awaited<ReturnType<typeof loadInputValidator>>): void {
         const url = new URL(request.url);
         const origin = globalThis.location?.origin ?? 'http://localhost';
         if (url.origin !== origin || request.method !== contract.method || !url.pathname.startsWith('/api/v1/')) throw new InvalidInputError();
@@ -350,7 +350,7 @@ export class FrontendTransport {
      * scope. A 304 can reuse only the caller's supplied snapshot after positive
      * context checks; malformed/empty success never confirms a command or read. */
     read<T>(operationId: ApiOperationId, result: FrontendDecodedResponse, validate: Validator<T>,
-                     scope?: FrontendRequestScope, previous?: FrontendRead<T>, checkLocale = false): FrontendRead<T> {
+        scope?: FrontendRequestScope, previous?: FrontendRead<T>, checkLocale = false): FrontendRead<T> {
         const {response, data, error, signal} = result;
         // A transport adapter can finish headers/body decoding after cancellation.
         // Retire that read before any success, identity change or error policy is
@@ -380,9 +380,9 @@ export class FrontendTransport {
      * Callers retain typed endpoint/headers/query selection and their exact cooldown
      * key. This owner neither caches snapshots nor retries or dispatches a command. */
     async readJson<T>(resource: string, scope: FrontendRequestScope | undefined,
-                      request: () => Promise<FrontendDecodedResponse>,
-                      operationId: ApiOperationId, validate: Validator<T>, signal?: AbortSignal,
-                      previous?: FrontendRead<T>, checkLocale = false): Promise<FrontendRead<T>> {
+        request: () => Promise<FrontendDecodedResponse>,
+        operationId: ApiOperationId, validate: Validator<T>, signal?: AbortSignal,
+        previous?: FrontendRead<T>, checkLocale = false): Promise<FrontendRead<T>> {
         const transport = this;
         // Admission runs before the supplied request. Delivery still passes through
         // the same cancellation, actor, conditional-read and generated-shape checks.
@@ -396,8 +396,8 @@ export class FrontendTransport {
     /** Header requests share read admission and binary decoding without another
      * response parser, actor owner or Retry-After deadline. */
     async readHeaderImage(resource: string, scope: FrontendRequestScope,
-                          request: () => Promise<FrontendDecodedResponse>,
-                          signal?: AbortSignal): Promise<Blob> {
+        request: () => Promise<FrontendDecodedResponse>,
+        signal?: AbortSignal): Promise<Blob> {
         const transport = this;
         // The feature selects its authorized endpoint. Binary success and failure
         // keep the established headerImage boundary after that single dispatch.
@@ -412,7 +412,7 @@ export class FrontendTransport {
      * save confirmation; timeout, abort and unusable delivery remain uncertain.
      * The feature retains its form, draft and explicit recovery decisions. */
     async uploadJson<T>(operationId: ApiOperationId, path: string, form: FormData, validate: Validator<T>,
-                        scope: FrontendRequestScope, progress: (loaded: number, total: number | null, complete?: boolean) => void): Promise<T> {
+        scope: FrontendRequestScope, progress: (loaded: number, total: number | null, complete?: boolean) => void): Promise<T> {
         if (!this.isCurrent(scope)) throw new ObsoleteRequestError();
         if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\'))
             throw new InvalidInputError(undefined, 'state.uploadDestinationInvalid');
@@ -437,31 +437,31 @@ export class FrontendTransport {
         for (const [name, value] of Object.entries(headers)) request.setRequestHeader(name, value);
 
         await new Promise<void>(
-        /** Send the same form once and settle only transport delivery. Byte
+            /** Send the same form once and settle only transport delivery. Byte
          * progress cannot confirm persistence; network/timeout/abort and a thrown
          * send remain unconfirmed until the separate HTTP response boundary. */
-        function send(resolve, reject) {
-            request.upload.onprogress = reportProgress;
-            request.upload.onload = uploaded;
-            request.onload = completed;
-            request.onerror = uncertain;
-            request.ontimeout = uncertain;
-            request.onabort = uncertain;
+            function send(resolve, reject) {
+                request.upload.onprogress = reportProgress;
+                request.upload.onload = uploaded;
+                request.onload = completed;
+                request.onerror = uncertain;
+                request.ontimeout = uncertain;
+                request.onabort = uncertain;
 
-            /** Report bytes only; the feature separately waits for confirmation. */
-            function reportProgress(event: ProgressEvent): void {
-                progress(event.loaded, event.lengthComputable ? event.total : null);
-            }
-            /** Transfer end is known even when the browser could not measure its total bytes. */
-            function uploaded(event: ProgressEvent): void {
-                progress(event.loaded, event.lengthComputable ? event.total : null, true);
-            }
-            function completed(): void { resolve(); }
-            function uncertain(): void { reject(new UnconfirmedResponseError()); }
+                /** Report bytes only; the feature separately waits for confirmation. */
+                function reportProgress(event: ProgressEvent): void {
+                    progress(event.loaded, event.lengthComputable ? event.total : null);
+                }
+                /** Transfer end is known even when the browser could not measure its total bytes. */
+                function uploaded(event: ProgressEvent): void {
+                    progress(event.loaded, event.lengthComputable ? event.total : null, true);
+                }
+                function completed(): void { resolve(); }
+                function uncertain(): void { reject(new UnconfirmedResponseError()); }
 
-            // A synchronous send failure still cannot establish server rejection.
-            request.send(form);
-        });
+                // A synchronous send failure still cannot establish server rejection.
+                request.send(form);
+            });
 
         // Reconstruct the ordinary response boundary without trusting XHR's body.
         // HTML redirects, malformed JSON and foreign context cannot confirm a write.
@@ -481,7 +481,7 @@ export class FrontendTransport {
      * reads. Features supply generated HTTP operations and retain their read key;
      * binary decoding never introduces another actor or retry owner. */
     headerImage(result: FrontendDecodedResponse, scope: FrontendRequestScope,
-                signal?: AbortSignal): Blob {
+        signal?: AbortSignal): Blob {
         // Cancel before classifying errors so an obsolete response cannot publish
         // identity loss or a Retry-After lease into a newer image visit.
         this.checkReadCancellation(signal);
@@ -507,7 +507,7 @@ export class FrontendTransport {
     /** Every read entry point shares one deadline: focus/manual callers cannot bypass Retry-After.
      * No delayed requests are queued; the caller's ordinary query timer may retry after the deadline. */
     async allowedRead<T>(resource: string, scope: FrontendRequestScope | undefined, operation: () => Promise<T>,
-                         signal?: AbortSignal): Promise<T> {
+        signal?: AbortSignal): Promise<T> {
         this.checkReadCancellation(signal);
         // Observer enabled state cannot protect explicit refetches or image reads.
         // Enforce the same session dispatch barrier here without expiring admitted commands.

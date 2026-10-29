@@ -21,7 +21,7 @@ async function session(request: APIRequestContext): Promise<SessionView> {
 /** Read actual alert text through nested native/Vue markup without parsing tags as prose. */
 function renderedIdentityError(html: string): string | undefined {
     const window = new Window({settings: {enableJavaScriptEvaluation: false,
-        disableJavaScriptFileLoading: true, enableCSSFileLoading: false}});
+            disableJavaScriptFileLoading: true, enableCSSFileLoading: false}});
     try {
         const document = new window.DOMParser().parseFromString(html, 'text/html');
         const notice = document.querySelector('.alert-danger');
@@ -119,14 +119,14 @@ test('mounted identity constraints retain the shared typed API problems', async 
         email: `mismatch-${randomUUID()}@example.invalid`, password: 'First-password!A1', password_repeat: 'Second-password!A1'};
     const cases: Array<{path: string; apiPath: string; form: Record<string, string>;
         code: string; apiStatus: number; message: string}> = [
-        {path: '/users/login', apiPath: '/api/v1/auth/login', form: {username, password},
-            code: 'INVALID_CREDENTIALS', apiStatus: 401, message: 'Invalid username/email or password'},
-        {path: '/users/register', apiPath: '/api/v1/auth/register', form: registration,
-            code: 'PASSWORD_MISMATCH', apiStatus: 400, message: 'Passwords do not match.'},
-        {path: '/users/register', apiPath: '/api/v1/auth/register',
-            form: {...registration, username: createE2ELogin().username, password_repeat: registration.password},
-            code: 'USERNAME_TAKEN', apiStatus: 409, message: 'This username is already taken.'},
-    ];
+            {path: '/users/login', apiPath: '/api/v1/auth/login', form: {username, password},
+                code: 'INVALID_CREDENTIALS', apiStatus: 401, message: 'Invalid username/email or password'},
+            {path: '/users/register', apiPath: '/api/v1/auth/register', form: registration,
+                code: 'PASSWORD_MISMATCH', apiStatus: 400, message: 'Passwords do not match.'},
+            {path: '/users/register', apiPath: '/api/v1/auth/register',
+                form: {...registration, username: createE2ELogin().username, password_repeat: registration.password},
+                code: 'USERNAME_TAKEN', apiStatus: 409, message: 'This username is already taken.'},
+        ];
 
     for (const path of ['/users/login', '/users/register']) {
         const entry = await request.get(`${path}?locale=en`);

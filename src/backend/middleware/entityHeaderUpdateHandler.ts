@@ -4,12 +4,11 @@
  */
 
 import type {Request, Response, Router} from 'express';
-import type {PreparedApiJsonResponse} from '../../types/ApiTransportTypes';
 import type {EntityHeaderCommand, EntityHeaderCommandInput, EntityHeaderDeleteOperation,
-    EntityHeaderUpdateConfig, EntityHeaderUploadOperation} from '../../types/EntityHeaderTypes';
+    EntityHeaderMutationResult, EntityHeaderUpdateConfig, EntityHeaderUploadOperation} from '../../types/EntityHeaderTypes';
 import {ApiProblem} from '../modules/api/problem';
 import {requireApiContext} from '../modules/api/session';
-import {decodeApiMultipartImage, prepareValidatedJson, receiveApiUpload, sendPreparedJson,
+import {decodeApiMultipartImage, executePreparedJson, prepareValidatedJson, receiveApiUpload, sendPreparedJson,
     sendValidatedJson, validateOperationRequest} from '../modules/api/transport';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {prepareFileUploader, removeImage} from '../modules/lib/fileCommons';
@@ -30,19 +29,19 @@ async function executeHeaderCommand(req: Request, res: Response,
         return;
     }
 
-    let prepared: PreparedApiJsonResponse;
-    if (command.receipt === 'before-write') {
-        // Activity's existing adapter prepares its invariant acknowledgement
-        // before its unchanged operation; it does not invent a new transaction.
-        prepared = prepareValidatedJson(req, operation, 200, {changed: true});
-        await command.execute(input);
-    } else {
-        // Drivers and Survey retain the controller-selected preparation point:
-        // under the transaction or before the existing image swap, respectively.
-        await command.execute(input, function prepareHeaderResult(result) {
-            prepared = prepareValidatedJson(req, operation, 200, result);
+    const {prepared} = await executePreparedJson(
+        (result: EntityHeaderMutationResult) => prepareValidatedJson(req, operation, 200, result),
+        function executeHeader(prepare) {
+            if (command.receipt === 'before-write') {
+                // Activity prepares its invariant acknowledgement before its
+                // unchanged operation, without adding a transaction.
+                prepare({changed: true});
+                return command.execute(input);
+            }
+            // Drivers and Survey retain the controller-selected preparation point:
+            // under the transaction or before the existing image swap, respectively.
+            return command.execute(input, prepare);
         });
-    }
 
     // Delivery only consumes the prepared bytes. Preserve the existing controller
     // contract that its preparation callback runs before successful completion.

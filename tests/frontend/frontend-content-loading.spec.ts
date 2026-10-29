@@ -62,7 +62,7 @@ afterEach(async () => {
 
 function json(value: unknown, status = 200): Response {
     return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
-        'X-Surveyor-Context': session.context}});
+            'X-Surveyor-Context': session.context}});
 }
 
 function deferred<T>() {
@@ -92,16 +92,16 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
     context.hydrated.value = true;
     context.visible.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/help', component: HelpPage},
-        {path: '/users/dashboard', component: OverviewPage},
-    ]});
+            {path: '/help', component: HelpPage},
+            {path: '/users/dashboard', component: OverviewPage},
+        ]});
     await router.push(path);
     await router.isReady();
     const wrapper = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}],
-            [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}],
+                [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+        }});
     cleanups.push(async () => {
         wrapper.unmount();
         await context.queryClient.cancelQueries();
@@ -115,9 +115,9 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
 function mountedSkeleton(props: FrontendLoadingSkeleton & {page?: boolean}) {
     const context = createFrontendContext({session}, false);
     const wrapper = mount(LoadingSkeleton, {props, global: {
-        plugins: [[I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [[I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+        }});
     cleanups.push(async () => { wrapper.unmount(); context.start()(); });
     return wrapper;
 }
@@ -170,7 +170,7 @@ describe('help and overview progressive content', () => {
             detail: 'Please wait before reading this guide again.', requestId: 'help-read-retry'};
         const {wrapper, context, request} = await mounted('/help', async () => unavailable
             ? new Response(JSON.stringify(issue), {status, headers: {'Content-Type': 'application/problem+json',
-                'X-Surveyor-Context': session.context, 'Retry-After': '5'}})
+                    'X-Surveyor-Context': session.context, 'Retry-After': '5'}})
             : json(article()), {initialUrl: '/help', help: article()});
         const content = wrapper.get('.help-content').element;
         const input = wrapper.get<HTMLInputElement>('#frontend-help-search');

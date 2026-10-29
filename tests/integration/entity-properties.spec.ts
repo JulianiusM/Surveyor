@@ -2,9 +2,9 @@
 import {authorizeEventLink, getEventLinkOptions} from '../../src/backend/modules/event/linkage';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {randomUUID} from 'node:crypto';
-import eventController from '../../src/backend/controller/eventController';
-import packingController from '../../src/backend/controller/packingController';
-import surveyController from '../../src/backend/controller/surveyController';
+import * as eventController from '../../src/backend/controller/eventController';
+import * as packingController from '../../src/backend/controller/packingController';
+import * as surveyController from '../../src/backend/controller/surveyController';
 import {getEntityPropertyPresentation, requireEntityPropertyUpdate} from '../../src/backend/controller/entityAdminController';
 import {canAccessEntityView, changeEntityEvent} from '../../src/backend/modules/event/linkage';
 import {archiveEntity} from '../../src/backend/modules/entityArchival';

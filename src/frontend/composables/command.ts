@@ -32,7 +32,7 @@ const draftOwnerKey = Symbol.for('surveyor.frontend.draft-owner');
  * delivery. The command retains recovery/actor admission and each feature keeps
  * its exact draft, captured revision and release or close decision. */
 export function useCommandReview(command: Pick<ReturnType<typeof useCommand>, 'pending' | 'recovering' | 'reconcileSafely' | 'acknowledge'>,
-                                 readSaved: () => Promise<unknown>, options: FrontendCommandReviewOptions) {
+    readSaved: () => Promise<unknown>, options: FrontendCommandReviewOptions) {
     const inspected = ref(false);
 
     /** Saved facts can explain uncertainty without proving which command saved. */
@@ -171,7 +171,7 @@ export function useDraftProtection(draft: FrontendCommandDraft) {
      * actual departure; a failed navigation alone retires none. The command caller
      * still releases its original consent when the first delivery attempt settles. */
     function retireDepartures(to: RouteLocationNormalized, _from: RouteLocationNormalized,
-                              failure?: NavigationFailure | void): void {
+        failure?: NavigationFailure | void): void {
         if (failure) return;
         const destination = frontendDocumentUrl(to.fullPath);
         for (const departure of approvedDepartures) {
@@ -522,7 +522,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
      * Return that confirmed result even when its follow-up remains stale. New
      * operations require a mounted owner; already admitted work can outlive it. */
     async function run<T>(operation: (scope: FrontendRequestScope) => Promise<T>, refreshAfter = true,
-                          reviewUnknown = requireUnknownReview, feedback?: FrontendCommandFeedback): Promise<T | undefined> {
+        reviewUnknown = requireUnknownReview, feedback?: FrontendCommandFeedback): Promise<T | undefined> {
         // A delayed preflight can finish after admission retires its form. Reject
         // that new submission before capturing authority or retaining a status lease.
         // Work admitted before unmount keeps its existing deferred steps and settlement.

@@ -17,8 +17,14 @@
 // lib/errors.js
 // Custom error types for centralized error handling in Express routes
 
-import type {ExpectedErrorOptions, Severity} from "../../../types/ErrorTypes";
+import type {ExpectedErrorOptions, Severity} from '../../../types/ErrorTypes';
 import type {MessageKey} from '../../../types/LocalizationTypes';
+
+/** Select a bounded exception name for diagnostics without exposing messages or payloads. */
+export function errorCategory(error: unknown): string {
+    return error instanceof Error && /^[A-Za-z][A-Za-z0-9]{0,63}$/u.test(error.name)
+        ? error.name : 'UnexpectedError';
+}
 
 /**
  * Represents a validation or business logic error that should render

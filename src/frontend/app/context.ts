@@ -72,8 +72,8 @@ function retryDelay(attempt: number): number {
 
 /** Request-local on the server, application-local in the browser; never a module singleton. */
 export function createFrontendContext(bootstrap: FrontendBootstrap, browser: boolean,
-                                   requestFetch?: typeof fetch,
-                                   mayReloadAutomatically: () => boolean = () => false): FrontendContext {
+    requestFetch?: typeof fetch,
+    mayReloadAutomatically: () => boolean = () => false): FrontendContext {
     const session = shallowRef(bootstrap.session);
     const epoch = ref(0);
     const locale = ref<Locale>(resolveLocale(bootstrap.session.locale));
@@ -111,17 +111,17 @@ export function createFrontendContext(bootstrap: FrontendBootstrap, browser: boo
     // Contexts without a route owner retain explicit recovery only.
     const updates = createUpdateCoordinator(bootstrap.session.deployment, browser, mayReloadAutomatically);
     const queryClient = new QueryClient({defaultOptions: {
-        queries: {
-            staleTime: 15_000,
-            gcTime: 60_000,
-            refetchOnWindowFocus: false,
-            refetchOnReconnect: false,
-            retry: (failures, error) => !(error instanceof ObsoleteRequestError)
-                && (!(error instanceof ApiFailure) || (error.status >= 500 && !error.retryAfter)) && failures < 2,
-            retryDelay,
-        },
-        mutations: {retry: false},
-    }});
+            queries: {
+                staleTime: 15_000,
+                gcTime: 60_000,
+                refetchOnWindowFocus: false,
+                refetchOnReconnect: false,
+                retry: (failures, error) => !(error instanceof ObsoleteRequestError)
+                    && (!(error instanceof ApiFailure) || (error.status >= 500 && !error.retryAfter)) && failures < 2,
+                retryDelay,
+            },
+            mutations: {retry: false},
+        }});
     const queryStateRevision = ref(0);
     const stopQueryState = queryClient.getQueryCache().subscribe(receiveQueryState);
 

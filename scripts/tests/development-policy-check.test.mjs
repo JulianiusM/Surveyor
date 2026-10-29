@@ -21,9 +21,6 @@ const developmentPolicy = fs.readFileSync(path.join(repository, 'docs/policies/D
 /** Each fixture owns a fresh disposable Git tree; no application source or DB is loaded. */
 function fixture(t) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'surveyor-development-policy-'));
-    execFileSync('git', ['init', '--quiet'], {cwd: root});
-    write(root, 'docs/policies/development-check.json', policy);
-    write(root, 'docs/policies/DEVELOPMENT_POLICY.md', developmentPolicy);
     t.after(function removeFixture() {
         // Verify the exact OS-created directory before its recursive cleanup.
         const resolved = path.resolve(root);
@@ -31,6 +28,9 @@ function fixture(t) {
         assert.ok(path.basename(resolved).startsWith('surveyor-development-policy-'));
         fs.rmSync(resolved, {recursive: true, force: true});
     });
+    execFileSync('git', ['init', '--quiet'], {cwd: root});
+    write(root, 'docs/policies/development-check.json', policy);
+    write(root, 'docs/policies/DEVELOPMENT_POLICY.md', developmentPolicy);
     return root;
 }
 
@@ -94,6 +94,164 @@ test('does not treat error names in comments, strings or shared type contracts a
     write(root, 'src/backend/modules/database/services/ExampleService.ts',
         "import type {Contract} from '../../../types/Contract';\n// APIError is a prohibited request error.\nexport const text = 'controller/APIError';");
     assert.equal(run(root).status, 0);
+});
+
+test('keeps canonical datasource repository, builder and transaction operations inside Services', t => {
+    const root = fixture(t);
+    const file = 'src/backend/controller/example.ts';
+    write(root, file, [
+        "import {AppDataSource as database} from '../modules/database/dataSource.js';",
+        'database.getRepository(User).findOneBy({id: 1});',
+        'const {manager: transactionManager} = database;',
+        'const alias = transactionManager;',
+        'alias.save(User, {id: 1});',
+        'database.createQueryBuilder(User, "user").where("user.id = :id", {id: 1}).getOne();',
+        'database.transaction(namedOperation);',
+    ].join('\n'));
+    const result = run(root);
+    assert.equal(result.status, 1);
+    assert.deepEqual(result.report.errors.map(error => [error.rule, error.line]),
+        [2, 5, 6, 7].map(line => ['runtime-dbal-owner', line]));
+    assert.equal(result.report.checkedRuntimeDatabaseSources, 1);
+    assert.match(result.report.runtimeDatabaseLimitations.join(' '), /not whole-program proof/u);
+});
+
+test('recognizes typed manager, repository, runner and builder aliases without guessing receiver names', t => {
+    const root = fixture(t);
+    write(root, 'src/backend/modules/feature.ts', [
+        "import type {EntityManager as Manager, Repository as Records, QueryRunner, SelectQueryBuilder} from 'typeorm';",
+        'type CurrentManager = Manager;',
+        'export function managerRead(manager: CurrentManager) { const alias = manager; return alias.find(User); }',
+        'export function repositoryWrite(records: Records<User>) { return records.save({id: 1}); }',
+        'export function runnerRead(runner: QueryRunner) { return runner.manager.query("SELECT id FROM users"); }',
+        'export function builderRead(builder: SelectQueryBuilder<User>) { return builder.getMany(); }',
+        'export function picked(manager: Pick<Manager, "save">) { return manager.save(User, {}); }',
+        'export function ordinary(manager: {find(value: string): string}) { return manager.find("local"); }',
+        'export const input = request.query;',
+        'export const local = model.save();',
+    ].join('\n'));
+    const result = run(root);
+    assert.equal(result.status, 1);
+    assert.deepEqual(result.report.errors.map(error => error.line), [3, 4, 5, 6, 7]);
+    assert.ok(result.report.errors.every(error => error.rule === 'runtime-dbal-owner'));
+});
+
+test('recognizes explicit namespace, literal require and ActiveRecord operations', t => {
+    const root = fixture(t);
+    write(root, 'src/backend/modules/feature.ts', [
+        "import * as ORM from 'typeorm';",
+        "import * as database from './database/dataSource';",
+        "const {EntityManager: Manager} = require('typeorm');",
+        'const manager = new Manager(database.AppDataSource); manager.delete(User, 1);',
+        'database.AppDataSource.getRepository(User).delete(1);',
+        'new ORM.DataSource(options);',
+        'class Record extends ORM.BaseEntity {}',
+        'Record.find();',
+    ].join('\n'));
+    const result = run(root);
+    assert.equal(result.status, 1);
+    assert.deepEqual(result.report.errors.map(error => error.line), [4, 5, 6, 8]);
+});
+
+test('does not infer Node loader identity from a locally shadowed require name', t => {
+    const root = fixture(t);
+    write(root, 'src/backend/modules/feature.ts', [
+        'export function local(require: (name: string) => unknown) {',
+        '    const records = require("typeorm");',
+        '    return records.getRepository(User).find();',
+        '}',
+        'function require(name: string) { return unrelated; }',
+        'const source = require("typeorm"); source.getRepository(User).save({});',
+    ].join('\n'));
+    assert.equal(run(root).status, 0);
+});
+
+test('does not infer ORM receivers through locally shadowed generic utility names', t => {
+    const root = fixture(t);
+    write(root, 'src/backend/modules/feature.ts', [
+        "import type {EntityManager} from 'typeorm';",
+        'type Pick<T, Key> = {save(value: unknown): unknown};',
+        'interface Readonly<T> {query(value: string): unknown}',
+        'export function local(value: Pick<EntityManager, "save">) { return value.save({}); }',
+        'export function other(value: Readonly<EntityManager>) { return value.query("ordinary text"); }',
+    ].join('\n'));
+    assert.equal(run(root).status, 0);
+});
+
+test('recognizes TypeORM sql tags without treating unrelated tags or SQL contents as ownership evidence', t => {
+    const root = fixture(t);
+    write(root, 'src/backend/modules/feature.ts', [
+        "import {AppDataSource as database} from './database/dataSource';",
+        "import type {EntityManager} from 'typeorm';",
+        'database.sql`SELECT id FROM users WHERE id = ${1}`;',
+        'export function read(manager: EntityManager) { return manager.sql`SELECT id FROM users`; }',
+        'ordinary.sql`SELECT id FROM users`;',
+        'const sql = ordinary.sql; sql`ordinary prose`;',
+    ].join('\n'));
+    const result = run(root);
+    assert.equal(result.status, 1);
+    assert.deepEqual(result.report.errors.map(error => [error.rule, error.line]),
+        [['runtime-dbal-owner', 3], ['runtime-dbal-owner', 4]]);
+    write(root, 'src/backend/modules/database/services/ExampleService.ts',
+        "import type {EntityManager} from 'typeorm';\nexport function read(manager: EntityManager) { return manager.sql`SELECT id FROM users`; }");
+    write(root, 'src/backend/modules/feature.ts', 'ordinary.sql`SELECT id FROM users`;');
+    assert.equal(run(root).status, 0);
+});
+
+test('allows Services, declared migration scopes, bootstrap wiring and shared type imports', t => {
+    const root = fixture(t);
+    const config = JSON.parse(policy);
+    const database = config.runtimeDatabaseAccess;
+    write(root, config.databaseServiceDirectory + '/ExampleService.ts', [
+        "import type {EntityManager} from 'typeorm';",
+        'export function read(manager: EntityManager) { return manager.query("SELECT id FROM users"); }',
+    ].join('\n'));
+    const migration = "import type {QueryRunner} from 'typeorm';\nexport function change(runner: QueryRunner) { return runner.query('ALTER TABLE fixture ADD value int'); }";
+    write(root, database.migrationDirectories[0] + '/1234567890000-Example.ts', migration);
+    write(root, database.migrationHelperFiles[0], migration);
+    write(root, database.dataSourceFile, "import {DataSource} from 'typeorm';\nexport const AppDataSource = new DataSource(options);\nAppDataSource.initialize();");
+    write(root, 'src/backend/app.ts', [
+        "import {AppDataSource} from './modules/database/dataSource';",
+        "import type {ServiceResult} from './modules/database/services/ExampleService';",
+        'AppDataSource.initialize();',
+        'wireSessionStore(AppDataSource.manager);',
+    ].join('\n'));
+    assert.equal(run(root).status, 0);
+});
+
+test('does not give copied migration helpers or bootstrap CRUD a blanket exemption', t => {
+    const root = fixture(t);
+    const database = JSON.parse(policy).runtimeDatabaseAccess;
+    write(root, 'src/backend/modules/feature/migration-helper.ts',
+        "import type {QueryRunner} from 'typeorm';\nexport function read(runner: QueryRunner) { return runner.query('SELECT id FROM users'); }");
+    write(root, database.dataSourceFile, [
+        "import {DataSource} from 'typeorm';", 'export const AppDataSource = new DataSource(options);',
+        'AppDataSource.initialize();', 'AppDataSource.getRepository(User).find();',
+    ].join('\n'));
+    const result = run(root);
+    assert.equal(result.status, 1);
+    assert.equal(result.report.errors.length, 2);
+    assert.ok(result.report.errors.every(error => error.rule === 'runtime-dbal-owner'));
+});
+
+test('runtime ORM ownership stays global and separately checks restored staged violations', t => {
+    const root = fixture(t);
+    const file = 'src/backend/modules/feature.ts';
+    const original = 'export const value = 1;\n';
+    write(root, file, original);
+    write(root, 'src/owned.ts', original);
+    execFileSync('git', ['add', '.'], {cwd: root});
+    execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+        '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'Synthetic runtime ORM boundary baseline'], {cwd: root});
+    write(root, file, "import {AppDataSource} from './database/dataSource';\nAppDataSource.query('SELECT id FROM users');\n");
+    assert.equal(run(root, ['--file', 'src/owned.ts']).report.errors[0].rule, 'runtime-dbal-owner');
+    execFileSync('git', ['add', file], {cwd: root});
+    write(root, file, original);
+    const result = run(root, ['--file', 'src/owned.ts']);
+    assert.equal(result.status, 1);
+    assert.equal(result.report.errors.length, 1);
+    assert.equal(result.report.errors[0].snapshot, 'index');
+    assert.equal(result.report.errors[0].rule, 'runtime-dbal-owner');
 });
 
 test('reports uncommented control-flow blocks and nested complex anonymous operations', t => {
@@ -184,6 +342,10 @@ test('rejects configurations that would silently disable policy boundaries', t =
         {...original, sessionStagingOwner: undefined},
         {...original, sessionStagingOwner: {file: 'src/backend/modules/', operation: '*'}},
         {...original, sessionStagingOwner: {...original.sessionStagingOwner, directory: 'src/'}},
+        {...original, runtimeDatabaseAccess: undefined},
+        {...original, runtimeDatabaseAccess: {...original.runtimeDatabaseAccess, directory: 'src/backend/modules'}},
+        {...original, runtimeDatabaseAccess: {...original.runtimeDatabaseAccess, migrationDirectories: []}},
+        {...original, runtimeDatabaseAccess: {...original.runtimeDatabaseAccess, migrationHelperFiles: ['src/backend/modules/database/utils']}},
     ];
     for (const config of invalid) {
         write(root, 'docs/policies/development-check.json', JSON.stringify(config));
@@ -329,6 +491,49 @@ test('approval preflight reads policy labels and accepts clear single and distin
     assert.equal(run(root, args).status, 0);
     write(root, file, approvalRequest().replaceAll('**', ''));
     assert.equal(run(root, args).status, 0);
+});
+
+test('approval preflight isolates authoritative fields from later policy sections', t => {
+    const root = fixture(t);
+    const file = 'request.txt';
+    const args = ['--approval-request', path.join(root, file)];
+    const valid = approvalRequest();
+    const explanation = [
+        '### Required change explanation (2026-10-13)',
+        '- **Reason:** Describe the observed problem.',
+        '- **What is to be changed:** Define the requested outcome.',
+        '- **How it is to be changed:** Identify its existing owner.',
+        '- **Implications:** Explain the consequences.',
+        '- **Prior decisions and requirements:** Identify the governing choices.',
+        '#### Supporting explanation',
+        'This deeper heading remains part of the required explanation.',
+        '- **History:** Distinguish prior approval from this finding.',
+        '',
+    ].join('\n');
+    // A separate policy section may reuse field words or introduce new labels;
+    // none can add to, replace or rescue this section's required six fields.
+    const later = '\n- **Reason:** An unrelated decision.\n- **Another label:** Its own scope.\n- **History:** Separate history.\n';
+    for (const heading of ['#', '##', '###']) {
+        write(root, 'docs/policies/DEVELOPMENT_POLICY.md', `${explanation}\n${heading} Later decisions${later}\n## Implementation principles\n`);
+        write(root, file, valid);
+        assert.equal(run(root, args).status, 0);
+        for (const invalid of [valid.replace(/^\*\*History:.*\n/mu, ''),
+        valid.replace('**What is to be changed:**', '**Scope:**')]) {
+            write(root, file, invalid);
+            assert.equal(run(root, args).status, 1);
+        }
+    }
+    // Broken authoritative content still makes preflight unavailable, even if
+    // later sections contain labels that could otherwise conceal the omission.
+    write(root, file, valid);
+    for (const invalid of [explanation.replace(/^- \*\*History:.*\n/mu, ''),
+    explanation.replace('- **Reason:**', '- **Rationale:**'),
+    explanation.replace('### Required change explanation (2026-10-13)', '### Other explanation')]) {
+        write(root, 'docs/policies/DEVELOPMENT_POLICY.md', `${invalid}\n### Later decisions${later}\n## Implementation principles\n`);
+        const result = run(root, args);
+        assert.equal(result.status, 2);
+        assert.match(result.stderr, /Cannot identify the six authoritative approval labels/u);
+    }
 });
 
 test('approval preflight rejects omissions, order changes, empty fields and missing question or rule link', t => {

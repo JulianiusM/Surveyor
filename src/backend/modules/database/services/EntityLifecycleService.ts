@@ -5,7 +5,7 @@
  * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {EntityManager, EntityTarget, Repository, type ObjectLiteral, type SelectQueryBuilder} from 'typeorm';
+import {EntityManager, EntityTarget, Equal, In, IsNull, LessThanOrEqual, MoreThan, Repository, type ObjectLiteral, type SelectQueryBuilder} from 'typeorm';
 import type {ArchiveMetadataPatch, ArchiveReference, ArchiveSnapshotEntry, ArchiveTarget, LockedArchiveContext} from '../../../../types/ArchiveTypes';
 import type {EntityType} from '../../../../types/UtilTypes';
 import {archiveKey} from '../../archive/policy';
@@ -86,7 +86,7 @@ async function loadArchiveTargets(manager: EntityManager, type: EntityType, ids:
         return [];
     }
     return archiveTargetQuery(manager, type)
-        .where('root.id IN (:...ids)', {ids})
+        .where({id: In(ids)})
         .getRawMany<ArchiveTarget>();
 }
 
@@ -94,7 +94,7 @@ async function lockTarget(manager: EntityManager, ref: ArchiveReference): Promis
     // Called only inside a transaction. The row lock lasts through its write/commit;
     // ordinary UPDATE and DELETE statements on this root must wait for it as well.
     const target = await archiveTargetQuery(manager, ref.type)
-        .where('root.id = :id', {id: ref.id})
+        .where({id: Equal(ref.id)})
         .setLock('pessimistic_write')
         .getRawOne<ArchiveTarget>();
     return target ?? null;
@@ -228,21 +228,17 @@ export async function archiveExpiredEntities(cutoff: string, now: Date): Promise
         let previous: {id: string; endDate: string} | undefined;
         while (true) {
             const candidates = archiveTargetQuery(AppDataSource.manager, type)
-                .where('root.archived_at IS NULL')
-                .andWhere('root.auto_archive_paused = 0')
-                .andWhere('root.end_date <= :cutoff', {cutoff});
+                .where({archivedAt: IsNull(), autoArchivePaused: Equal(false), endDate: LessThanOrEqual(cutoff)});
             if (type === 'activity') {
                 // Attached plans inherit the event timestamp. Their own end date
                 // cannot make them disappear while the event remains active.
-                candidates.andWhere('root.event_id IS NULL');
+                candidates.andWhere({event: IsNull()});
             }
             if (previous) {
                 // Both fields form the cursor because many entities can share an
                 // end date. UUID order provides a deterministic tie breaker.
-                candidates.andWhere(
-                    '(root.end_date > :lastDate OR (root.end_date = :lastDate AND root.id > :lastId))',
-                    {lastDate: previous.endDate, lastId: previous.id},
-                );
+                candidates.andWhere([{endDate: MoreThan(previous.endDate)},
+                {endDate: Equal(previous.endDate), id: MoreThan(previous.id)}]);
             }
             const rows = await candidates
                 .orderBy('root.end_date', 'ASC')
@@ -267,11 +263,8 @@ export async function archiveExpiredEntities(cutoff: string, now: Date): Promise
 
                     const update = getRootRepository(manager, type).createQueryBuilder().update()
                         .set({archivedAt: now})
-                        .where('id = :id', {id: root.id})
-                        .andWhere('archived_at IS NULL')
-                        .andWhere('auto_archive_paused = 0')
-                        .andWhere('end_date <= :cutoff', {cutoff});
-                    if (type === 'activity') update.andWhere('event_id IS NULL');
+                        .where({id: Equal(root.id), archivedAt: IsNull(), autoArchivePaused: Equal(false), endDate: LessThanOrEqual(cutoff)});
+                    if (type === 'activity') update.andWhere({event: IsNull()});
 
                     // Count only the conditional write's actual persistence receipt.
                     const affected = (await update.execute()).affected ?? 0;

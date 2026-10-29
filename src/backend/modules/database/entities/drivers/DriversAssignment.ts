@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import {Entity, JoinColumn, ManyToOne, RelationId,} from "typeorm";
-import {DefaultNumericEntityItemAssignment} from "../abstract/ProfileEntityItemAssignment";
-import {DriversItem} from "./DriversItem";
-import {DriversList} from "./DriversList";
+import {Entity, JoinColumn, ManyToOne, RelationId,} from 'typeorm';
+import {DefaultNumericEntityItemAssignment} from '../abstract/ProfileEntityItemAssignment';
+import {DriversItem} from './DriversItem';
+import {DriversList} from './DriversList';
 
 @Entity("drivers_assignments", {schema: "surveyor"})
 export class DriversAssignment extends DefaultNumericEntityItemAssignment {

@@ -48,7 +48,7 @@ afterEach(async () => {
 
 function json(value: unknown, status = 200): Response {
     return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
-        'X-Surveyor-Context': session.context, ETag: '"original"'}});
+            'X-Surveyor-Context': session.context, ETag: '"original"'}});
 }
 
 /** Exercise real mounted feature controls, generated contracts and shared owners.
@@ -59,18 +59,18 @@ async function mounted(component: Component, handler: (request: Request) => Prom
     const context = createFrontendContext({session}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/drivers/create', component},
-        {path: '/drivers/:listId/duplicate', component},
-        {path: '/drivers/:listId', component: path.endsWith('/duplicate') || path.endsWith('/create')
-            ? defineComponent({template: '<p>Created</p>'}) : component},
-        {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
-    ]});
+            {path: '/drivers/create', component},
+            {path: '/drivers/:listId/duplicate', component},
+            {path: '/drivers/:listId', component: path.endsWith('/duplicate') || path.endsWith('/create')
+                    ? defineComponent({template: '<p>Created</p>'}) : component},
+            {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
+        ]});
     await router.push(path);
     const stopInitial = observeInitialDocument(context, router);
     const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+        }});
     await flushPromises();
     cleanups.push(async () => {root.unmount(); stopInitial(); await context.queryClient.cancelQueries(); context.queryClient.clear();});
     if (component === DriversPage) {

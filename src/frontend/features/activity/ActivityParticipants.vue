@@ -10,7 +10,7 @@ import ActionButton from '../../components/ActionButton.vue';
 // every participant field, requirement target, role and attendance window.
 const props = withDefaults(defineProps<{participants: components['schemas']['ActivityParticipant'][]; assignmentMode: 'FREE' | 'REQUIRED';
     id?: string; heading?: boolean; localizeAttendance?: boolean; requirementsAvailable?: boolean}>(),
-{id: 'participant-status-overview', heading: true, localizeAttendance: false, requirementsAvailable: true});
+    {id: 'participant-status-overview', heading: true, localizeAttendance: false, requirementsAvailable: true});
 const {messages} = useFrontend();
 const search = ref('');
 const filter = ref('all');

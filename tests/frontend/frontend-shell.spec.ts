@@ -34,20 +34,20 @@ const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Fixtu
     toc: [{id: 'fixture-task', title: 'A synthetic task', level: 2}]};
 
 async function renderHelp(data = help, url = '/help?doc=fixture', requestFetch?: typeof fetch,
-                          bootstrap: Partial<FrontendBootstrap> = {}) {
+    bootstrap: Partial<FrontendBootstrap> = {}) {
     const context = createFrontendContext({session, help: data, initialUrl: url, ...bootstrap}, true, requestFetch ?? readLoadedHelp);
     // This helper exercises an initialized shell/Help workflow. Initial delivery
     // and unavailable-JS behavior have their own real SSR/startup fixtures.
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/help', component: HelpPage, meta: {helpPage: true}},
-        {path: '/help/:doc', component: HelpPage, meta: {helpPage: true}},
-    ]});
+            {path: '/help', component: HelpPage, meta: {helpPage: true}},
+            {path: '/help/:doc', component: HelpPage, meta: {helpPage: true}},
+        ]});
     await router.push(url);
     await router.isReady();
     const wrapper = mount(App, {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
+        }});
     await flushPromises();
     return {wrapper, context, router};
 
@@ -113,33 +113,33 @@ describe('native shell and help presentation contract', () => {
     });
 
     it.each(['/packing/fixture', '/packing/create', '/drivers/fixture', '/users/login', '/help/packing_lists'])
-    ('preserves native contextual Help activation on %s without widening it to other routes', async nativePath => {
-        const expectedActive = /^\/(packing|drivers)(?:\/|$)/u.test(nativePath);
-        const context = createFrontendContext({session}, true, vi.fn());
-        const router = createRouter({history: createMemoryHistory(), routes: [
-            {path: '/:pathMatch(.*)*', component: defineComponent({template: '<p>Route host</p>'})},
-        ]});
-        await router.push(nativePath);
-        await router.isReady();
-        const wrapper = mount(AppHeader, {attachTo: document.body, global: {
-            plugins: [router, [I18NextVue, {i18next: context.i18next}]],
-            provide: {[frontendContextKey as symbol]: context},
-        }});
-        try {
-            const frontendHelp = wrapper.get('a[aria-label="Help for this page"]');
-            expect(frontendHelp.classes().includes('active')).toBe(expectedActive);
-            await router.push(nativePath.toUpperCase());
-            expect(frontendHelp.classes().includes('active')).toBe(expectedActive);
-            const dropdowns = wrapper.findAll('summary.nav-link.dropdown-toggle');
-            expect(dropdowns.map(dropdown => dropdown.text())).toEqual(['New', 'Overview']);
-            for (const dropdown of dropdowns) expect(dropdown.attributes('role')).toBe('button');
-            await router.push('/help');
-            expect(frontendHelp.classes()).not.toContain('active');
-        } finally {
-            wrapper.unmount();
-            context.queryClient.clear();
-        }
-    });
+        ('preserves native contextual Help activation on %s without widening it to other routes', async nativePath => {
+            const expectedActive = /^\/(packing|drivers)(?:\/|$)/u.test(nativePath);
+            const context = createFrontendContext({session}, true, vi.fn());
+            const router = createRouter({history: createMemoryHistory(), routes: [
+                    {path: '/:pathMatch(.*)*', component: defineComponent({template: '<p>Route host</p>'})},
+                ]});
+            await router.push(nativePath);
+            await router.isReady();
+            const wrapper = mount(AppHeader, {attachTo: document.body, global: {
+                    plugins: [router, [I18NextVue, {i18next: context.i18next}]],
+                    provide: {[frontendContextKey as symbol]: context},
+                }});
+            try {
+                const frontendHelp = wrapper.get('a[aria-label="Help for this page"]');
+                expect(frontendHelp.classes().includes('active')).toBe(expectedActive);
+                await router.push(nativePath.toUpperCase());
+                expect(frontendHelp.classes().includes('active')).toBe(expectedActive);
+                const dropdowns = wrapper.findAll('summary.nav-link.dropdown-toggle');
+                expect(dropdowns.map(dropdown => dropdown.text())).toEqual(['New', 'Overview']);
+                for (const dropdown of dropdowns) expect(dropdown.attributes('role')).toBe('button');
+                await router.push('/help');
+                expect(frontendHelp.classes()).not.toContain('active');
+            } finally {
+                wrapper.unmount();
+                context.queryClient.clear();
+            }
+        });
 
     it.each([false, true])('preserves caller alert attributes and listeners through the shared root (notification=%s)', async notification => {
         const click = vi.fn();
@@ -209,8 +209,8 @@ describe('native shell and help presentation contract', () => {
                 + ' @dismiss="setError(null)">{{ error }}</StatusNotice>',
         });
         const wrapper = mount(host, {attachTo: document.body, global: {
-            plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
-        }});
+                plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
+            }});
         try {
             const input = wrapper.get<HTMLInputElement>('input').element;
             input.focus();
@@ -259,8 +259,8 @@ describe('native shell and help presentation contract', () => {
                 + '<StatusNotice v-if="message" placement="notification" transient :disabled="pending" :renewal="message"'
                 + ' @dismiss="message = \'\'">{{ message }}</StatusNotice></section>',
         }), {attachTo: document.body, global: {
-            plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
-        }});
+                plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
+            }});
         const ordinary = mount(StatusNotice, {props: {transient: true}, slots: {default: 'Native POST flash'}, attachTo: document.body});
         try {
             await flushPromises();
@@ -421,7 +421,7 @@ describe('native shell and help presentation contract', () => {
                 + '<template #feedback><StatusNotice v-if="shown" placement="notification" transient'
                 + ' kind="success" @dismiss="dismiss">Pool created</StatusNotice></template></AppDialog>',
         }), {attachTo: document.body, global: {plugins: [[I18NextVue, {i18next: context.i18next}]],
-            provide: {[frontendContextKey as symbol]: context, [noticeTargetKey as symbol]: ref(target)}}});
+                provide: {[frontendContextKey as symbol]: context, [noticeTargetKey as symbol]: ref(target)}}});
         try {
             await flushPromises();
             const alert = document.querySelector<HTMLElement>('[role="dialog"] [data-frontend-notices] .alert')!;
@@ -457,9 +457,9 @@ describe('native shell and help presentation contract', () => {
                 + '<section v-show="disclosed"><StatusNotice v-if="shown" placement="notification" transient'
                 + ' @dismiss="shown = false">Admin added</StatusNotice></section></AppDialog>',
         }), {attachTo: document.body, global: {
-            plugins: [[I18NextVue, {i18next: context.i18next}]],
-            provide: {[frontendContextKey as symbol]: context, [noticeTargetKey as symbol]: ref(pageHost)},
-        }});
+                plugins: [[I18NextVue, {i18next: context.i18next}]],
+                provide: {[frontendContextKey as symbol]: context, [noticeTargetKey as symbol]: ref(pageHost)},
+            }});
         try {
             await flushPromises();
             const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
@@ -590,8 +590,8 @@ describe('native shell and help presentation contract', () => {
     it('keeps the shared notification host separate from page content on ordinary and full-message routes', async () => {
         const {wrapper, context, router} = await renderHelp();
         router.addRoute({path: '/message-fixture', component: defineComponent({
-            render: () => h(PageMessage, {kind: 'success', message: 'Confirmed fixture message'}),
-        })});
+                render: () => h(PageMessage, {kind: 'success', message: 'Confirmed fixture message'}),
+            })});
         try {
             // The shell owns one persistent presentation scope. Empty or disclosed
             // notices never create a feature-specific destination inside the page.
@@ -668,16 +668,16 @@ describe('native shell and help presentation contract', () => {
         context.hydrated.value = true;
         const destination = defineComponent({template: '<p>Fixture destination</p>'});
         const router = createRouter({history: createMemoryHistory(), routes: [
-            {path: '/users/dashboard', component: destination},
-            {path: '/help', component: destination},
-            {path: '/packing/create', component: destination},
-        ]});
+                {path: '/users/dashboard', component: destination},
+                {path: '/help', component: destination},
+                {path: '/packing/create', component: destination},
+            ]});
         await router.push('/users/dashboard');
         await router.isReady();
         const wrapper = mount(AppHeader, {attachTo: document.body, global: {
-            plugins: [router, [I18NextVue, {i18next: context.i18next}]],
-            provide: {[frontendContextKey as symbol]: context},
-        }});
+                plugins: [router, [I18NextVue, {i18next: context.i18next}]],
+                provide: {[frontendContextKey as symbol]: context},
+            }});
         try {
             const form = wrapper.get('form');
             (form.element.closest('details') as HTMLDetailsElement).open = true;
@@ -720,9 +720,9 @@ describe('native shell and help presentation contract', () => {
         const {wrapper, context, router} = await renderHelp();
         const path = '/message-fixture';
         router.addRoute({path, component: defineComponent({
-            render: () => h(PageMessage, {kind: 'success', message: context.messages.value.t('auth.recoverySent'),
-                renewal: context.pageCompletion.value}),
-        })});
+                render: () => h(PageMessage, {kind: 'success', message: context.messages.value.t('auth.recoverySent'),
+                    renewal: context.pageCompletion.value}),
+            })});
         try {
             await router.push(path);
             context.pageCompletion.value = {context: session.context, destination: path,
@@ -800,9 +800,9 @@ describe('native shell and help presentation contract', () => {
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
         const {wrapper, context, router} = await renderHelp();
         router.addRoute({path: '/read-fixture', component: defineComponent({
-            render: () => h(PageMessage, {kind: 'error', message: 'Synthetic failed read', transient: false},
-                {default: () => h('button', 'Retry read')}),
-        })});
+                render: () => h(PageMessage, {kind: 'error', message: 'Synthetic failed read', transient: false},
+                    {default: () => h('button', 'Retry read')}),
+            })});
         try {
             await router.push('/read-fixture');
             await flushPromises();
@@ -816,21 +816,21 @@ describe('native shell and help presentation contract', () => {
 
     it('renders the same native label text next to its margin-owned icon in SSR and the mounted client', async () => {
         for (const props of [
-    {
-        "id": "username",
-        "label": "Display name *",
-        "icon": "bi bi-person-circle me-1",
-        "labelIcon": "bi bi-person-circle me-1",
-        "modelValue": ""
-    },
-    {
-        "id": "email",
-        "label": "E-mail (for your personal editing link as well as recovery)",
-        "icon": "bi bi-envelope-at me-1",
-        "labelIcon": "bi bi-envelope-at me-1",
-        "modelValue": ""
-    }
-]) {
+            {
+                "id": "username",
+                "label": "Display name *",
+                "icon": "bi bi-person-circle me-1",
+                "labelIcon": "bi bi-person-circle me-1",
+                "modelValue": ""
+            },
+            {
+                "id": "email",
+                "label": "E-mail (for your personal editing link as well as recovery)",
+                "icon": "bi bi-envelope-at me-1",
+                "labelIcon": "bi bi-envelope-at me-1",
+                "modelValue": ""
+            }
+        ]) {
             const rendered = document.createElement('div');
             rendered.innerHTML = await renderToString(createSSRApp(FormField, props));
             expect(rendered.querySelector('label')?.textContent).toBe(props.label);
@@ -1086,8 +1086,8 @@ describe('native shell and help presentation contract', () => {
 
     it('keeps the entire search result clickable with its section context and result count', async () => {
         const result = await renderHelp({...help, content: '', toc: [], searchQuery: 'fixture', searchResults: [
-            {title: 'Result fixture', url: '/help/fixture#fixture-task', sectionTitle: 'A synthetic task', excerpt: 'Synthetic excerpt'},
-        ]}, '/help?q=fixture');
+                {title: 'Result fixture', url: '/help/fixture#fixture-task', sectionTitle: 'A synthetic task', excerpt: 'Synthetic excerpt'},
+            ]}, '/help?q=fixture');
         try {
             const link = result.wrapper.get('.help-search-results .list-group-item');
             expect(link.element.tagName).toBe('A');
@@ -1167,8 +1167,8 @@ describe('native shell and help presentation contract', () => {
 
     it('preserves supported native Help query and fragment suffixes in SSR and navigation', async () => {
         const data = {...help, content: '<h2 id="fixture-task">Task</h2>'
-            + '<a href="/help/search?q=packing&amp;source=fixture#fixture-task">Search</a>'
-            + '<a href="/help/packing_lists#fixture-task">Article</a>'};
+                + '<a href="/help/search?q=packing&amp;source=fixture#fixture-task">Search</a>'
+                + '<a href="/help/packing_lists#fixture-task">Article</a>'};
         const {wrapper, router, context} = await renderHelp(data);
         try {
             const links = wrapper.findAll('.help-content a');

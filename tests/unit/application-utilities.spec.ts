@@ -35,7 +35,7 @@ describe('shared monetary and list projections', () => {
         expect(acceptedInvoiceCosts(rows)).toEqual(rows.slice(0, 2));
         expect(acceptedInvoiceCosts(rows)[0]).toBe(rows[0]);
         expect(invoiceCostTotals(rows, [{amount: '-2.10', subtractFromPool: true},
-            {amount: '1.01', subtractFromPool: false}])).toEqual({invoiceTotal: 9.45, openAmount: 9.25,
+        {amount: '1.01', subtractFromPool: false}])).toEqual({invoiceTotal: 9.45, openAmount: 9.25,
             extraAmount: 1.01, subtractiveAmount: -2.1});
         expect(invoiceCostTotals([{status: 'APPROVED', amount: 0.1}, {status: 'APPROVED', amount: 0.2}], [])
             .invoiceTotal).toBe(0.30000000000000004);
@@ -45,9 +45,9 @@ describe('shared monetary and list projections', () => {
         const id = 'a103fc16-052d-4269-8abc-432853059a6c';
         const profile = 'b204fc16-052d-4269-8abc-432853059a6d';
         const rows = [{id: id.toUpperCase(), maxAssignees: 3, assignedCount: 0},
-            {id: 'unlimited', maxAssignees: null, assignedCount: 0}, {id: 'full', maxAssignees: 1, assignedCount: 1}];
+        {id: 'unlimited', maxAssignees: null, assignedCount: 0}, {id: 'full', maxAssignees: 1, assignedCount: 1}];
         const assignments = new Map([[id, [{profileId: profile.toUpperCase()}, {name: 'Historical guest'}]],
-            ['full', [{profileId: profile}, {name: 'Historical guest'}]]]);
+        ['full', [{profileId: profile}, {name: 'Historical guest'}]]]);
         expect(countListItems(rows, assignments)).toEqual({participants: 2, open: 1, empty: 2});
     });
 });
@@ -276,8 +276,8 @@ describe('backend application behavior suite', () => {
             const firstPath = 'private-storage/first-image.png';
             const secondPath = 'private-storage/replacement-image.png';
             const card = (headerImg: string | null) => convertToSingleList({packingLists: [
-                createEntityBase({id: 'packing-1', headerImg}),
-            ]} as Partial<DashboardEntities>)[0];
+                    createEntityBase({id: 'packing-1', headerImg}),
+                ]} as Partial<DashboardEntities>)[0];
             const first = card(firstPath);
             const replacement = card(secondPath);
             expect(first.imageVersion).toEqual(expect.any(String));

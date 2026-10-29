@@ -23,7 +23,7 @@ const guestRoute = computed(() => resourceRouteIntent(route) === 'guest');
 const initialDocument = context.initialDocumentFor(route.fullPath);
 const initialEntry: components['schemas']['EntityResourceEntry'] | undefined = initialDocument
     ? {entry: initialDocument.pageEntry ?? (initialDocument.packingError
-        ? {kind: 'denied', status: 404, messageKey: initialDocument.packingError} : {kind: 'render'}),
+            ? {kind: 'denied', status: 404, messageKey: initialDocument.packingError} : {kind: 'render'}),
         guest: initialDocument.guestEntry ?? null}
     : undefined;
 

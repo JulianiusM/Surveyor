@@ -37,11 +37,11 @@ const Fixture = defineComponent({
         if (!validateProblem(problem)) throw new Error('The binding fixture requires a validated known Problem.');
         const readError = new ApiFailure(400, problem);
         return () => h('section', [h('span', {id: 'binding-message'}, messages.value.t('common.save')),
-            h(StatusNotice, {id: 'binding-read-notice', kind: 'warning', readError,
-                lastUpdatedAt: Date.UTC(2026, 9, 11, 6), retryAt: Date.UTC(2026, 9, 11, 6, 1)},
-                () => messages.value.t('state.stale')),
-            h('input', {id: 'binding-draft', value: draft.value,
-                onInput: (event: Event) => { draft.value = (event.target as HTMLInputElement).value; }})]);
+        h(StatusNotice, {id: 'binding-read-notice', kind: 'warning', readError,
+            lastUpdatedAt: Date.UTC(2026, 9, 11, 6), retryAt: Date.UTC(2026, 9, 11, 6, 1)},
+            () => messages.value.t('state.stale')),
+        h('input', {id: 'binding-draft', value: draft.value,
+            onInput: (event: Event) => { draft.value = (event.target as HTMLInputElement).value; }})]);
     },
 });
 
@@ -80,7 +80,7 @@ describe('typed i18next-vue binding', () => {
 
     it('hydrates the real application and refreshes library translations without replacing draft input', async () => {
         const profiles = [{id: '11111111-1111-4111-8111-111111111111', name: 'First profile'},
-            {id: '22222222-2222-4222-8222-222222222222', name: 'Second profile'}];
+        {id: '22222222-2222-4222-8222-222222222222', name: 'Second profile'}];
         const account: components['schemas']['SessionView'] = {...session, kind: 'account', profiles,
             activeProfile: profiles[0]!, logoutUrl: '/users/logout'};
         const bootstrap = {session: account, initialUrl: path};

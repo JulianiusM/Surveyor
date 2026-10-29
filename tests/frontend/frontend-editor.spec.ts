@@ -48,7 +48,7 @@ const settings: components['schemas']['ListSettings'] = {id: listId, title: list
 
 function json(value: unknown, status = 200): Response {
     return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
-        'X-Surveyor-Context': session.context, ETag: '"original"'}});
+            'X-Surveyor-Context': session.context, ETag: '"original"'}});
 }
 
 /** These HTTP outcomes cannot establish read denial: each fails the shared wire
@@ -75,8 +75,8 @@ describe('shared inline input constraints', () => {
         // Focusing an existing value keeps the caret at its end without selecting all text.
         const context = createFrontendContext({session}, true);
         const router = createRouter({history: createMemoryHistory(), routes: [
-            {path: '/', component: defineComponent({template: '<p>Editor host</p>'})},
-        ]});
+                {path: '/', component: defineComponent({template: '<p>Editor host</p>'})},
+            ]});
         await router.push('/');
         const save = vi.fn(async () => true);
         const wrapper = mount(InlineCell, {attachTo: document.body,
@@ -99,8 +99,8 @@ describe('shared inline input constraints', () => {
         const save = vi.fn(async () => true);
         const context = createFrontendContext({session}, true);
         const router = createRouter({history: createMemoryHistory(), routes: [
-            {path: '/', component: defineComponent({template: '<p>Editor host</p>'})},
-        ]});
+                {path: '/', component: defineComponent({template: '<p>Editor host</p>'})},
+            ]});
         await router.push('/');
         const wrapper = mount(InlineCell, {attachTo: document.body,
             props: {value: 2, token: '"capacity-original"', editable: true, numeric: true, label: 'Capacity', save},
@@ -175,9 +175,9 @@ describe('shared dialog focus', () => {
 
 /** Mount the real packing view with an HTTP-boundary fixture; state and rendering stay production code. */
 async function mountPackingView(view: components['schemas']['PackingListView'],
-                                handler?: (request: Request) => Promise<Response>,
-                                path = `/packing/${listId}`,
-                                locale: components['schemas']['SessionView']['locale'] = 'en') {
+    handler?: (request: Request) => Promise<Response>,
+    path = `/packing/${listId}`,
+    locale: components['schemas']['SessionView']['locale'] = 'en') {
     const request = vi.fn(async function readPackingFixture(input: RequestInfo | URL) {
         if (handler) return handler(input as Request);
         if (new URL((input as Request).url).pathname.endsWith('/header')) return new Response(new Blob(['image']), {
@@ -187,15 +187,15 @@ async function mountPackingView(view: components['schemas']['PackingListView'],
     const context = createFrontendContext({session: {...session, locale}}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/packing/:listId', component: PackingPage},
-        {path: '/packing/:listId/duplicate', component: PackingCreatePage},
-    ]});
+            {path: '/packing/:listId', component: PackingPage},
+            {path: '/packing/:listId/duplicate', component: PackingCreatePage},
+        ]});
     await router.push(path);
     await router.isReady();
     const wrapper = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+        }});
     await flushPromises();
     async function dispose() {
         wrapper.unmount();
@@ -500,7 +500,7 @@ describe('mounted Packing header upload selection', () => {
                     if (writes && followUp === 'failed') return new Response(JSON.stringify({type: 'about:blank',
                         title: 'Read unavailable', status: 503, detail: 'Saved header needs a later read.', requestId: 'header-follow-up'}),
                         {status: 503, headers: {'Content-Type': 'application/problem+json',
-                            'X-Surveyor-Context': session.context, 'Retry-After': '3600'}});
+                                'X-Surveyor-Context': session.context, 'Retry-After': '3600'}});
                     return json({...headerSettings, headerUrl: writes ? `/packing/${listId}/header` : null,
                         headerVersion: writes ? `saved-header-${writes}` : null});
                 }
@@ -1157,7 +1157,7 @@ describe('packing presentation compatibility', () => {
                 }
                 expect(writes).toBe(unknownWrite ? 1 : 0);
             } finally { await mounted.dispose(); }
-    });
+        });
 
     it.each([[404, 'html'], [403, 'mismatched'], [404, 'malformed']] as const)(
         'recovers cold duplicate admission after unusable %s %s without a denial card or POST', async (status, representation) => {
@@ -1184,7 +1184,7 @@ describe('packing presentation compatibility', () => {
                 expect(mounted.wrapper.text()).not.toContain(mounted.context.messages.value.t('state.loadFailed'));
                 expect(mounted.request.mock.calls.map(([request]) => (request as Request).method)).toEqual(['GET', 'GET']);
             } finally { await mounted.dispose(); }
-    });
+        });
 
     it('shares image lifetime with an injected reader and retires held versions, actor changes and disposal', async () => {
         // Actor invalidation asks the session owner to recover. Keep that real
@@ -1210,7 +1210,7 @@ describe('packing presentation compatibility', () => {
             template: '<img v-if="image" :src="image" alt="Authorized feature image" />',
         });
         const wrapper = mount(host, {global: {plugins: [[I18NextVue, {i18next: context.i18next}]],
-            provide: {[frontendContextKey as symbol]: context}}});
+                provide: {[frontendContextKey as symbol]: context}}});
         try {
             await flushPromises();
             expect(wrapper.get('img').attributes('src')).toBe('blob:first');
@@ -1266,7 +1266,7 @@ describe('packing presentation compatibility', () => {
                 template: '<img v-if="image" :src="image" alt="Admitted image" />',
             });
             const wrapper = mount(host, {global: {plugins: [[I18NextVue, {i18next: context.i18next}]],
-                provide: {[frontendContextKey as symbol]: context}}});
+                    provide: {[frontendContextKey as symbol]: context}}});
             const stop = context.start();
             try {
                 visibility.mockReturnValue('visible');
@@ -1322,7 +1322,7 @@ describe('packing presentation compatibility', () => {
                 template: '<img v-if="image" :src="image" alt="Readmitted image" />',
             });
             const wrapper = mount(host, {global: {plugins: [[I18NextVue, {i18next: context.i18next}]],
-                provide: {[frontendContextKey as symbol]: context}}});
+                    provide: {[frontendContextKey as symbol]: context}}});
             try {
                 await flushPromises();
                 expect(read).toHaveBeenCalledOnce();
@@ -1370,7 +1370,7 @@ describe('packing presentation compatibility', () => {
             template: '<img v-if="image" :src="image" alt="Recovered image" />',
         });
         const wrapper = mount(host, {global: {plugins: [[I18NextVue, {i18next: context.i18next}]],
-            provide: {[frontendContextKey as symbol]: context}}});
+                provide: {[frontendContextKey as symbol]: context}}});
         try {
             await flushPromises();
             expect(read).toHaveBeenCalledOnce();
@@ -1423,7 +1423,7 @@ describe('packing presentation compatibility', () => {
             template: '<img v-if="image" :src="image" alt="Admitted image" />',
         });
         const wrapper = mount(host, {global: {plugins: [[I18NextVue, {i18next: context.i18next}]],
-            provide: {[frontendContextKey as symbol]: context}}});
+                provide: {[frontendContextKey as symbol]: context}}});
         try {
             await flushPromises();
             expect(read).not.toHaveBeenCalled();
@@ -1465,7 +1465,7 @@ describe('packing presentation compatibility', () => {
             template: '<img v-if="image" :src="image" alt="Current image" />',
         });
         const wrapper = mount(host, {global: {plugins: [[I18NextVue, {i18next: context.i18next}]],
-            provide: {[frontendContextKey as symbol]: context}}});
+                provide: {[frontendContextKey as symbol]: context}}});
         try {
             await flushPromises();
             version.value = 'current-version';
@@ -1500,7 +1500,7 @@ describe('packing presentation compatibility', () => {
             if (!new URL(request.url).pathname.endsWith('/header')) return json(view);
             if (++headerReads === 1) throw new TypeError('Temporary image connection failure');
             return new Response(new Blob(['image']), {headers: {'Content-Type': 'image/png',
-                'X-Surveyor-Context': session.context}});
+                    'X-Surveyor-Context': session.context}});
         });
         try {
             expect(headerReads).toBe(1);
@@ -1533,19 +1533,19 @@ describe('packing presentation compatibility', () => {
             if (!new URL((input as Request).url).pathname.endsWith('/header')) return json(region);
             if (++headerReads === 1) throw new TypeError('Temporary card image failure');
             return new Response(new Blob(['image']), {headers: {'Content-Type': 'image/png',
-                'X-Surveyor-Context': session.context}});
+                    'X-Surveyor-Context': session.context}});
         });
         const context = createFrontendContext({session}, true, request);
         context.hydrated.value = true;
         const router = createRouter({history: createMemoryHistory(), routes: [
-            {path: '/users/dashboard', component: OverviewRegion, props: {collection: 'owner', region: 'main'}},
-        ]});
+                {path: '/users/dashboard', component: OverviewRegion, props: {collection: 'owner', region: 'main'}},
+            ]});
         await router.push('/users/dashboard');
         const wrapper = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}],
-                [I18NextVue, {i18next: context.i18next}]],
-            provide: {[frontendContextKey as symbol]: context},
-        }});
+                plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}],
+                    [I18NextVue, {i18next: context.i18next}]],
+                provide: {[frontendContextKey as symbol]: context},
+            }});
         try {
             await flushPromises();
             expect(headerReads).toBe(1);
@@ -1648,7 +1648,7 @@ describe('authorized binary transport', () => {
         async (_kind, body, confirmed, message) => {
             const request = vi.fn(async function denyImage(): Promise<Response> {
                 return new Response(JSON.stringify(body), {status: 403, headers: {'Content-Type': 'application/problem+json',
-                    'X-Surveyor-Context': session.context}});
+                        'X-Surveyor-Context': session.context}});
             });
             const identityLost = vi.fn();
             const api = new PackingApi(new FrontendApi(() => true, identityLost, request));
@@ -1662,9 +1662,9 @@ describe('authorized binary transport', () => {
         let attempts = 0;
         const request = vi.fn(async function readLimitedBinary(): Promise<Response> {
             if (++attempts === 1) return new Response('{}', {status: 429, headers: {'Content-Type': 'application/problem+json',
-                'Retry-After': '90', 'X-Surveyor-Context': session.context}});
+                    'Retry-After': '90', 'X-Surveyor-Context': session.context}});
             return new Response(new Blob(['image']), {headers: {'Content-Type': 'image/png',
-                'X-Surveyor-Context': session.context}});
+                    'X-Surveyor-Context': session.context}});
         });
         const api = new PackingApi(new FrontendApi(() => true, vi.fn(), request));
         const scope = {context: session.context, csrfToken: session.csrfToken, locale: 'en', epoch: 0};
@@ -1683,7 +1683,7 @@ describe('authorized binary transport', () => {
         const request = vi.fn(async function readHeldBinary(_input: RequestInfo | URL): Promise<Response> {
             if (request.mock.calls.length === 1) return oldResponse;
             return new Response(new Blob(['current image']), {headers: {'Content-Type': 'image/png',
-                'X-Surveyor-Context': session.context}});
+                    'X-Surveyor-Context': session.context}});
         });
         const api = new PackingApi(new FrontendApi(() => true, vi.fn(), request));
         const scope = {context: session.context, csrfToken: session.csrfToken, locale: 'en', epoch: 0};
@@ -1696,7 +1696,7 @@ describe('authorized binary transport', () => {
         // The external fixture intentionally ignores cancellation and completes
         // with a valid deadline. Only current reads may publish that shared state.
         finishOldResponse(new Response('{}', {status: 429, headers: {'Content-Type': 'application/problem+json',
-            'Retry-After': '90', 'X-Surveyor-Context': session.context}}));
+                'Retry-After': '90', 'X-Surveyor-Context': session.context}}));
         await expect(retired).rejects.toBeInstanceOf(ObsoleteRequestError);
         await expect(api.header(listId, scope)).resolves.toBeInstanceOf(Blob);
         expect(request).toHaveBeenCalledTimes(2);
@@ -1729,17 +1729,17 @@ describe('packing editor ownership', () => {
         const context = createFrontendContext({session}, true, request);
         context.hydrated.value = true;
         const router = createRouter({history: createMemoryHistory(), routes: [
-            {path: '/packing/:listId', component: PackingPage},
-        ]});
+                {path: '/packing/:listId', component: PackingPage},
+            ]});
         await router.push(`/packing/${listId}`);
         await router.isReady();
         const wrapper = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-            provide: {[frontendContextKey as symbol]: context},
-            // Portal/focus-trap mechanics have their own real-browser journey. Keep the actual page,
-            // editor, v-model and query observers together here to exercise draft component lifetime.
-            stubs: {AppDialog: defineComponent({template: '<section role="dialog"><slot name="navigation" /><slot /><slot name="footer" /></section>'})},
-        }});
+                plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+                provide: {[frontendContextKey as symbol]: context},
+                // Portal/focus-trap mechanics have their own real-browser journey. Keep the actual page,
+                // editor, v-model and query observers together here to exercise draft component lifetime.
+                stubs: {AppDialog: defineComponent({template: '<section role="dialog"><slot name="navigation" /><slot /><slot name="footer" /></section>'})},
+            }});
         try {
             await flushPromises();
             const edit = wrapper.findAll('button').find(button => button.text() === 'Entity settings');

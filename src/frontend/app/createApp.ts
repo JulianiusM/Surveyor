@@ -19,7 +19,7 @@ function isRouteModuleLoadFailure(error: unknown): boolean {
 
 /** Server and browser construct the same component tree with separate application-owned state. */
 export function createFrontendApp(bootstrap: FrontendBootstrap, browser: boolean,
-                               initialReloadGuard?: () => boolean) {
+    initialReloadGuard?: () => boolean) {
     const context = createFrontendContext(bootstrap, browser, undefined, mayReloadAutomatically);
     // Register initial DOM protection before Router can start a failing import.
     // The browser entry releases it only after mounted draft restoration finishes.
@@ -42,7 +42,7 @@ export function createFrontendApp(bootstrap: FrontendBootstrap, browser: boolean
             if (to.meta.helpPage && (saved || to.hash)
                 && (saved || to.path !== from.path || to.hash !== from.hash
                     || JSON.stringify(resolveFrontendHelpQuery(to.params.doc, to.query))
-                        !== JSON.stringify(resolveFrontendHelpQuery(from.params.doc, from.query)))) {
+                    !== JSON.stringify(resolveFrontendHelpQuery(from.params.doc, from.query)))) {
                 if (!await pageReadiness.wait(to)) return false;
                 await nextTick();
                 if (router.currentRoute.value !== to) return false;
@@ -60,7 +60,7 @@ export function createFrontendApp(bootstrap: FrontendBootstrap, browser: boolean
             // a locale-only URL synchronization must retain the reader's position.
             if (to.path === from.path && to.meta.helpPage
                 && JSON.stringify(resolveFrontendHelpQuery(to.params.doc, to.query))
-                    !== JSON.stringify(resolveFrontendHelpQuery(from.params.doc, from.query))) {
+                !== JSON.stringify(resolveFrontendHelpQuery(from.params.doc, from.query))) {
                 return to.hash ? false : {top: 0};
             }
             // Locale synchronization, filters and read results are SPA state,

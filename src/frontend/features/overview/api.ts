@@ -10,7 +10,7 @@ import {validateOverviewVisibilityResult} from '../../../../.generated/api/v1/br
  * and mounted navigation must use the exact same key, including omitted fields;
  * another collection's query fields never enter this feature request. */
 export function overviewQueryParameters(values: LocationQuery, collection: components['schemas']['OverviewRegion']['collection'],
-                                        region: components['schemas']['OverviewRegion']['region']): NonNullable<paths['/overview']['get']['parameters']['query']> {
+    region: components['schemas']['OverviewRegion']['region']): NonNullable<paths['/overview']['get']['parameters']['query']> {
     const prefix = collection + '_' + region + '_';
 
     // Bookmarked values admit only a single string. The server remains

@@ -36,7 +36,7 @@ import type {
 } from '../../types/EntityPropertyTypes';
 
 import {hasAccountProfile} from './userController';
-import {Request} from "express";
+import {Request} from 'express';
 import type {EntityManager} from 'typeorm';
 import {comparisonToken, comparisonActor, requireFieldComparison, entityTag} from '../modules/api/transport';
 import {classifyArchiveCommandError, archiveEntity, restoreEntity} from '../modules/entityArchival';
@@ -50,25 +50,25 @@ import type {LockedArchiveContext} from '../../types/ArchiveTypes';
 
 import type {Event} from '../modules/database/entities/event/Event';
 import Joi from 'joi';
-import {DriversItem} from "../modules/database/entities/drivers/DriversItem";
-import {DriversList} from "../modules/database/entities/drivers/DriversList";
+import {DriversItem} from '../modules/database/entities/drivers/DriversItem';
+import {DriversList} from '../modules/database/entities/drivers/DriversList';
 
 import * as driverService from '../modules/database/services/DriverService';
 import * as lifecycleService from '../modules/database/services/EntityLifecycleService';
 import * as adminService from '../modules/database/services/EntityAdminService';
 
 import {ApiProblem} from '../modules/api/problem';
+import {requireApiProfileId} from '../modules/api/session';
 import {APIError, ValidationError} from '../modules/lib/errors';
-import {performImageSwap, checkNewImage, removeImage} from "../modules/lib/fileCommons";
+import {performImageSwap, checkNewImage, removeImage} from '../modules/lib/fileCommons';
 import {ENTITIES, generateUniqueId, sameUuid, uuidKey, groupByUuid, countListItems} from '../modules/lib/util';
-import type {EntityBase} from "../../types/UserTypes";
 import type {DriversCommandPreparation, DriversMethod} from '../../types/DriversTypes';
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'drivers/drivers-create';
 
 /** Decode Drivers creation with the existing optional parent, description and field defaults. */
-function preprocessCreate(body: any): Partial<DriversList> {
+export function preprocessCreate(body: any): Partial<DriversList> {
     // Preserve form coercion and validation before selecting only the supported root fields.
     const schema = Joi.object({
         title: Joi.string().required(),
@@ -96,9 +96,9 @@ function preprocessCreate(body: any): Partial<DriversList> {
     };
 }
 
-/** Share root creation between adapters. Direct creation keeps its original
- * later defaults hook; the versioned command supplies its existing transaction. */
-async function createEntity(
+/** Persist the admitted root through the existing DBAL. The creation command
+ * supplies its transaction and writes defaults before preparing its response. */
+export async function createEntity(
     ownerId: string,
     listData: Partial<DriversList>,
     manager?: EntityManager,
@@ -113,13 +113,9 @@ async function createEntity(
     );
 }
 
-async function afterCreateItems(id: string, data: any) {
-    await updateSettings(id, data._body);
-}
-
 /** Preserve shared read order and renderer data while sharing only the counter
  * policy with the versioned snapshot projection. Neither read changes membership. */
-async function fetchForView(list: DriversList, req: Request) {
+export async function fetchForView(list: DriversList, req: Request) {
     // Caller admission has already supplied the active profile.
     // Keep these existing independent reads and their original failure ordering.
     const items = await driverService.getDriversItems(list.id);
@@ -138,24 +134,19 @@ async function fetchForView(list: DriversList, req: Request) {
     };
 }
 
-/** Read source offers after the calling adapter has admitted duplication. */
-async function fetchForDuplicate(list: DriversList) {
-    return await driverService.getDriversItems(list.id);
-}
-
-async function deleteEntity(list: DriversList, session: SessionLike, manager?: EntityManager) {
+export async function deleteEntity(list: DriversList, session: SessionLike, manager?: EntityManager) {
     return await driverService.deleteDriversList(list.id, manager);
 }
 
 // ---------- API ----------
 // API-specific controllers
-async function updateDescription(id: string, body: any, expectedEventId?: string | null) {
+export async function updateDescription(id: string, body: any, expectedEventId?: string | null) {
     await saveListMetadata('drivers', id, normalizeBasicProperties({description: body.description}), {kind: 'direct', expectedEventId});
     return 'Description updated';
 }
 
 
-async function reorderItems(id: string, order: Array<{ itemId: string; position: number }>, manager?: EntityManager) {
+export async function reorderItems(id: string, order: Array<{ itemId: string; position: number }>, manager?: EntityManager) {
     await driverService.reorderDriversItems(id, order, manager);
     return 'Order saved';
 }
@@ -163,7 +154,7 @@ async function reorderItems(id: string, order: Array<{ itemId: string; position:
 
 /** Decode Quick Add's original defaults, numeric fallback and diagnostics;
  * the admitted profile and stored position reach the shared offer creator. */
-async function quickAddItem(list: DriversList, body: any, session: Request['session']) {
+export async function quickAddItem(list: DriversList, body: any, session: Request['session']) {
     const {title = '', description = '', maxAssignees = '1'} = body;
     if (!title) throw new APIError('Title required', body, 400);
 
@@ -177,7 +168,7 @@ async function quickAddItem(list: DriversList, body: any, session: Request['sess
 }
 
 
-async function updateItemDescription(itemId: string, body: any) {
+export async function updateItemDescription(itemId: string, body: any) {
     await applyDriversItemPatch(itemId, {description: body.description}, {kind: 'direct', body});
     return 'Description updated';
 }
@@ -185,7 +176,7 @@ async function updateItemDescription(itemId: string, body: any) {
 
 /** Direct attribute edits retain their raw scalar and allowlist. The common
  * sparse write preserves passengers and the original vanished-row diagnostic. */
-async function updateItemAttr(itemId: string, body: any) {
+export async function updateItemAttr(itemId: string, body: any) {
     const {field, value} = body;
     const allowed: any = {title: 1, description: 1, maxAssignees: 1};
 
@@ -207,24 +198,14 @@ async function updateSettings(id: string, body: any, manager?: EntityManager, in
 }
 
 
-async function deleteItem(itemId: string, manager?: EntityManager) {
+export async function deleteItem(itemId: string, manager?: EntityManager) {
     await driverService.deleteDriversItem(itemId, manager);
     return 'Item deleted';
 }
 
-async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
-    await performImageSwap(entity, driverService.updateHeaderImage, file);
-    return 'Image updated';
-}
-
-async function deleteHeaderImg(entity: EntityBase) {
-    await performImageSwap(entity, driverService.updateHeaderImage);
-    return 'Image deleted';
-}
-
 /** Select the feature's shared membership owners for the direct operation adapters.
  * The mapping exposes body-shaped operations with explicit profile and ride identifiers. */
-function getAssignmentAccessMapping() {
+export function getAssignmentAccessMapping() {
     // Both transports retain the same capacity/idempotency policy; only direct
     // removal preserves the original unlocked deletion and feedback adapter.
     return {
@@ -249,37 +230,6 @@ async function assignItem(itemId: string, profileId: string): Promise<void> {
         await applyListMembership('drivers', itemId, profileId, true, {manager, item, existing, count});
     });
 }
-
-/** Normalize all submitted fields before acquiring a lock; omitted fields remain unchanged. */
-async function updateProperties(entity: EntityBase, body: unknown) {
-    await saveListMetadata('drivers', entity.id, normalizeBasicProperties(body), {kind: 'direct', expectedEventId: entity.eventId ?? null});
-    return 'Properties updated';
-}
-
-export default {
-    updateProperties,
-    preprocessCreate,
-    createEntity,
-    afterCreateItems,
-    fetchForView,
-    fetchForDuplicate,
-    deleteEntity,
-
-    updateDescription,
-    reorderItems,
-    quickAddItem,
-    updateItemDescription,
-    updateItemAttr,
-    deleteAssignment,
-    updateSettings,
-    deleteItem,
-
-    updateHeaderImg,
-    deleteHeaderImg,
-
-    getAssignmentAccessMapping,
-}
-
 
 /**
  * One method policy drives named controller checks and action
@@ -329,12 +279,6 @@ function mayEditItemField(permissions: PermView, field: keyof components['schema
     return mayPerformDriversMethod(permissions, itemFieldMethods[field]);
 }
 
-/** Require the already admitted actor; this module never re-reads a mutable Express session. */
-function actorId(session: SessionLike): string {
-    if (!session.profile?.id) throw new ApiProblem('AUTH_REQUIRED');
-    return session.profile.id;
-}
-
 /** Interpret nullable DB evidence here, keeping missing-resource policy outside the DBAL. */
 function requireList(list: DriversList | null): DriversList {
     if (!list) throw new ApiProblem('NOT_FOUND');
@@ -363,7 +307,7 @@ export async function readDriversList(id: string, session: SessionLike) {
         const {items, assignments} = await driverService.getDriversSnapshotRows(manager, id);
         const assignmentsByItem = groupByUuid(assignments, assignment => assignment.itemId);
 
-        const profileId = actorId(session);
+        const profileId = requireApiProfileId(session);
         const itemRows: components['schemas']['DriversItemView'][] = [];
         for (const item of items) {
             const itemPermissions = await listItemPermissions('drivers', manager, list, item, session, caches);
@@ -421,7 +365,7 @@ export async function readDriversList(id: string, session: SessionLike) {
 const driversListReadOperations: ListReadOperations<DriversList, DriversItem, components['schemas']['EntityDescriptionBaseline']> = {
     withSnapshot: driverService.withDriversReadSnapshot,
     requireRoot: requireList,
-    requireProfile: actorId,
+    requireProfile: requireApiProfileId,
     mayPerform: mayPerformDriversMethod,
     descriptionBaseline: (list, session) => listDescriptionBaseline('drivers', list, session),
     items: driverService.getDriversSnapshotItems,
@@ -458,7 +402,7 @@ export async function readDriversItemOrderBaseline(id: string, session: SessionL
  */
 export async function patchDriversMetadata(id: string, patch: components['schemas']['DriversMetadataPatch'], ifMatch: string | undefined, session: SessionLike,
     prepare?: DriversCommandPreparation<ReturnType<typeof listMetadataResult<'drivers'>>>) {
-    actorId(session);
+    requireApiProfileId(session);
     return saveListMetadata('drivers', id, patch, {kind: 'versioned', ifMatch, session, prepare});
 }
 
@@ -482,7 +426,7 @@ export async function patchDriversDescription(id: string, patch: components['sch
  */
 export async function setDriversSelfAssignment(listId: string, itemId: string, assigned: boolean, session: SessionLike,
     prepare?: DriversCommandPreparation<components['schemas']['DriversAssignmentResult']>): Promise<components['schemas']['DriversAssignmentResult']> {
-    const profileId = actorId(session);
+    const profileId = requireApiProfileId(session);
     /** Recheck the captured actor against the locked relationship before reading
      * item/count evidence and applying the common desired-membership policy. */
     async function assignLocked(manager: EntityManager, context: LockedArchiveContext) {
@@ -610,7 +554,7 @@ const listItemCommandOperations: ListItemCommandOperations<'drivers', components
 
 /** Creation POST requires an account, including when a public/guest duplicate GET supplied its draft. */
 export function requireDriversCreation(session: SessionLike): void {
-    actorId(session);
+    requireApiProfileId(session);
     if (!hasAccountProfile(session)) throw new ApiProblem('FORBIDDEN');
 }
 
@@ -642,7 +586,7 @@ export async function createDriversList(
         // Direct submission and versioned commands use the event controller's same attachment
         // policy. The v1 adapter supplies its already locked parent and manager.
         await authorizeEventLink(body.eventId, session, manager, event);
-        const id = await createEntity(actorId(session), {...body, eventId: body.eventId ?? undefined, description: body.description ?? undefined, headerImg: file?.path}, manager);
+        const id = await createEntity(requireApiProfileId(session), {...body, eventId: body.eventId ?? undefined, description: body.description ?? undefined, headerImg: file?.path}, manager);
         await updateSettings(id, {defaultPerms: body.defaultPermissions}, manager, 'masks');
         const result = {id};
         prepare?.(result);
@@ -654,25 +598,25 @@ export async function createDriversList(
 /** Duplicate GET depends only on DATA_DUPLICATE, independently of detail admission and creation POST. */
 export async function readDriversDuplicate(id: string, session: SessionLike, eventId?: unknown): Promise<components['schemas']['DriversDuplicate']> {
     return driverService.withDriversReadSnapshot(id,
-    /** Read the granted source form/defaults without copying offers or memberships;
+        /** Read the granted source form/defaults without copying offers or memberships;
      * only independently admitted destination selection can seed a new parent. */
-    async function readDuplicate(manager, row) {
-        const list = requireList(row);
-        const permissions = await evaluateSubject({kind: 'entity', entity: {
-            entityType: 'drivers', entityId: list.id, ownerId: list.ownerId, eventId: list.eventId,
-        }}, session, undefined, manager);
-        if (!mayPerformDriversMethod(permissions, 'duplicate')) throw new ApiProblem('FORBIDDEN');
+        async function readDuplicate(manager, row) {
+            const list = requireList(row);
+            const permissions = await evaluateSubject({kind: 'entity', entity: {
+                    entityType: 'drivers', entityId: list.id, ownerId: list.ownerId, eventId: list.eventId,
+                }}, session, undefined, manager);
+            if (!mayPerformDriversMethod(permissions, 'duplicate')) throw new ApiProblem('FORBIDDEN');
 
-        // Copy the form surface only. Assignments, administrators, header,
-        // archive state and event membership remain associated with the source.
-        const selected = await readEventLinkSelection(eventId, session);
-        return {title: list.title, description: list.description ?? null, eventId: null,
-            defaultPermissions: completeDefaults(await adminService.getDefaultPerms('drivers', id, manager)),
-            // The source's parent is deliberately excluded. Only a separately
-            // admitted URL selection may seed the destination creation draft.
-            formContext: driversFormContext(),
-            ...(eventId !== undefined ? {selectedEvent: selected ? projectEntityEventOption(selected) : null} : {})};
-    });
+            // Copy the form surface only. Assignments, administrators, header,
+            // archive state and event membership remain associated with the source.
+            const selected = await readEventLinkSelection(eventId, session);
+            return {title: list.title, description: list.description ?? null, eventId: null,
+                defaultPermissions: completeDefaults(await adminService.getDefaultPerms('drivers', id, manager)),
+                // The source's parent is deliberately excluded. Only a separately
+                // admitted URL selection may seed the destination creation draft.
+                formContext: driversFormContext(),
+                ...(eventId !== undefined ? {selectedEvent: selected ? projectEntityEventOption(selected) : null} : {})};
+        });
 }
 
 /** Project settings separately, omitting the administrator matrix entirely without MANAGE_PERMISSIONS. */
@@ -697,10 +641,10 @@ async function addDriversItem(id: string, fields: Partial<DriversItem>, profileI
 /** A versioned add has method authority independently of linked detail-page admission. */
 export async function createDriversItem(id: string, body: components['schemas']['DriversNewItem'], session: SessionLike,
     prepare?: DriversCommandPreparation<components['schemas']['DriversCreated']>): Promise<components['schemas']['DriversCreated']> {
-    actorId(session);
+    requireApiProfileId(session);
     return withDriversManagement(id, session, async function addItem(manager, list, permissions) {
         if (!mayPerformDriversMethod(permissions, 'addItem')) throw new ApiProblem('FORBIDDEN');
-        const itemId = await addDriversItem(id, body, actorId(session), manager);
+        const itemId = await addDriversItem(id, body, requireApiProfileId(session), manager);
         return {id: itemId};
     }, prepare);
 }
@@ -832,7 +776,7 @@ export async function changeDriversEvent(
     token?: string,
     prepare?: DriversCommandPreparation<components['schemas']['DriversEventChanged']>
 ): Promise<components['schemas']['DriversEventChanged']> {
-    actorId(session);
+    requireApiProfileId(session);
     const list = requireList(await driverService.getDriversListById(id));
     try {
         /** The shared relink owner already checked source/target method authority;
@@ -867,7 +811,7 @@ export async function changeDriversEvent(
  */
 export async function setDriversArchived(id: string, archived: boolean, session: SessionLike,
     prepare?: DriversCommandPreparation<components['schemas']['MutationResult']>): Promise<components['schemas']['MutationResult']> {
-    actorId(session);
+    requireApiProfileId(session);
 
     /** Preserve the existing command acknowledgement, including harmless repeated archive requests. */
     function prepareArchiveCompletion(): components['schemas']['MutationResult'] {
@@ -898,22 +842,22 @@ export async function setDriversHeader(
      * its prior path after commit so the file-swap owner can retire it safely. */
     async function persistApprovedHeader(listId: string, path?: string | null) {
         return withDriversManagement(listId, session,
-        /** Compare current header evidence, save its reference and prepare the receipt inside the lock. */
-        async function replaceHeader(manager, list, permissions) {
-            // Upload existence does not replace current method authority or the
-            // actor-bound comparison on this freshly locked root.
-            if (!mayPerformDriversMethod(permissions, 'editHeader')) throw new ApiProblem('FORBIDDEN');
-            requireFieldComparison(token, listHeaderToken('drivers', list, session), ['header']);
+            /** Compare current header evidence, save its reference and prepare the receipt inside the lock. */
+            async function replaceHeader(manager, list, permissions) {
+                // Upload existence does not replace current method authority or the
+                // actor-bound comparison on this freshly locked root.
+                if (!mayPerformDriversMethod(permissions, 'editHeader')) throw new ApiProblem('FORBIDDEN');
+                requireFieldComparison(token, listHeaderToken('drivers', list, session), ['header']);
 
-            await driverService.updateHeaderImage(listId, path, manager);
+                await driverService.updateHeaderImage(listId, path, manager);
 
-            // The receipt leaves this callback only after commit. The existing
-            // image-swap owner can then remove the confirmed previous file, and
-            // retains its file cleanup of this upload when persistence fails.
-            const changed = Boolean(file || list.headerImg);
-            prepare?.({changed});
-            return {previousImage: list.headerImg, changed};
-        });
+                // The receipt leaves this callback only after commit. The existing
+                // image-swap owner can then remove the confirmed previous file, and
+                // retains its file cleanup of this upload when persistence fails.
+                const changed = Boolean(file || list.headerImg);
+                prepare?.({changed});
+                return {previousImage: list.headerImg, changed};
+            });
     }
 
     const result = await performImageSwap({id}, persistApprovedHeader, file);
@@ -935,7 +879,7 @@ export async function readDriversHeaderPath(id: string, session: SessionLike): P
 /** Hard deletion stays the simple feature repository operation, separate from archival coordination. */
 export async function deleteDriversList(id: string, session: SessionLike, expectedEventId?: string,
     prepare?: DriversCommandPreparation<components['schemas']['MutationResult']>): Promise<components['schemas']['MutationResult']> {
-    actorId(session);
+    requireApiProfileId(session);
     const oldPath = await withListRootLock('drivers', id, async function removeList(manager, row) {
         const list = requireList(row);
         // An Event-hosted command must still address this parent when the existing

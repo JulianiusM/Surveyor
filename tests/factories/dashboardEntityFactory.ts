@@ -1,4 +1,4 @@
-import type {DashboardEntities, Entity, EntityBase} from '../../src/types/UserTypes';
+import type {Entity, EntityBase} from '../../src/types/UserTypes';
 import {createEntityBase, createExpectedEntity} from './entitiesFactory';
 
 export interface DashboardEntityInput {

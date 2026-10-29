@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-import {NextFunction, Request, Response} from "express";
-import {ExpectedError} from "../modules/lib/errors";
-import {normalizeToArray} from "../modules/lib/util";
-import {can} from "../modules/permissionEngine";
+import {NextFunction, Request, Response} from 'express';
+import {ExpectedError} from '../modules/lib/errors';
+import {normalizeToArray} from '../modules/lib/util';
+import {can} from '../modules/permissionEngine';
 import {captureApiActor} from '../modules/api/session';
-import type {EntityGetter, Subject} from "../../types/PermissionTypes";
+import type {EntityGetter, Subject} from '../../types/PermissionTypes';
 
 type ErrorAdapter = {
     forbidden: () => never;

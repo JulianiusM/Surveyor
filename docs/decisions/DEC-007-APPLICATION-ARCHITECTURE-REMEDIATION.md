@@ -212,3 +212,13 @@ D04V and OPSV-001 through OPSV-007 are permanently deferred, excluded from activ
 and may be reactivated only by a new explicit maintainer request. More time, a corrected release or newly available
 tools do not reactivate them. Their historical records preserve the verification limits; deferral does not certify
 deployment, backup/restore or rollback, and does not remove the operating guides' safety procedures.
+
+## Approved convention resolutions (2026-10-29)
+
+The maintainer explicitly approves each R1–R6 from the immediately preceding convention-review final answer:
+the bounded runtime ORM-expression allowance, equivalent migration-style conversion including OrganizerInvoices,
+personal-visibility feature ownership, the limited common source-format baseline, identity profile-selection
+ownership and shared permission business ownership. These are that answer's identifiers, not earlier requests.
+The [Development Policy's dated amendment](../policies/DEVELOPMENT_POLICY.md#approved-convention-decisions-2026-10-29)
+owns the exact rules and preserved boundaries. This resolves the named owner/source-preservation conflicts without
+changing unrelated lifecycle decisions or the permanent rehearsal deferral above; approval is not execution evidence.

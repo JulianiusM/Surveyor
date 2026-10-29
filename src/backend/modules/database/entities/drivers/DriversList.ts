@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import {Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
-import {DefaultEntity} from "../abstract/BaseEntity";
-import {Event} from "../event/Event";
-import {DriversAssignment} from "./DriversAssignment";
-import {DriversItem} from "./DriversItem";
+import {Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from 'typeorm';
+import {DefaultEntity} from '../abstract/BaseEntity';
+import {Event} from '../event/Event';
+import {DriversAssignment} from './DriversAssignment';
+import {DriversItem} from './DriversItem';
 
 @Entity("drivers_lists", {schema: "surveyor"})
 export class DriversList extends DefaultEntity {

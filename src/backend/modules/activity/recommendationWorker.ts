@@ -7,7 +7,7 @@
 import type {FairAssignmentContext} from '../../../types/ActivityTypes';
 
 
-import {parentPort} from "node:worker_threads";
+import {parentPort} from 'node:worker_threads';
 import {generateFairRecommendations} from './fairAssignment';
 
 interface RecommendationWorkerRequest {

@@ -34,7 +34,7 @@ const session: components['schemas']['SessionView'] & {context: string; csrfToke
 function workspace(): components['schemas']['ActivityRecommendations'] {
     const slot = {id: slotId, title: 'Breakfast', day: '2030-06-01', startTime: '09:00:00', endTime: '10:00:00'};
     return {recommendations: [{id: recommendationId, item: slot, profile: {id: profileId, name: 'Alex'}, sourceItem: null,
-        operation: 'ASSIGN', status: 'PENDING', manual: false}], slots: [slot, {...slot, id: otherId, title: 'Lunch', startTime: '12:00:00', endTime: '13:00:00'}],
+            operation: 'ASSIGN', status: 'PENDING', manual: false}], slots: [slot, {...slot, id: otherId, title: 'Lunch', startTime: '12:00:00', endTime: '13:00:00'}],
         participantOptions: [{key: 'profile:' + profileId, profileId, label: 'Alex', arrivalDate: null, departureDate: null}],
         existingAssignments: [], warnings: [], autoGenerationJob: null};
 }
@@ -44,7 +44,7 @@ function workspace(): components['schemas']['ActivityRecommendations'] {
 function reciprocalWorkspace(): components['schemas']['ActivityRecommendations'] {
     const saved = workspace();
     const people = [{id: profileId, name: 'Alex'}, {id: otherId, name: 'Blair'},
-        {id: nextId, name: 'Casey'}, {id: jobId, name: 'Dana'}];
+    {id: nextId, name: 'Casey'}, {id: jobId, name: 'Dana'}];
     const ids = [recommendationId, jobId, nextId, '88888888-8888-4888-8888-888888888888'];
     saved.recommendations = [];
     saved.existingAssignments = [];
@@ -97,15 +97,15 @@ async function mounted(handler: (request: Request) => Promise<Response>) {
     context.hydrated.value = true;
     const currentView = shallowRef(view());
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/activity/:planId', component: ActivityRecommendations, props: () => ({planId, view: currentView.value})},
-        {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
-    ]});
+            {path: '/activity/:planId', component: ActivityRecommendations, props: () => ({planId, view: currentView.value})},
+            {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
+        ]});
     await router.push('/activity/' + planId);
     const stopInitial = observeInitialDocument(context, router);
     const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+        }});
     cleanups.push(async () => {root.unmount(); stopInitial(); await context.queryClient.cancelQueries(); context.queryClient.clear();});
     await flushPromises();
     await vi.waitFor(() => expect(root.find('[data-recommendations-schedule]').exists()).toBe(true));
@@ -133,7 +133,7 @@ function reviewStatus(root: ReturnType<typeof mount>, id: string): string {
 /** Stage through the actual editor so its SWAP/single distinction reaches the
  * production draft owner, including the real server preview boundary. */
 async function stageMove(root: ReturnType<typeof mount>, profile: string, counterpart?: string,
-                         sourceSlot = slotId, targetSlot = otherId): Promise<void> {
+    sourceSlot = slotId, targetSlot = otherId): Promise<void> {
     await root.get(`[data-add-recommendation][data-slot-id="${targetSlot}"]`).trigger('click');
     await flushPromises();
     await selectDialogValue('addRecommendationOperation', counterpart ? 'SWAP' : 'REASSIGN');
@@ -178,15 +178,15 @@ describe('Activity recommendation review production frontend', () => {
         // DBAL references retain stored IDs but deliberately have no title. The
         // warning must keep that ID so the UI can resolve its visible slot label.
         const existingAssignments = {[`profile:${storedProfile.toLowerCase()}`]: [{
-            id: storedConflict, day: '2030-06-01', startTime: '08:00', endTime: '14:00',
-        }]};
+                id: storedConflict, day: '2030-06-01', startTime: '08:00', endTime: '14:00',
+            }]};
         function calculatedWarnings(input: components['schemas']['ActivityRecommendationReview']) {
             return buildRecommendationWarnings({slots, recommendations: input.recommendations, existingAssignments})
                 .map(result => ({...result, recommendation: {...result.recommendation,
-                    profileId: result.recommendation.profileId ?? undefined}}));
+                        profileId: result.recommendation.profileId ?? undefined}}));
         }
         saved.warnings = calculatedWarnings({recommendations: [{id: recommendationId, itemId: storedSlot,
-            profileId: storedProfile, status: 'PENDING', operation: 'ASSIGN', manual: false}]});
+                profileId: storedProfile, status: 'PENDING', operation: 'ASSIGN', manual: false}]});
         const {root, currentView, requests} = await mounted(async request => {
             if (path(request).endsWith('/warnings')) {
                 return json({warnings: calculatedWarnings(await request.json())});
@@ -194,7 +194,7 @@ describe('Activity recommendation review production frontend', () => {
             return json(saved);
         });
         currentView.value = {...currentView.value, slots: saved.slots.map((slot, index) =>
-            ({...(currentView.value.slots[index] ?? currentView.value.slots[0]!), ...slot}))};
+                ({...(currentView.value.slots[index] ?? currentView.value.slots[0]!), ...slot}))};
         await flushPromises();
 
         expect(root.get('[data-recommendation-warnings]').text()).toContain('overlap');
@@ -324,7 +324,7 @@ describe('Activity recommendation review production frontend', () => {
         const {root, context} = await mounted(async request => {
             if (denied && path(request).endsWith('/entry')) return new Response(JSON.stringify({type: 'about:blank', title: 'Forbidden', status: 403,
                 detail: 'Access denied.', requestId: 'advanced-grant-revoked', code: 'FORBIDDEN', messageKey: 'api:errors.FORBIDDEN', params: {}}),
-            {status: 403, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
+                {status: 403, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
             return json(workspace());
         });
         denied = true;
@@ -428,7 +428,7 @@ describe('Activity recommendation review production frontend', () => {
         const {root, requests} = await mounted(async request => {
             if (path(request).includes('/auto/')) return new Response(JSON.stringify({type: 'about:blank', title: 'Not found', status: 404,
                 detail: 'Job is unavailable.', requestId: 'missing-domain-job', code: 'NOT_FOUND', messageKey: 'api:errors.NOT_FOUND', params: {}}),
-            {status: 404, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
+                {status: 404, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
             if (path(request).endsWith('/auto')) return json({job: domainJob('QUEUED'), coalesced: false}, 202);
             return json(workspace());
         });
@@ -687,7 +687,7 @@ describe('Activity recommendation review production frontend', () => {
         const {root, context, requests} = await mounted(async request => {
             if (denied && request.method === 'GET') return new Response(JSON.stringify({type: 'about:blank', title: 'Forbidden', status: 403,
                 detail: 'Access denied.', requestId: 'pair-grant-revoked', code: 'FORBIDDEN', messageKey: 'api:errors.FORBIDDEN', params: {}}),
-            {status: 403, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
+                {status: 403, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
             return json(saved);
         });
         await root.get(`[data-rec-id="${nextId}"] button[title="Approve"]`).trigger('click');
@@ -786,7 +786,7 @@ describe('Activity recommendation review production frontend', () => {
         saved.recommendations = [];
         saved.participantOptions.push({key: 'profile:' + otherId, profileId: otherId, label: 'Blair', arrivalDate: null, departureDate: null});
         saved.existingAssignments = [{item: saved.slots[0], profile: {id: profileId, name: 'Alex'}, roles: ['default']},
-            {item: saved.slots[1], profile: {id: otherId, name: 'Blair'}, roles: ['default']}];
+        {item: saved.slots[1], profile: {id: otherId, name: 'Blair'}, roles: ['default']}];
         const values = manualRecommendationRows(saved, [], {targetSlotId: saved.slots[1].id, operation: 'SWAP', profileId,
             sourceItemId: saved.slots[0].id, swapProfileId: otherId});
         const rows = values.map((value, index) => ({key: String(index), value}));

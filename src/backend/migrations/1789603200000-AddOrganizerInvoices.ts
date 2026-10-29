@@ -6,8 +6,9 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {MigrationInterface, QueryRunner, TableForeignKey} from "typeorm";
-import {addColumnIfNotExists, columnExists, dropColumnIfExists, tableExists} from "../modules/database/utils/migration-helper";
+import {MigrationInterface, QueryRunner} from 'typeorm';
+import {addColumnIfNotExists, columnExists, createConstraint, dropColumnIfExists, dropFkConstraint,
+    migrationColumnDefinition, recordMigrationGeneratedColumn, tableExists} from '../modules/database/utils/migration-helper';
 
 const TABLE = "event_invoices";
 const RECORDER_COLUMN = "recorded_by_profile_id";
@@ -24,7 +25,7 @@ export class AddOrganizerInvoices1789603200000 implements MigrationInterface {
         if (registrationColumn && !registrationColumn.isNullable) {
             const nullableRegistration = registrationColumn.clone();
             nullableRegistration.isNullable = true;
-            await queryRunner.changeColumn(TABLE, registrationColumn, nullableRegistration);
+            await queryRunner.query(`ALTER TABLE \`${TABLE}\` CHANGE \`registration_id\` ${await migrationColumnDefinition(queryRunner, TABLE, 'registration_id', nullableRegistration)}`);
         }
 
         if (!await columnExists(queryRunner, TABLE, RECORDER_COLUMN)) {
@@ -39,19 +40,18 @@ export class AddOrganizerInvoices1789603200000 implements MigrationInterface {
             recorder.generationStrategy = undefined;
             recorder.default = undefined;
             recorder.isNullable = true;
-            await queryRunner.addColumn(TABLE, recorder);
+            await queryRunner.query(`ALTER TABLE \`${TABLE}\` ADD ${await migrationColumnDefinition(queryRunner, 'profiles', 'id', recorder)}`);
+            // A historical generated expression retains the native ADD's
+            // bookkeeping before a later constraint may refuse the migration.
+            if (recorder.generatedType && recorder.asExpression) {
+                await recordMigrationGeneratedColumn(queryRunner, table ?? TABLE, recorder);
+            }
         }
         await addColumnIfNotExists(queryRunner, TABLE, "recorded_by_name", "varchar(50)", "NULL");
         const updated = await queryRunner.getTable(TABLE);
         if (!updated?.foreignKeys.some((foreignKey) => foreignKey.columnNames.includes(RECORDER_COLUMN))) {
-            await queryRunner.createForeignKey(TABLE, new TableForeignKey({
-                name: "FK_event_invoices_recorded_by_profile",
-                columnNames: [RECORDER_COLUMN],
-                referencedTableName: "profiles",
-                referencedColumnNames: ["id"],
-                onDelete: "SET NULL",
-                onUpdate: "CASCADE",
-            }));
+            await createConstraint(queryRunner, TABLE, "FK_event_invoices_recorded_by_profile",
+                "FOREIGN KEY (`recorded_by_profile_id`) REFERENCES `profiles` (`id`) ON DELETE SET NULL ON UPDATE CASCADE");
         }
         // Existing participant invoices keep their registration attribution and all saved settlement data.
     }
@@ -66,7 +66,7 @@ export class AddOrganizerInvoices1789603200000 implements MigrationInterface {
         }
         const table = await queryRunner.getTable(TABLE);
         for (const foreignKey of table?.foreignKeys.filter((key) => key.columnNames.includes(RECORDER_COLUMN)) ?? []) {
-            await queryRunner.dropForeignKey(TABLE, foreignKey);
+            await dropFkConstraint(queryRunner, TABLE, foreignKey.name!);
         }
         await dropColumnIfExists(queryRunner, TABLE, RECORDER_COLUMN);
         await dropColumnIfExists(queryRunner, TABLE, "recorded_by_name");

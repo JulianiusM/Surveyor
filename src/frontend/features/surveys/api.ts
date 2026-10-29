@@ -29,7 +29,7 @@ export class SurveysApi {
 
     /** A conditional detail read stays bound to its caller's actor/resource key. */
     async survey(surveyId: string, scope: FrontendRequestScope, signal?: AbortSignal,
-                 previous?: FrontendRead<Survey>): Promise<FrontendRead<Survey>> {
+        previous?: FrontendRead<Survey>): Promise<FrontendRead<Survey>> {
         const transport = this.transport;
         function readSurvey() {
             // Carry the previous representation's validator through the same
@@ -143,7 +143,7 @@ export class SurveysApi {
     /** ETags identify admitted representations for shared draft reconciliation.
      * They do not introduce a new server write precondition for legacy Surveys. */
     async metadata(surveyId: string, scope: FrontendRequestScope, signal?: AbortSignal,
-                   previous?: FrontendRead<Metadata>): Promise<FrontendRead<Metadata>> {
+        previous?: FrontendRead<Metadata>): Promise<FrontendRead<Metadata>> {
         const transport: FrontendApi = this.transport;
         function readMetadata() {
             // The returned identity belongs to this admitted metadata baseline,
@@ -163,7 +163,7 @@ export class SurveysApi {
     /** Preserve the existing blind metadata operation. The shared editor token
      * stays local comparison evidence and is deliberately not sent as If-Match. */
     async saveMetadata(surveyId: string, patch: components['schemas']['SurveyMetadataPatch'], _token: string,
-                       scope: FrontendRequestScope): Promise<FrontendRead<Metadata>> {
+        scope: FrontendRequestScope): Promise<FrontendRead<Metadata>> {
         // Keep the generated sparse patch distinct from its local baseline token.
         if (!validateSurveyMetadataPatch(patch)) {
             throw generatedInputError(validateSurveyMetadataPatch.errors, path => path === '/title' ? {label: 'survey.title'}

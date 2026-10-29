@@ -54,7 +54,7 @@ function poolCostFixture(redistributed: boolean): InvoiceSharesPdfData {
         contributions: [{...data.explanation!.contributions[0], baseShareAmount}]};
     // An explicitly saved empty list certifies that this plain pool has no on-top adjustment features.
     data.savedAdjustments = redistributed ? [{registrationId: 1, amount: 10, subtractFromPool: true},
-        {registrationId: 1, amount: -5, subtractFromPool: true}] : [];
+    {registrationId: 1, amount: -5, subtractFromPool: true}] : [];
     data.shares = [{...data.shares[0], baseShareAmount, extraAmount: redistributed ? 5 : 0,
         invoiceCreditAmount: 0, paymentCreditAmount: 0, shareAmount: 200, note: undefined}];
     return data;
@@ -108,7 +108,7 @@ function standaloneTextBlocks(content: unknown): string[] {
     // outside the optional example, so the factual displays may contain only their standalone heading.
     const ownText = typeof node.text === 'string' ? [node.text] : [];
     return [...ownText, ...standaloneTextBlocks(node.stack), ...standaloneTextBlocks(node.columns),
-        ...standaloneTextBlocks(node.table?.body)];
+    ...standaloneTextBlocks(node.table?.body)];
 }
 
 /** Inspect column groups containing arithmetic, including any accidentally nested equations. */
@@ -141,9 +141,9 @@ function isInlineMetric(content: unknown): boolean {
 
 function pdfNode(id: string, pages: number[]): Node {
     return {id, pageNumbers: pages, pages: 3, stack: false, startPosition: {
-        pageNumber: pages[0], pageOrientation: 'portrait', pageInnerHeight: 777.89, pageInnerWidth: 539.28,
-        left: 28, top: 750, verticalRatio: 0.9, horizontalRatio: 0,
-    }};
+            pageNumber: pages[0], pageOrientation: 'portrait', pageInnerHeight: 777.89, pageInnerWidth: 539.28,
+            left: 28, top: 750, verticalRatio: 0.9, horizontalRatio: 0,
+        }};
 }
 
 describe('saved invoice shares PDF', () => {
@@ -375,8 +375,8 @@ describe('saved invoice shares PDF', () => {
         data.explanation = {...data.explanation!, assignedParticipants: 2, exemptParticipants: 1,
             attendanceUnits: 5, eligibleAttendanceUnits: 3, effectiveWeight: 1.5, weightDenominator: '15000',
             contributions: [{...own, factor: 0.5, effectiveWeight: 1.5, weightNumerator: '15000'},
-                {registrationId: 2, payerRegistrationId: 2, name: 'Exempt attendee', attendanceWeight: 2,
-                    factor: 1, isExempt: true, effectiveWeight: 0, weightNumerator: '0', baseShareAmount: 0}]};
+            {registrationId: 2, payerRegistrationId: 2, name: 'Exempt attendee', attendanceWeight: 2,
+                factor: 1, isExempt: true, effectiveWeight: 0, weightNumerator: '0', baseShareAmount: 0}]};
         data.shares.push({registrationId: 2, name: 'Exempt attendee', baseShareAmount: 0, extraAmount: 0,
             invoiceCreditAmount: 0, paymentCreditAmount: 0, shareAmount: 0, isPaid: true, paidAt: null});
         const definition = buildInvoiceSharesPdfDefinition(data, {includeExampleCalculation});

@@ -480,7 +480,7 @@ for (const width of [1280, 390]) {
                 const owner = page.locator('[data-collection="owner"][data-region="main"]');
                 const surface = state === 'populated' ? owner.locator(`[data-id="${resource!.id}"]`)
                     : owner.locator('.status-notice').filter({hasText: state === 'empty'
-                        ? "You don't have any administrable entities yet" : 'No entities match your search and filter.'});
+                            ? "You don't have any administrable entities yet" : 'No entities match your search and filter.'});
                 await expect(surface).toBeVisible();
                 await expect(owner).toHaveAttribute('aria-busy', 'false');
                 const current = await captureMatchedPresentation(page, info, `frontend-overview-${state}`,
@@ -823,7 +823,7 @@ test('preserves existing-capacity edits through the real browser and persistence
     const original = (await readPacking(page.request, resource.id)).items[0]!;
     const row = page.locator(`tr[data-item-id="${original.id}"]`);
     const cases = [{draft: '0', saved: 0}, {draft: '-1', saved: -1},
-        {draft: '1.5', saved: 2}, {draft: '-1.5', saved: -2}];
+    {draft: '1.5', saved: 2}, {draft: '-1.5', saved: -2}];
 
     // Number inputs do not expose selectionStart/End. The first typed character
     // must insert into the focused value, preserving the existing contents.
@@ -1589,11 +1589,11 @@ test('frontend retains a dirty draft across a locale refresh and requires review
         dialog.getByRole('heading', {name: 'Changes are available', exact: true}).locator('..'), {viewportOnly: true});
     await captureState(page, testInfo, 'metadata-stale-choice-actions',
         dialog.getByRole('button', {name: 'Review changes', exact: true}), {
-            viewportOnly: true,
-            reachable: [dialog.getByRole('radio', {name: 'Use your change', exact: true}),
-                dialog.getByRole('radio', {name: 'Use current value', exact: true}),
-                dialog.getByRole('button', {name: 'Review changes', exact: true})],
-        });
+        viewportOnly: true,
+        reachable: [dialog.getByRole('radio', {name: 'Use your change', exact: true}),
+        dialog.getByRole('radio', {name: 'Use current value', exact: true}),
+        dialog.getByRole('button', {name: 'Review changes', exact: true})],
+    });
     await dialog.getByRole('radio', {name: 'Use your change', exact: true}).check();
     await expect(dialog.getByRole('button', {name: 'Review changes', exact: true})).toBeEnabled();
     await expect(dialog.getByRole('button', {name: 'Save properties', exact: true})).toBeDisabled();
@@ -1888,19 +1888,19 @@ test('frontend creates and duplicates complete lists through the SPA forms with 
     await expect(page.getByRole('heading', {name: 'Create packing list', exact: true})).toBeVisible();
     await page.setViewportSize({width: 390, height: 844});
     {
-            const trigger = page.getByLabel('Assign to event (optional)', {exact: true});
-            await trigger.click();
-            const picker = page.getByRole('dialog');
-            await expect(picker.getByRole('searchbox', {name: 'Search events', exact: true})).toBeFocused();
-            const bounds = await picker.boundingBox();
-            expect(bounds).not.toBeNull();
-            expect(bounds!.x).toBeCloseTo(8, 0);
-            expect(bounds!.y).toBeCloseTo(8, 0);
-            expect(bounds!.width).toBeCloseTo(374, 0);
-            expect(bounds!.height).toBeLessThanOrEqual(828);
-            await page.keyboard.press('Escape');
-            await expect(picker).not.toBeVisible();
-            await expect(trigger).toBeFocused();
+        const trigger = page.getByLabel('Assign to event (optional)', {exact: true});
+        await trigger.click();
+        const picker = page.getByRole('dialog');
+        await expect(picker.getByRole('searchbox', {name: 'Search events', exact: true})).toBeFocused();
+        const bounds = await picker.boundingBox();
+        expect(bounds).not.toBeNull();
+        expect(bounds!.x).toBeCloseTo(8, 0);
+        expect(bounds!.y).toBeCloseTo(8, 0);
+        expect(bounds!.width).toBeCloseTo(374, 0);
+        expect(bounds!.height).toBeLessThanOrEqual(828);
+        await page.keyboard.press('Escape');
+        await expect(picker).not.toBeVisible();
+        await expect(trigger).toBeFocused();
     }
     await page.setViewportSize({width: 1280, height: 900});
     await page.evaluate(() => { document.documentElement.dataset.frontendDocument = 'creation'; });
@@ -2003,7 +2003,7 @@ async function createOverviewActivity(request: APIRequestContext, title: string,
     // resume. Linked and standalone plans otherwise use the same creation owner.
     Object.assign(input.form, {startDate: '2099-10-07', endDate: '2099-10-09',
         slots: JSON.stringify({'2099-10-07': [{id: randomUUID(), day: '2099-10-07', pos: 0,
-            title: 'Overview duty', description: 'Lifecycle fixture', startTime: '09:00', endTime: '10:00', maxAssignees: 1}]}),
+                title: 'Overview duty', description: 'Lifecycle fixture', startTime: '09:00', endTime: '10:00', maxAssignees: 1}]}),
         ...(eventId ? {event_id: eventId} : {})});
     if (eventId) input.createPath += `?eventId=${eventId}`;
     return createResourceViaForm(request, input);
@@ -2398,11 +2398,11 @@ test('frontend overview preserves personal visibility, shared archive state and 
     await expect(owner.locator('.entity-overview-children')).toHaveCount(0);
     await expect(expansion).toBeFocused();
     await info.attach('overview-return-scroll', {contentType: 'application/json', body: JSON.stringify({
-        beforeClick: originalScroll,
-        afterReturn: await page.evaluate(() => window.scrollY),
-        activation: activationScroll,
-        maximum: await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight),
-    })});
+            beforeClick: originalScroll,
+            afterReturn: await page.evaluate(() => window.scrollY),
+            activation: activationScroll,
+            maximum: await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight),
+        })});
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(activationScroll, 0);
     await eventCard.getByRole('link', {name: 'Show linked entities for ' + event.title, exact: true}).click();
     await owner.locator(`[data-id="${linked.id}"] > a.card-body`).click();
@@ -2826,15 +2826,15 @@ test('opens real event cards into bounded child pages and finds unloaded childre
     await expect(region.locator(`article[data-id][data-id="${children[25]}"]`)).toBeVisible();
     await expect(region.locator('article[data-id]')).toHaveCount(2);
     const response = await page.request.get('/api/v1/overview', {headers: headers(await bootstrap(page.request)), params: {
-        collection: 'participant', region: 'main', q: prefix, eventId: event.id,
-    }});
+            collection: 'participant', region: 'main', q: prefix, eventId: event.id,
+        }});
     expect(response.status()).toBe(200);
     const responseText = JSON.stringify(await response.json());
     expect(responseText).not.toContain(children[0]);
     expect(responseText).not.toContain(event.title);
     expect((await page.request.get('/api/v1/overview', {headers: headers(await bootstrap(page.request)), params: {
-        collection: 'owner', region: 'main', profileId: randomUUID(),
-    }})).status()).toBe(400);
+            collection: 'owner', region: 'main', profileId: randomUUID(),
+        }})).status()).toBe(400);
     const anonymous = await browser.newContext({baseURL});
     try {
         expect((await anonymous.request.get('/api/v1/overview', {params: {collection: 'owner', region: 'main'}})).status()).toBe(401);

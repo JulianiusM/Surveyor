@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
+import {MigrationInterface, QueryRunner} from 'typeorm';
 
 export class AddNightBasedInvoiceDist1785039317554 implements MigrationInterface {
     name = 'AddNightBasedInvoiceDist1785039317554'

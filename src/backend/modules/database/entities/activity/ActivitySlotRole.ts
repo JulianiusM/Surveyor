@@ -17,11 +17,11 @@
 import type {ParentItemRelation} from '../../../../../types/EntityRelationTypes';
 
 
-import {Column, Entity, JoinColumn, ManyToOne, RelationId, Unique} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, RelationId, Unique} from 'typeorm';
 
-import {NumericBase} from "../abstract/TrackedBase";
-import {ActivityRole} from "./ActivityRole";
-import {ActivitySlot} from "./ActivitySlot";
+import {NumericBase} from '../abstract/TrackedBase';
+import {ActivityRole} from './ActivityRole';
+import {ActivitySlot} from './ActivitySlot';
 
 @Unique("unique_act_slot_role_map", ["item", "role"])
 @Entity("activity_slot_role", {schema: "surveyor"})

@@ -13,10 +13,10 @@ import {frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 const calendarRanges = [
     {zone: 'America/Los_Angeles', days: ['2030-03-09', '2030-03-10', '2030-03-11'], offsets: [480, 420, 420],
         weeks: [{start: '2030-03-04', days: ['2030-03-09', '2030-03-10']},
-            {start: '2030-03-11', days: ['2030-03-11']}]},
+        {start: '2030-03-11', days: ['2030-03-11']}]},
     {zone: 'Europe/Berlin', days: ['2030-03-30', '2030-03-31', '2030-04-01'], offsets: [-60, -120, -120],
         weeks: [{start: '2030-03-25', days: ['2030-03-30', '2030-03-31']},
-            {start: '2030-04-01', days: ['2030-04-01']}]},
+        {start: '2030-04-01', days: ['2030-04-01']}]},
 ] as const;
 type CalendarRange = typeof calendarRanges[number];
 type CalendarFixture = Awaited<ReturnType<typeof createAdvancedActivityForE2E>>;
@@ -194,7 +194,7 @@ for (const range of calendarRanges) {
                     expect(wording.offsets).toEqual(range.offsets);
                     const before = await readActivityRecommendationsForE2E(page.request, fixture.id);
                     await info.attach('calendar-wire-and-expectations', {body: JSON.stringify({range, event,
-                        weeks: fixture.view.weeks, slots: fixture.view.slots, link, wording}, null, 2), contentType: 'application/json'});
+                            weeks: fixture.view.weeks, slots: fixture.view.slots, link, wording}, null, 2), contentType: 'application/json'});
 
                     // Track only actual dispatches. Existing entry maintenance
                     // is preserved; no test action generates or applies a batch.

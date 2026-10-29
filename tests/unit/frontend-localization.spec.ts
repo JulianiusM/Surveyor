@@ -27,8 +27,8 @@ describe('shared request-bound localization', () => {
         const english = createTranslator('en');
         const german = createTranslator('de');
         const values = await Promise.all([Promise.resolve().then(() => english.t('common.save')),
-            Promise.resolve().then(() => german.t('common.save')),
-            Promise.resolve().then(() => english.t('api:errors.FORBIDDEN'))]);
+        Promise.resolve().then(() => german.t('common.save')),
+        Promise.resolve().then(() => english.t('api:errors.FORBIDDEN'))]);
         expect(values).toEqual(['Save', 'Speichern', 'You do not have permission for this action.']);
         expect(german.t('api:errors.PACKING_ITEM_FULL', {itemId: 'd506d78a-e2d7-4be9-bc95-04d83bbd22ec'}))
             .toBe('Für diesen Gegenstand liegen bereits genügend Zusagen vor.');

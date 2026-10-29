@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-import {Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
-import type {InvoicePoolCalculationSnapshot, InvoicePoolDistribution, InvoicePoolStatus} from "../../../../../types/InvoicePoolTypes";
-import {currencyTransformer} from "../../transformers";
-import {UuidBase} from "../abstract/TrackedBase";
-import {Event} from "./Event";
-import {EventInvoice} from "./EventInvoice";
-import {EventInvoiceShare} from "./EventInvoiceShare";
-import {EventInvoiceSurcharge} from "./EventInvoiceSurcharge";
-import {EventPoolAssignment} from "./EventPoolAssignment";
-import {EventPoolTakeover} from "./EventPoolTakeover";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from 'typeorm';
+import type {InvoicePoolCalculationSnapshot, InvoicePoolDistribution, InvoicePoolStatus} from '../../../../../types/InvoicePoolTypes';
+import {currencyTransformer} from '../../transformers';
+import {UuidBase} from '../abstract/TrackedBase';
+import {Event} from './Event';
+import {EventInvoice} from './EventInvoice';
+import {EventInvoiceShare} from './EventInvoiceShare';
+import {EventInvoiceSurcharge} from './EventInvoiceSurcharge';
+import {EventPoolAssignment} from './EventPoolAssignment';
+import {EventPoolTakeover} from './EventPoolTakeover';
 
 export const InvoicePoolDistributions = ['EQUAL', 'TIME_BASED', 'NIGHTS'];
 

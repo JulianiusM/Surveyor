@@ -15,7 +15,7 @@
  */
 
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import eventController from '../../src/backend/controller/eventController';
+import * as eventController from '../../src/backend/controller/eventController';
 import {canBypassDeadlineWithToken, isEventFull, listDeadlineBypassLinks,
     updateRegistrationDates} from '../../src/backend/modules/event/registration';
 import {Profile} from '../../src/backend/modules/database/entities/user/Profile';

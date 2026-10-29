@@ -59,8 +59,8 @@ describe('Activity recommendation review and allocation identity', () => {
         const source = createActivitySlotEntity({id: sourceId, day: '2027-06-01', startTime: '09:00', endTime: '10:00'});
         const target = createActivitySlotEntity({...source, id: targetId});
         const results = buildRecommendationWarnings({slots: [source, target], recommendations: [
-            {itemId: targetId.toLowerCase(), sourceItemId: sourceId.toLowerCase(), profileId, operation: 'REASSIGN'},
-        ], existingAssignments: {[`profile:${profileId}`]: [source]}, slotCapacities: {[targetId.toLowerCase()]: 0}});
+                {itemId: targetId.toLowerCase(), sourceItemId: sourceId.toLowerCase(), profileId, operation: 'REASSIGN'},
+            ], existingAssignments: {[`profile:${profileId}`]: [source]}, slotCapacities: {[targetId.toLowerCase()]: 0}});
 
         expect(results[0].warnings).toEqual([{type: 'over_capacity'}]);
         expect(results[0].recommendation.itemId).toBe(targetId.toLowerCase());
@@ -77,12 +77,12 @@ describe('Activity recommendation review and allocation identity', () => {
         const foreignSlotId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
         const rowId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
         const results = [{recommendation: {itemId: slotId, profileId, manual: true}, warnings: [{
-            type: 'overlap' as const, confirmable: true,
-            overlapTarget: {id: slotId, planId, day: '2027-06-01', startTime: '09:00', endTime: '10:00'},
-            overlapDetails: [{id: foreignSlotId, planId: foreignPlanId, recommendationId: rowId,
-                sourceItemId: slotId, operation: 'REASSIGN' as const, day: '2027-06-01',
-                startTime: '09:00', endTime: '10:00'}],
-        }]}];
+                type: 'overlap' as const, confirmable: true,
+                overlapTarget: {id: slotId, planId, day: '2027-06-01', startTime: '09:00', endTime: '10:00'},
+                overlapDetails: [{id: foreignSlotId, planId: foreignPlanId, recommendationId: rowId,
+                    sourceItemId: slotId, operation: 'REASSIGN' as const, day: '2027-06-01',
+                    startTime: '09:00', endTime: '10:00'}],
+            }]}];
         let uppercase = JSON.stringify(results);
         for (const id of [planId, slotId, foreignPlanId, profileId, foreignSlotId, rowId]) {
             uppercase = uppercase.replaceAll(id, id.toUpperCase());
@@ -94,6 +94,6 @@ describe('Activity recommendation review and allocation identity', () => {
         expect(() => requireOverlapConfirmation(digest, digest)).not.toThrow();
         expect(() => requireOverlapConfirmation(digest, digest.toUpperCase())).toThrow();
         expect(overlapConfirmation(planId, [{...results[0], warnings: [{...results[0].warnings[0],
-            overlapDetails: [{...results[0].warnings[0].overlapDetails[0], endTime: '11:00'}]}]}])).not.toBe(digest);
+                overlapDetails: [{...results[0].warnings[0].overlapDetails[0], endTime: '11:00'}]}]}])).not.toBe(digest);
     });
 });

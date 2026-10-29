@@ -2,8 +2,8 @@ import {getLockedListAssignment} from '../../src/backend/modules/database/servic
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {randomUUID} from 'node:crypto';
 import type {EntityManager, Logger} from 'typeorm';
-import packingController from '../../src/backend/controller/packingController';
-import {readPackingItemEditBaseline, updatePackingItem} from '../../src/backend/controller/packingController';
+import * as packingController from '../../src/backend/controller/packingController';
+
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
 import {PackingAssignment} from '../../src/backend/modules/database/entities/packing/PackingAssignment';
 import {PackingList} from '../../src/backend/modules/database/entities/packing/PackingList';
@@ -97,7 +97,7 @@ afterAll(closeIntegrationDatabase);
 describe('native and versioned Packing lock coexistence', function packingCoexistence() {
     it('commits a native assignment before an overlapping versioned root/item command without a deadlock', async function nativeFirst() {
         const [id, item] = await createPackingListWithItem(owner.id);
-        const baseline = await readPackingItemEditBaseline(id, item.id, sessionFor(owner));
+        const baseline = await packingController.readPackingItemEditBaseline(id, item.id, sessionFor(owner));
         const profileLocked = milestone();
         const releaseProfile = milestone();
         const nativeInsertDispatched = milestone();
@@ -119,7 +119,7 @@ describe('native and versioned Packing lock coexistence', function packingCoexis
 
             // Native is held at its actual FK insertion. V1 reaches root X while
             // native retains root S/item X, then proceeds only after native commits.
-            const versioned = updatePackingItem(id, item.id, {description: 'Native-first update'}, baseline.editToken, sessionFor(owner));
+            const versioned = packingController.updatePackingItem(id, item.id, {description: 'Native-first update'}, baseline.editToken, sessionFor(owner));
             pending.push(versioned);
             await waitForMilestone(versionedRootDispatched, 'versioned root write lock');
             releaseProfile.release();
@@ -136,7 +136,7 @@ describe('native and versioned Packing lock coexistence', function packingCoexis
 
     it('holds native assignment before its item lock until the versioned root/item command commits', async function versionedFirst() {
         const [id, item] = await createPackingListWithItem(owner.id);
-        const baseline = await readPackingItemEditBaseline(id, item.id, sessionFor(owner));
+        const baseline = await packingController.readPackingItemEditBaseline(id, item.id, sessionFor(owner));
         const fixtureItemLocked = milestone();
         const releaseItem = milestone();
         const versionedItemDispatched = milestone();
@@ -161,7 +161,7 @@ describe('native and versioned Packing lock coexistence', function packingCoexis
             // The real v1 controller holds root X while its item query waits on
             // the fixture. Native must queue at root S, leaving the item available.
             versionedStarted = true;
-            const versioned = updatePackingItem(id, item.id, {description: 'Versioned-first update'}, baseline.editToken, sessionFor(owner));
+            const versioned = packingController.updatePackingItem(id, item.id, {description: 'Versioned-first update'}, baseline.editToken, sessionFor(owner));
             pending.push(versioned);
             await waitForMilestone(versionedItemDispatched, 'versioned item lock after root lock');
             const native = packingController.getAssignmentAccessMapping().assign({itemId: item.id}, participant.id);

@@ -205,9 +205,9 @@ describe('P7 finance saved reads and participant invoices', () => {
 
     it('retains organizer fallback attribution, original proof names and recorded/submitted audit wording', async () => {
         const mounted = await mountFrontendEvent(FinanceHistory, async () => json(snapshot), {admin: true, invoices: [
-            {...invoice, organizerRecorded: true, recordedByName: null, participantName: null},
-            {...invoice, id: '13', proofUrl: '/api/legacy-proof', proofOriginalName: null},
-        ]});
+                {...invoice, organizerRecorded: true, recordedByName: null, participantName: null},
+                {...invoice, id: '13', proofUrl: '/api/legacy-proof', proofOriginalName: null},
+            ]});
         cleanups.push(mounted.dispose);
         const recorded = mounted.wrapper.get('[data-finance-invoice="12"]');
         const submitted = mounted.wrapper.get('[data-finance-invoice="13"]');
@@ -260,7 +260,7 @@ describe('P7 finance saved reads and participant invoices', () => {
         // confirmation retains invoice12 and its own participant command.
         mounted.context.queryClient.setQueryData([...eventKeys.finance(mounted.context.session.value?.context, eventId), 'en'],
             {...snapshot, invoices: [{...invoice, id: '13', createdAt: '2026-10-21T10:00:00Z', status: 'REJECTED',
-                canRetract: false, rejectionReason: 'Historical rejection'}, accepted]});
+                    canRetract: false, rejectionReason: 'Historical rejection'}, accepted]});
         await flushPromises();
         expect(reopened.get('p.fw-semibold').text()).toBe('Invoice #12');
         expect(mounted.wrapper.get('[data-finance-invoice="13"] small.text-danger-emphasis strong').text()).toBe('Reason:');
@@ -328,7 +328,7 @@ describe('P7 finance saved reads and participant invoices', () => {
     ])('searches $label from the admitted saved projection', async ({admin, needle}) => {
         const mounted = await mountFrontendEvent(FinanceShares, async () => json(snapshot), {
             shares: [{...share, coveredNames: ['Covered person keyword']},
-                ...(admin ? [{...share, id: '999', payerName: 'Another payer', coveredNames: [], notes: []}] : [])], admin,
+            ...(admin ? [{...share, id: '999', payerName: 'Another payer', coveredNames: [], notes: []}] : [])], admin,
             pools: [{id: poolId, description: 'Saved source keyword'}],
         });
         cleanups.push(mounted.dispose);
@@ -378,7 +378,7 @@ describe('P7 finance saved reads and participant invoices', () => {
             if (req.headers.get('X-Surveyor-Locale') !== 'de') return json(snapshot);
             if (mode === 'denied') return new Response(JSON.stringify({type: 'about:blank', title: 'Forbidden', status: 403,
                 detail: 'Not allowed', code: 'FORBIDDEN', messageKey: 'api:errors.FORBIDDEN', params: {}, requestId: 'finance-denial'}),
-            {status: 403, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': createFrontendEventSession().context}});
+                {status: 403, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': createFrontendEventSession().context}});
             if (mode === 'saved') return json(localized);
             return new Promise<Response>(resolve => delayed.push(() => resolve(json(localized))));
         });
@@ -568,7 +568,7 @@ describe('P7 finance saved reads and participant invoices', () => {
         const detail = {...breakdown, needsRecalculation: false, statusLabel: 'Paid', notes: ['Receipt 089'],
             components: [{key: 'shareAmount', label: 'Calculated balance', amount: '0.90'}],
             calculation: {title: 'Saved calculation', sections: [{key: 'balance', title: 'Calculated balance for Returning participant',
-                metrics: [{label: 'Calculated balance', value: '0.90'}]}]}};
+                    metrics: [{label: 'Calculated balance', value: '0.90'}]}]}};
         const {wrapper, request} = await mountFinance(async request => {
             const path = new URL(request.url).pathname;
             if (path.includes('/shares/')) {
@@ -743,8 +743,8 @@ describe('P7 finance saved reads and participant invoices', () => {
         const organizer: components['schemas']['FinanceView'] = {...snapshot, audience: 'organizer', registrationId: null,
             pools: [{...pool, status: 'CLOSED', canSubmit: false}], invoices: [{...invoice, status: 'APPROVED'}]};
         const {wrapper, context, request} = await mountFinance(async () => json({...organizer, invoices: saved
-            ? [...organizer.invoices, {...invoice, id: '13', status: 'APPROVED', organizerRecorded: true}]
-            : organizer.invoices}), true);
+                ? [...organizer.invoices, {...invoice, id: '13', status: 'APPROVED', organizerRecorded: true}]
+                : organizer.invoices}), true);
         // XHR upload delivery has its own transport tests. This presentation
         // scenario retains the real form, command and following admitted GET.
         const upload = vi.spyOn(context.api, 'uploadJson').mockImplementation(async (operation, path) => {
@@ -782,7 +782,7 @@ describe('P7 finance saved reads and participant invoices', () => {
         const organizer: components['schemas']['FinanceView'] = {...snapshot, audience: 'organizer', registrationId: null,
             pools: [{...pool, status: 'CLOSED', canSubmit: false, needsRecalculation: true,
                 summary: {primary: [], details: [], saved: previous === undefined ? []
-                    : [{key: 'paymentCreditAmount', label: 'Previously settled', amount: previous}]}}]};
+                        : [{key: 'paymentCreditAmount', label: 'Previously settled', amount: previous}]}}]};
         const {wrapper, context, request} = await mountFinance(async () => json(organizer), true);
         await wrapper.get('[data-finance-pool] .accordion-button').trigger('click');
         const settlement = wrapper.get('[data-finance-settlement-context]');

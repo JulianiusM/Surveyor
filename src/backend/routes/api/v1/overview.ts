@@ -3,7 +3,7 @@ import type {components, operations} from '../../../../types/api/v1';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import {requireApiContext} from '../../../modules/api/session';
 import {prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
-import {readOverview, setOverviewVisibility} from '../../../modules/overview/api';
+import {readOverview, setOverviewVisibility} from '../../../controller/userController';
 
 const router = Router();
 router.get('/', asyncHandler(async function getOverview(req, res) {

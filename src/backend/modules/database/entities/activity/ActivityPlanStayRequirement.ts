@@ -17,10 +17,10 @@
 import type {ParentEntityRelation} from '../../../../../types/EntityRelationTypes';
 
 
-import {Column, Entity, Index, JoinColumn, ManyToOne, RelationId} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, RelationId} from 'typeorm';
 
-import {NumericBase} from "../abstract/TrackedBase";
-import {ActivityPlan} from "./ActivityPlan";
+import {NumericBase} from '../abstract/TrackedBase';
+import {ActivityPlan} from './ActivityPlan';
 
 @Entity("activity_plan_stay_requirements", {schema: "surveyor"})
 @Index("uk_activity_plan_stay_days", ["entity", "stayDays"], {unique: true})

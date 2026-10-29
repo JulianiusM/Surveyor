@@ -7,7 +7,7 @@ export type ApiSuccessStatus<Operation extends ApiOperationId> = Extract<keyof o
     200 | 201 | 202 | 204 | 206>;
 export type ApiResponseBody<Operation extends ApiOperationId, Status extends ApiSuccessStatus<Operation>> =
     operations[Operation]['responses'][Status] extends {content: infer Content}
-        ? Content[keyof Content] : never;
+    ? Content[keyof Content] : never;
 
 /** Prepare one declared adapter response before its controller's transaction commits. */
 export type ApiResponsePreparer<Operation extends ApiOperationId, Status extends ApiSuccessStatus<Operation>, Result> =
@@ -20,6 +20,12 @@ export interface PreparedApiJsonResponse {
     readonly locale: string;
     readonly context?: string;
     readonly json: string;
+}
+
+/** Only caller-selected receipt modes require a command to prepare HTTP bytes. */
+export interface PreparedApiCommand<Result> {
+    operationResult: Result;
+    prepared: PreparedApiJsonResponse | undefined;
 }
 
 export interface ApiOperationContract {

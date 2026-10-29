@@ -138,8 +138,8 @@ test('keeps five-state personal history, attribution and retained proofs private
             data: {expectedRevision: revision},
         })).status()).toBe(400);
         expect((await financeFixtureRequest(participant.request, 'POST', `${endpoint}/invoices/${retracted.id}/retract`, {data: {
-            confirmed: true, expectedRevision: revision,
-        }})).status()).toBe(200);
+                confirmed: true, expectedRevision: revision,
+            }})).status()).toBe(200);
         expect((await financeFixtureRequest(page.request, 'POST', `${endpoint}/invoices/${invoice('Rejected evidence').id}/decline`, {
             data: {rejectionReason: 'Paid separately; preserve this evidence'},
         })).status()).toBe(200);
@@ -347,9 +347,9 @@ test('distinguishes transferred bytes, confirmed repeated uploads, rejection and
                     localeInterception.once('Fetch.requestPaused', resolve);
                 });
                 await localeInterception.send('Fetch.enable', {patterns: [{
-                    urlPattern: new URL(`/api/v1/events/${event.id}/finance`, participantPage.url()).href,
-                    requestStage: 'Response',
-                }]});
+                        urlPattern: new URL(`/api/v1/events/${event.id}/finance`, participantPage.url()).href,
+                        requestStage: 'Response',
+                    }]});
                 await participantPage.locator('#frontend-locale').selectOption('de');
                 const read = await paused;
                 heldLocaleResponse = read.requestId;

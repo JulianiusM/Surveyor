@@ -9,7 +9,7 @@ import {isTerminalReadFailure} from '../app/transport';
  * Only a missing image retries. A healthy version keeps its existing browser URL
  * through JSON polling, manual refresh and language changes. */
 export function useAuthorizedImage(id: Ref<string>, version: Ref<string | null | undefined>,
-                                   read: FrontendImageRead, enabled?: Ref<boolean>): FrontendAuthorizedImage {
+    read: FrontendImageRead, enabled?: Ref<boolean>): FrontendAuthorizedImage {
     const context = useFrontend();
     const source = ref<string | null>(null);
     // A collapsed region can remain mounted. Its feature supplies disclosure,

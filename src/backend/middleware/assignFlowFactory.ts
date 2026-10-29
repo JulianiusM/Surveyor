@@ -6,11 +6,10 @@
  */
 
 import type {Request, RequestHandler, Response, Router} from 'express';
-import type {PreparedApiJsonResponse} from '../../types/ApiTransportTypes';
 import type {AssignmentCommand, AssignmentInput, AssignmentOperation, AssignmentRoleRoute,
     AssignmentRoutePair, AssignmentRouteParameters, AssignmentResult} from '../../types/AssignmentFlowTypes';
 import {requireApiContext} from '../modules/api/session';
-import {prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../modules/api/transport';
+import {executePreparedJson, prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../modules/api/transport';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 
 /**
@@ -20,7 +19,7 @@ import {asyncHandler} from '../modules/lib/asyncHandler';
  */
 export function attachAssignRoutes<Assign extends 'assignPackingItem' | 'assignDriversItem',
     Unassign extends 'unassignPackingItem' | 'unassignDriversItem'>(router: Router,
-    configuration: AssignmentRoutePair<Assign, Unassign>): void {
+        configuration: AssignmentRoutePair<Assign, Unassign>): void {
     // PUT takes a place and DELETE releases it. Both retain the same configured
     // parameter names and admission while selecting distinct generated operations.
     router.put(configuration.path, assignmentHandler(configuration, configuration.assign));
@@ -62,19 +61,16 @@ function assignmentHandler<Operation extends AssignmentOperation>(parameters: As
             return;
         }
 
-        let prepared: PreparedApiJsonResponse;
-        function prepareAssignment(data: AssignmentResult<Operation>): void {
-            prepared = prepareValidatedJson<AssignmentOperation, 200>(req, command.operation, 200, data);
-        }
-
         // Drivers invokes preparation inside its existing transaction. Activity
         // prepares the invariant acknowledgement before its existing operation.
         // After success both branches only deliver their already prepared bytes.
-        if (command.delivery === 'transaction') await command.execute(input, prepareAssignment);
-        else {
-            prepareAssignment(command.result);
-            await command.execute(input);
-        }
+        const {prepared} = await executePreparedJson(
+            (data: AssignmentResult<Operation>) => prepareValidatedJson<AssignmentOperation, 200>(req, command.operation, 200, data),
+            function executeAssignment(prepare) {
+                if (command.delivery === 'transaction') return command.execute(input, prepare);
+                prepare(command.result);
+                return command.execute(input);
+            });
         sendPreparedJson(req, res, prepared!);
     }
     return asyncHandler(performAssignment);

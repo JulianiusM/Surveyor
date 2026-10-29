@@ -3,18 +3,18 @@ import os from 'node:os';
 import path from 'node:path';
 import type {Request} from 'express';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import eventController from '../../src/backend/controller/eventController';
+import * as eventController from '../../src/backend/controller/eventController';
 import * as userController from '../../src/backend/controller/userController';
 import * as entityArchival from '../../src/backend/modules/entityArchival';
 import * as activityApi from '../../src/backend/controller/activityController';
 import * as driversApi from '../../src/backend/controller/driversController';
 import * as packingApi from '../../src/backend/controller/packingController';
 import * as surveyApi from '../../src/backend/controller/surveyController';
-import * as eventApi from '../../src/backend/controller/eventController';
+
 import {archiveKey} from '../../src/backend/modules/archive/policy';
 import {contractValidator} from '../../src/backend/modules/api/contracts';
 import {prepareValidatedJson} from '../../src/backend/modules/api/transport';
-import {readOverview, setOverviewVisibility} from '../../src/backend/modules/overview/api';
+
 import {projectEntityCard} from '../../src/backend/modules/lib/util';
 import {isOwner} from '../../src/backend/modules/permissionEngine';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
@@ -75,8 +75,8 @@ function visibilityApiRequest(session: SessionLike): Request {
 // real application entities. Tests choose an explicit clock rather than today's date.
 async function createEvent(title: string, endDate = '2027-06-03'): Promise<ArchiveReference> {
     return {type: 'event', id: await eventService.createEventTx(owner.id, {
-        title, startDate: '2027-06-01', endDate, timezone: 'UTC',
-    })};
+            title, startDate: '2027-06-01', endDate, timezone: 'UTC',
+        })};
 }
 
 /** Create one actual root per domain without introducing a second lifecycle owner. */
@@ -84,7 +84,7 @@ async function createLifecycleRoot(type: EntityType): Promise<ArchiveReference> 
     switch (type) {
         case 'event': return createEvent('UUID identity Event');
         case 'activity': return {type, id: await activityService.createActivityPlanTx(
-            owner.id, 'UUID identity Activity', '', '2027-06-01', '2027-06-03', [])};
+                owner.id, 'UUID identity Activity', '', '2027-06-01', '2027-06-03', [])};
         case 'packing': return {type, id: await packingService.createPackingListTx(owner.id, 'UUID identity Packing', '', [])};
         case 'drivers': return {type, id: await driverService.createDriversList(owner.id, 'UUID identity Drivers', '')};
         case 'survey': return {type, id: await surveyService.createSurveyTx(owner.id, 'UUID identity Survey', '', [])};
@@ -94,7 +94,7 @@ async function createLifecycleRoot(type: EntityType): Promise<ArchiveReference> 
 /** Full settings retain each feature's actual admission and wire projection. */
 function readLifecycleSettings(reference: ArchiveReference, session: SessionLike) {
     switch (reference.type) {
-        case 'event': return eventApi.readEventSettings(reference.id, session);
+        case 'event': return eventController.readEventSettings(reference.id, session);
         case 'activity': return activityApi.readActivitySettings(reference.id, session);
         case 'packing': return packingApi.readPackingSettings(reference.id, session);
         case 'drivers': return driversApi.readDriversSettings(reference.id, session);
@@ -217,20 +217,20 @@ describe('authoritative archival and personal overview visibility', () => {
             const reference = {type, id};
             const session: SessionLike = {profile: owner, auth: {user: owner.user!}};
 
-            await eventApi.setEventChildArchived(parent.id.toUpperCase(), type, id.toUpperCase(), true, session);
+            await eventController.setEventChildArchived(parent.id.toUpperCase(), type, id.toUpperCase(), true, session);
             expect((await state(reference)).directArchived).toBe(true);
-            await eventApi.setEventChildArchived(parent.id, type, id.toUpperCase(), false, session);
+            await eventController.setEventChildArchived(parent.id, type, id.toUpperCase(), false, session);
             expect((await state(reference)).directArchived).toBe(false);
 
             // Case equivalence does not invent an independent schedule for a linked child.
-            await expect(eventApi.setEventChildAutomaticArchival(parent.id.toUpperCase(), type, id.toUpperCase(),
+            await expect(eventController.setEventChildAutomaticArchival(parent.id.toUpperCase(), type, id.toUpperCase(),
                 {paused: true}, session)).rejects.toMatchObject({status: 409, cause: 'ARCHIVE_SCHEDULE_UNAVAILABLE'});
             const foreign = await createEvent('Different UUID identity parent');
-            await expect(eventApi.setEventChildArchived(foreign.id.toUpperCase(), type, id.toUpperCase(), true, session))
+            await expect(eventController.setEventChildArchived(foreign.id.toUpperCase(), type, id.toUpperCase(), true, session))
                 .rejects.toMatchObject({status: 404});
             expect((await state(reference)).directArchived).toBe(false);
 
-            await eventApi.deleteEventChild(parent.id.toUpperCase(), type, id.toUpperCase(), session);
+            await eventController.deleteEventChild(parent.id.toUpperCase(), type, id.toUpperCase(), session);
             expect(await getRootRepository(AppDataSource.manager, type).findOneBy({id})).toBeNull();
         },
     );
@@ -238,11 +238,11 @@ describe('authoritative archival and personal overview visibility', () => {
     it('projects native schedule controls only for admitted personal Overview actors and independent roots', async function projectsOverviewSchedules() {
         const event = await createEvent('Projected Overview Event');
         const activity: ArchiveReference = {type: 'activity', id: await activityService.createActivityPlanTx(
-            owner.id, 'Projected standalone Activity', '', '2027-06-01', '2027-06-03', [],
-        )};
+                owner.id, 'Projected standalone Activity', '', '2027-06-01', '2027-06-03', [],
+            )};
         const linked: ArchiveReference = {type: 'activity', id: await activityService.createActivityPlanTx(
-            owner.id, 'Projected linked Activity', '', '2027-06-01', '2027-06-03', [], event.id,
-        )};
+                owner.id, 'Projected linked Activity', '', '2027-06-01', '2027-06-03', [], event.id,
+            )};
         const packing: ArchiveReference = {type: 'packing', id: await packingService.createPackingListTx(owner.id, 'Projected Packing', '', [])};
         const drivers: ArchiveReference = {type: 'drivers', id: await driverService.createDriversList(owner.id, 'Projected Drivers', '')};
         const survey: ArchiveReference = {type: 'survey', id: await surveyService.createSurveyTx(owner.id, 'Projected Survey', '', [])};
@@ -253,7 +253,7 @@ describe('authoritative archival and personal overview visibility', () => {
         for (const reference of [event, activity, linked, packing, drivers, survey]) {
             const native = (await card(owner, reference))!;
             expect(native).toBeDefined();
-            const view = await readOverview({collection: 'owner', region: 'main', type: reference.type,
+            const view = await userController.readOverview({collection: 'owner', region: 'main', type: reference.type,
                 q: native.title, ...(reference === linked ? {eventId: event.id} : {})}, ownerSession);
             const projected = [...view.items, ...(view.parent ? [view.parent] : [])]
                 .find(item => item.id === reference.id && item.type === reference.type);
@@ -272,7 +272,7 @@ describe('authoritative archival and personal overview visibility', () => {
         const participantSession: SessionLike = {profile: participant, auth: {user: participant.user!}};
         const nativeParticipant = (await card(participant, event, 'participant'))!;
         expect(nativeParticipant.archive).toMatchObject({hasAutomaticSchedule: true, autoArchivePaused: true, canManageAutomation: false});
-        const participantView = await readOverview({collection: 'participant', region: 'main', type: 'event', q: nativeParticipant.title}, participantSession);
+        const participantView = await userController.readOverview({collection: 'participant', region: 'main', type: 'event', q: nativeParticipant.title}, participantSession);
         expect(participantView.items.find(item => item.id === event.id)?.automation).toBeUndefined();
         expect(projectEntityCard(nativeParticipant, isOwner(participantSession, nativeParticipant.ownerId)).automation).toBeUndefined();
 
@@ -281,18 +281,18 @@ describe('authoritative archival and personal overview visibility', () => {
         expect(projectEntityCard(nativeParticipant, isOwner(participantSession, nativeParticipant.ownerId), false, true).automation)
             .toEqual({paused: true, canManage: false});
         await adminService.addAdmin('event', event.id, participant.id, PERM.EDIT_META);
-        const admitted = await readOverview({collection: 'participant', region: 'main', type: 'event', q: nativeParticipant.title}, participantSession);
+        const admitted = await userController.readOverview({collection: 'participant', region: 'main', type: 'event', q: nativeParticipant.title}, participantSession);
         expect(admitted.items.find(item => item.id === event.id)?.automation).toEqual({paused: true, canManage: true});
     });
 
     it('archives every event attachment immediately and restores only inherited state', async () => {
         const event = await createEvent('Archive inheritance');
         const activity: ArchiveReference = {type: 'activity', id: await activityService.createActivityPlanTx(
-            owner.id, 'Longer linked plan', '', '2027-06-01', '2028-01-01', [createActivitySlotEntity()], event.id,
-        )};
+                owner.id, 'Longer linked plan', '', '2027-06-01', '2028-01-01', [createActivitySlotEntity()], event.id,
+            )};
         const packing: ArchiveReference = {type: 'packing', id: await packingService.createPackingListTx(
-            owner.id, 'Independent archive', '', [createPackingItemEntity()], event.id,
-        )};
+                owner.id, 'Independent archive', '', [createPackingItemEntity()], event.id,
+            )};
         const drivers: ArchiveReference = {type: 'drivers', id: await driverService.createDriversList(owner.id, 'Linked rides', '', event.id)};
         const refs = [event, activity, packing, drivers];
         // Give one child independent state before archiving the event. Restoration must
@@ -416,10 +416,10 @@ describe('authoritative archival and personal overview visibility', () => {
         // permission evaluator later reads its audience relation during projection;
         // this failing input leaves that actual pipeline and its DBAL queries intact.
         const session: SessionLike = {auth: {user: participant.user!}, profile: {
-            id: participant.id, get user(): never { throw projectionFailure; },
-        }};
+                id: participant.id, get user(): never { throw projectionFailure; },
+            }};
 
-        await expect(setOverviewVisibility('event', event.id, {visibility: 'hidden'}, session)).rejects.toBe(projectionFailure);
+        await expect(userController.setOverviewVisibility('event', event.id, {visibility: 'hidden'}, session)).rejects.toBe(projectionFailure);
         expect(await userService.getVisibilityPreferences(participant.id, [event])).toEqual(new Map([[archiveKey(event), 'shown']]));
         expect(await card(participant, event, 'participant')).toMatchObject({visibility: 'shown', overviewHidden: false});
     });
@@ -438,7 +438,7 @@ describe('authoritative archival and personal overview visibility', () => {
             return prepareValidatedJson(req, 'setOverviewVisibility', 200, result);
         }
 
-        await expect(setOverviewVisibility('event', event.id, {visibility: 'hidden'}, session, prepareInvalidResponse))
+        await expect(userController.setOverviewVisibility('event', event.id, {visibility: 'hidden'}, session, prepareInvalidResponse))
             .rejects.toMatchObject({code: 'INTERNAL_ERROR'});
         expect(projected).toEqual({visibility: 'hidden', overviewHidden: true, archived: false});
         expect(await userService.getVisibilityPreferences(owner.id, [event])).toEqual(new Map([[archiveKey(event), 'shown']]));
@@ -452,14 +452,14 @@ describe('authoritative archival and personal overview visibility', () => {
         const native = await userController.setPersonalVisibility('event', event.id, {visibility: 'shown'}, session);
         expect(native).toMatchObject({visibility: 'shown', overviewHidden: false,
             archive: {archived: true, directArchived: true, canRestore: true}});
-        expect(await setOverviewVisibility('event', event.id, {visibility: 'hidden'}, session))
+        expect(await userController.setOverviewVisibility('event', event.id, {visibility: 'hidden'}, session))
             .toEqual({visibility: 'hidden', overviewHidden: true, archived: true});
 
         const req = visibilityApiRequest(session);
         function prepareResponse(result: components['schemas']['OverviewVisibilityResult']) {
             return prepareValidatedJson(req, 'setOverviewVisibility', 200, result);
         }
-        const prepared = await setOverviewVisibility('event', event.id, {visibility: 'default'}, session, prepareResponse);
+        const prepared = await userController.setOverviewVisibility('event', event.id, {visibility: 'default'}, session, prepareResponse);
         expect(await userService.getVisibilityPreferences(owner.id, [event])).toEqual(new Map());
         // A later shared restoration or request actor cannot change the already
         // prepared completion, trigger another projection or reopen the command.
@@ -586,8 +586,8 @@ describe('authoritative archival and personal overview visibility', () => {
         const reference: ArchiveReference = type === 'event'
             ? await createEvent('Concurrent restore')
             : {type, id: await activityService.createActivityPlanTx(
-                owner.id, 'Concurrent standalone restore', '', '2027-06-01', '2027-06-03', [createActivitySlotEntity()],
-            )};
+                    owner.id, 'Concurrent standalone restore', '', '2027-06-01', '2027-06-03', [createActivitySlotEntity()],
+                )};
         const blocker = AppDataSource.createQueryRunner();
         await blocker.connect();
         await blocker.startTransaction();

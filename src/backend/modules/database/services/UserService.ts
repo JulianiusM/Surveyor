@@ -15,7 +15,8 @@
  */
 
 import bcrypt from 'bcryptjs';
-import {EntityManager, In, MoreThan, Raw, type DeepPartial, type FindOptionsWhere, type SelectQueryBuilder} from "typeorm";
+import {TypeormStore} from 'connect-typeorm';
+import {EntityManager, Equal, In, Like, MoreThan, Raw, type DeepPartial, type FindOptionsWhere, type ObjectLiteral, type SelectQueryBuilder} from 'typeorm';
 import type {ArchiveReference, PersonalVisibility} from '../../../../types/ArchiveTypes';
 import type {Entity, OverviewCollection, OverviewQuery, OverviewReadResult} from '../../../../types/UserTypes';
 import type {EntityType} from '../../../../types/UtilTypes';
@@ -23,7 +24,7 @@ import {archiveKey} from '../../archive/policy';
 import {convertEntity, generateUniqueToken} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {Guest} from '../entities/user/Guest';
-import {Profile} from "../entities/user/Profile";
+import {Profile} from '../entities/user/Profile';
 import {User} from '../entities/user/User';
 import {Session} from '../entities/session/Session';
 import {EntityVisibilityPreference} from '../entities/archive/EntityVisibilityPreference';
@@ -220,6 +221,56 @@ export async function createGuest(username: string, email: string | null = null,
 }
 
 /**
+ * Configure ordinary and transaction-bound session stores in one place. A manager
+ * supplied by an existing DBAL transaction binds every store query/write to that
+ * same connection; constructing a store does not perform cleanup or open a pool.
+ */
+export function createSessionStore(manager: EntityManager): TypeormStore {
+    // These are the existing application options. Cleanup runs only on set;
+    // the library remains the owner of TTL, soft-delete and JSON semantics.
+    const repository = manager.getRepository(Session);
+    const ttl = 60 * 60 * 24;
+    const store = new TypeormStore({cleanupLimit: 2, limitSubquery: false, ttl}).connect(repository);
+
+    /** Acknowledge ordinary renewal once, after the existing expiry update settles. */
+    store.touch = function renewStoredSession(sessionId, _session, callback): void {
+        // connect-typeorm 2.0.0 acknowledges expiry-cookie sessions before this
+        // write, then calls back again. Keep its fixed TTL and expiry-only SQL.
+        // The promise boundary also catches synchronous query-builder failures.
+        void Promise.resolve().then(function updateExpiration() {
+            return repository.createQueryBuilder()
+                .update({expiredAt: Date.now() + ttl * 1000})
+                .whereInIds([sessionId])
+                .execute();
+        }).then(function renewed(): void {
+            callback?.();
+        }, function renewalFailed(error: unknown): void {
+            callback?.(error);
+            store.emit('disconnect', error);
+        });
+    };
+
+    /** Complete destruction only when the same repository's soft deletion settles.
+     * connect-typeorm 2.0.0 drops these promises from Promise.all, acknowledging
+     * destruction early and leaking rejected deletes as unhandled rejections. */
+    store.destroy = function destroyStoredSessions(sessionIds, callback): void {
+        const ids = Array.isArray(sessionIds) ? sessionIds : [sessionIds];
+        // Keep library soft-delete and multi-ID semantics on the caller's manager.
+        // Starting from a promise also routes synchronous adapter failures here.
+        const deletions = ids.map(id => Promise.resolve().then(() => repository.softDelete({id})));
+        void Promise.all(deletions).then(function destroyed(): void {
+            callback?.();
+        }, function destructionFailed(error: unknown): void {
+            // The factory has no custom onError; preserve the library's default
+            // disconnect notification as well as its optional completion callback.
+            callback?.(error);
+            store.emit('disconnect', error);
+        });
+    };
+    return store;
+}
+
+/**
  * Hold the existing session row before invoking the controller's identity operation.
  * Nullable evidence keeps expiry/context/error decisions in the controller/store;
  * READ COMMITTED allows the bound store to inspect current committed evidence.
@@ -292,8 +343,7 @@ export async function getGuestByEmail(email: string) {
 
 export async function usernameExists(username: string): Promise<boolean> {
     const repo = AppDataSource.getRepository(User);
-    const count = await repo.count({where: {username}});
-    return count > 0;
+    return repo.existsBy({username});
 }
 
 /** Share byte-exact provider identity comparison across full and projected
@@ -361,20 +411,13 @@ export async function findUserByNameOrEmail(identifier: string | number): Promis
 
     if (raw.includes('@')) {
         // case-insensitive email; avoid LOWER() on column to keep indexes usable where possible
-        return await repo
-            .createQueryBuilder('u')
-            .where('u.email = :email', {email: raw})
-            .orWhere('u.email LIKE :emailCase', {emailCase: raw}) // fallback for case-insensitive collations
-            .orWhere('u.username = :username', {username: raw})
-            .getOne();
+        const [user] = await repo.find({where: [{email: raw}, {email: Like(raw)}, {username: raw}]});
+        return user ?? null;
     }
 
     // username exact, email fallback
-    return await repo
-        .createQueryBuilder('u')
-        .where('u.username = :username', {username: raw})
-        .orWhere('u.email = :email', {email: raw})
-        .getOne();
+    const [user] = await repo.find({where: [{username: raw}, {email: raw}]});
+    return user ?? null;
 }
 
 /** Query admitted account-profile prefixes; callers own input limits and safe display projection. */
@@ -383,9 +426,9 @@ export async function queryUserProfiles(prefix: string, limit: number): Promise<
     const likePrefix = prefix + '%';
     return AppDataSource.getRepository(Profile).createQueryBuilder('p')
         .innerJoinAndSelect('p.user', 'u')
-        .where('p.name LIKE :pfx', {pfx: likePrefix})
-        .orWhere('u.email LIKE :pfx', {pfx: likePrefix})
-        .orWhere('u.username LIKE :pfx', {pfx: likePrefix})
+        .where({name: Like(likePrefix)})
+        .orWhere({user: {email: Like(likePrefix)}})
+        .orWhere({user: {username: Like(likePrefix)}})
         .orderBy('p.name', 'ASC').limit(limit).getMany();
 }
 
@@ -425,10 +468,10 @@ const participationQueries = {
 const OVERVIEW_PAGE_SIZE = 24;
 const OVERVIEW_TYPES: EntityType[] = ['survey', 'activity', 'packing', 'drivers', 'event'];
 
-/** SQL composition and raw rows stay private to this persistence module. */
-interface OverviewSql {
-    sql: string;
-    parameters: unknown[];
+/** Flat CTE ownership stays private: TypeORM does not support a builder containing nested CTEs. */
+interface OverviewSource {
+    expressions: {alias: string; query: SelectQueryBuilder<ObjectLiteral> | string}[];
+    parameters: ObjectLiteral;
 }
 
 interface OverviewRootRow {
@@ -468,9 +511,8 @@ function overviewMembershipQuery(manager: EntityManager, profileId: string, coll
 
 /**
  * Project memberships to a common SQL shape without hydrating their relations.
- * Compile each builder independently: managed builders reuse parameter names
- * across types, and concatenating their named parameters would overwrite them.
- * Positional parameters preserve each branch's own type/profile values.
+ * Shared membership factories retain their own parameter names; the generated
+ * UNION composition below namespaces those binds before combining branches.
  */
 function overviewRootQuery(manager: EntityManager, profileId: string, collection: OverviewCollection, type: EntityType, input: OverviewQuery, parent = false): SelectQueryBuilder<BaseEntity> {
     const query = overviewMembershipQuery(manager, profileId, collection, type);
@@ -490,41 +532,71 @@ function overviewRootQuery(manager: EntityManager, profileId: string, collection
     return query;
 }
 
-/** Build heterogeneous overview membership CTEs with bind parameters in SQL placeholder order. */
-function overviewSource(manager: EntityManager, profileId: string, input: OverviewQuery): OverviewSql {
+/**
+ * Compose only ORM-generated branch queries, giving each resource its own bind
+ * namespace. TypeORM has no UNION API; its driver's parameter token grammar
+ * identifies registered scalar/spread binds without interpolating any values.
+ */
+function overviewUnionBranch(query: SelectQueryBuilder<BaseEntity>, type: EntityType) {
+    const generated = query.getQuery();
+    const parameters = query.getParameters();
+    const scoped: ObjectLiteral = {};
+    const sql = generated.replaceAll(/:(\.\.\.)?([A-Za-z0-9_.]+)/g, namespaceParameter);
+
+    /** Rename only known binds, retaining spread syntax and the driver's own lexical rules. */
+    function namespaceParameter(token: string, spread: string | undefined, key: string): string {
+        if (!Object.hasOwn(parameters, key)) return token;
+        const scopedKey = `overview_${type}_${key}`;
+        scoped[scopedKey] = parameters[key];
+        return `:${spread ?? ''}${scopedKey}`;
+    }
+    return {sql, parameters: scoped};
+}
+
+/** Attach ordered native CTEs and the generated UNION's distinct binds to one executable builder. */
+function withOverviewSource<T extends ObjectLiteral>(query: SelectQueryBuilder<T>, source: OverviewSource): SelectQueryBuilder<T> {
+    // Every CTE refers only to an earlier sibling. Only the UNION needs generated
+    // SQL composition; placement, filtering and grouping remain native builders.
+    for (const expression of source.expressions) query.addCommonTableExpression(expression.query, expression.alias);
+    return query.setParameters(source.parameters);
+}
+
+/** Build heterogeneous membership with native CTEs and one composition of ORM-generated UNION branches. */
+function overviewSource(manager: EntityManager, profileId: string, input: OverviewQuery): OverviewSource {
     const branches: string[] = [];
-    const parameters: unknown[] = [];
-    // Append each resource branch's binds immediately after its SQL; the later
-    // event-only parent branch contributes its parameters after all root branches.
+    const parameters: ObjectLiteral = {};
+    // Branch-local namespaces prevent a later resource from replacing an earlier
+    // type/profile/search bind. Ordinary membership callers keep their existing API.
     for (const type of OVERVIEW_TYPES) {
         const query = overviewRootQuery(manager, profileId, input.collection, type, input);
-        const [sql, branchParameters] = query.getQueryAndParameters();
-        branches.push(sql);
-        parameters.push(...branchParameters);
+        const branch = overviewUnionBranch(query, type);
+        branches.push(branch.sql);
+        Object.assign(parameters, branch.parameters);
     }
 
     // Parent membership is a small event-only relation. Joining the complete
     // heterogeneous union again would materialize every child a second time.
     const eventQuery = overviewRootQuery(manager, profileId, input.collection, 'event', input, true);
-    const [eventSql, eventParameters] = eventQuery.getQueryAndParameters();
-    parameters.push(...eventParameters);
     // This is the single SQL translation of isHiddenInOverview. Parent preference
     // does not occur here: only shared parent archival affects a child's default.
     return {
-        sql: `WITH overview_roots AS (${branches.join('\nUNION ALL\n')}),
-            overview_eligible AS (${overviewPlacementSql('overview_roots')}),
-            overview_event_roots AS (${eventSql}),
-            overview_events AS (${overviewPlacementSql('overview_event_roots')})`,
+        expressions: [
+            {alias: 'overview_roots', query: branches.join('\nUNION ALL\n')},
+            {alias: 'overview_eligible', query: overviewPlacementQuery(manager, 'overview_roots')},
+            {alias: 'overview_event_roots', query: eventQuery},
+            {alias: 'overview_events', query: overviewPlacementQuery(manager, 'overview_event_roots')},
+        ],
         parameters,
     };
 }
 
-function overviewPlacementSql(source: string): string {
+/** Project personal placement without turning the CTE itself into a handwritten query. */
+function overviewPlacementQuery(manager: EntityManager, source: string): SelectQueryBuilder<ObjectLiteral> {
     // source is one of the private CTE identifiers above, never request input.
-    return `SELECT ${source}.*,
-        CASE WHEN visibility = 'HIDDEN' THEN 1
-             WHEN visibility = 'SHOWN' THEN 0
-             ELSE effectiveArchived END AS overviewHidden FROM ${source}`;
+    return manager.createQueryBuilder().from(source, 'root').select('root.*')
+        .addSelect(`CASE WHEN root.visibility = 'HIDDEN' THEN 1
+             WHEN root.visibility = 'SHOWN' THEN 0
+             ELSE root.effectiveArchived END`, 'overviewHidden');
 }
 
 /**
@@ -554,14 +626,17 @@ function addOverviewMatchProjection(builder: SelectQueryBuilder<BaseEntity>, typ
     builder.addSelect(conditions.length ? conditions.join(' AND ') : '1', 'matches');
 }
 
-function overviewRegionSource(source: OverviewSql, query: OverviewQuery): OverviewSql {
+/** Filter both ordinary roots and eligible parents to the requested private placement region. */
+function overviewRegionSource(manager: EntityManager, source: OverviewSource, query: OverviewQuery): OverviewSource {
+    const hidden = query.region === 'hidden' ? 1 : 0;
     return {
-        sql: `${source.sql}, overview_region AS (
-            SELECT * FROM overview_eligible WHERE overviewHidden = ?
-        ), overview_parent_region AS (
-            SELECT * FROM overview_events WHERE overviewHidden = ?
-        )`,
-        parameters: [...source.parameters, query.region === 'hidden' ? 1 : 0, query.region === 'hidden' ? 1 : 0],
+        expressions: [...source.expressions,
+        {alias: 'overview_region', query: manager.createQueryBuilder().from('overview_eligible', 'eligible')
+                .select('eligible.*').where('eligible.overviewHidden = :overviewRegionHidden', {overviewRegionHidden: hidden})},
+        {alias: 'overview_parent_region', query: manager.createQueryBuilder().from('overview_events', 'parent')
+                .select('parent.*').where('parent.overviewHidden = :overviewRegionHidden', {overviewRegionHidden: hidden})},
+        ],
+        parameters: source.parameters,
     };
 }
 
@@ -571,21 +646,23 @@ function overviewRegionSource(source: OverviewSql, query: OverviewQuery): Overvi
  * an event can therefore remain as navigation to a matching child. This mapping
  * occurs before the mixed-grid LIMIT, so large events occupy one overview slot.
  */
-function overviewRepresentativeSource(source: OverviewSql): OverviewSql {
+function overviewRepresentativeSource(manager: EntityManager, source: OverviewSource): OverviewSource {
     return {
-        sql: `${source.sql}, overview_matches AS (
-            SELECT item.* FROM overview_region item WHERE item.matches = 1
-        ), overview_representatives AS (
-            SELECT CASE WHEN parent.id IS NULL THEN item.id ELSE parent.id END AS id,
-                CASE WHEN parent.id IS NULL THEN item.type ELSE parent.type END AS type,
-                CASE WHEN parent.id IS NULL THEN item.eventId ELSE NULL END AS eventId,
-                CASE WHEN parent.id IS NULL THEN item.visibility ELSE parent.visibility END AS visibility
-            FROM overview_matches item
-            LEFT JOIN overview_parent_region parent ON parent.id = item.eventId
-        ), overview_cards AS (
-            SELECT id, type, eventId, visibility, COUNT(*) AS matchingCount
-            FROM overview_representatives GROUP BY id, type, eventId, visibility
-        )`,
+        expressions: [...source.expressions,
+        {alias: 'overview_matches', query: manager.createQueryBuilder().from('overview_region', 'item')
+                .select('item.*').where('item.matches = :overviewMatchFlag', {overviewMatchFlag: 1})},
+        {alias: 'overview_representatives', query: manager.createQueryBuilder().from('overview_matches', 'item')
+                .leftJoin('overview_parent_region', 'parent', 'parent.id = item.eventId')
+                .select('CASE WHEN parent.id IS NULL THEN item.id ELSE parent.id END', 'id')
+                .addSelect('CASE WHEN parent.id IS NULL THEN item.type ELSE parent.type END', 'type')
+                .addSelect('CASE WHEN parent.id IS NULL THEN item.eventId ELSE NULL END', 'eventId')
+                .addSelect('CASE WHEN parent.id IS NULL THEN item.visibility ELSE parent.visibility END', 'visibility')},
+        {alias: 'overview_cards', query: manager.createQueryBuilder().from('overview_representatives', 'representative')
+                .select('representative.id', 'id').addSelect('representative.type', 'type')
+                .addSelect('representative.eventId', 'eventId').addSelect('representative.visibility', 'visibility')
+                .addSelect('COUNT(*)', 'matchingCount').groupBy('representative.id')
+                .addGroupBy('representative.type').addGroupBy('representative.eventId').addGroupBy('representative.visibility')},
+        ],
         parameters: source.parameters,
     };
 }
@@ -614,7 +691,7 @@ async function loadOverviewCards(manager: EntityManager, rows: OverviewRootRow[]
             .select('display.id', 'id').addSelect('display.title', 'title')
             .addSelect('display.description', 'description').addSelect('display.header_img', 'headerImg')
             .addSelect('display.owner_id', 'ownerId')
-            .where('display.id IN (:...ids)', {ids}).getRawMany<OverviewDisplayRow>();
+            .where({id: In(ids)}).getRawMany<OverviewDisplayRow>();
         for (const row of displayRows) fields.set(archiveKey({type, id: row.id}), row);
     }
     // Rejoin display data in the page's original mixed order. A disappeared row
@@ -633,7 +710,7 @@ async function loadOverviewCards(manager: EntityManager, rows: OverviewRootRow[]
  * tables for profiles with many linked children. Type-qualified joins preserve
  * polymorphic identities even when two root tables contain the same UUID.
  */
-function overviewCardPage(manager: EntityManager, query: OverviewQuery, children = false): OverviewSql {
+function overviewCardPage(manager: EntityManager, query: OverviewQuery, children = false): SelectQueryBuilder<ObjectLiteral> {
     const page = manager.createQueryBuilder().select('card.*')
         .from(children ? 'overview_region' : 'overview_cards', 'card');
     // Resource-qualified title lookups avoid collisions between table-local IDs
@@ -654,19 +731,17 @@ function overviewCardPage(manager: EntityManager, query: OverviewQuery, children
     // A child page is constrained to the selected event and current search;
     // representative pages use the already grouped eligible card set.
     if (children) page.where('card.eventId = :overviewSelectedEvent AND card.matches = 1', {overviewSelectedEvent: query.eventId});
-    const [sql, parameters] = page.getQueryAndParameters();
-    return {sql, parameters};
+    return page;
 }
 
 /** Count only eligible children of the bounded set of displayed event cards. */
-async function overviewChildCounts(manager: EntityManager, source: OverviewSql, eventIds: string[]): Promise<Map<string, OverviewChildCount>> {
+async function overviewChildCounts(manager: EntityManager, source: OverviewSource, eventIds: string[]): Promise<Map<string, OverviewChildCount>> {
     const counts = new Map<string, OverviewChildCount>();
     if (!eventIds.length) return counts;
-    const placeholders = eventIds.map(() => '?').join(', ');
-    const rows = await manager.query<OverviewChildCount[]>(`${source.sql}
-        SELECT child.eventId, COUNT(*) AS total, SUM(child.matches) AS matching
-        FROM overview_region child WHERE child.eventId IN (${placeholders}) GROUP BY child.eventId`,
-    [...source.parameters, ...eventIds]);
+    const query = manager.createQueryBuilder().from('overview_region', 'child')
+        .select('child.eventId', 'eventId').addSelect('COUNT(*)', 'total').addSelect('SUM(child.matches)', 'matching')
+        .where('child.eventId IN (:...overviewChildEvents)', {overviewChildEvents: eventIds}).groupBy('child.eventId');
+    const rows = await withOverviewSource(query, source).getRawMany<OverviewChildCount>();
     for (const row of rows) counts.set(row.eventId, row);
     return counts;
 }
@@ -677,10 +752,12 @@ async function readOverviewRegion(manager: EntityManager, profileId: string, inp
     // Keep a local copy because bounded pagination adjusts page numbers in the read result.
     const query = {...input};
     const source = overviewSource(manager, profileId, query);
-    const region = overviewRegionSource(source, query);
-    const representatives = overviewRepresentativeSource(region);
-    const counts = await manager.query<OverviewTypeCount[]>(`${source.sql}
-        SELECT type, overviewHidden, COUNT(*) AS total FROM overview_eligible GROUP BY type, overviewHidden`, source.parameters);
+    const region = overviewRegionSource(manager, source, query);
+    const representatives = overviewRepresentativeSource(manager, region);
+    const typeCounts = manager.createQueryBuilder().from('overview_eligible', 'eligible')
+        .select('eligible.type', 'type').addSelect('eligible.overviewHidden', 'overviewHidden')
+        .addSelect('COUNT(*)', 'total').groupBy('eligible.type').addGroupBy('eligible.overviewHidden');
+    const counts = await withOverviewSource(typeCounts, source).getRawMany<OverviewTypeCount>();
     const result: OverviewReadResult = {
         query, items: [], collectionTotal: 0, hiddenTotal: 0, regionTotal: 0,
         matchingTotal: 0, cardTotal: 0, childTotal: 0, types: [], pageSize: OVERVIEW_PAGE_SIZE,
@@ -703,19 +780,19 @@ async function readOverviewRegion(manager: EntityManager, profileId: string, inp
         return result;
     }
 
-    const totals = await manager.query<Array<{matchingTotal: number | string; cardTotal: number | string}>>(`${representatives.sql}
-        SELECT COALESCE(SUM(matchingCount), 0) AS matchingTotal, COUNT(*) AS cardTotal
-        FROM overview_cards`, representatives.parameters);
-    result.matchingTotal = Number(totals[0].matchingTotal);
-    result.cardTotal = Number(totals[0].cardTotal);
+    const cardTotals = manager.createQueryBuilder().from('overview_cards', 'card')
+        .select('COALESCE(SUM(card.matchingCount), 0)', 'matchingTotal').addSelect('COUNT(*)', 'cardTotal');
+    const totals = await withOverviewSource(cardTotals, representatives).getRawOne<{matchingTotal: number | string; cardTotal: number | string}>();
+    result.matchingTotal = Number(totals!.matchingTotal);
+    result.cardTotal = Number(totals!.cardTotal);
     query.page = clampOverviewPage(query.page, result.cardTotal);
 
     if (query.eventId) {
         // A stale/forged selection cannot act as a container. Its surviving
         // children naturally reappear in the mixed grid through the same query.
-        const parents = await manager.query<OverviewRootRow[]>(`${region.sql}
-            SELECT * FROM overview_parent_region WHERE id = ? LIMIT 1`,
-        [...region.parameters, query.eventId]);
+        const parent = manager.createQueryBuilder().from('overview_parent_region', 'parent')
+            .select('parent.*').where('parent.id = :overviewSelectedEvent', {overviewSelectedEvent: query.eventId}).limit(1);
+        const parents = await withOverviewSource(parent, region).getRawMany<OverviewRootRow>();
         if (parents.length) {
             [result.event] = await loadOverviewCards(manager, parents, result.visibility);
             const childCounts = await overviewChildCounts(manager, region, [query.eventId]);
@@ -725,7 +802,7 @@ async function readOverviewRegion(manager: EntityManager, profileId: string, inp
             result.event.overview = {total: result.childTotal, matching};
             query.childPage = clampOverviewPage(query.childPage, matching);
             const page = overviewCardPage(manager, query, true);
-            const rows = await manager.query<OverviewRootRow[]>(`${region.sql} ${page.sql}`, [...region.parameters, ...page.parameters]);
+            const rows = await withOverviewSource(page, region).getRawMany<OverviewRootRow>();
             result.items = await loadOverviewCards(manager, rows, result.visibility);
             return result;
         }
@@ -734,7 +811,7 @@ async function readOverviewRegion(manager: EntityManager, profileId: string, inp
 
     query.childPage = 1;
     const page = overviewCardPage(manager, query);
-    const rows = await manager.query<OverviewRootRow[]>(`${representatives.sql} ${page.sql}`, [...representatives.parameters, ...page.parameters]);
+    const rows = await withOverviewSource(page, representatives).getRawMany<OverviewRootRow>();
     const eventIds: string[] = [];
     result.items = await loadOverviewCards(manager, rows, result.visibility);
     for (const card of result.items) {
@@ -777,7 +854,7 @@ export async function getOverviewPages(profileId: string, queries: OverviewQuery
         if (contextIds.size) {
             const parents = await getRootRepository(manager, 'event').createQueryBuilder('parent')
                 .select('parent.id', 'id').addSelect('parent.title', 'title').addSelect('parent.owner_id', 'ownerId')
-                .where('parent.id IN (:...ids)', {ids: Array.from(contextIds)}).getRawMany<Pick<OverviewDisplayRow, 'id' | 'title' | 'ownerId'>>();
+                .where({id: In(Array.from(contextIds))}).getRawMany<Pick<OverviewDisplayRow, 'id' | 'title' | 'ownerId'>>();
             for (const parent of parents) contextEvents.push(convertEntity(parent, 'event'));
         }
         // Every returned surface receives the same completed context objects
@@ -798,7 +875,7 @@ export async function isOverviewMember(profileId: string, ref: ArchiveReference,
     // this to an owner check or accept an arbitrary entity just because it is viewable.
     const repository = getRootRepository(manager, ref.type);
     const managed = createManagedEntityQuery(repository, ref.type, profileId)
-        .andWhere('entity.id = :overviewEntityId', {overviewEntityId: ref.id});
+        .andWhere({id: Equal(ref.id)});
     if (await managed.getExists()) {
         return true;
     }
@@ -806,7 +883,7 @@ export async function isOverviewMember(profileId: string, ref: ArchiveReference,
     // Use the same transaction manager as the preference write. The query's existing
     // joins/predicates remain the single source of truth for current participation.
     const participation = participationQueries[ref.type](profileId, manager);
-    participation.andWhere(`${participation.alias}.id = :overviewEntityId`, {overviewEntityId: ref.id});
+    participation.andWhere({id: Equal(ref.id)});
     return participation.getExists();
 }
 
@@ -1016,10 +1093,9 @@ export async function updateProfileDefault(profileId: string, isDefault: boolean
             // Remove all other defaults for the owner of this profile if a new one is set
             const profile = await repo.findOneByOrFail({id: profileId});
             if (profile.userId !== undefined && profile.userId !== null) {
-                // Match the stored FK directly: this ORM's relation-ID shortcut
-                // treats zero as absent and otherwise tries an unsupported UPDATE join.
-                await repo.createQueryBuilder().update(Profile).set({defaultForOwner: false})
-                    .where('user_id = :userId', {userId: profile.userId}).execute();
+                // The equality operator keeps zero present while TypeORM maps
+                // the User relation to its existing stored foreign key.
+                await repo.update({user: {id: Equal(profile.userId)}}, {defaultForOwner: false});
             }
             if (profile.guestId) {
                 await repo.update({guest: {id: profile.guestId}}, {defaultForOwner: false});

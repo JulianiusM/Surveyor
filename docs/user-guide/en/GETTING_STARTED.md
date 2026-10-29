@@ -4,10 +4,10 @@ documentation-metadata
 audience: novice users; guests; registered users
 owner: identity feature maintainers
 status: current
-last-verified: 2026-10-28
+last-verified: 2026-10-29
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved shared name bounds, temporary identity-request waits and provider-account deletion completion reconciled with current forms and messages; prior password/recovery guidance retained
-source-anchors: tests/unit/email-rendering.spec.ts; src/backend/controller/userController.ts; src/backend/modules/identity.ts; contracts/api/v1/auth.yaml; src/backend/middleware/identityAdmission.ts; src/backend/middleware/permissionMiddleware.ts; src/backend/modules/database/services/UserService.ts; src/backend/modules/database/entities/user/; src/backend/modules/oidc.ts; src/backend/modules/settings.ts; src/backend/modules/email.ts; src/backend/modules/lib/guestRegistrationNags.ts; tests/integration/authentication-workflows.spec.ts; src/backend/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/identity/; src/frontend/components/CommandFeedback.vue; src/common/locales/; src/frontend/
+verification-scope: guest confirmation source anchor reconciled to the existing frontend/catalog owner; prior approved name, credential, recovery and completion guidance retained
+source-anchors: tests/unit/email-rendering.spec.ts; src/backend/controller/userController.ts; src/backend/modules/identity.ts; contracts/api/v1/auth.yaml; src/backend/middleware/identityAdmission.ts; src/backend/middleware/permissionMiddleware.ts; src/backend/modules/database/services/UserService.ts; src/backend/modules/database/entities/user/; src/backend/modules/oidc.ts; src/backend/modules/settings.ts; src/backend/modules/email.ts; tests/integration/authentication-workflows.spec.ts; src/backend/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/identity/; src/frontend/components/CommandFeedback.vue; src/common/locales/; src/frontend/
 next-review: identity-or-authentication-visible-behavior-change
 -->
 

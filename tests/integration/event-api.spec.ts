@@ -1,7 +1,7 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import * as eventApi from '../../src/backend/controller/eventController';
 import {eventFlow} from '../../src/backend/routes/eventFlow';
-import eventController from '../../src/backend/controller/eventController';
+
 import {getEntityPropertyPresentation} from '../../src/backend/controller/entityAdminController';
 import * as eventService from '../../src/backend/modules/database/services/EventService';
 import * as adminService from '../../src/backend/modules/database/services/EntityAdminService';
@@ -34,7 +34,7 @@ function sessionFor(profile: Profile): SessionLike {
 
 async function createEvent(title: string, capacity: number | null = 20): Promise<string> {
     const id = await createIntegrationEvent(owner.id, title, capacity);
-    await eventController.afterCreateItems(id, {_body: {defaultPerms: {authenticated: ['ACCESS_REGISTRATION']}}});
+    await eventApi.afterCreateItems(id, {_body: {defaultPerms: {authenticated: ['ACCESS_REGISTRATION']}}});
     return id;
 }
 
@@ -159,13 +159,13 @@ describe('versioned Event projections and native operation adoption', () => {
         // Persist the edge limits directly: creation still independently requires
         // positive capacity, while existing stored zero and NULL retain their meaning.
         for (const {limit, full} of [{limit: null, full: false}, {limit: 0, full: true},
-            {limit: 1, full: true}, {limit: 2, full: false}]) {
+        {limit: 1, full: true}, {limit: 2, full: false}]) {
             await eventService.updateEventProperties(id, {maxParticipants: limit});
             const current = (await eventService.getEventById(id))!;
 
             // Exercise the actual three production consumers with real persistence,
             // preserving each projection's normal data acquisition and actor scope.
-            const native = await eventController.fetchForView(current, {session: sessionFor(owner)} as Request);
+            const native = await eventApi.fetchForView(current, {session: sessionFor(owner)} as Request);
             const versioned = await eventApi.readEvent(id, sessionFor(owner));
             expect(native.isFull).toBe(full);
             expect(versioned.isFull).toBe(full);
@@ -183,7 +183,7 @@ describe('versioned Event projections and native operation adoption', () => {
 
         /** Native and versioned consumers retain their own page/method admission. */
         async function expectRelatedContent(expected: number): Promise<void> {
-            const native = await eventController.fetchForView(event, {session: sessionFor(editor)} as Request);
+            const native = await eventApi.fetchForView(event, {session: sessionFor(editor)} as Request);
             expect(native.relatedEntities).toHaveLength(expected);
             expect((await eventApi.readEventThingsToDo(id, sessionFor(editor), 'detail')).items).toHaveLength(expected);
             expect((await eventApi.readEventThingsToDo(id, sessionFor(editor), 'admin')).items).toHaveLength(expected);
@@ -335,7 +335,7 @@ describe('versioned Event projections and native operation adoption', () => {
         const before = (await eventService.getEventById(id))!;
         await eventService.register(id, '2027-06-01', '2027-06-03', participant.id);
         await eventService.updateEventProperties(id, {maxParticipants: 1});
-        await expect(eventController.registerAttendance(before,
+        await expect(eventApi.registerAttendance(before,
             {arrivalDate: '2027-06-01', departureDate: '2027-06-03'}, {session: sessionFor(other)}))
             .rejects.toMatchObject({status: 403, cause: 'EVENT_FULL'});
         expect(await eventService.getRegistrationsForEvent(id)).toHaveLength(1);

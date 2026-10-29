@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-import {Column, Entity, Index, OneToMany} from "typeorm";
-import {BaseEntity} from "../abstract/BaseEntity";
-import {ActivityPlan} from "../activity/ActivityPlan";
-import {DriversList} from "../drivers/DriversList";
-import {PackingList} from "../packing/PackingList";
-import {EventRegBypassLink} from "./EventRegBypassLink";
-import {EventRegistration} from "./EventRegistration";
+import {Column, Entity, Index, OneToMany} from 'typeorm';
+import {BaseEntity} from '../abstract/BaseEntity';
+import {ActivityPlan} from '../activity/ActivityPlan';
+import {DriversList} from '../drivers/DriversList';
+import {PackingList} from '../packing/PackingList';
+import {EventRegBypassLink} from './EventRegBypassLink';
+import {EventRegistration} from './EventRegistration';
 
 @Entity("events", {schema: "surveyor"})
 // The sweep filters archive/pause state and advances through (endDate, id) batches.

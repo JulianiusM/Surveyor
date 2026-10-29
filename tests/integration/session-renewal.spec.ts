@@ -5,7 +5,7 @@ import type {SessionData} from 'express-session';
 import http from 'node:http';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
 import {Session} from '../../src/backend/modules/database/entities/session/Session';
-import {createSessionStore} from '../../src/backend/modules/lib/session';
+import {createSessionStore} from '../../src/backend/modules/database/services/UserService';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 
 beforeAll(initializeIntegrationDatabase);

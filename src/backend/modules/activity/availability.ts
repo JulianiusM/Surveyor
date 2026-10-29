@@ -21,7 +21,7 @@ import type {
 import {toParticipantKey} from '../../../common/activity/requirements';
 import {uuidKey, sameUuid, indexByUuid} from '../lib/util';
 
-import type {ParticipantAttendance} from "../../../types/ActivityRequirementTypes";
+import type {ParticipantAttendance} from '../../../types/ActivityRequirementTypes';
 import {parseTimeToMinutes, slotsOverlap} from './timebox';
 
 function isBefore(a: string, b: string): boolean {
@@ -193,15 +193,15 @@ export function recommendationInputKey(recommendation: RecommendationInput): str
  * depend on payload order; foreign work remains reserved. Missing slots throw,
  * and callers retain admission, disclosure and persistence ownership. */
 export function buildRecommendationWarnings({
-                                                slots,
-                                                recommendations,
-                                                existingAssignments = {},
-                                                linkedAssignments = {},
-                                                participantAttendance = {},
-                                                slotCapacities = {},
-                                                allowOverfill = false,
-                                                attendancePolicy,
-                                            }: RecommendationWarningOptions): RecommendationWarningResult[] {
+    slots,
+    recommendations,
+    existingAssignments = {},
+    linkedAssignments = {},
+    participantAttendance = {},
+    slotCapacities = {},
+    allowOverfill = false,
+    attendancePolicy,
+}: RecommendationWarningOptions): RecommendationWarningResult[] {
     // Resolve targets once and normalize every operation before projecting any
     // participant's releases or additions from this batch.
     const slotMap = indexByUuid(slots, (slot) => slot.id);

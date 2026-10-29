@@ -17,10 +17,10 @@
 import type {DefaultItemRelationEntity, EntityItemAssignment} from '../../../../../types/EntityRelationTypes';
 
 
-import {JoinColumn, ManyToOne, RelationId} from "typeorm";
-import {Profile} from "../user/Profile";
+import {JoinColumn, ManyToOne, RelationId} from 'typeorm';
+import {Profile} from '../user/Profile';
 import type {BaseEntity} from './BaseEntity';
-import {NumericDescriptionEntityItem, UuidDescriptionEntityItem} from "./DescriptionEntityItem";
+import {NumericDescriptionEntityItem, UuidDescriptionEntityItem} from './DescriptionEntityItem';
 
 
 export abstract class UuidProfileEntityItem extends UuidDescriptionEntityItem {

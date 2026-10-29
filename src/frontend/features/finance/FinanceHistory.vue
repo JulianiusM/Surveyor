@@ -26,7 +26,7 @@ const ordered = computed(orderedInvoices);
 // Locale-only reads retain lexical input. Actor/source/audience retirement must
 // remount the rows even if another actor's same-resource cache is already warm.
 const rowSource = computed(() => [context.epoch.value, context.session.value?.context, props.eventId,
-    props.pool?.id, !!props.admin, !!props.readOnly].join(':'));
+props.pool?.id, !!props.admin, !!props.readOnly].join(':'));
 const filtered = computed(filteredInvoices);
 const {page, pages, visible} = useFinancePagination(() => filtered.value, pageSize);
 watch([search, status, pageSize], () => {page.value = 0;});
@@ -39,10 +39,10 @@ function filteredInvoices(): Invoice[] {
     // fields hidden inside a corrected row's secondary text.
     return ordered.value.filter(invoice => (!status.value || invoice.status === status.value)
         && (!needle || [invoice.id, invoice.poolName, invoice.participantName, invoice.participantEmail,
-            invoice.organizerRecorded ? recorderName(invoice) : '',
-            props.admin && invoice.participantName === null ? messages.value.t('finance.poolExpense') : '',
-            invoice.amount, invoice.description, invoice.correctedAmount, invoice.correctedDescription,
-            invoice.rejectionReason].join(' ').toLocaleLowerCase().includes(needle)));
+        invoice.organizerRecorded ? recorderName(invoice) : '',
+        props.admin && invoice.participantName === null ? messages.value.t('finance.poolExpense') : '',
+        invoice.amount, invoice.description, invoice.correctedAmount, invoice.correctedDescription,
+        invoice.rejectionReason].join(' ').toLocaleLowerCase().includes(needle)));
 }
 /** Render the same newest-first complete set which filtering and paging admit. */
 function orderedInvoices(): Invoice[] {

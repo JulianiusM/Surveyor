@@ -22,7 +22,7 @@ import type {
     BaselineRequirementDiagnostics, BaselineRequirementComputationResult, RequirementCapacitySlot,
     RequirementAnalysisInput, RequirementAnalysisResult,
     HypotheticalRoleCoverageResult, RequirementPlanInput, BaselineSlotInput,
-} from "../../types/ActivityRequirementTypes";
+} from '../../types/ActivityRequirementTypes';
 
 interface DaysWindow {
     start: string;
@@ -584,44 +584,44 @@ export function calculateHypotheticalRoleCoverage(options: {
     participants.forEach(/** Add one participant's unit-capacity flow edges only
      * for attendance-eligible role positions. Requirement benefit dominates the
      * deterministic tie rank; retain before/after evidence for the selected match. */
-    function addParticipantMatches(participant, participantIndex) {
-        // Calculate the current requirement once before evaluating possible role changes.
-        addFlowEdge(graph, source, participantOffset + participantIndex, 1, 0);
-        const before = calculateParticipantRequirement(
-            options.plan,
-            participant,
-            options.roleRequirements,
-            options.overrides,
-            options.stayRequirements,
-        ).requiredShifts;
-
-        /** Add one eligible role edge and retain its before/after requirement evidence. */
-        positions.forEach(function addAvailablePosition(position, positionIndex) {
-            // A hypothetical role cannot extend this participant's attendance.
-            if (!isParticipantAvailableForRoleSlot(participant, position)) return;
-            const hypotheticalParticipant = {...participant, roleIds: [position.roleId]};
-            const after = calculateParticipantRequirement(
+        function addParticipantMatches(participant, participantIndex) {
+            // Calculate the current requirement once before evaluating possible role changes.
+            addFlowEdge(graph, source, participantOffset + participantIndex, 1, 0);
+            const before = calculateParticipantRequirement(
                 options.plan,
-                hypotheticalParticipant,
+                participant,
                 options.roleRequirements,
                 options.overrides,
                 options.stayRequirements,
             ).requiredShifts;
-            const benefit = options.baselineWeight
-                ? options.baselineWeight(participant, position.roleId)
-                : before - after;
-            const normalizedBenefit = Math.round(benefit * 1_000);
-            const deterministicRank = participantIndex * positions.length + positionIndex;
-            const edge = addFlowEdge(
-                graph,
-                participantOffset + participantIndex,
-                positionOffset + positionIndex,
-                1,
-                -normalizedBenefit * benefitMultiplier + deterministicRank,
-            );
-            matchEdges.push({participantIndex, positionIndex, edge, requirementBefore: before, requirementAfter: after});
+
+            /** Add one eligible role edge and retain its before/after requirement evidence. */
+            positions.forEach(function addAvailablePosition(position, positionIndex) {
+                // A hypothetical role cannot extend this participant's attendance.
+                if (!isParticipantAvailableForRoleSlot(participant, position)) return;
+                const hypotheticalParticipant = {...participant, roleIds: [position.roleId]};
+                const after = calculateParticipantRequirement(
+                    options.plan,
+                    hypotheticalParticipant,
+                    options.roleRequirements,
+                    options.overrides,
+                    options.stayRequirements,
+                ).requiredShifts;
+                const benefit = options.baselineWeight
+                    ? options.baselineWeight(participant, position.roleId)
+                    : before - after;
+                const normalizedBenefit = Math.round(benefit * 1_000);
+                const deterministicRank = participantIndex * positions.length + positionIndex;
+                const edge = addFlowEdge(
+                    graph,
+                    participantOffset + participantIndex,
+                    positionOffset + positionIndex,
+                    1,
+                    -normalizedBenefit * benefitMultiplier + deterministicRank,
+                );
+                matchEdges.push({participantIndex, positionIndex, edge, requirementBefore: before, requirementAfter: after});
+            });
         });
-    });
     positions.forEach((_, positionIndex) => addFlowEdge(graph, positionOffset + positionIndex, sink, 1, 0));
 
     // Initial shortest-path potentials are cheap because the first residual graph is a DAG.

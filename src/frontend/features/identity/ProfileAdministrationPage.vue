@@ -111,7 +111,7 @@ async function retireEntryProjection(_entry: {readonly status: number}, scope: F
     fields.isDefault = false;
     baseline.value = null;
     await evictQueryFamilies(context.queryClient, [identityAdministrationKeys.current(scope.context),
-        identityAdministrationKeys.profiles(scope.context)]);
+    identityAdministrationKeys.profiles(scope.context)]);
 }
 
 /** Keep server-owned denial wording separate from a recoverable admission read failure. */

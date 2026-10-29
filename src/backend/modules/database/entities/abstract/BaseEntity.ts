@@ -17,12 +17,12 @@
 import type {EntityItemAssignment, DefaultRelationEntity} from '../../../../../types/EntityRelationTypes';
 
 
-import {Column, JoinColumn, ManyToOne, RelationId} from "typeorm";
-import type {EntityBase} from "../../../../../types/UserTypes";
-import {Profile} from "../user/Profile";
-import {BaseEntityItem} from "./BaseEntityItem";
+import {Column, JoinColumn, ManyToOne, RelationId} from 'typeorm';
+import type {EntityBase} from '../../../../../types/UserTypes';
+import {Profile} from '../user/Profile';
+import {BaseEntityItem} from './BaseEntityItem';
 
-import {UuidBase} from "./TrackedBase";
+import {UuidBase} from './TrackedBase';
 
 export abstract class BaseEntity extends UuidBase implements EntityBase {
     /**

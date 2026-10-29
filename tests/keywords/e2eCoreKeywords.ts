@@ -134,7 +134,7 @@ export function projectNativeMobileOverviewActions(presentation: Awaited<ReturnT
         expect(presentation.content.elements.filter(element => element.text === label)).toHaveLength(1);
     expect(presentation.content.text.split('DuplicateDelete')).toHaveLength(2);
     return {...presentation, content: {...presentation.content,
-        text: presentation.content.text.replace('DuplicateDelete', 'Duplicate Delete')}};
+            text: presentation.content.text.replace('DuplicateDelete', 'Duplicate Delete')}};
 }
 
 /** Check the actual phone layout before continuing the real card workflows.
@@ -144,8 +144,8 @@ export async function expectMobileOverviewActionRows(card: Locator): Promise<voi
     const rowBounds = (await row.boundingBox())!;
     expect(rowBounds.width).toBeGreaterThan(0);
     const actions = [row.getByRole('button', {name: /^Archival and visibility for /u}),
-        row.getByRole('link', {name: 'Duplicate', exact: true}),
-        row.getByRole('button', {name: 'Delete', exact: true})];
+    row.getByRole('link', {name: 'Duplicate', exact: true}),
+    row.getByRole('button', {name: 'Delete', exact: true})];
     let previousBottom = rowBounds.y;
     for (const action of actions) {
         await expect(action).toBeVisible();
@@ -182,7 +182,7 @@ export async function projectCreationPermissionDisclosure(surface: Locator, meas
     expect(matches.length).toBeLessThanOrEqual(1);
     const omitted = matches[0]?.index;
     return {...measured, content: {...measured.content, text: measured.content.text.replace(label, '').replace(/\s+/gu, ' ').trim(),
-        elements: measured.content.elements.filter((_element, index) => index !== omitted)},
+            elements: measured.content.elements.filter((_element, index) => index !== omitted)},
         geometry: measured.geometry.filter((_bounds, index) => omitted === undefined || index !== omitted + 1)};
 }
 
@@ -201,7 +201,7 @@ function inspectBrowserPresentation(roots: Element[], selection: {selectors: str
 
     const content = selected.map(presentationElement);
     return {fields, presentation: {content: {text: visibleText(root!), style: appearance(root!), elements: content},
-        geometry: [{x: origin!.x, y: 0, width: origin!.width, height: origin!.height}, ...selected.map(bounds)]}};
+            geometry: [{x: origin!.x, y: 0, width: origin!.width, height: origin!.height}, ...selected.map(bounds)]}};
 
     /** Button-style choices expose the real clipped input through a painted
      * associated label. Keep that input's checked/value/disabled contract; the
@@ -616,9 +616,9 @@ export async function readProfileWorkflowFixtureForE2E(fixture: E2EProfileWorkfl
         // Return only observable fixture facts. Browser evidence never carries a
         // password hash, migration token value, guest link token or live repository.
         return {accountCount, guestCount, profiles: profiles.map(function profileState(profile) {
-            return {id: profile.id, userId: profile.userId ?? null, guestId: profile.guestId ?? null,
-                hasMigrationToken: !!profile.migrationToken};
-        })};
+                return {id: profile.id, userId: profile.userId ?? null, guestId: profile.guestId ?? null,
+                    hasMigrationToken: !!profile.migrationToken};
+            })};
     }
 
     return withBuiltE2EDatabase(readWorkflow);

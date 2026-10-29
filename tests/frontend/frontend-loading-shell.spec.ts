@@ -63,14 +63,14 @@ async function mountedApp() {
         template: '<label>Existing draft <input v-model="draft" /></label>',
     });
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/', component: draftPage},
-    ]});
+            {path: '/', component: draftPage},
+        ]});
     await router.push('/');
     const wrapper = mount(App, {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}],
-            [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}],
+                [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+        }});
     await flushPromises();
     cleanups.push(() => { wrapper.unmount(); context.start()(); });
     return {wrapper, router, context};
@@ -131,10 +131,10 @@ describe('shared skeleton accessibility', () => {
     it('gates contextual retry and dismiss controls until initialization while keeping standalone controls usable', async () => {
         const context = createFrontendContext({session}, false);
         const view = defineComponent({components: {ActionButton, StatusNotice}, template:
-            '<ActionButton>Retry</ActionButton><StatusNotice placement="notification" transient>Notice</StatusNotice>'});
+                '<ActionButton>Retry</ActionButton><StatusNotice placement="notification" transient>Notice</StatusNotice>'});
         const wrapper = mount(view, {global: {
-            plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
-        }});
+                plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
+            }});
         const standalone = mount(ActionButton);
         cleanups.push(() => { wrapper.unmount(); standalone.unmount(); context.start()(); });
         expect(wrapper.findAll('button')).toHaveLength(2);
@@ -230,7 +230,7 @@ describe('shared skeleton accessibility', () => {
     it('hydrates a scoped readable completion at an initial fragment without changing it into a skeleton', async () => {
         const url = '/guest/recovery';
         const rendered = await render(url, {session, pageCompletion: {context: session.context,
-            destination: url, messageKey: 'auth.recoverySent', kind: 'success'}});
+                destination: url, messageKey: 'auth.recoverySent', kind: 'success'}});
         document.body.innerHTML = `<div id="surveyor-frontend">${rendered.html}</div>`;
         window.history.replaceState({}, '', url + '#frontend-main');
         const application = createFrontendApp(JSON.parse(rendered.state), true);
@@ -247,9 +247,9 @@ describe('shared skeleton accessibility', () => {
     it('accepts a region-specific translated status without duplicating an announcement', () => {
         const context = createFrontendContext({session: {...session, locale: 'de'}}, false);
         const wrapper = mount(LoadingSkeleton, {props: {label: 'Inhalt wird geladen'}, global: {
-            plugins: [[I18NextVue, {i18next: context.i18next}]],
-            provide: {[frontendContextKey as symbol]: context},
-        }});
+                plugins: [[I18NextVue, {i18next: context.i18next}]],
+                provide: {[frontendContextKey as symbol]: context},
+            }});
         cleanups.push(() => { wrapper.unmount(); context.start()(); });
         expect(wrapper.findAll('[role="status"]')).toHaveLength(1);
         expect(wrapper.get('[role="status"]').text()).toBe('Inhalt wird geladen');

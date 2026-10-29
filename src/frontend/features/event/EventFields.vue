@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {fieldAttributes as eventFields} from "../../../../.generated/api/v1/browser/validateEventMetadataPatch.mjs";
+import {fieldAttributes as eventFields} from '../../../../.generated/api/v1/browser/validateEventMetadataPatch.mjs';
 import {useFrontend} from '../../app/context';
 import type {EntityMetadataValues} from '../../../types/FrontendEntityMetadataTypes';
 import TimezonePicker from '../../components/TimezonePicker.vue';

@@ -27,7 +27,7 @@ const session: components['schemas']['SessionView'] & {context: string; csrfToke
 };
 const preview: components['schemas']['ProfileMigrationPreview'] = {kind: 'preview', token,
     profile: {id: profileId, name: 'Transferred <profile>', owner: {kind: 'account', name: 'Original owner',
-        username: 'original-owner', email: 'owner@example.test'}}};
+            username: 'original-owner', email: 'owner@example.test'}}};
 const cleanups: (() => void)[] = [];
 
 afterEach(() => {
@@ -42,9 +42,9 @@ afterEach(() => {
 /** Use actual routes, SSR bootstrap, hydration, shell and SPA command owners.
  * Only HTTP is substituted; persistence and real browser delivery belong to application E2E. */
 async function mounted(workflow: FrontendProfileWorkflow | undefined,
-                       path = '/users/profile/migrate/show',
-                       read: typeof fetch = rejectUnexpectedRequest,
-                       readAdmission?: (request: Request) => Promise<Response>) {
+    path = '/users/profile/migrate/show',
+    read: typeof fetch = rejectUnexpectedRequest,
+    readAdmission?: (request: Request) => Promise<Response>) {
     const request = vi.fn(function deliverWorkflowRequest(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
         const received = input as Request;
         const pathname = new URL(received.url).pathname;
@@ -82,7 +82,7 @@ function rejectUnexpectedRequest(): Promise<Response> {
 /** Match authored response shapes while preserving actual generated validation. */
 function json(value: unknown, status = 200, responseContext = session.context): Response {
     return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
-        'X-Surveyor-Context': responseContext}});
+            'X-Surveyor-Context': responseContext}});
 }
 
 function rejection(status: 400 | 500): Response {
@@ -90,7 +90,7 @@ function rejection(status: 400 | 500): Response {
         code: status === 400 ? 'VALIDATION_FAILED' : 'WORKFLOW_OUTCOME_UNKNOWN',
         messageKey: status === 400 ? 'api:errors.VALIDATION_FAILED' : 'api:errors.WORKFLOW_OUTCOME_UNKNOWN',
         params: {}, detail: 'A workflow result.', requestId: 'workflow-response'}),
-    {status, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
+        {status, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
 }
 
 /** Query may hold admission, never token input, issued output or private preview. */
@@ -103,7 +103,7 @@ function expectPrivateCache(context: ReturnType<typeof createFrontendApp>['conte
 /** Substitute only the HTTP boundary; generated request/response validation remains actual. */
 function previewResponse(outcome: components['schemas']['ProfileMigrationPreviewOutcome']): Response {
     return new Response(JSON.stringify(outcome), {headers: {'Content-Type': 'application/json',
-        'X-Surveyor-Context': session.context}});
+            'X-Surveyor-Context': session.context}});
 }
 
 /** Visible workflow contracts remain explicit after retiring native templates. */
@@ -218,9 +218,9 @@ async function guardedWorkflow() {
         template: '<ProfileWorkflowPage /><Sibling />',
     });
     const wrapper = mount(Owner, {attachTo: document.body, global: {plugins: [application.router,
-        [VueQueryPlugin, {queryClient: application.context.queryClient}],
-        [I18NextVue, {i18next: application.context.i18next}]],
-        provide: {[frontendContextKey as symbol]: application.context}}});
+            [VueQueryPlugin, {queryClient: application.context.queryClient}],
+            [I18NextVue, {i18next: application.context.i18next}]],
+            provide: {[frontendContextKey as symbol]: application.context}}});
     cleanups.push(function disposeGuards() { wrapper.unmount(); application.context.start()(); });
     await flushPromises();
     return {wrapper, request, context: application.context, busy, dirty, uncertain};
@@ -359,10 +359,10 @@ describe('SPA profile workflows', () => {
         const bootstrap = new Promise<Response>(resolve => { finishBootstrap = resolve; });
         const {host, context, request} = await mounted(candidate.kind === 'entry' ? {kind: 'entry'}
             : {kind: candidate.kind, value: ''}, `/users/${candidate.path}`,
-        async function readWorkflow(request) {
-            if (new URL((request as Request).url).pathname === '/api/v1/session') return bootstrap;
-            return candidate.kind === 'entry' ? previewResponse(preview) : rejection(400);
-        });
+            async function readWorkflow(request) {
+                if (new URL((request as Request).url).pathname === '/api/v1/session') return bootstrap;
+                return candidate.kind === 'entry' ? previewResponse(preview) : rejection(400);
+            });
         const form = host.querySelector<HTMLFormElement>('#forgotForm')!;
         const input = form.querySelector<HTMLInputElement>('#' + candidate.field)!;
         input.value = token;
@@ -382,7 +382,7 @@ describe('SPA profile workflows', () => {
         expect(new FormData(form).get(candidate.field)).toBe(token);
 
         finishBootstrap(new Response(JSON.stringify(session), {headers: {'Content-Type': 'application/json',
-            'X-Surveyor-Context': session.context}}));
+                'X-Surveyor-Context': session.context}}));
         await checking;
         await flushPromises();
         expect(button.disabled).toBe(false);
@@ -403,7 +403,7 @@ describe('SPA profile workflows', () => {
         {workflow: {kind: 'entry'}, path: 'profile/migrate/show', template: 'profile/migrate-token-enter'},
         {workflow: {kind: 'entry'}, preview: true, path: 'profile/migrate/show', template: 'profile/migrate-validate',
             data: {profile: {id: profileId, name: 'Transferred <profile>', migrationToken: token,
-                user: {name: 'Original owner', username: 'original-owner', email: 'owner@example.test'}}}},
+                    user: {name: 'Original owner', username: 'original-owner', email: 'owner@example.test'}}}},
         {workflow: {kind: 'deactivate', value: ''}, path: 'profile/delete', template: 'profile/delete'},
         {workflow: {kind: 'delete-account', value: ''}, path: 'account/delete', template: 'delete-account'},
     ] as const)('retains native $workflow.kind headings and submitted fields with approved copy', async function matchesNative(candidate) {

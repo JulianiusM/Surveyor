@@ -1,6 +1,6 @@
 import {normalizeListMetadataPatch as normalizePackingMetadataPatch} from '../../src/backend/controller/entityAdminController';
 import {describe, expect, it} from 'vitest';
-import packingController from '../../src/backend/controller/packingController';
+import * as packingController from '../../src/backend/controller/packingController';
 import {APIError, ValidationError} from '../../src/backend/modules/lib/errors';
 import {ApiProblem} from '../../src/backend/modules/api/problem';
 
@@ -62,9 +62,9 @@ describe('original native packing creation contract', () => {
 
     it('keeps mixed root, required-row, scalar and multiple-rule failures in the original native schema order', () => {
         const body = form({}, {title: '', description: null, event_id: 'invalid-guid', items: JSON.stringify([
-            {title: '', description: null, maxAssignees: '0x2', requiredByAll: 'yes'},
-            {description: '', maxAssignees: 0.5, requiredByAll: false},
-        ])});
+                {title: '', description: null, maxAssignees: '0x2', requiredByAll: 'yes'},
+                {description: '', maxAssignees: 0.5, requiredByAll: false},
+            ])});
         expect(() => packingController.preprocessCreate(body)).toThrow([
             '"title" is not allowed to be empty',
             '"description" must be a string',

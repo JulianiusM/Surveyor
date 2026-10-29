@@ -96,21 +96,21 @@ async function admitProfileWorkflow(req: Request, res: Response, accountOnly: bo
 router.get('/oidc/login', asyncHandler(/** Apply configured provider admission,
  * store the safe application return choice, and persist the protocol owner's
  * PKCE/state preparation before delivering its authorization redirect. */
-async function startFrontendOidc(req, res) {
-    const entry = frontendIdentityPageEntry('oidc', settings.value, req.query.next);
-    if (entry.kind === 'denied') {
-        const state = await bootstrap(req);
-        await applyPageEntry(req, res, state, entry);
-        return renderFrontend(res, req.originalUrl, state);
-    }
-    // Preserve the configured callback and PKCE/state handling; only the final application
-    // destination differs. It belongs to the session and is never supplied by the provider.
-    const session = req.session;
-    session.frontendAuthReturn = safeFrontendReturn(req.query.next);
-    const redirect = await userController.loginUserWithOidc(session);
-    await persistSession(session);
-    res.redirect(redirect);
-}));
+    async function startFrontendOidc(req, res) {
+        const entry = frontendIdentityPageEntry('oidc', settings.value, req.query.next);
+        if (entry.kind === 'denied') {
+            const state = await bootstrap(req);
+            await applyPageEntry(req, res, state, entry);
+            return renderFrontend(res, req.originalUrl, state);
+        }
+        // Preserve the configured callback and PKCE/state handling; only the final application
+        // destination differs. It belongs to the session and is never supplied by the provider.
+        const session = req.session;
+        session.frontendAuthReturn = safeFrontendReturn(req.query.next);
+        const redirect = await userController.loginUserWithOidc(session);
+        await persistSession(session);
+        res.redirect(redirect);
+    }));
 
 /** Preserve the registered provider callback and its existing controller order.
  * The stored return destination is bounded before delivering the current page. */
@@ -140,24 +140,24 @@ router.get('/logout', addNextQuery('/users/logout', '/users'), asyncHandler(asyn
 router.get('/reset-password/:token', asyncHandler(/** Read reset-token admission
  * without consuming it, rendering localized denial/bootstrap when necessary.
  * The later password command independently rechecks expiry and consumption. */
-async function renderPasswordResetFrontend(req, res) {
-    const state = await bootstrap(req);
-    const entry = frontendIdentityPageEntry('reset', settings.value);
-    if (await applyPageEntry(req, res, state, entry)) return;
-    if (entry.kind === 'denied') return renderFrontend(res, req.originalUrl, state);
-    try {
-        // Initial requests and SPA navigation use the same existing controller admission.
-        // Render a truthful localized denial before hydration, with no password form; the
-        // later API command independently checks expiry/consumption rather than trusting this read.
-        await userController.checkPasswordForgotToken(String(req.params.token));
-        state.passwordReset = {valid: true};
-    } catch (error) {
-        const problem = classifyApiError(error);
-        state.passwordReset = validatedProblemBody(problem, state.session.locale);
-        res.status(documentErrorStatus(error, problem));
-    }
-    await renderFrontend(res, req.originalUrl, state);
-}));
+    async function renderPasswordResetFrontend(req, res) {
+        const state = await bootstrap(req);
+        const entry = frontendIdentityPageEntry('reset', settings.value);
+        if (await applyPageEntry(req, res, state, entry)) return;
+        if (entry.kind === 'denied') return renderFrontend(res, req.originalUrl, state);
+        try {
+            // Initial requests and SPA navigation use the same existing controller admission.
+            // Render a truthful localized denial before hydration, with no password form; the
+            // later API command independently checks expiry/consumption rather than trusting this read.
+            await userController.checkPasswordForgotToken(String(req.params.token));
+            state.passwordReset = {valid: true};
+        } catch (error) {
+            const problem = classifyApiError(error);
+            state.passwordReset = validatedProblemBody(problem, state.session.locale);
+            res.status(documentErrorStatus(error, problem));
+        }
+        await renderFrontend(res, req.originalUrl, state);
+    }));
 
 /** Complete account activation through the shared identity controller. Document
  * configuration/admission precedes the token operation; success retains the
@@ -165,44 +165,44 @@ async function renderPasswordResetFrontend(req, res) {
 router.get('/activate/:token', asyncHandler(/** Apply local-login admission before
  * the identity owner's staged token/notice transaction. Failures rebootstrap the
  * current actor; success adopts the committed session before redirect delivery. */
-async function activateIdentity(req, res) {
-    // Resolve the request's presentation and local-login configuration before
-    // attempting token activation, matching the existing document-entry owner.
-    applyPresentationLocale(req);
-    const entry = frontendIdentityPageEntry('activate', settings.value);
-    if (entry.kind === 'denied') {
-        const state = await bootstrap(req);
-        await applyPageEntry(req, res, state, entry);
-        return renderFrontend(res, req.originalUrl, state);
-    }
-
-    let committed: IdentityCompletionReceipt<FrontendIdentityRedirect>;
-    try {
-        const actor = await captureApiActor(req);
-        const destination = `/users/login?next=${encodeURIComponent(safeFrontendReturn(req.query.next))}&locale=${requestLocale(req)}`;
-        /** Stage existing public activation feedback inside its token/session transaction. */
-        function prepareActivationRedirect(staged: Request['session']) {
-            req.flash.call({session: staged} as Request, 'frontend', 'auth.activated');
-            return Object.freeze({status: 303 as const, destination});
+    async function activateIdentity(req, res) {
+        // Resolve the request's presentation and local-login configuration before
+        // attempting token activation, matching the existing document-entry owner.
+        applyPresentationLocale(req);
+        const entry = frontendIdentityPageEntry('activate', settings.value);
+        if (entry.kind === 'denied') {
+            const state = await bootstrap(req);
+            await applyPageEntry(req, res, state, entry);
+            return renderFrontend(res, req.originalUrl, state);
         }
-        committed = await userController.activateAccountWithSession(String(req.params.token), req,
-            {context: actor.context, persistCompletion: true, prepareResult: prepareActivationRedirect});
-    } catch (error) {
-        // Rebootstrap the current identity before projecting a safe typed problem;
-        // the document status still follows the shared error contract.
-        req.apiActor = undefined;
-        const state = await bootstrap(req);
-        const problem = classifyApiError(error);
-        state.identityProblem = validatedProblemBody(problem, state.session.locale);
-        res.status(documentErrorStatus(error, problem));
-        await renderFrontend(res, req.originalUrl, state);
-        return;
-    }
-    // The token write and existing flash are already durable. Adopt their
-    // acknowledgement session; redirect delivery cannot trigger another save.
-    req.session = committed.session;
-    res.redirect(committed.result.status, committed.result.destination);
-}));
+
+        let committed: IdentityCompletionReceipt<FrontendIdentityRedirect>;
+        try {
+            const actor = await captureApiActor(req);
+            const destination = `/users/login?next=${encodeURIComponent(safeFrontendReturn(req.query.next))}&locale=${requestLocale(req)}`;
+            /** Stage existing public activation feedback inside its token/session transaction. */
+            function prepareActivationRedirect(staged: Request['session']) {
+                req.flash.call({session: staged} as Request, 'frontend', 'auth.activated');
+                return Object.freeze({status: 303 as const, destination});
+            }
+            committed = await userController.activateAccountWithSession(String(req.params.token), req,
+                {context: actor.context, persistCompletion: true, prepareResult: prepareActivationRedirect});
+        } catch (error) {
+            // Rebootstrap the current identity before projecting a safe typed problem;
+            // the document status still follows the shared error contract.
+            req.apiActor = undefined;
+            const state = await bootstrap(req);
+            const problem = classifyApiError(error);
+            state.identityProblem = validatedProblemBody(problem, state.session.locale);
+            res.status(documentErrorStatus(error, problem));
+            await renderFrontend(res, req.originalUrl, state);
+            return;
+        }
+        // The token write and existing flash are already durable. Adopt their
+        // acknowledgement session; redirect delivery cannot trigger another save.
+        req.session = committed.session;
+        res.redirect(committed.result.status, committed.result.destination);
+    }));
 
 for (const [path, operation] of [['/login', 'login'], ['/register', 'register'], ['/forgot-password', 'forgot']] as const) {
     // Configuration follows the registered operation, including Express's

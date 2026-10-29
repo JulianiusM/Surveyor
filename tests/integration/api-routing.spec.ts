@@ -67,7 +67,7 @@ async function apiRoutingFixture() {
     }
 
     return {origin, storedSessions, commandHeaders: {'Content-Type': 'application/json', Origin: origin,
-        'X-Surveyor-Api-Compatibility': apiCompatibility}};
+            'X-Surveyor-Api-Compatibility': apiCompatibility}};
 }
 
 describe('layered API route composition', () => {

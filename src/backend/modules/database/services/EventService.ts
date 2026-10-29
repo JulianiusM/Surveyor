@@ -15,21 +15,21 @@
  */
 
 // TypeORM-based implementation of the event module
-import {EntityManager, IsNull, MoreThanOrEqual} from 'typeorm';
-import type {DIETARY, EventLinkOptionsQuery} from "../../../../types/EventTypes";
+import {EntityManager, Equal, IsNull, LessThan, LessThanOrEqual, MoreThan, MoreThanOrEqual, Not} from 'typeorm';
+import type {DIETARY, EventLinkOptionsQuery} from '../../../../types/EventTypes';
 import type {EntityPermissionQueryScope} from '../../../../types/PermissionTypes';
-import {WithRequired} from "../../../../types/UtilTypes";
+import {WithRequired} from '../../../../types/UtilTypes';
 import {generateUniqueId, generateUniqueToken, now} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
-import {ActivityPlan} from "../entities/activity/ActivityPlan";
-import {DriversList} from "../entities/drivers/DriversList";
+import {ActivityPlan} from '../entities/activity/ActivityPlan';
+import {DriversList} from '../entities/drivers/DriversList';
 import {Event} from '../entities/event/Event';
-import {EventRegBypassLink} from "../entities/event/EventRegBypassLink";
+import {EventRegBypassLink} from '../entities/event/EventRegBypassLink';
 import {EventRegistration} from '../entities/event/EventRegistration';
-import {EventRegistrationDietary} from "../entities/event/EventRegistrationDietary";
-import {PackingList} from "../entities/packing/PackingList";
-import * as entityAdminService from "./EntityAdminService";
-import {invalidateEventPools, lockEventPools, registerForDefaultPools} from "./EventInvoiceService";
+import {EventRegistrationDietary} from '../entities/event/EventRegistrationDietary';
+import {PackingList} from '../entities/packing/PackingList';
+import * as entityAdminService from './EntityAdminService';
+import {invalidateEventPools, lockEventPools, registerForDefaultPools} from './EventInvoiceService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Events (CRUD)
@@ -132,8 +132,7 @@ export async function getActiveManagedEvents(profileId: string) {
     // so this helper's date and archival restrictions do not define selectable destinations.
     const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
     return entityAdminService.createManagedEntityQuery(AppDataSource.getRepository(Event), 'event', profileId)
-        .andWhere('entity.endDate >= :today', {today})
-        .andWhere('entity.archivedAt IS NULL')
+        .andWhere({endDate: MoreThanOrEqual(today), archivedAt: IsNull()})
         .orderBy('entity.startDate', 'ASC').getMany();
 }
 
@@ -192,17 +191,17 @@ export async function getEventLinkCandidates(
         query.andWhere("(event.title LIKE :term ESCAPE '!' OR event.description LIKE :term ESCAPE '!')", {term});
     }
     // From/to select overlapping date periods, rather than only events beginning inside them.
-    if (filters.from) query.andWhere('event.endDate >= :from', {from: filters.from});
-    if (filters.to) query.andWhere('event.startDate <= :to', {to: filters.to});
-    if (filters.period === 'upcoming') query.andWhere('event.startDate > :today', {today});
-    if (filters.period === 'ongoing') query.andWhere('event.startDate <= :today AND event.endDate >= :today', {today});
-    if (filters.period === 'ended') query.andWhere('event.endDate < :today', {today});
+    if (filters.from) query.andWhere({endDate: MoreThanOrEqual(filters.from)});
+    if (filters.to) query.andWhere({startDate: LessThanOrEqual(filters.to)});
+    if (filters.period === 'upcoming') query.andWhere({startDate: MoreThan(today)});
+    if (filters.period === 'ongoing') query.andWhere({startDate: LessThanOrEqual(today), endDate: MoreThanOrEqual(today)});
+    if (filters.period === 'ended') query.andWhere({endDate: LessThan(today)});
     // Archive and deadline are independent dimensions; neither implies a calendar period.
-    if (filters.archive === 'active') query.andWhere('event.archivedAt IS NULL');
-    if (filters.archive === 'archived') query.andWhere('event.archivedAt IS NOT NULL');
-    if (filters.deadline === 'open') query.andWhere('(event.bindingDeadline IS NULL OR event.bindingDeadline >= :now)', {now: referenceTime});
-    if (filters.deadline === 'passed') query.andWhere('event.bindingDeadline < :now', {now: referenceTime});
-    if (after) query.andWhere('(event.startDate > :start OR (event.startDate = :start AND event.id > :id))', {start: after.startDate, id: after.id});
+    if (filters.archive === 'active') query.andWhere({archivedAt: IsNull()});
+    if (filters.archive === 'archived') query.andWhere({archivedAt: Not(IsNull())});
+    if (filters.deadline === 'open') query.andWhere([{bindingDeadline: IsNull()}, {bindingDeadline: MoreThanOrEqual(referenceTime)}]);
+    if (filters.deadline === 'passed') query.andWhere({bindingDeadline: LessThan(referenceTime)});
+    if (after) query.andWhere([{startDate: MoreThan(after.startDate)}, {startDate: Equal(after.startDate), id: MoreThan(after.id)}]);
     return query.orderBy('event.startDate', 'ASC').addOrderBy('event.id', 'ASC').take(limit).getMany();
 }
 
@@ -487,7 +486,7 @@ export async function consumeDeadlineBypassToken(
     await manager.getRepository(EventRegBypassLink).createQueryBuilder()
         .update(EventRegBypassLink)
         .set({usedCount: () => 'used_count + 1', profile: {id: profileId}, usedAt: () => 'CURRENT_TIMESTAMP'})
-        .where('id = :id', {id: linkId})
+        .where({id: Equal(linkId)})
         .execute();
 }
 

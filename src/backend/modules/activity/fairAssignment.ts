@@ -14,9 +14,9 @@ import type {RecommendationInput, AssignmentCandidate, AttendancePolicy, FairAss
 
 
 
-import type {ParticipantAttendance} from "../../../types/ActivityRequirementTypes";
-import {calculateRequirementsForParticipants, countInclusiveDays, hasCompleteStayRequirements, toParticipantKey} from "../../../common/activity/requirements";
-import {compareSlotsByDayAndTime} from "./timebox";
+import type {ParticipantAttendance} from '../../../types/ActivityRequirementTypes';
+import {calculateRequirementsForParticipants, countInclusiveDays, hasCompleteStayRequirements, toParticipantKey} from '../../../common/activity/requirements';
+import {compareSlotsByDayAndTime} from './timebox';
 
 
 interface ParticipantState {

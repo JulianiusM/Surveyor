@@ -16,8 +16,8 @@
 
 // src/backend/modules/database/entities/event/EventRegBypassLink.ts
 import {Column, Entity, Index, JoinColumn, ManyToOne, RelationId} from 'typeorm';
-import {UuidProfileBase} from "../abstract/Base";
-import {Event} from "./Event";
+import {UuidProfileBase} from '../abstract/Base';
+import {Event} from './Event';
 
 @Entity('event_reg_links')
 @Index('uk_event_token', ['event', 'token'], {unique: true})
@@ -28,10 +28,10 @@ export class EventRegBypassLink extends UuidProfileBase {
     @Column('int', {name: 'created_by'})
     createdBy!: number;
 
-    @Column('smallint', {name: 'max_uses', default: () => '1'})
+    @Column('smallint', {name: 'max_uses', default: 1})
     maxUses!: number;
 
-    @Column('smallint', {name: 'used_count', default: () => '0'})
+    @Column('smallint', {name: 'used_count', default: 0})
     usedCount!: number;
 
     @Column('timestamp', {name: 'expires_at', nullable: true})

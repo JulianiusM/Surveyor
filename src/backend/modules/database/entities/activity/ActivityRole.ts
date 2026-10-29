@@ -17,17 +17,17 @@
 import type {ParentEntityRelation} from '../../../../../types/EntityRelationTypes';
 
 
-import {Column, Entity, JoinColumn, ManyToOne, RelationId, Unique,} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, RelationId, Unique,} from 'typeorm';
 
-import {NumericDescriptionEntityItem} from "../abstract/DescriptionEntityItem";
-import {ActivityPlan} from "./ActivityPlan";
+import {NumericDescriptionEntityItem} from '../abstract/DescriptionEntityItem';
+import {ActivityPlan} from './ActivityPlan';
 
 @Unique("act_roles_name_plan", ["title", "entity"])
 @Entity("activity_roles", {schema: "surveyor"})
 export class ActivityRole extends NumericDescriptionEntityItem implements ParentEntityRelation {
     @Column("tinyint", {
         name: "is_default",
-        default: () => "'0'"
+        default: 0
     })
     isDefault: boolean;
 

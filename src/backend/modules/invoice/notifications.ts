@@ -26,9 +26,30 @@ import type {Profile} from '../database/entities/user/Profile';
 import type {ParticipantRow} from '../../../types/EventTypes';
 import mailer, {resolveEmailRecipientName} from '../email';
 import type {EmailContent, EmailRecipient} from '../../../types/EmailTypes';
-import {resolveInvoiceAmount, resolveActorLabel, toAmount} from '../lib/util';
+import {resolveInvoiceAmount, resolveActorLabel, toAmount, projectEventParticipants} from '../lib/util';
 import settings from '../settings';
-import type {InvoiceTakeoverChanges, InvoiceSettlementNotice, InvoiceSettlementNotificationSelection} from '../../../types/InvoicePoolTypes';
+import type {InvoiceTakeoverChanges, InvoiceSettlementNotice, InvoiceSettlementNotificationSelection,
+    InvoicePoolCalculationCommit, InvoiceManagementContext} from '../../../types/InvoicePoolTypes';
+import * as eventService from '../database/services/EventService';
+import {requireEventPool, withInvoiceManagementEvent} from './state';
+import {assertPoolNotificationAllowed} from './poolOperations';
+import {prepareCalculationOptions} from './requests';
+
+/** Select saved calculation/contact data in the established order, then admit
+ * explicit management dispatch before queuing any external delivery. */
+export async function sendSavedPoolShareNotices(event: Event, poolId: string, expectedRevision: number | undefined,
+    session?: Request['session'], reason: 'closed' | 'recalculated' | 'requested' = 'requested',
+    excludedRegistrationIds: readonly number[] = [], management?: InvoiceManagementContext): Promise<{count: number}> {
+    // Contacts decorate saved shares only; this path never recalculates costs.
+    const participants = new Map((await eventService.getEventParticipantRows(event.id).then(projectEventParticipants))
+        .map((participant) => [Number(participant.id), participant]));
+    const pool = await requireEventPool(event, poolId);
+    assertPoolNotificationAllowed(pool, expectedRevision);
+    // Automatic notices retain their post-commit path. Explicit requests take
+    // the existing Event authority fence and release it before SMTP work.
+    if (management) await withInvoiceManagementEvent(management);
+    return notifyPoolShareSettlements(event, pool, participants, reason, session, {excludedRegistrationIds});
+}
 
 /** Resolve the canonical event URL used by invoice notification actions. */
 function eventPageUrl(event: Event): string {
@@ -369,4 +390,45 @@ export function notifyPoolShareSettlements(event: Event, pool: EventInvoicePool,
         count++;
     }
     return {count};
+}
+
+/** Notify only the exact committed calculation: required responsibility notices
+ * precede optional bulk mail, whose selection excludes those same payers.
+ * Every delivery failure stays separate from the already completed transaction. */
+export async function notifyCommittedPoolCalculation(event: Event, poolId: string, pool: EventInvoicePool,
+    participants: ParticipantRow[], committed: InvoicePoolCalculationCommit, sendEmailsOption: boolean | 'on' | '' | undefined,
+    session?: Request['session'], recalculate = false): Promise<void> {
+    // Capture this exact committed calculation for mandatory history notices, even if another request edits the pool afterward.
+    const committedPool = {...pool, status: 'CLOSED' as const, needsRecalculation: false,
+        shares: committed.shares, calculationSnapshot: committed.calculationSnapshot};
+    const affectedRegistrationIds = committed.settledShareImpacts.map(impact => impact.registrationId);
+    // Coverage notices describe the old-to-new applied snapshot, never the intermediate staged edits.
+    // They remain independent of the calculation-email preference, matching immediate planning notices.
+    try {
+        await notifyTakeoverChanges(event, pool, committed.takeoverChanges, resolveActorLabel(session), participants);
+    } catch (error) {
+        console.error(invoiceText('takeoverNotificationFailed'), error);
+    }
+    // Historic payers must hear that exemption or coverage changed their saved responsibility, independently of bulk preferences.
+    // Delivery is post-commit and cannot erase their retained payment/refund row or roll back the allocation.
+    if (affectedRegistrationIds.length) {
+        try {
+            const contacts = new Map(participants.map(participant => [Number(participant.id), participant]));
+            notifyPoolShareSettlements(event, committedPool, contacts, 'responsibility-changed', session,
+                {registrationIds: affectedRegistrationIds});
+        } catch (error) {
+            console.error(invoiceText('settlementNotificationFailed'), error);
+        }
+    }
+    // The settlement preference applies only after commit; delivery failures cannot undo calculation.
+    const sendEmails = sendEmailsOption === undefined ? pool.sendCalculationEmails : sendEmailsOption === true || sendEmailsOption === 'on';
+    if (sendEmails) {
+        try {
+            const options = prepareCalculationOptions({expectedRevision: pool.calculationRevision + 1});
+            await sendSavedPoolShareNotices(event, poolId, options.expectedRevision, session,
+                recalculate ? 'recalculated' : 'closed', affectedRegistrationIds);
+        } catch (error) {
+            console.error(invoiceText('settlementNotificationFailed'), error);
+        }
+    }
 }

@@ -11,8 +11,8 @@ import {flushFrontendPromises as flushPromises, frontendEventButton as button, f
 
 const poolId = '22222222-2222-4222-8222-222222222222';
 const participants = [{id: '7', name: 'Original payer', email: 'payer@example.test'},
-    {id: '8', name: 'Second participant', email: 'second@example.test'},
-    {id: '9', name: 'Covered participant', email: null}, {id: '10', name: 'Free participant', email: null}];
+{id: '8', name: 'Second participant', email: 'second@example.test'},
+{id: '9', name: 'Covered participant', email: null}, {id: '10', name: 'Free participant', email: null}];
 const pool: components['schemas']['FinancePool'] = {id: poolId, name: 'Saved pool', description: '', status: 'CLOSED',
     isDefault: false, needsRecalculation: false, hasPendingTakeovers: false, revision: 7, canSubmit: false, summary: null,
     calculation: null, exampleCalculation: null, coverageKnown: true, coverageGroups: [], pendingCoverageGroups: [], assignedCount: 1, assignAll: false,
@@ -293,7 +293,7 @@ describe('P8 independently saved allocation inputs', () => {
         const refresh = vi.fn(async () => {throw new Error('Following read unavailable');});
         const mounted = await mountFrontendEvent(FinanceAdjustments, () => new Promise(resolve => {finish = resolve;}),
             {eventId, pool: {...pool, surcharges: [{id: '51', registrationId: '7', amount: '3.00', note: 'Saved adjustment',
-                subtractFromPool: true}]}, participants, open: true, active: true, refresh});
+                        subtractFromPool: true}]}, participants, open: true, active: true, refresh});
         cleanups.push(mounted.dispose);
         const surface = body();
         const amount = surface.get<HTMLInputElement>('input[id$="-amount"]');
@@ -312,7 +312,7 @@ describe('P8 independently saved allocation inputs', () => {
         expect(document.activeElement).toBe(trigger.element);
         await trigger.trigger('click'); await flushPromises();
         await mounted.wrapper.setProps({pool: {...pool, surcharges: [{id: '52', registrationId: '8', amount: '-4.00',
-            note: 'Neighboring saved rebate', subtractFromPool: false}]}});
+                    note: 'Neighboring saved rebate', subtractFromPool: false}]}});
         expect(surface.get('[data-finance-removal-review]').text()).toContain('Remove Surcharge for Original payer');
         const confirm = button(surface, 'Remove adjustment');
         expect(confirm.classes()).toContain('btn-warning');
@@ -334,7 +334,7 @@ describe('P8 independently saved allocation inputs', () => {
     it('keeps an unknown removal locked after Cancel and cannot retarget a review to another pool', async () => {
         const mounted = await mountFrontendEvent(FinanceAdjustments, async () => {throw new TypeError('Response lost');},
             {eventId, pool: {...pool, surcharges: [{id: '51', registrationId: '7', amount: '3.00', note: 'Saved adjustment',
-                subtractFromPool: true}]}, participants, open: true, active: true, refresh: vi.fn(async () => {})});
+                        subtractFromPool: true}]}, participants, open: true, active: true, refresh: vi.fn(async () => {})});
         cleanups.push(mounted.dispose);
         const surface = body();
         await button(surface, 'Remove').trigger('click'); await flushPromises();
@@ -343,7 +343,7 @@ describe('P8 independently saved allocation inputs', () => {
         expect(mounted.request).not.toHaveBeenCalled();
         await button(surface, 'Cancel').trigger('click'); await flushPromises();
         await mounted.wrapper.setProps({pool: {...pool, surcharges: [{id: '51', registrationId: '7', amount: '3.00', note: 'Saved adjustment',
-            subtractFromPool: true}]}});
+                    subtractFromPool: true}]}});
         await button(surface, 'Remove').trigger('click'); await flushPromises();
         await button(surface, 'Remove adjustment').trigger('click'); await flushPromises();
         await button(surface, 'Cancel').trigger('click'); await flushPromises();
@@ -363,7 +363,7 @@ describe('P8 independently saved allocation inputs', () => {
             expect(new URL(request.url).pathname).toContain('/adjustments/51/remove');
             throw new TypeError('Removal response lost');
         }, {eventId, pool: {...pool, surcharges: [{id: '51', registrationId: '7', amount: '3.00', note: 'Saved adjustment',
-            subtractFromPool: true}]}, participants, open: true, active: true, refresh});
+                    subtractFromPool: true}]}, participants, open: true, active: true, refresh});
         cleanups.push(mounted.dispose);
         const surface = body();
         await surface.get('input[id$="-note"]').setValue('Independent unfinished addition');
@@ -460,8 +460,8 @@ describe('P8 independently saved allocation inputs', () => {
         refresh.mockImplementationOnce(async () => {
             await heldRead;
             await mounted.wrapper.setProps({pool: {...pool, currentCoverageGroups: [
-                {payerId: '7', payerName: 'Original payer', beneficiaries: [{id: '10', name: 'Free participant'}]},
-            ]}});
+                        {payerId: '7', payerName: 'Original payer', beneficiaries: [{id: '10', name: 'Free participant'}]},
+                    ]}});
         });
         await surface.get('select').setValue('8'); await flushPromises();
         expect(surface.get<HTMLSelectElement>('select').element.value).toBe('7');

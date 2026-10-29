@@ -85,16 +85,16 @@ export function createFrontendAssets(directory: string): RequestHandler {
         res.sendFile(filename + extension, {acceptRanges: false}, /** Recover an
          * unstarted stream through ordinary static delivery after clearing its
          * headers; already-started failures propagate and forbidden identity stays 406. */
-        function sentFrontendAsset(error) {
-            if (!error) return;
-            // A release can remove an asset between selection and streaming. Let
-            // the existing static/missing-asset owner report that delivery failure.
-            if (!res.headersSent) {
-                for (const header of ['Content-Encoding', 'Content-Type', 'Content-Length', 'ETag',
-                    'Last-Modified', 'Accept-Ranges', 'Content-Range']) res.removeHeader(header);
-                if (!req.acceptsEncodings('identity')) { res.status(406).end(); return; }
-                original(req, res, next);
-            } else next(error);
-        });
+            function sentFrontendAsset(error) {
+                if (!error) return;
+                // A release can remove an asset between selection and streaming. Let
+                // the existing static/missing-asset owner report that delivery failure.
+                if (!res.headersSent) {
+                    for (const header of ['Content-Encoding', 'Content-Type', 'Content-Length', 'ETag',
+                        'Last-Modified', 'Accept-Ranges', 'Content-Range']) res.removeHeader(header);
+                    if (!req.acceptsEncodings('identity')) { res.status(406).end(); return; }
+                    original(req, res, next);
+                } else next(error);
+            });
     };
 }

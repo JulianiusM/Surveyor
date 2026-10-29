@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
-import {addColumnIfNotExists, dropColumnIfExists} from "../modules/database/utils/migration-helper";
+import {MigrationInterface, QueryRunner} from 'typeorm';
+import {addColumnIfNotExists, dropColumnIfExists} from '../modules/database/utils/migration-helper';
 
 export class AddHeaderImgs1783180919744 implements MigrationInterface {
     name = 'AddHeaderImgs1783180919744'

@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import {JoinColumn, ManyToOne, RelationId} from "typeorm";
-import {Profile} from "../user/Profile";
-import {NumericBase, UuidBase} from "./TrackedBase";
+import {JoinColumn, ManyToOne, RelationId} from 'typeorm';
+import {Profile} from '../user/Profile';
+import {NumericBase, UuidBase} from './TrackedBase';
 
 export abstract class NumericProfileBase extends NumericBase {
     @RelationId((a: NumericProfileBase) => a.profile)

@@ -89,24 +89,24 @@ export function frontendBoundary(projectRoot: string): Plugin {
             server.middlewares.use(/** Preserve missing ordinary-route fallthrough
              * while source files and aliases require the reviewed public inventory;
              * denied source requests receive an uncached 404. */
-            function guardFrontendSource(req, res, next) {
-                // Nonexistent extensionless paths retain Vite's ordinary route
-                // fallthrough. Existing files and all source/alias namespaces
-                // still require the inventory even without an extension.
-                const pathname = req.url?.split('?', 1)[0] ?? '';
-                const relative = pathname.startsWith(server.config.base) ? pathname.slice(server.config.base.length) : '';
-                if (/^[a-zA-Z0-9][\w-]*$/u.test(relative) && !fs.existsSync(path.join(root, relative))) {
+                function guardFrontendSource(req, res, next) {
+                    // Nonexistent extensionless paths retain Vite's ordinary route
+                    // fallthrough. Existing files and all source/alias namespaces
+                    // still require the inventory even without an extension.
+                    const pathname = req.url?.split('?', 1)[0] ?? '';
+                    const relative = pathname.startsWith(server.config.base) ? pathname.slice(server.config.base.length) : '';
+                    if (/^[a-zA-Z0-9][\w-]*$/u.test(relative) && !fs.existsSync(path.join(root, relative))) {
+                        next();
+                        return;
+                    }
+                    if (!req.url || !isFrontendDevelopmentRequest(server, req.url)) {
+                        res.statusCode = 404;
+                        res.setHeader('Cache-Control', 'no-store');
+                        res.end('Not found');
+                        return;
+                    }
                     next();
-                    return;
-                }
-                if (!req.url || !isFrontendDevelopmentRequest(server, req.url)) {
-                    res.statusCode = 404;
-                    res.setHeader('Cache-Control', 'no-store');
-                    res.end('Not found');
-                    return;
-                }
-                next();
-            });
+                });
         },
         /** Enforce reviewed package-entry resolution for public client importers.
          * Other environments retain their normal resolution and no private file

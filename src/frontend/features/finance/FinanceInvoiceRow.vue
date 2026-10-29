@@ -28,8 +28,8 @@ const review = props.admin && !props.readOnly && props.eventId && props.pool && 
         action: 'approve', inline: true, get open() { return confirmationOpen.value; },
         get active() { return !props.disabled; }, refresh: () => props.refreshSaved!(),
     }, {close: () => { confirmationOpen.value = false; }, saved: () => {
-        // This row remains mounted and renders the command's same receipt.
-    }}) : null;
+            // This row remains mounted and renders the command's same receipt.
+        }}) : null;
 // A saved status can change before the initiating command/read settles. Keep
 // that same row locked across NEW/accepted markup without blocking later edits.
 const rowBlocked = computed(() => !!props.disabled || !!review && (review.command.pending.value

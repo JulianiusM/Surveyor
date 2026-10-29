@@ -51,16 +51,16 @@ function parseOptions(args) {
 function specifications(mode) {
     if (mode === 'tooling') {
         return [{name: 'tooling-tests', args: ['--test',
-            'scripts/tests/documentation-check.test.mjs', 'scripts/tests/documentation-advisory.test.mjs',
-            'scripts/tests/package-documentation.test.mjs']}];
+                'scripts/tests/documentation-check.test.mjs', 'scripts/tests/documentation-advisory.test.mjs',
+                'scripts/tests/package-documentation.test.mjs']}];
     }
     if (mode === 'content') {
         return [{name: 'content-tests', args: ['node_modules/vitest/vitest.mjs', 'run',
-            '--config', 'tests/documentation/vitest.config.mts']}];
+                '--config', 'tests/documentation/vitest.config.mts']}];
     }
     if (mode === 'browser') {
         return [{name: 'browser-tests', args: ['node_modules/@playwright/test/cli.js', 'test',
-            '--config', 'tests/documentation/playwright.config.ts']}];
+                '--config', 'tests/documentation/playwright.config.ts']}];
     }
     const specs = [];
     if (mode !== 'help') {
@@ -104,7 +104,7 @@ function runCheck(spec, options) {
     const couldNotRun = Boolean(result.error || result.signal || reportError || missingRunner);
     const status = couldNotRun ? 'tool-error'
         : result.status !== 0 ? (diagnostic ? 'tool-error' : 'failed')
-        : findingCount > 0 || diagnostic?.ok === false ? 'findings' : 'clean';
+            : findingCount > 0 || diagnostic?.ok === false ? 'findings' : 'clean';
     return {
         name: spec.name, command: ['node', ...args], status,
         childExitCode: result.status, signal: result.signal, findingCount,

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
-import {addColumnIfNotExists, dropColumnIfExists} from "../modules/database/utils/migration-helper";
+import {MigrationInterface, QueryRunner} from 'typeorm';
+import {addColumnIfNotExists, dropColumnIfExists} from '../modules/database/utils/migration-helper';
 
 export class AddDietaryComment1784007497812 implements MigrationInterface {
     name = 'AddDietaryComment1784007497812'

@@ -24,6 +24,7 @@ import {Profile} from './database/entities/user/Profile';
 import {User} from './database/entities/user/User';
 import settings from './settings';
 import {escapeHtml} from './lib/util';
+import {errorCategory} from './lib/errors';
 
 let transporter: Transporter | undefined;
 const LINK_EMAIL_SUBJECT = 'Your personal editing link';
@@ -408,8 +409,7 @@ async function sendMailOptions(mailOptions: MailOptions, reportDelivery = false,
         if (reportDelivery) {
             // Transport errors can contain private recipients, credentials and
             // links. The opted-in receipt logs only a bounded exception category.
-            const category = error instanceof Error && /^[A-Za-z][A-Za-z0-9]{0,63}$/u.test(error.name)
-                ? error.name : 'UnexpectedError';
+            const category = errorCategory(error);
             console.error('[identity-mail]', {category});
         } else {
             console.error('Error sending email:', error);

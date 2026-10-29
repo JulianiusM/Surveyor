@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {FindOperator} from "typeorm";
+import {FindOperator} from 'typeorm';
 
 export type IdInput = string | number;
 export type Maybe<T> = T | null | undefined;

@@ -44,7 +44,7 @@ describe('full access URL with in-place secret redaction', () => {
         // contains memory exhaustion if per-character mappings regress, without
         // relying on a timing ratio or copying its private implementation.
         const built = buildSync({stdin: {contents: "export {redactAccessLogUrl} from './src/backend/modules/lib/http';",
-            resolveDir: process.cwd()}, platform: 'node', format: 'cjs', bundle: true, write: false});
+                resolveDir: process.cwd()}, platform: 'node', format: 'cjs', bundle: true, write: false});
         const exercise = built.outputFiles[0]!.text + `
 const prefix = '/x?next='.repeat(1900);
 for (const token of ['private', 'malformed%ZZprivate']) {

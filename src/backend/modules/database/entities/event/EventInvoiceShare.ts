@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import {Column, Entity, JoinColumn, ManyToOne, RelationId} from "typeorm";
-import {currencyTransformer} from "../../transformers";
-import {NumericBase} from "../abstract/TrackedBase";
-import {EventInvoicePool} from "./EventInvoicePool";
-import {EventRegistration} from "./EventRegistration";
+import {Column, Entity, JoinColumn, ManyToOne, RelationId} from 'typeorm';
+import {currencyTransformer} from '../../transformers';
+import {NumericBase} from '../abstract/TrackedBase';
+import {EventInvoicePool} from './EventInvoicePool';
+import {EventRegistration} from './EventRegistration';
 
 @Entity("event_invoice_shares", {schema: "surveyor"})
 export class EventInvoiceShare extends NumericBase {

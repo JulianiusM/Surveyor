@@ -1,6 +1,6 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import * as drivers from '../../src/backend/controller/driversController';
-import driversController from '../../src/backend/controller/driversController';
+
 import {archiveEntity} from '../../src/backend/modules/entityArchival';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
 import {DriversAssignment} from '../../src/backend/modules/database/entities/drivers/DriversAssignment';
@@ -125,7 +125,7 @@ describe('versioned Drivers production operations', () => {
 
         // The native controller is the counter oracle, using the same persisted
         // rows and actor rather than a second formula in the migration tests.
-        const native = await driversController.fetchForView((await driverService.getDriversListById(id))!,
+        const native = await drivers.fetchForView((await driverService.getDriversListById(id))!,
             createApiRequest({profileId: owner.id}));
         expect(view.counters).toEqual(native.counters);
         expect(view.items.map(item => item.id)).toEqual(native.items.map(item => item.id));

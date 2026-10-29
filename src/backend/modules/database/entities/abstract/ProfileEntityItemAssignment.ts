@@ -17,9 +17,9 @@
 import type {DefaultItemAssignmentRelationEntity} from '../../../../../types/EntityRelationTypes';
 
 
-import {NumericProfileBase, UuidProfileBase} from "./Base";
+import {NumericProfileBase, UuidProfileBase} from './Base';
 import type {BaseEntity} from './BaseEntity';
-import type {BaseEntityItem} from "./BaseEntityItem";
+import type {BaseEntityItem} from './BaseEntityItem';
 
 export abstract class DefaultNumericEntityItemAssignment<ItemId extends string | number = string>
     extends NumericProfileBase implements DefaultItemAssignmentRelationEntity<ItemId> {

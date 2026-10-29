@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
-import {addColumnIfNotExists, dropColumnIfExists} from "../modules/database/utils/migration-helper";
+import {MigrationInterface, QueryRunner} from 'typeorm';
+import {addColumnIfNotExists, dropColumnIfExists} from '../modules/database/utils/migration-helper';
 
 export class UpdateTracking1785614240136 implements MigrationInterface {
     name = 'UpdateTracking1785614240136'

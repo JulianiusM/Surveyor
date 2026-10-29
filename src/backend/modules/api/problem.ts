@@ -2,7 +2,7 @@ import {randomUUID} from 'node:crypto';
 import type {ErrorRequestHandler} from 'express';
 import type {components} from '../../../types/api/v1';
 import type {ApiProblemCode, ApiProblemParameters, ApiProblemArguments} from '../../../types/ApiTypes';
-import {APIError, ExpectedError, ValidationError} from '../lib/errors';
+import {APIError, ExpectedError, ValidationError, errorCategory} from '../lib/errors';
 import {createTranslator} from '../../../common/localization/translator';
 import {requestLocale} from '../lib/http';
 import {apiContract, contractValidator, problemContract} from './contracts';
@@ -145,8 +145,7 @@ export const handleApiProblem: ErrorRequestHandler = function handleApiProblem(e
     if (body.status >= 500) {
         // Arbitrary exception messages/stacks can contain SQL parameters, email addresses or tokens.
         // Keep correlation and a bounded exception category, never the request body/cookies/URL.
-        const category = error instanceof Error && /^[A-Za-z][A-Za-z0-9]{0,63}$/u.test(error.name)
-            ? error.name : 'UnexpectedError';
+        const category = errorCategory(error);
         console.error('[api]', {requestId, method: req.method, code: body.code, category});
     }
 

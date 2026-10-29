@@ -6,7 +6,7 @@ owner: architecture maintainers
 status: current
 last-verified: 2026-10-29
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: separate former-account cleanup fencing reconciled; current-source diagrams, layer ownership, identity completion and Finance authorization guidance retained without installed-release or deployment certification
+verification-scope: approved convention ownership and structured ORM query implementation reconciled; prior cleanup, completion and authorization boundaries retained without installed-release or exhaustive verification claim
 source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/backend/modules/lists/metadata.ts; src/backend/modules/identity.ts; src/backend/middleware/identityAdmission.ts; src/backend/modules/lib/session.ts; src/backend/modules/invoice/state.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: architecture-or-help-delivery-change
 -->
@@ -221,10 +221,11 @@ registration and logout when no explicit destination was supplied, using the sha
 - choose flash messages, redirects, or expected errors; and
 - coordinate file replacement or other cross-service actions.
 
-Most feature controllers export a plain object of functions; other controllers use named function exports. Controllers do not instantiate class-based services and do not directly obtain TypeORM repositories.
+Feature controllers expose their locally implemented public operations through named exports. Callers import those operations directly or through the controller namespace. Controllers do not instantiate class-based services and do not directly obtain TypeORM repositories.
 
-`entityAdminController` owns matching permission-default comparisons, administrator baselines/commands and safe
-profile-search projection. Packing, Drivers, Event and Activity retain their feature admission, private field policy
+`entityAdminController` owns matching permission comparisons, administrator baselines/request adapters and safe
+profile-search projection; `permissionEngine` owns shared administrator/default-grant business decisions.
+Packing, Drivers, Event and Activity retain their feature admission, private field policy
 and response preparation. Feature DBAL services retain the original snapshots, locks and commit boundaries;
 Activity's direct administration path retains its separate operation order. Matching Packing/Drivers metadata,
 context, settings and permission-subject mechanics also use this existing shared controller owner.
@@ -260,7 +261,7 @@ and presentation. Numeric identifiers and opaque security evidence keep their ex
 retain ordering rules, authorization and persistence decisions rather than hiding them in identity helpers.
 
 `modules/event/linkage.ts` owns Event selection, linkage authorization and search for child creation and settings.
-It also owns Event parent projection, reassociation and child admission. The existing permission engine owns the
+It also owns Event parent projection, reassociation, child admission and locked root-date/deadline checks. The existing permission engine owns the
 general Event method-grant declaration used by routes, the Event controller and linkage. Shared settings normalize
 only already admitted parent fields through linkage, without another permission decision or database read.
 Search candidate filtering
@@ -367,9 +368,10 @@ The existing identity feature module selects linking, activation, name/address f
 `UserService` supplies queries, ORM construction and persistence. Email fallback is disabled by default and follows
 the operator's explicit linking choice. Replacing a conflicting provider binding requires its separate opt-in;
 the identity decision runs against the locked email candidate inside the existing service-managed transaction.
-Exact provider-identity lookup remains independent of those options. The user controller applies account/default-profile
-selection through one synchronous operation for local and provider login, while each journey retains its own save
-and token order. Provider protocol code has no dependency on that controller.
+Exact provider-identity lookup remains independent of those options. The identity feature owns account-profile
+ownership and default/oldest-profile selection. The user controller applies the selected authority through one
+synchronous operation for local and provider login, while each journey retains its own Session save and token order.
+Provider protocol code has no dependency on that controller.
 
 Both full and restricted provider-account queries share byte-exact issuer/subject predicates in `UserService`, preserving
 their distinct projections and all stored bindings. The authored `IdentityName` schema supplies the shared 50-code-point
@@ -421,6 +423,10 @@ The complete bit, preset, default, audience, persistence, and evaluation contrac
 ### Surveys
 
 Surveys primarily coordinate recurring monthly patterns represented by weekday plus first/second/third/fourth/last occurrence. Profiles submit Yes/Maybe/No answers. Every admitted participant may add a combination. Survey participation is link-based and survey-specific; there is no general permission matrix or event linkage.
+
+The existing Survey controller owns request admission and response projection. `modules/survey.ts` owns combination
+rules and ballot replacement through `SurveyService`; replacement retains its existing delete-then-save persistence
+boundary rather than introducing a stronger transaction or automatic replay.
 
 ### Events and invoice pools
 
@@ -579,13 +585,15 @@ prior credits, and signed transfers recorded in this calculation without inferri
 
 Activity plans contain dated slots, optional roles, assignments, shared fields, participant requirements, availability, recommendations, and review operations. The user guide owns the basic and advanced organizer workflows. [Activity Requirements and Assignment Recommendations](features/activity/ACTIVITY_REQUIREMENTS_ALGORITHM.md) is the canonical technical reference for precedence, coverage, fair allocation, bounded repair, overfill, background jobs, review states, and application persistence.
 
-The controller owns request admission, requirement decoding/analysis/commands, API projection and schedule
-presentation. The existing `autoAssignment.ts` assembles participant/linked-plan context and algorithm input,
+The controller owns request admission, requirement decoding, API projection and schedule
+presentation. The existing `autoAssignment.ts` owns saved-requirement analysis, baseline preparation and locked
+requirement commands, assembles participant/linked-plan context and algorithm input,
 coordinates generation and guarded persistence, and supplies callbacks to the single `recommendationJobs.ts`
 coordinator. The existing `recommendations.ts` owns review, application and warning operations. Both use pure
 normalization/warning rules in `availability.ts`; business modules do not import the controller. Database services
 retain transactions and stored rows; the common requirements engine and fair allocator remain the sole calculations.
-The `slots.ts` feature owns slot creation/editing and plan-role validation; controller capabilities consume its
+The `slots.ts` feature owns slot creation/editing, assignment and role rules, and locked plan-date changes with
+their generated-work invalidation. Controller capabilities consume its
 field-permission accessor, while scalar changes and follow-up role replacement retain separate persistence boundaries.
 The previous six business extraction modules and separate schedule presentation module were consolidated under
 the maintainer's further 2026-10-26 existing-owner instruction, preserving algorithm and queue behavior.
@@ -866,7 +874,9 @@ explicit document ownership. Guest recovery also has its own admitted `/guest/re
 account login. Token issuance is deliberate command work, never Query, prefetch or history restoration; private
 output stays in its admitted mounted lifetime.
 
-The shared `modules/identity.ts` feature owns profile capability checks, transfer cleanup and deletion policy.
+The shared `modules/identity.ts` feature owns credential and activation/resend rules, reset/activation/guest-token
+checks, profile capability checks, transfer cleanup and deletion policy. The user controller retains input and link
+presentation, Session mutation and completion coordination; feature checks use the caller's existing manager and locks.
 Issuance checks current ownership under the Profile lock. Transfer locks sorted account owners, then any source
 Guest and the Profile, rechecks token/expiry, and completes transfer, required owner cleanup and response preparation
 before commit. It prepares mail before commit and delivers afterward without rotating the recipient's active profile.
@@ -949,7 +959,8 @@ grid represents an eligible linked plan or list through its event card only when
 the same collection and region. Otherwise the child remains an ordinary card. Personal visibility never propagates
 from the event to its children, and event membership never substitutes for a child's own participation or administration.
 
-`UserService.getOverviewPages` composes the existing feature membership queries into a common SQL projection. It
+`UserService.getOverviewPages` composes the existing feature membership queries through native TypeORM CTE builders
+and ORM-generated UNION branches with distinct parameter namespaces. It
 applies lifecycle and personal placement, matches filters, maps children to eligible parent cards, and pages the
 combined set before returning card data. Counts distinguish underlying entities from displayed cards. A
 `REPEATABLE READ` snapshot covers page selection, totals, placement, and lifecycle inputs; the controller reuses that
@@ -1009,8 +1020,8 @@ The implementation keeps these responsibilities separate:
 | `database/services/EntityLifecycleService.ts` | Root and parent reads, coherent raw snapshots, lifecycle writes, conditional automatic updates, and transaction locks. |
 | Existing `database/services/UserService.ts` and feature services | Visibility preference persistence, membership queries, and bounded overview queries; feature services own the shared SQL membership predicates. |
 | Existing `controller/entityAdminController.ts` and versioned adapters | Shared administration entry points and generated API transport through the lifecycle business owner. |
-| Existing `controller/userController.ts` | Personal visibility validation and membership decisions under the service-managed lock, overview navigation normalization, and bounded presentation. |
-| `modules/entityArchival.ts` | Lifecycle validation/authorization, effective-state and scheduling projection, presentation capabilities, independent startup/hourly scheduling and local overlap prevention. |
+| Existing `controller/userController.ts` | Personal visibility input admission/completion, overview navigation normalization and bounded presentation. |
+| `modules/entityArchival.ts` | Locked personal-visibility membership/write decisions, lifecycle validation/authorization, effective-state and scheduling projection, presentation capabilities, independent startup/hourly scheduling and local overlap prevention. |
 | App-owned lifecycle/card controls and feature query owners | Server-calculated state, bounded navigation, explicit commands and authorized refresh after success. |
 
 Overview membership is discovered before archival placement. Direct and parent state are resolved once per distinct reference in a `REPEATABLE READ` snapshot and reused across participation/administration cards. Personal `hidden` and `shown` overrides belong to the active profile; no preference means default placement. They never enter shared entity serialization or the event's **Things to do** filtering. Creation and settings event pickers include authorized historical and archived events by default, with explicit date, archive, period, and registration-deadline filters.

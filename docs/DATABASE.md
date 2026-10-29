@@ -5,9 +5,9 @@ documentation-metadata
 audience: database administrators; operators; site reliability engineers; maintainers
 owner: application operators
 status: current
-last-verified: 2026-10-28
+last-verified: 2026-10-29
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: approved item-owner/Profile preservation preflights and rollback refusals reconciled against current source; Activity pairing, invoice-proof recovery and targeting guidance retained; no full-bootstrap or deployment certification
+verification-scope: controller/feature/DBAL wording aligned with the development policy; existing preservation preflights, rollback refusals, pairing, proof recovery and targeting guidance retained; no full-bootstrap or deployment certification
 source-anchors: src/backend/migrations/1793232000000-AddActivityRecommendationPairing.ts; src/backend/modules/database/entities/activity/ActivityAssignmentRecommendation.ts; src/backend/modules/activity/recommendations.ts; src/backend/migrations/1789862400000-AddEntityArchival.ts; src/backend/modules/database/entities/archive/EntityVisibilityPreference.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; src/backend/controller/packingController.ts; src/backend/modules/database/services/PackingService.ts; src/backend/modules/api/contracts.ts; src/backend/modules/database/entities/session/Session.ts; src/backend/migrations; package.json; .github/workflows/ci.yml; src/backend/migrations/1785163809347-AddItemOwners.ts; src/backend/migrations/1785610467095-AddProfiles.ts; src/backend/modules/database/utils/migration-helper.ts
 next-review: database-schema-or-targeting-change
 -->
@@ -313,8 +313,9 @@ Packing edit comparisons use the current relevant values inside existing locked 
 table or Packing revision column. A value changed away and back can match an earlier comparison. Financial calculation
 revisions and saved settlement history retain their own persistence contracts.
 
-Controllers own authorization and business decisions against the locked evidence supplied by database services.
-The services own queries, locks, transactions and persistence. Diagnose conflicting writes through the actual application
+Controllers coordinate request admission, feature operations and responses. Feature modules own shared business
+checks and errors against locked evidence inside service-managed transactions. Services own queries, locks,
+transactions and persistence. Diagnose conflicting writes through the actual application
 operations and database logs; do not bypass the checks or change transaction isolation as an operational workaround.
 
 ## Invoice proof ownership

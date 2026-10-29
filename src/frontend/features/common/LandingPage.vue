@@ -39,42 +39,42 @@ const welcomeText = computed(() => session.value?.activeProfile
 // permission or route registry; each creation link uses the shared Vue router.
 const featureRows = [
     {classes: 'row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4 mb-4', features: [
-        {type: 'survey', points: [
-            'landing.features.survey.point1',
-            'landing.features.survey.point2',
-            'landing.features.survey.point3',
-            'landing.features.survey.point4',
+            {type: 'survey', points: [
+                    'landing.features.survey.point1',
+                    'landing.features.survey.point2',
+                    'landing.features.survey.point3',
+                    'landing.features.survey.point4',
+                ]},
+            {type: 'event', points: [
+                    'landing.features.event.point1',
+                    'landing.features.event.point2',
+                    'landing.features.event.point3',
+                    'landing.features.event.point4',
+                    'landing.features.event.point5',
+                ]},
+            {type: 'packing', points: [
+                    'landing.features.packing.point1',
+                    'landing.features.packing.point2',
+                    'landing.features.packing.point3',
+                    'landing.features.packing.point4',
+                ]},
         ]},
-        {type: 'event', points: [
-            'landing.features.event.point1',
-            'landing.features.event.point2',
-            'landing.features.event.point3',
-            'landing.features.event.point4',
-            'landing.features.event.point5',
-        ]},
-        {type: 'packing', points: [
-            'landing.features.packing.point1',
-            'landing.features.packing.point2',
-            'landing.features.packing.point3',
-            'landing.features.packing.point4',
-        ]},
-    ]},
     {classes: 'row row-cols-1 row-cols-md-2 g-4 mb-4', features: [
-        {type: 'activity', points: [
-            'landing.features.activity.point1',
-            'landing.features.activity.point2',
-            'landing.features.activity.point3',
-            'landing.features.activity.point4',
-            'landing.features.activity.point5',
-            'landing.features.activity.point6',
+            {type: 'activity', points: [
+                    'landing.features.activity.point1',
+                    'landing.features.activity.point2',
+                    'landing.features.activity.point3',
+                    'landing.features.activity.point4',
+                    'landing.features.activity.point5',
+                    'landing.features.activity.point6',
+                ]},
+            {type: 'drivers', points: [
+                    'landing.features.drivers.point1',
+                    'landing.features.drivers.point2',
+                    'landing.features.drivers.point3',
+                    'landing.features.drivers.point4',
+                ]},
         ]},
-        {type: 'drivers', points: [
-            'landing.features.drivers.point1',
-            'landing.features.drivers.point2',
-            'landing.features.drivers.point3',
-            'landing.features.drivers.point4',
-        ]},
-    ]},
 ] as const;
 
 usePageTitle(() => messages.value.t('landing.documentTitle'), true);

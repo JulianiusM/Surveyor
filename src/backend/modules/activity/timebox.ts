@@ -17,7 +17,7 @@
 import type {SlotTimeboxCandidate, SlotTimebox} from '../../../types/ActivityTypes';
 
 
-import {ActivitySlot} from "../database/entities/activity/ActivitySlot";
+import {ActivitySlot} from '../database/entities/activity/ActivitySlot';
 
 /**
  * Parse a database time string (HH:MM or HH:MM:SS) into minutes after midnight.

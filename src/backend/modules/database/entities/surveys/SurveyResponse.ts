@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import {Column, Entity, JoinColumn, ManyToOne, RelationId,} from "typeorm";
-import type {SurveyAnswer} from "../../../../../types/SurveyTypes";
-import {DefaultNumericEntityItemAssignment} from "../abstract/ProfileEntityItemAssignment";
-import {Survey} from "./Survey";
-import {SurveyCombination} from "./SurveyCombination";
+import {Column, Entity, JoinColumn, ManyToOne, RelationId,} from 'typeorm';
+import type {SurveyAnswer} from '../../../../../types/SurveyTypes';
+import {DefaultNumericEntityItemAssignment} from '../abstract/ProfileEntityItemAssignment';
+import {Survey} from './Survey';
+import {SurveyCombination} from './SurveyCombination';
 
 export const SURVEY_ANSWERS: SurveyAnswer[] = ["yes", "no", "maybe"];
 

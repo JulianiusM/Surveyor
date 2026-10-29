@@ -25,6 +25,35 @@ import type {Event} from '../database/entities/event/Event';
 import * as eventService from '../database/services/EventService';
 import {evaluateSubject} from '../permissionEngine';
 import {sameUuid} from '../lib/util';
+import type {SessionLike} from '../../../types/PermissionTypes';
+
+/** Resolve authenticated event membership before an invoice operation selects
+ * its ownership policy. Missing profiles remain an absent registration. */
+export async function getInvoiceActorRegistrationId(event: Event, session: SessionLike) {
+    if (!session.profile) return undefined;
+    const registration = await eventService.getRegistrationFor(session.profile.id, event.id);
+    return registration?.id;
+}
+
+/** Load the requested event's pool without admitting a same-ID foreign scope. */
+export async function requireEventPool(event: Event, poolId: string) {
+    const pool = await invoiceService.getPoolWithInvoices(poolId);
+    if (pool?.event.id !== event.id) {
+        throw new APIError(invoiceText('poolNotFound'), {}, 404);
+    }
+    return pool;
+}
+
+/** Retain the request's early membership preflight before the locked adjustment
+ * operation repeats its current event and pool membership checks. */
+export async function assertPoolRegistrationAllowed(pool: EventInvoicePool, registrationId: number): Promise<void> {
+    // The loaded assignment snapshot and all-event membership are deliberately
+    // selected here; the write still uses fresh transaction-scoped rows later.
+    const assignedIds = pool.assignAll
+        ? (await eventService.getRegistrationsForEvent(pool.event.id)).map((r) => r.id)
+        : pool.assignments.map((a) => a.registrationId);
+    if (!assignedIds.includes(registrationId)) throw new APIError(invoiceText('participantNotAssignedToThisPool'), {}, 400, {cause: invoiceRejectionCause('participantNotAssignedToThisPool')});
+}
 
 /** Recheck the captured actor's current method grant on the fenced Event using
  * this write's manager. Public method grants remain valid independently from
@@ -35,8 +64,8 @@ async function requireInvoiceManagement(manager: EntityManager, context: Invoice
     // Event ACL/default writers retain this same root fence, so authority cannot
     // change between this fresh evaluation and the write transaction's commit.
     const permissions = await evaluateSubject({kind: 'entity', entity: {
-        entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
-    }}, context.actor, undefined, manager);
+            entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
+        }}, context.actor, undefined, manager);
     if (!permissions.has('MANAGE_ASSIGNMENTS')) throw new ApiProblem('FORBIDDEN');
 }
 

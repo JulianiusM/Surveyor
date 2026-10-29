@@ -46,10 +46,10 @@ export function buildInvoiceSettlementEmail(input: InvoiceSettlementNotice): Str
     const introduction = input.reason === 'responsibility-changed'
         ? invoiceText('settledShareResponsibilityChangedIntroduction')
         : input.reason === 'closed'
-        ? invoiceText('theInvoicePoolHasBeenClosedAndYourShare')
-        : input.reason === 'recalculated'
-            ? invoiceText('theInvoicePoolHasBeenRecalculatedPreviouslyRecordedPayments')
-            : invoiceText('anOrganizerRequestedAnUpdateOnYourSavedInvoice');
+            ? invoiceText('theInvoicePoolHasBeenClosedAndYourShare')
+            : input.reason === 'recalculated'
+                ? invoiceText('theInvoicePoolHasBeenRecalculatedPreviouslyRecordedPayments')
+                : invoiceText('anOrganizerRequestedAnUpdateOnYourSavedInvoice');
     // Staleness is material context for the visible balance, so explain it before the action rather than below the disclosure.
     const staleContext = input.needsRecalculation ? invoiceText('poolInputsHaveChangedSinceThisCalculationTheseAmounts') : undefined;
     // Select only applicable saved components. The heading already shows the calculated balance.

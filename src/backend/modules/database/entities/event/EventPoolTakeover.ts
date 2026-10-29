@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import {Entity, Index, JoinColumn, ManyToOne, RelationId} from "typeorm";
-import {NumericBase} from "../abstract/TrackedBase";
-import {EventInvoicePool} from "./EventInvoicePool";
-import {EventRegistration} from "./EventRegistration";
+import {Entity, Index, JoinColumn, ManyToOne, RelationId} from 'typeorm';
+import {NumericBase} from '../abstract/TrackedBase';
+import {EventInvoicePool} from './EventInvoicePool';
+import {EventRegistration} from './EventRegistration';
 
 // Track pre-close agreements where one participant covers another participant's share
 @Index("uniq_pool_beneficiary", ["pool", "beneficiaryRegistration"], {unique: true})

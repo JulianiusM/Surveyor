@@ -59,7 +59,7 @@ const {list, data, denied, refresh: readDetail, isActive} = useListDetail<compon
     read: (id, scope, signal, previous) => api.activity(id, scope, signal, previous, windowStart.value), denied: revokeAccess});
 const {command, blocked: commandBlocked, readAction, retryAt, refresh, retireSettingsAccess, denyInlineEdit} = useListCommands({active: isActive, denied: () => denied.value,
     reading: () => list.isFetching.value, error: () => list.error.value, refresh: readFresh},
-{dirty: () => false, busy: () => previewPending.value, unknownMessage: 'draft.leaveUnknown'});
+    {dirty: () => false, busy: () => previewPending.value, unknownMessage: 'draft.leaveUnknown'});
 const blocked = computed(() => commandBlocked.value || previewPending.value);
 const editingSlot = computed(() => data.value?.slots.find(slot => slot.id === editor.value?.id));
 const tabs = computed(() => [
@@ -124,7 +124,7 @@ function reconcileSelectedTab(): void {
 }
 
 watch(() => [!!(data.value?.currentEventId && data.value.capabilities.rulesWorkspace && data.value.capabilities.manageRequirements),
-    !!(data.value?.currentEventId && data.value.capabilities.rulesWorkspace && data.value.capabilities.manageRecommendations)],
+!!(data.value?.currentEventId && data.value.capabilities.rulesWorkspace && data.value.capabilities.manageRecommendations)],
     /** Release private snapshots when a fresh detail receipt withdraws advanced admission. */
     function retireAdvancedCapabilities([requirements, recommendations], [previousRequirements, previousRecommendations]) {
         // Unlinking can retain management grants while releasing Event participant

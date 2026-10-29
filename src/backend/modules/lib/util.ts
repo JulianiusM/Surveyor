@@ -14,19 +14,27 @@
  * limitations under the License.
  */
 
-import {Request} from "express";
+import {Request} from 'express';
 import crypto from 'node:crypto';
 import {v4 as uuidv4} from 'uuid';
-import type {DashboardEntities, Entity, EntityBase} from "../../../types/UserTypes";
+import type {DashboardEntities, Entity, EntityBase} from '../../../types/UserTypes';
 import type {
     EntityItemType, EntityType, InvoiceCostInput, InvoiceAdjustmentInput, InvoiceCostTotals, ListCounterItem,
     ListCounterAssignee,
-} from "../../../types/UtilTypes";
-import settings from "../settings";
-import {addCivilDays} from '../../../common/lib/civilDate';
+} from '../../../types/UtilTypes';
+import settings from '../settings';
+import {addCivilDays, parseCivilDate} from '../../../common/lib/civilDate';
+import type {CustomHelpers, ErrorReport} from 'joi';
 import type {EventRegistration} from '../database/entities/event/EventRegistration';
 import type {ParticipantRow} from '../../../types/EventTypes';
 import type {components} from '../../../types/api/v1';
+
+/** Reject impossible or pre-1000 stored calendar dates without applying a local timezone. */
+export function validateCalendarDate(value: string, helpers: CustomHelpers): string | ErrorReport {
+    const date = parseCivilDate(value);
+    if (!date || date.getUTCFullYear() < 1000) return helpers.error('any.invalid');
+    return value;
+}
 
 /** Project shared card data after callers evaluate ownership using the permission owner.
  * Membership, admission and ownership evaluation stay outside this pure projection. */
@@ -56,7 +64,7 @@ export function projectEntityCard(card: Entity, ownsCard: boolean, ownerCollecti
         // admitted to manage that independent schedule; other viewers receive
         // neither its pause state nor a new management capability.
         ...((sharedLifecycle || supportedType && card.archive?.canManageAutomation) && card.archive?.hasAutomaticSchedule ? {automation: {
-            paused: card.archive.autoArchivePaused, canManage: card.archive.canManageAutomation}} : {}),
+                paused: card.archive.autoArchivePaused, canManage: card.archive.canManageAutomation}} : {}),
         children: card.overview ? {total: card.overview.total, matching: card.overview.matching} : null};
 }
 

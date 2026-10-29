@@ -5,8 +5,8 @@ import * as eventService from '../../src/backend/modules/database/services/Event
 import * as invoiceService from '../../src/backend/modules/database/services/EventInvoiceService';
 import * as invoiceOperations from '../../src/backend/modules/invoice/invoiceOperations';
 import {withInvoiceManagementEvent} from '../../src/backend/modules/invoice/state';
-import eventPoolController, {createEventFinancePool, updateEventFinanceSettings, updateEventFinanceTakeovers,
-    closeEventInvoice} from '../../src/backend/controller/eventPoolController';
+import * as eventPoolController from '../../src/backend/controller/eventPoolController';
+
 import {PERM} from '../../src/backend/modules/lib/permissions';
 import mailer from '../../src/backend/modules/email';
 import type {Profile} from '../../src/backend/modules/database/entities/user/Profile';
@@ -71,7 +71,7 @@ describe('Finance management authorization under the Event fence', () => {
         await blocker.startTransaction('READ COMMITTED');
         await eventService.lockEvent(blocker.manager, eventId);
         const observed = observeLocks(eventId, poolId);
-        const pending = updateEventFinanceSettings(eventId, poolId, {distribution: 'EQUAL', description: 'Must not persist'}, actor(administrator));
+        const pending = eventPoolController.updateEventFinanceSettings(eventId, poolId, {distribution: 'EQUAL', description: 'Must not persist'}, actor(administrator));
         const outcome = pending.then(value => ({value}), error => ({error}));
         try {
             await observed.event(1);
@@ -96,7 +96,7 @@ describe('Finance management authorization under the Event fence', () => {
         await blocker.startTransaction('READ COMMITTED');
         await blocker.manager.query('SELECT id FROM event_invoice_pools WHERE id = ? FOR UPDATE', [poolId]);
         const observed = observeLocks(eventId, poolId);
-        const pending = updateEventFinanceSettings(eventId, poolId, {distribution: 'EQUAL', description: 'Authorized result'}, actor(administrator));
+        const pending = eventPoolController.updateEventFinanceSettings(eventId, poolId, {distribution: 'EQUAL', description: 'Authorized result'}, actor(administrator));
         const write = pending.then(value => ({value}), error => ({error}));
         let revocation: Promise<void> | undefined;
         try {
@@ -164,7 +164,7 @@ describe('Finance management authorization under the Event fence', () => {
     it('preserves public management and participant-owned operations as distinct grants', async () => {
         const {eventId, event, poolId, owner, administrator} = await fixture();
         await adminService.updatePerms('event', eventId, {public: PERM.MANAGE_ASSIGNMENTS});
-        const publicPool = await createEventFinancePool(eventId, {name: 'Public method pool', distribution: 'EQUAL'}, {});
+        const publicPool = await eventPoolController.createEventFinancePool(eventId, {name: 'Public method pool', distribution: 'EQUAL'}, {});
         expect((await invoiceService.getPoolWithInvoices(publicPool))!.name).toBe('Public method pool');
         await adminService.updatePerms('event', eventId, {public: 0});
         await adminService.removeAdmin('event', eventId, administrator.id);
@@ -174,10 +174,10 @@ describe('Finance management authorization under the Event fence', () => {
         const beneficiary = (await eventService.getRegistrationFor(owner.id, eventId))!;
         const delivery = vi.spyOn(mailer, 'sendEmail').mockResolvedValue();
         try {
-            await updateEventFinanceTakeovers(eventId, poolId, {beneficiaries: [beneficiary.id]}, actor(administrator), false);
+            await eventPoolController.updateEventFinanceTakeovers(eventId, poolId, {beneficiaries: [beneficiary.id]}, actor(administrator), false);
             const invoiceId = await invoiceOperations.persistSubmittedInvoice(poolId, registration.id, 5, 'Participant expense');
             await invoiceOperations.acceptSavedInvoice(poolId, invoiceId);
-            await closeEventInvoice(eventId, poolId, String(invoiceId), actor(administrator));
+            await eventPoolController.closeEventInvoice(eventId, poolId, String(invoiceId), actor(administrator));
             expect((await invoiceService.getInvoiceWithRegistration(poolId, invoiceId))!.status).toBe('CLOSED');
             expect((await invoiceService.getPoolWithInvoices(poolId))!.takeovers).toHaveLength(1);
         } finally { delivery.mockRestore(); }

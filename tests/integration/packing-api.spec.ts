@@ -1,6 +1,6 @@
 import {normalizeListMetadataPatch as normalizePackingMetadataPatch} from '../../src/backend/controller/entityAdminController';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import packingController from '../../src/backend/controller/packingController';
+import * as packingController from '../../src/backend/controller/packingController';
 import {changeEntityEvent} from '../../src/backend/modules/event/linkage';
 import {archiveEntity, archiveExpiredEntities, restoreEntity} from '../../src/backend/modules/entityArchival';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
@@ -12,7 +12,7 @@ import * as eventService from '../../src/backend/modules/database/services/Event
 import * as packingService from '../../src/backend/modules/database/services/PackingService';
 import * as userService from '../../src/backend/modules/database/services/UserService';
 import {PERM} from '../../src/backend/modules/lib/permissions';
-import {patchPackingMetadata as applyPackingMetadataCommand, readPackingList, readPackingMetadata, setPackingSelfAssignment} from '../../src/backend/controller/packingController';
+
 import type {components} from '../../src/types/api/v1';
 import type {SessionLike} from '../../src/types/PermissionTypes';
 import {createIntegrationEvent, createPackingListWithItem as createPackingFixture, persistIntegrationProfile} from '../keywords/coreDomainKeywords';
@@ -29,7 +29,7 @@ function sessionFor(profile: Profile): SessionLike {
 /** Typed persistence scenarios reuse the real HTTP normalizer; malformed wire shapes belong to unit transport tests. */
 async function patchPackingMetadata(id: string, body: components['schemas']['BasicEntityMetadataPatch'], token: string | undefined, session: SessionLike) {
     const patch = normalizePackingMetadataPatch(body) as components['schemas']['BasicEntityMetadataPatch'];
-    return applyPackingMetadataCommand(id, patch, token, session);
+    return packingController.patchPackingMetadata(id, patch, token, session);
 }
 
 /** Reproduce the submitted permission fields as well as createEntity's persistence hook. */
@@ -55,9 +55,9 @@ describe('versioned packing projections and metadata preconditions', () => {
         const [id, item] = await createPackingListWithItem(owner.id);
         await packingService.updateHeaderImage(id, 'uploads/private-storage-name.jpg');
         await adminService.addAdmin('packing', id, editor.id, PERM.EDIT_TITLE);
-        await setPackingSelfAssignment(id, item.id, true, sessionFor(participant));
+        await packingController.setPackingSelfAssignment(id, item.id, true, sessionFor(participant));
 
-        const view = await readPackingList(id, sessionFor(editor));
+        const view = await packingController.readPackingList(id, sessionFor(editor));
         expect(view.data).toMatchObject({id, headerUrl: `/api/v1/packing-lists/${id}/header`,
             counters: {participants: 1, open: 0, empty: 0},
             capabilities: {editTitle: true, editDescription: false, selfAssign: true}});
@@ -67,7 +67,7 @@ describe('versioned packing projections and metadata preconditions', () => {
         for (const hidden of ['ownerId', 'profileId', 'metadataRevision', 'email', 'private-storage-name', participant.id]) {
             expect(serialized).not.toContain(hidden);
         }
-        const metadata = await readPackingMetadata(id, sessionFor(editor));
+        const metadata = await packingController.readPackingMetadata(id, sessionFor(editor));
         expect(metadata.data.values).toEqual({title: 'Camp packing list'});
         expect(metadata.data.editableFields).toEqual(['title']);
         await expect(patchPackingMetadata(id, {title: 'Must not save', description: 'Forged'}, metadata.etag, sessionFor(editor)))
@@ -81,11 +81,11 @@ describe('versioned packing projections and metadata preconditions', () => {
         await changeEntityEvent('packing', (await packingService.getPackingListById(id))!,
             {eventId, expectedEventId: null}, sessionFor(owner));
         await adminService.updatePerms('packing', id, {public: 0, authenticated: 0, participant: 0});
-        await expect(readPackingList(id, sessionFor(editor))).rejects.toMatchObject({status: 403});
+        await expect(packingController.readPackingList(id, sessionFor(editor))).rejects.toMatchObject({status: 403});
         await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id);
-        expect((await readPackingList(id, sessionFor(participant))).data.capabilities.selfAssign).toBe(false);
-        await expect(setPackingSelfAssignment(id, item.id, true, sessionFor(participant))).rejects.toMatchObject({status: 403});
-        await expect(readPackingList(id, {})).rejects.toMatchObject({status: 401});
+        expect((await packingController.readPackingList(id, sessionFor(participant))).data.capabilities.selfAssign).toBe(false);
+        await expect(packingController.setPackingSelfAssignment(id, item.id, true, sessionFor(participant))).rejects.toMatchObject({status: 403});
+        await expect(packingController.readPackingList(id, {})).rejects.toMatchObject({status: 401});
     });
 
     it('projects the event link only with independent parent view permission', async () => {
@@ -101,23 +101,23 @@ describe('versioned packing projections and metadata preconditions', () => {
 
         // This versioned projection supplies the migrated Event destination;
         // the shared native owner still decides whether parent navigation is admitted.
-        expect((await readPackingList(id, sessionFor(owner))).data.currentEventUrl).toBe(`/event/${eventId}`);
-        const childOnly = await readPackingList(id, guestSession);
+        expect((await packingController.readPackingList(id, sessionFor(owner))).data.currentEventUrl).toBe(`/event/${eventId}`);
+        const childOnly = await packingController.readPackingList(id, guestSession);
         expect(childOnly.data).toMatchObject({currentEventId: eventId, currentEventUrl: null});
         // Assignment-management metadata exposure remains distinct from page-navigation authority.
         await adminService.addAdmin('event', eventId, guest.profile.id, PERM.MANAGE_ASSIGNMENTS);
-        expect((await readPackingList(id, guestSession)).data.currentEventUrl).toBeNull();
+        expect((await packingController.readPackingList(id, guestSession)).data.currentEventUrl).toBeNull();
         await adminService.updateAdminPerms('event', eventId, guest.profile.id, PERM.ACCESS_VIEW);
-        const parentView = await readPackingList(id, guestSession);
+        const parentView = await packingController.readPackingList(id, guestSession);
         expect(parentView.data.currentEventUrl).toBe(`/event/${eventId}`);
         expect(parentView.etag).not.toBe(childOnly.etag);
         await adminService.removeAdmin('event', eventId, guest.profile.id);
-        expect((await readPackingList(id, guestSession)).data.currentEventUrl).toBeNull();
+        expect((await packingController.readPackingList(id, guestSession)).data.currentEventUrl).toBeNull();
     });
 
     it('requires the reviewed strong actor token and preserves omitted metadata', async () => {
         const [id] = await createPackingListWithItem(owner.id);
-        const baseline = await readPackingMetadata(id, sessionFor(owner));
+        const baseline = await packingController.readPackingMetadata(id, sessionFor(owner));
         await expect(patchPackingMetadata(id, {title: 'No token'}, undefined, sessionFor(owner))).rejects.toMatchObject({status: 428});
         await expect(patchPackingMetadata(id, {title: 'Weak token'}, `W/${baseline.etag}`, sessionFor(owner))).rejects.toMatchObject({status: 412});
         const saved = await patchPackingMetadata(id, {title: '  Trimmed title  '}, baseline.etag, sessionFor(owner));
@@ -133,10 +133,10 @@ describe('versioned packing projections and metadata preconditions', () => {
 
     it('compares current values from every legacy writer without tracking historical round trips', async () => {
         const [id] = await createPackingListWithItem(owner.id);
-        const original = await readPackingMetadata(id, sessionFor(owner));
+        const original = await packingController.readPackingMetadata(id, sessionFor(owner));
         await packingService.updatePackingListTitle(id, 'Intermediate title');
         await packingService.updatePackingListTitle(id, original.data.values.title!);
-        expect((await readPackingMetadata(id, sessionFor(owner))).data).toEqual(original.data);
+        expect((await packingController.readPackingMetadata(id, sessionFor(owner))).data).toEqual(original.data);
         await patchPackingMetadata(id, {title: 'Current value still matches'}, original.etag, sessionFor(owner));
         const writers = [
             {field: 'description', run: () => packingService.updatePackingListDescription(id, 'Service description')},
@@ -144,7 +144,7 @@ describe('versioned packing projections and metadata preconditions', () => {
             {field: 'title', run: async () => packingController.updateProperties((await packingService.getPackingListById(id))!, {title: 'Legacy form title'})},
         ];
         for (const write of writers) {
-            const before = await readPackingMetadata(id, sessionFor(owner));
+            const before = await packingController.readPackingMetadata(id, sessionFor(owner));
             await write.run();
             await expect(patchPackingMetadata(id, {[write.field]: 'Stale'}, before.etag, sessionFor(owner))).rejects.toMatchObject({status: 412});
         }
@@ -154,30 +154,30 @@ describe('versioned packing projections and metadata preconditions', () => {
         const [id] = await createPackingListWithItem(owner.id);
         await adminService.addAdmin('packing', id, editor.id, PERM.EDIT_TITLE);
         await adminService.addAdmin('packing', id, participant.id, PERM.EDIT_TITLE);
-        const editorBaseline = await readPackingMetadata(id, sessionFor(editor));
+        const editorBaseline = await packingController.readPackingMetadata(id, sessionFor(editor));
         await expect(patchPackingMetadata(id, {title: 'Other actor'}, editorBaseline.etag, sessionFor(participant))).rejects.toMatchObject({status: 412});
         await adminService.updateAdminPerms('packing', id, editor.id, PERM.EDIT_TITLE | PERM.EDIT_DESC);
         await patchPackingMetadata(id, {title: 'Still authorized'}, editorBaseline.etag, sessionFor(editor));
-        const beforeRevocation = await readPackingMetadata(id, sessionFor(editor));
+        const beforeRevocation = await packingController.readPackingMetadata(id, sessionFor(editor));
         await adminService.removeAdmin('packing', id, editor.id);
         await expect(patchPackingMetadata(id, {title: 'Revoked'}, beforeRevocation.etag, sessionFor(editor))).rejects.toMatchObject({status: 403});
-        expect((await readPackingMetadata(id, sessionFor(editor))).data.values).toEqual({});
+        expect((await packingController.readPackingMetadata(id, sessionFor(editor))).data.values).toEqual({});
     });
 
     it('allows unchanged setup values after parent and lifecycle round trips with fresh authorization', async () => {
         const [id] = await createPackingListWithItem(owner.id);
         const eventId = await createIntegrationEvent(owner.id, 'Packing parent context');
-        const baseline = await readPackingMetadata(id, sessionFor(owner));
+        const baseline = await packingController.readPackingMetadata(id, sessionFor(owner));
         await changeEntityEvent('packing', (await packingService.getPackingListById(id))!, {eventId, expectedEventId: null}, sessionFor(owner));
         await changeEntityEvent('packing', (await packingService.getPackingListById(id))!, {eventId: null, expectedEventId: eventId}, sessionFor(owner));
-        expect((await readPackingMetadata(id, sessionFor(owner))).data).toEqual(baseline.data);
+        expect((await packingController.readPackingMetadata(id, sessionFor(owner))).data).toEqual(baseline.data);
         await patchPackingMetadata(id, {title: 'After relink'}, baseline.etag, sessionFor(owner));
         await changeEntityEvent('packing', (await packingService.getPackingListById(id))!, {eventId, expectedEventId: null}, sessionFor(owner));
         for (const reference of [{type: 'packing' as const, id}, {type: 'event' as const, id: eventId}]) {
-            const before = await readPackingMetadata(id, sessionFor(owner));
+            const before = await packingController.readPackingMetadata(id, sessionFor(owner));
             await archiveEntity(reference, {}, sessionFor(owner));
             await restoreEntity(reference, {}, sessionFor(owner));
-            expect((await readPackingMetadata(id, sessionFor(owner))).data).toEqual(before.data);
+            expect((await packingController.readPackingMetadata(id, sessionFor(owner))).data).toEqual(before.data);
             await patchPackingMetadata(id, {title: `${before.data.values.title} revised`}, before.etag, sessionFor(owner));
         }
     });
@@ -187,13 +187,13 @@ describe('versioned packing projections and metadata preconditions', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Automatic packing archive');
         await eventService.updateEventDates(eventId, '2000-01-01', '2000-01-02');
         await changeEntityEvent('packing', (await packingService.getPackingListById(id))!, {eventId, expectedEventId: null}, sessionFor(owner));
-        const before = await readPackingMetadata(id, sessionFor(owner));
+        const before = await packingController.readPackingMetadata(id, sessionFor(owner));
         await archiveExpiredEntities(0, new Date('2000-02-01T00:00:00Z'));
-        expect((await readPackingMetadata(id, sessionFor(owner))).data.inheritedArchived).toBe(true);
-        const archived = await readPackingMetadata(id, sessionFor(owner));
+        expect((await packingController.readPackingMetadata(id, sessionFor(owner))).data.inheritedArchived).toBe(true);
+        const archived = await packingController.readPackingMetadata(id, sessionFor(owner));
         expect(archived.etag).not.toBe(before.etag);
         await archiveExpiredEntities(0, new Date('2000-02-01T00:00:00Z'));
-        expect(await readPackingMetadata(id, sessionFor(owner))).toEqual(archived);
+        expect(await packingController.readPackingMetadata(id, sessionFor(owner))).toEqual(archived);
         await patchPackingMetadata(id, {title: 'After sweep'}, before.etag, sessionFor(owner));
     });
 });
@@ -201,17 +201,17 @@ describe('versioned packing projections and metadata preconditions', () => {
 describe('versioned packing self-assignment commands', () => {
     it('retries desired membership idempotently without staling a metadata editor', async () => {
         const [id, item] = await createPackingListWithItem(owner.id);
-        const metadata = await readPackingMetadata(id, sessionFor(owner));
-        const view = await readPackingList(id, sessionFor(participant));
+        const metadata = await packingController.readPackingMetadata(id, sessionFor(owner));
+        const view = await packingController.readPackingList(id, sessionFor(participant));
         for (let retry = 0; retry < 2; retry++) {
-            expect(await setPackingSelfAssignment(id, item.id, true, sessionFor(participant)))
+            expect(await packingController.setPackingSelfAssignment(id, item.id, true, sessionFor(participant)))
                 .toEqual({listId: id, itemId: item.id, selfAssigned: true, assignedCount: 1, maxAssignees: 1});
         }
-        expect(await readPackingMetadata(id, sessionFor(owner))).toEqual(metadata);
-        expect((await readPackingList(id, sessionFor(participant))).etag).not.toBe(view.etag);
-        await expect(setPackingSelfAssignment(id, item.id, true, sessionFor(editor))).rejects.toMatchObject({status: 409});
+        expect(await packingController.readPackingMetadata(id, sessionFor(owner))).toEqual(metadata);
+        expect((await packingController.readPackingList(id, sessionFor(participant))).etag).not.toBe(view.etag);
+        await expect(packingController.setPackingSelfAssignment(id, item.id, true, sessionFor(editor))).rejects.toMatchObject({status: 409});
         for (let retry = 0; retry < 2; retry++) {
-            expect(await setPackingSelfAssignment(id, item.id, false, sessionFor(participant)))
+            expect(await packingController.setPackingSelfAssignment(id, item.id, false, sessionFor(participant)))
                 .toMatchObject({selfAssigned: false, assignedCount: 0});
         }
         expect(await packingService.getPackingAssignments(id, participant.id)).toEqual([]);
@@ -220,7 +220,7 @@ describe('versioned packing self-assignment commands', () => {
     it('serializes two actors competing for the final place', async () => {
         const [id, item] = await createPackingListWithItem(owner.id);
         const results = await Promise.allSettled([editor, participant].map(profile =>
-            setPackingSelfAssignment(id, item.id, true, sessionFor(profile))));
+            packingController.setPackingSelfAssignment(id, item.id, true, sessionFor(profile))));
         expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
         expect(results.filter(result => result.status === 'rejected')).toEqual([
             expect.objectContaining({reason: expect.objectContaining({status: 409})}),
@@ -231,11 +231,11 @@ describe('versioned packing self-assignment commands', () => {
     it('rejects a foreign item and uses current parent admission after relinking', async () => {
         const [id, item] = await createPackingListWithItem(owner.id);
         const [otherId] = await createPackingListWithItem(owner.id);
-        await expect(setPackingSelfAssignment(otherId, item.id, true, sessionFor(participant))).rejects.toMatchObject({status: 404});
+        await expect(packingController.setPackingSelfAssignment(otherId, item.id, true, sessionFor(participant))).rejects.toMatchObject({status: 404});
         const eventId = await createIntegrationEvent(owner.id, 'Restricted packing parent');
         await adminService.updatePerms('packing', id, {public: 0, authenticated: 0, participant: PERM.ACCESS_VIEW});
         await changeEntityEvent('packing', (await packingService.getPackingListById(id))!, {eventId, expectedEventId: null}, sessionFor(owner));
-        await expect(setPackingSelfAssignment(id, item.id, true, sessionFor(participant))).rejects.toMatchObject({status: 403});
+        await expect(packingController.setPackingSelfAssignment(id, item.id, true, sessionFor(participant))).rejects.toMatchObject({status: 403});
         expect(await packingService.getPackingAssignments(id, participant.id)).toEqual([]);
     });
 
@@ -248,7 +248,7 @@ describe('versioned packing self-assignment commands', () => {
         await AppDataSource.getRepository(PackingAssignment).save([1, 2].map(() => ({
             entity: {id}, item: {id: item.id}, profile: {id: participant.id},
         })));
-        expect((await readPackingList(id, sessionFor(participant))).data.counters).toEqual({participants: 0, open: 0, empty: 0});
-        expect(await setPackingSelfAssignment(id, item.id, false, sessionFor(participant))).toMatchObject({selfAssigned: false, assignedCount: 0});
+        expect((await packingController.readPackingList(id, sessionFor(participant))).data.counters).toEqual({participants: 0, open: 0, empty: 0});
+        expect(await packingController.setPackingSelfAssignment(id, item.id, false, sessionFor(participant))).toMatchObject({selfAssigned: false, assignedCount: 0});
     });
 });

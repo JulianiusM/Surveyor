@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import {Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId} from "typeorm";
-import {NumericProfileBase} from "../abstract/Base";
-import {Event} from "./Event";
-import {EventRegistrationDietary} from "./EventRegistrationDietary";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId} from 'typeorm';
+import {NumericProfileBase} from '../abstract/Base';
+import {Event} from './Event';
+import {EventRegistrationDietary} from './EventRegistrationDietary';
 
 @Entity("event_registrations", {schema: "surveyor"})
 export class EventRegistration extends NumericProfileBase {

@@ -37,7 +37,7 @@ afterEach(() => {
 /** Keep production transport/validators intact while replacing only the external HTTP boundary. */
 function creationResponse(value: unknown, status = 200): Response {
     return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
-        'X-Surveyor-Context': account.context}});
+            'X-Surveyor-Context': account.context}});
 }
 
 /** Use a real FileList, matching a browser file choice instead of a test-only array property. */
@@ -164,7 +164,7 @@ describe('drafts entered before hydration', () => {
                 parent: null, items: [],
             };
             return new Response(JSON.stringify(view), {headers: {'Content-Type': 'application/json',
-                'X-Surveyor-Context': session.context}});
+                    'X-Surveyor-Context': session.context}});
         });
         vi.stubGlobal('fetch', request);
         const account: components['schemas']['SessionView'] = {...session, kind: 'account',
@@ -197,7 +197,7 @@ describe('drafts entered before hydration', () => {
     it('withholds identity fields until initialization and submits only the user-entered initialized values', async () => {
         const request = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify({type: 'about:blank', title: 'Rejected',
             status: 400, code: 'VALIDATION_FAILED', detail: 'Review the request.', messageKey: 'api:errors.VALIDATION_FAILED', params: {}}),
-        {status: 400, headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context}}));
+            {status: 400, headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context}}));
         vi.stubGlobal('fetch', request);
         const {container, context, initialize} = await nativeApplication('/users/login', {session});
         expect(container.querySelector('main form')).toBeNull();

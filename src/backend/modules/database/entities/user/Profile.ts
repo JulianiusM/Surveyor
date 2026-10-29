@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import {Column, Entity, JoinColumn, ManyToOne, OneToOne, RelationId} from "typeorm";
-import {UuidBase} from "../abstract/TrackedBase";
-import {Guest} from "./Guest";
-import {User} from "./User";
+import {Column, Entity, JoinColumn, ManyToOne, OneToOne, RelationId} from 'typeorm';
+import {UuidBase} from '../abstract/TrackedBase';
+import {Guest} from './Guest';
+import {User} from './User';
 
 @Entity("profiles", {schema: "surveyor"})
 export class Profile extends UuidBase {

@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; advanced activity-plan contributors
 owner: activity-plan maintainers
 status: current
-last-verified: 2026-10-27
+last-verified: 2026-10-29
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: approved R6 identity and R7 saved-provenance matching reconciled; original algorithm, queue and DBAL decisions retained
+verification-scope: requirement analysis and locked commands reconciled to the existing feature owner under the current layer boundary; original algorithms, identity, queue and DBAL decisions retained
 source-anchors: src/types/ActivityTypes.d.ts; src/backend/modules/database/services/ActivityService.ts; tests/unit/activity-linked-recommendations.spec.ts; tests/integration/activity-plan-interlinking.spec.ts; tests/e2e/frontend-activity-advanced.spec.ts; src/common/activity/requirements.ts; src/backend/modules/activity/availability.ts; src/backend/modules/activity/fairAssignment.ts; src/backend/modules/activity/autoAssignment.ts; src/backend/modules/activity/recommendations.ts; src/backend/modules/activity/recommendationJobs.ts; src/backend/modules/database/services/ActivityRequirementService.ts; src/backend/modules/database/services/ActivityRecommendationService.ts; src/backend/controller/activityController.ts; tests/unit/activity-requirements.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/frontend/features/activity/; src/backend/routes/api/v1/activity.ts
 next-review: implementation-change,D14
 -->
@@ -22,9 +22,9 @@ The implementation has four cooperating layers:
 1. `requirements.ts` calculates participant requirements, live coverage, hypothetical open-role coverage, and baseline suggestions.
 2. `fairAssignment.ts` proposes fair default-role assignments and permitted reassignments.
 3. `recommendationJobs.ts` runs the bounded, coalescing queue and rejects stale results; the existing `autoAssignment.ts` supplies generation/context and guarded persistence callbacks.
-4. The controller owns requirement commands; the existing `recommendations.ts` validates and coordinates review/application and warning operations. Database services own the queries, transactions and writes that preserve review, rejection and audit history.
+4. The existing `autoAssignment.ts` owns requirement analysis, baseline preparation and locked requirement commands; `recommendations.ts` validates and coordinates review/application and warning operations. Database services own the queries, transactions and writes that preserve review, rejection and audit history.
 
-The controller retains request admission and delegates generation/review to these modules. Shared context lives in
+The controller retains request admission, form decoding and result presentation, and delegates business work to these modules. Shared context lives in
 `autoAssignment.ts`; pure normalization/warning calculations live in `availability.ts` below both business owners.
 None of those modules imports the controller. The maintainer's further 2026-10-26 instruction consolidates the earlier
 six business extraction modules into these existing owners, preserving the calculations and queue lifecycle.
@@ -412,8 +412,8 @@ A change to this subsystem should review all of the following together:
 - Requirement and baseline calculations: `src/common/activity/requirements.ts`
 - Availability and warning rules: `src/backend/modules/activity/availability.ts`
 - Fair recommendation algorithm: `src/backend/modules/activity/fairAssignment.ts`
-- Participant merging/context, algorithm input and guarded generation writes: `src/backend/modules/activity/autoAssignment.ts`
-- Requirement decoding/analysis and commands: `src/backend/controller/activityController.ts`
+- Participant merging/context, requirement analysis/commands, algorithm input and guarded generation writes: `src/backend/modules/activity/autoAssignment.ts`
+- Requirement decoding and response projection: `src/backend/controller/activityController.ts`
 - Warning admission/private projection and recommendation review/application: `src/backend/modules/activity/recommendations.ts`
 - Job coordination: `src/backend/modules/activity/recommendationJobs.ts`
 - Generation/job integration: `src/backend/modules/activity/autoAssignment.ts`

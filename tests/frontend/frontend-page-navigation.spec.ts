@@ -28,8 +28,8 @@ describe('shared pending page navigation', () => {
 
     it('cancels an older visit and an application retirement without inheriting its scroll intent', async () => {
         const router = createRouter({history: createMemoryHistory(), routes: [
-            {path: '/', component: page}, {path: '/other', component: page},
-        ]});
+                {path: '/', component: page}, {path: '/other', component: page},
+            ]});
         await router.push('/');
         const readiness = createPageReadiness(router);
         try {
@@ -74,10 +74,10 @@ describe('shared pending page navigation', () => {
         const firstModule = new Promise<typeof page>(resolve => { finishFirst = resolve; });
         const secondModule = new Promise<typeof page>(resolve => { finishSecond = resolve; });
         const router = createRouter({history: createMemoryHistory(), routes: [
-            {path: '/', component: page},
-            {path: '/first', component: () => firstModule},
-            {path: '/second', component: () => secondModule},
-        ]});
+                {path: '/', component: page},
+                {path: '/first', component: () => firstModule},
+                {path: '/second', component: () => secondModule},
+            ]});
         await router.push('/');
         const finished = vi.fn();
         const navigation = observePageNavigation(router, {finished});
@@ -109,8 +109,8 @@ describe('shared pending page navigation', () => {
         {target: '/other', all: true, document: true, path: true},
     ])('retains caller-specific URL boundaries for $target', async expected => {
         const router = createRouter({history: createMemoryHistory(), routes: [
-            {path: '/', component: page}, {path: '/other', component: page},
-        ]});
+                {path: '/', component: page}, {path: '/other', component: page},
+            ]});
         await router.push('/');
         const all = observePageNavigation(router, {scope: 'all'});
         const document = observePageNavigation(router);
@@ -135,9 +135,9 @@ describe('shared pending page navigation', () => {
     it('retires failed delivery and releases its callbacks when the owner is disposed', async () => {
         const failure = new Error('Fixture route module is unavailable.');
         const router = createRouter({history: createMemoryHistory(), routes: [
-            {path: '/', component: page}, {path: '/other', component: page},
-            {path: '/broken', component: () => Promise.reject(failure)},
-        ]});
+                {path: '/', component: page}, {path: '/other', component: page},
+                {path: '/broken', component: () => Promise.reject(failure)},
+            ]});
         await router.push('/');
         const started = vi.fn();
         const finished = vi.fn();

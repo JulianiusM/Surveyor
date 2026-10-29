@@ -367,7 +367,7 @@ function pairVersion(row: ActivityRecommendationDraftRow): string {
     // either can change while the operation's stable identity remains equal.
     const saved = row.value.id ? workspace.value?.recommendations.find(value => value.id === row.value.id) : undefined;
     return JSON.stringify([recommendationIdentity(row.value), row.value.status,
-        row.value.id ? saved ? [recommendationIdentity(saved), saved.status] : null : 'local']);
+    row.value.id ? saved ? [recommendationIdentity(saved), saved.status] : null : 'local']);
 }
 
 /** Resolve only unchanged candidates from this chooser's captured actor and row.

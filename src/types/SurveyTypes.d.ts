@@ -32,7 +32,3 @@ export type GroupedResponses = Record<string, BasePicked[]>;
 
 /** Adapter-only response preparation happens before the existing shared write. */
 export type SurveyMutationPreparation = (result: components['schemas']['MutationResult']) => void;
-
-/** Every survey mutation acknowledgement has the same generated result shape. */
-export type SurveyMutationOperation = 'submitSurveyBallot' | 'addSurveyCombination' | 'uploadSurveyHeader'
-    | 'deleteSurveyHeader' | 'archiveSurvey' | 'restoreSurvey' | 'deleteSurvey';

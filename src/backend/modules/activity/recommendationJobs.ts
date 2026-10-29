@@ -10,14 +10,14 @@ import type {
 } from '../../../types/ActivityTypes';
 
 
-import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
-import {Worker} from "node:worker_threads";
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import {Worker} from 'node:worker_threads';
 
-import {generateFairRecommendations} from "./fairAssignment";
+import {generateFairRecommendations} from './fairAssignment';
 
-import {APIError} from "../lib/errors";
+import {APIError} from '../lib/errors';
 
 interface RecommendationJobRecord extends RecommendationJobView {
     createdAtMs: number;

@@ -15,15 +15,15 @@
  */
 
 // src/backend/modules/database/services/EntityAdminService.ts
-import {Brackets, In, type EntityManager, type FindOptionsWhere, type ObjectLiteral, type Repository, type SelectQueryBuilder, type WhereExpressionBuilder} from "typeorm";
-import type {Audience, EntityDescriptor, EntityPermissionQueryScope, PermData} from "../../../../types/PermissionTypes";
-import type {CombEntityType, EntityType} from "../../../../types/UtilTypes";
+import {Brackets, Equal, In, type EntityManager, type FindOptionsWhere, type ObjectLiteral, type Repository, type SelectQueryBuilder, type WhereExpressionBuilder} from 'typeorm';
+import type {Audience, EntityDescriptor, EntityPermissionQueryScope, PermData} from '../../../../types/PermissionTypes';
+import type {CombEntityType, EntityType} from '../../../../types/UtilTypes';
 import {AppDataSource} from '../dataSource';
 import {EntityAdminAssignment as ACL} from '../entities/permissions/EntityAdminAssignment';
-import {EntityPermissions} from "../entities/permissions/EntityPermissions";
-import {EventRegistration} from "../entities/event/EventRegistration";
-import {Event} from "../entities/event/Event";
-import {PackingList} from "../entities/packing/PackingList";
+import {EntityPermissions} from '../entities/permissions/EntityPermissions';
+import {EventRegistration} from '../entities/event/EventRegistration';
+import {Event} from '../entities/event/Event';
+import {PackingList} from '../entities/packing/PackingList';
 import {lockEvent} from './EventService';
 
 /**
@@ -319,8 +319,7 @@ export async function getIds(entityType: CombEntityType, profileId: string, mask
     const repo = AppDataSource.getRepository(ACL);
     const ids = await repo.createQueryBuilder("e")
         .where('(e.perms & :mask) = :mask', {mask})
-        .andWhere('e.profile_id = :profileId', {profileId})
-        .andWhere('e.entity_type = :entityType', {entityType})
+        .andWhere({profile: {id: Equal(profileId)}, entityType: Equal(entityType)})
         .select("e.entity_id").getRawMany();
     return (ids ?? []).map(i => i.entity_id);
 }

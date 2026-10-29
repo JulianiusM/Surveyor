@@ -177,7 +177,7 @@ function calculateTakeovers(pool: EventInvoicePool, targetIds: Set<number>) {
 function invoiceAttendanceWeight(pool: EventInvoicePool, registration: EventRegistration): number {
     return pool.distributionMethod === 'EQUAL' ? 1
         : differenceInCalendarDays(registration.departureDate, registration.arrivalDate)
-            + (pool.distributionMethod === 'NIGHTS' ? 0 : 1);
+        + (pool.distributionMethod === 'NIGHTS' ? 0 : 1);
 }
 
 /** Derive the shared base and allocate it through the exact weighted rounding implementation. */
@@ -210,7 +210,7 @@ function calculateIndividualCosts(pool: EventInvoicePool, billableRegistrations:
         // unrelated exceptions can never publish their message as API detail.
         throw new APIError(error instanceof Error ? error.message : invoiceText('cannotCalculateInvoiceShares'), {}, 400,
             {cause: error instanceof Error && typeof error.cause === 'string' && error.cause.startsWith('FINANCE_')
-                ? error.cause : invoiceRejectionCause('cannotCalculateInvoiceShares')});
+                    ? error.cause : invoiceRejectionCause('cannotCalculateInvoiceShares')});
     }
 }
 

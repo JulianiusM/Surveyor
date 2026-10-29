@@ -37,11 +37,11 @@ describe('identity entry referrer preservation', () => {
         'https://surveyor.example.external.example/packing/source', 'http://surveyor.example/packing/source',
         'https://surveyor.example/', 'https://surveyor.example/users/profile',
         'https://surveyor.example/api/v1/packing-lists', 'https://surveyor.example/frontend-assets/private'])
-    ('keeps the existing entry/provider default for an ineligible referrer: %s', referrer => {
-        const result = navigate(referrer);
-        expect(result.redirect).not.toHaveBeenCalled();
-        expect(result.next).toHaveBeenCalledOnce();
-    });
+        ('keeps the existing entry/provider default for an ineligible referrer: %s', referrer => {
+            const result = navigate(referrer);
+            expect(result.redirect).not.toHaveBeenCalled();
+            expect(result.next).toHaveBeenCalledOnce();
+        });
 
     it('fills an empty next and respects a configured application path boundary', () => {
         const result = navigate('https://surveyor.example/application/event/source', {next: ''},

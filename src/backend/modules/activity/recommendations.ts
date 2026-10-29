@@ -44,7 +44,7 @@ import {
 } from './availability';
 import {evaluateEntities, entityPermissionKey} from '../permissionEngine';
 
-import {ActivitySlot} from "../database/entities/activity/ActivitySlot";
+import {ActivitySlot} from '../database/entities/activity/ActivitySlot';
 
 
 
@@ -592,7 +592,7 @@ export function overlapConfirmation(planId: string, results: RecommendationWarni
                 recommendationId: target.recommendationId ? uuidKey(target.recommendationId) : target.recommendationId,
                 sourceItemId: target.sourceItemId ? uuidKey(target.sourceItemId) : target.sourceItemId} : target;
             collisions.push(JSON.stringify([recommendationInputKey(result.recommendation), targetIdentity,
-                warning.requiredPriority, details.sort()]));
+            warning.requiredPriority, details.sort()]));
         }
     }
     if (!collisions.length) return undefined;

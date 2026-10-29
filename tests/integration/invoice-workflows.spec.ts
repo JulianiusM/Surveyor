@@ -7,7 +7,7 @@ import {Request} from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import {afterAll, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
-import eventPoolController from '../../src/backend/controller/eventPoolController';
+import * as eventPoolController from '../../src/backend/controller/eventPoolController';
 import {AddInvoicePoolFactors1789344000000} from '../../src/backend/migrations/1789344000000-AddInvoicePoolFactors';
 import {AddInvoiceSettlementSnapshots1789430400000} from '../../src/backend/migrations/1789430400000-AddInvoiceSettlementSnapshots';
 import {AddInvoiceShareRounding1789516800000} from '../../src/backend/migrations/1789516800000-AddInvoiceShareRounding';
@@ -456,8 +456,8 @@ describe('staged takeover notifications', () => {
         expect(beneficiaryMessage).toMatchObject({
             details: expect.arrayContaining([{label: 'Your records updated by', value: organizer.name}]),
             sections: [{title: 'What changed for you', items: [
-                expect.stringContaining(third.name), expect.stringContaining(participant.name),
-            ]}],
+                    expect.stringContaining(third.name), expect.stringContaining(participant.name),
+                ]}],
         });
         expect((await invoiceService.getPoolWithInvoices(poolId))!.calculationSnapshot!.takeovers)
             .toEqual([{payerRegistrationId: thirdId, beneficiaryRegistrationId: secondId}]);
@@ -525,8 +525,8 @@ describe('staged takeover notifications', () => {
         expect(sendEmail).toHaveBeenCalledTimes(2);
         const payerMessage = sendEmail.mock.calls.find(call => call[0].address === participant.user!.email)![2];
         expect(payerMessage).toMatchObject({sections: [{title: 'What changed for you', items: [
-            expect.stringContaining('no longer covering'),
-        ]}]});
+                    expect.stringContaining('no longer covering'),
+                ]}]});
         expect((await invoiceService.getPoolWithInvoices(poolId))!.calculationSnapshot!.takeovers).toEqual([]);
     });
 

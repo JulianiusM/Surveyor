@@ -14,7 +14,8 @@ import {requireSessionProfileId} from './lib/session';
 import {entityPermissionKey, evaluateEntities, isOwner} from './permissionEngine';
 import {sameUuid, uuidKey, createHourlyJob} from './lib/util';
 import * as lifecycleService from './database/services/EntityLifecycleService';
-import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, ArchiveState, ArchiveTarget, LockedArchiveContext} from '../../types/ArchiveTypes';
+import * as userService from './database/services/UserService';
+import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, ArchiveState, ArchiveTarget, LockedArchiveContext, PersonalVisibility} from '../../types/ArchiveTypes';
 import type {EntityDescriptor, PermView, SessionLike} from '../../types/PermissionTypes';
 import type {EntityMutationCompletion} from '../../types/EntityPropertyTypes';
 import type {Entity} from '../../types/UserTypes';
@@ -59,7 +60,7 @@ function reportArchivalFailure(error: unknown): void {
 /** The shared timer owns registration; this module retains sweep/overlap policy. */
 export const startEntityArchivalJob = createHourlyJob(runEntityArchival, reportArchivalFailure);
 
-/** Interpret locking reads; the controller rejects deletion or a parent changed after discovery. */
+/** Interpret locking reads; the feature rejects deletion or a parent changed after discovery. */
 export function requireLockedArchiveRoot(context: LockedArchiveContext): ArchiveTarget {
     const root = context.root;
     if (!root || context.initialEventId === undefined) throw new APIError('Entity not found.', {}, 404);
@@ -68,6 +69,17 @@ export function requireLockedArchiveRoot(context: LockedArchiveContext): Archive
         throw new APIError('The linked event changed. Reload and try again.', {}, 409);
     }
     return root;
+}
+
+/** Save private placement only after its current target and overview membership
+ * have been checked under the caller's existing lifecycle lock and manager. */
+export async function savePersonalVisibility(profileId: string, reference: ArchiveReference, visibility: PersonalVisibility,
+    manager: EntityManager, context: LockedArchiveContext): Promise<void> {
+    // A previously rendered card supplies no authority after deletion or membership
+    // loss. These checks still precede the only preference write on this transaction.
+    requireLockedArchiveRoot(context);
+    if (!await userService.isOverviewMember(profileId, reference, manager)) throw new APIError('This entity is not in your overview', {}, 403, {cause: 'OVERVIEW_MEMBERSHIP_LOST'});
+    await userService.setVisibility(profileId, reference, visibility, manager);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -93,7 +105,7 @@ function mayManageArchival(reference: ArchiveReference, state: ArchiveState, ses
 
 /**
  * Derive lifecycle policy from raw, coherent reads. The DBAL supplies both timestamps;
- * deciding inheritance and independent scheduling stays in this controller. Overview
+ * deciding inheritance and independent scheduling stays in this feature. Overview
  * callers pass their existing snapshot so projection cannot race their page/count reads.
  */
 export async function getArchiveStates(references: ArchiveReference[], snapshot?: Map<string, ArchiveSnapshotEntry>): Promise<Map<string, ArchiveState>> {
@@ -329,7 +341,7 @@ export function setAutomaticArchival<Result>(reference: ArchiveReference, body: 
 /** Explicit pause/resume affects scheduling only, never the current archive timestamp. */
 export async function setAutomaticArchival<Result>(reference: ArchiveReference, body: unknown, session: SessionLike,
     completion?: EntityMutationCompletion<Result>): Promise<ArchivePresentation | undefined | Result> {
-    // Admission and the schedule rule remain in their existing controller owner.
+    // Admission and the schedule rule remain in their existing feature owner.
     const schema = Joi.object<{paused: boolean}>({paused: Joi.boolean().required()}).unknown(false);
     const value = validateArchiveBody(schema, body);
     requireSessionProfileId(session);
@@ -351,8 +363,8 @@ export async function setAutomaticArchival<Result>(reference: ArchiveReference, 
 /** Keep inherited restoration distinct from a changed root/parent relationship. */
 export function classifyArchiveCommandError(error: unknown, archived: boolean): unknown {
     if (error instanceof ApiProblem) return error;
-    // A controller-owned schedule diagnostic is more specific than the generic
-    // parent-change fallback. Controller prose/data never cross this adapter.
+    // A feature-owned schedule diagnostic is more specific than the generic
+    // parent-change fallback. Feature prose/data never cross this adapter.
     const declared = declaredApiProblem(error);
     if (declared) return declared;
     if (error instanceof APIError && error.status === 409) {

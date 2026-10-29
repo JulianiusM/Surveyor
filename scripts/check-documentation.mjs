@@ -881,7 +881,7 @@ function collectRepositoryPathErrors(root, config, markdownFiles, referenceRoot)
                 ...(referenceRoot ? {referenceExpected: entry.expectedOccurrences, referenceActual: referenceCount} : {}),
                 message: referenceRoot
                     ? `${entry.path} has ${actualCount} projected documented reference(s); expected ${expectedCount}; `
-                        + `source retains ${referenceCount} reference(s) against configured ${entry.expectedOccurrences}`
+                    + `source retains ${referenceCount} reference(s) against configured ${entry.expectedOccurrences}`
                     : `${entry.path} has ${actualCount} documented reference(s); configuration expects ${entry.expectedOccurrences}`,
             });
         }
@@ -1375,7 +1375,7 @@ function buildReport(root, config, strict, referenceRoot = null) {
         staleTermOccurrences: staleTerms.occurrences,
         documentedRepositoryPaths: repositoryPaths.references,
         ...(referenceRoot ? {documentedPathReferenceProjection: {referenceRepository: referenceRoot,
-            counts: repositoryPaths.projection}} : {}),
+                counts: repositoryPaths.projection}} : {}),
         allowlistedMissingDocumentedPaths: repositoryPaths.allowlisted,
         metadata: metadata.records,
         sourceFingerprintFiles: fingerprint.files,

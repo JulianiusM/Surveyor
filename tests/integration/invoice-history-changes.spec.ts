@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {afterAll, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
-import eventPoolController from '../../src/backend/controller/eventPoolController';
+import * as eventPoolController from '../../src/backend/controller/eventPoolController';
 import {AddInvoiceRetraction1789689600000} from '../../src/backend/migrations/1789689600000-AddInvoiceRetraction';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
 import {Profile} from '../../src/backend/modules/database/entities/user/Profile';

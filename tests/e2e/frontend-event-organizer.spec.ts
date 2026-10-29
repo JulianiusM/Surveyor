@@ -23,9 +23,9 @@ type DietaryRead = {
 async function organizerFixture(page: Page, children = false, dateWording = false) {
     const event = await createFrontendEventFixture(page.request);
     const attendance = await page.request.put(`/api/v1/events/${event.id}/registration`, {headers: await frontendEventHeaders(page.request), data: {
-        arrivalDate: '2030-06-01', departureDate: '2030-06-04', dietary: ['MEAT', 'ALLERGIES', 'COMMENT'],
-        allergyNotes: 'Peanuts; Lactose', dietComment: 'No tomatoes',
-    }});
+            arrivalDate: '2030-06-01', departureDate: '2030-06-04', dietary: ['MEAT', 'ALLERGIES', 'COMMENT'],
+            allergyNotes: 'Peanuts; Lactose', dietComment: 'No tomatoes',
+        }});
     expect(attendance.status()).toBe(200);
     if (dateWording) {
         // Only the matched presentation cases need a real nonempty deadline.
@@ -53,7 +53,7 @@ async function organizerFixture(page: Page, children = false, dateWording = fals
             if (input.createPath.startsWith('/activity')) Object.assign(input.form, {
                 startDate: '2030-06-01', endDate: '2030-06-04',
                 slots: JSON.stringify({'2030-06-02': [{id: randomUUID(), day: '2030-06-02', pos: 0,
-                    title: 'Kitchen', startTime: '08:00', endTime: '09:00', maxAssignees: 2}]}),
+                        title: 'Kitchen', startTime: '08:00', endTime: '09:00', maxAssignees: 2}]}),
             });
             result.children.push(await createResourceViaForm(page.request, input));
         }
@@ -99,7 +99,7 @@ async function germanEventWording(page: Page, event: components['schemas']['Even
             attendance: [source.event.registration!.arrivalDate, source.event.registration!.departureDate]
                 .map(day => full.format(new Date(day))),
             deadlines: [new Intl.DateTimeFormat('de', {dateStyle: 'full', timeStyle: 'full', timeZone: source.event.timezone || 'UTC'}).format(deadline),
-                new Intl.DateTimeFormat('de', {dateStyle: 'full', timeStyle: 'full'}).format(deadline)],
+            new Intl.DateTimeFormat('de', {dateStyle: 'full', timeStyle: 'full'}).format(deadline)],
             roster: [source.participant.arrivalDate, source.participant.departureDate].map(day => short.format(new Date(day!))).join(' → '),
             // toLocaleString's default numeric date uses a full year; retain it
             // explicitly rather than relying on dateStyle's two-digit year.
@@ -298,8 +298,8 @@ async function dietaryRead(response: Response): Promise<DietaryRead> {
     expect(response.status()).toBe(200);
     const data = await response.json() as components['schemas']['EventParticipants'];
     return {participants: data.participants.map(function participantChoices(row) {
-        return {id: row.id, choices: row.dietary.map(choice => choice.choice)};
-    }), totals: data.totals};
+            return {id: row.id, choices: row.dietary.map(choice => choice.choice)};
+        }), totals: data.totals};
 }
 
 /** Measure just the dietary cells and derived totals of the actual roster.
@@ -529,8 +529,8 @@ for (const width of [1280, 390]) {
         // setup, never from substituted responses or assumed display strings.
         const headers = await frontendEventHeaders(page.request);
         const reads = await Promise.all([page.request.get(`/api/v1/events/${event.id}`, {headers}),
-            page.request.get(`/api/v1/events/${event.id}/participants`, {headers}),
-            page.request.get(`/api/v1/events/${event.id}/links`, {headers})]);
+        page.request.get(`/api/v1/events/${event.id}/participants`, {headers}),
+        page.request.get(`/api/v1/events/${event.id}/links`, {headers})]);
         for (const response of reads) expect(response.status()).toBe(200);
         const detail = await reads[0]!.json() as components['schemas']['EventView'];
         const participants = await reads[1]!.json() as components['schemas']['EventParticipants'];
@@ -735,8 +735,8 @@ for (const width of [1280, 390]) {
                 const thingsFilterNode = await thingsFilter.elementHandle();
                 await expect(page.locator('.event-participants tbody .fw-semibold')).toHaveCount(1);
                 const refreshReads = [{path: `/api/v1/events/${event.id}`, view: 'detail'},
-                    {path: `/api/v1/events/${event.id}/participants`, view: null},
-                    {path: `/api/v1/events/${event.id}/things-to-do`, view: 'detail'}]
+                {path: `/api/v1/events/${event.id}/participants`, view: null},
+                {path: `/api/v1/events/${event.id}/things-to-do`, view: 'detail'}]
                     .map(({path, view}) => page.waitForResponse(response => {
                         const url = new URL(response.url());
                         return response.request().method() === 'GET' && url.pathname === path

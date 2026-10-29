@@ -17,10 +17,10 @@
 import type {Request} from 'express';
 import * as oidc from 'openid-client';
 import type {OidcLoginEvidence, ProviderLogoutEvidence, ProviderLogoutOutcome} from '../../types/IdentityTypes';
-import {ExpectedError} from "./lib/errors";
-import {persistSession} from "./lib/session";
+import {ExpectedError} from './lib/errors';
+import {persistSession} from './lib/session';
 import {rotateFrontendSessionContext} from './lib/frontendSession';
-import settings from "./settings";
+import settings from './settings';
 
 let config: oidc.Configuration;
 

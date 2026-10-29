@@ -20,7 +20,7 @@ import {allocateInvoiceProofUpload, cleanupInvoiceProofs, createInvoiceProofMani
     reconcileInvoiceProofs, rememberInvoiceProofs} from '../../src/backend/modules/invoice/proofs';
 import {purgeExpiredInvoices} from '../../src/backend/modules/invoice/retention';
 import {prepareFileUploader} from '../../src/backend/modules/lib/fileCommons';
-import eventPoolController from '../../src/backend/controller/eventPoolController';
+import * as eventPoolController from '../../src/backend/controller/eventPoolController';
 import settings from '../../src/backend/modules/settings';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 import {createIntegrationEvent, persistIntegrationProfile, registerEventAttendance} from '../keywords/coreDomainKeywords';
@@ -189,8 +189,8 @@ describe('durable invoice proof ownership', () => {
             }
             const boundary = 'proof-abort-boundary';
             const outgoing = http.request(`${origin}/upload?abort=1`, {method: 'POST', headers: {
-                'Content-Type': `multipart/form-data; boundary=${boundary}`,
-            }});
+                    'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                }});
             outgoing.on('error', () => undefined);
             outgoing.write(`--${boundary}\r\nContent-Disposition: form-data; name="proof"; filename="receipt.pdf"\r\nContent-Type: application/pdf\r\n\r\npartial proof`);
             await abortAllocated.promise;
@@ -355,6 +355,46 @@ describe('durable invoice proof ownership', () => {
 });
 
 describe('offline historical proof reconciliation', () => {
+    it('holds the maintenance connection through its callback and releases it after rejection', async () => {
+        const orphan = path.join(directory, 'maintenance-lock.pdf');
+        await fs.promises.writeFile(orphan, 'historical orphan', {flag: 'wx'});
+        const manifest = await createInvoiceProofManifest(1);
+        expect(await AppDataSource.getRepository(InvoiceProofFile).count()).toBe(0);
+
+        // The scalar lock must work without a ledger row and remain owned while
+        // the callback yields; a second real offline command uses another connection.
+        const entered = deferred();
+        const resume = deferred();
+        let callbackEntered = false;
+        const holder = invoiceService.withProofMaintenanceLock(async () => {
+            callbackEntered = true;
+            entered.resolve();
+            await resume.promise;
+            return 'held';
+        });
+        try {
+            await Promise.race([entered.promise, holder]);
+            expect(callbackEntered).toBe(true);
+            await expect(reconcileInvoiceProofs(manifest, 'quarantine')).rejects.toThrow('Another proof reconciliation');
+            await expect(fs.promises.access(orphan)).resolves.toBeUndefined();
+            expect(await AppDataSource.getRepository(InvoiceProofFile).count()).toBe(0);
+        } finally {
+            resume.resolve();
+            await holder;
+        }
+
+        // Successful completion releases before returning, so the genuine file
+        // operation can acquire the same database lock and create its evidence.
+        await expect(reconcileInvoiceProofs(manifest, 'quarantine')).resolves.toEqual({processed: 1, skipped: 0});
+        const rejected = new Error('Controlled maintenance callback failure');
+        await expect(invoiceService.withProofMaintenanceLock(async () => { throw rejected; })).rejects.toBe(rejected);
+
+        // The rejection path releases too; it must not leave a pooled connection
+        // holding the name and block the next legitimate recovery command.
+        await expect(reconcileInvoiceProofs(manifest, 'restore')).resolves.toEqual({processed: 1, skipped: 0});
+        await expect(fs.promises.readFile(orphan, 'utf8')).resolves.toBe('historical orphan');
+    });
+
     it('inventories only unowned files and supports idempotent quarantine and restore', async () => {
         const live = await savedProof();
         const orphan = path.join(directory, 'historical-orphan.pdf');

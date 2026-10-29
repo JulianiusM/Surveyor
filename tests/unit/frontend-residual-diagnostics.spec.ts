@@ -1,7 +1,7 @@
 
 import {getEventLinkOptions} from '../../src/backend/modules/event/linkage';
 import {describe, expect, it} from 'vitest';
-import eventController from '../../src/backend/controller/eventController';
+import * as eventController from '../../src/backend/controller/eventController';
 import {createProfile, deactivateProfile} from '../../src/backend/controller/userController';
 import {isDeactivationOwnershipRejection, requireAccountDeletion, updateProfile} from '../../src/backend/modules/identity';
 import {DataSource} from 'typeorm';
@@ -98,7 +98,7 @@ describe('Remaining reachable controller rejection diagnostics', () => {
             ? requireAccountDeletion(body, session) : deactivateProfile(body, session));
         expect(error).toBeInstanceOf(ValidationError);
         expect(error).toMatchObject({data: body, message: kind === 'account'
-            ? 'Invalid account deletion verification' : 'Invalid profile deactivation verification'});
+                ? 'Invalid account deletion verification' : 'Invalid profile deactivation verification'});
         localizedRejection(error, kind === 'account' ? 'ACCOUNT_DELETION_CONFIRMATION_INVALID' : 'PROFILE_DEACTIVATION_CONFIRMATION_INVALID');
     });
 

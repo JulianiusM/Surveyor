@@ -18,9 +18,9 @@ import type {Settings} from '../../types/SettingsTypes';
 
 
 // src/settings-csv.ts
-import * as dotenv from "dotenv";
-import crypto from "node:crypto";
-import fs from "node:fs";
+import * as dotenv from 'dotenv';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
 
 // Load env before anything else.
 // Priority: E2E_DOTENV_FILE > .env.e2e (when NODE_ENV=e2e) > .env

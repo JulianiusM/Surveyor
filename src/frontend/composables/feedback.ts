@@ -71,7 +71,7 @@ export function isElementVisible(element: HTMLElement): boolean {
  * Hidden messages wait for disclosure, renewed receipts get a fresh interval, and
  * page-cache restoration restarts observation without accumulating timers/listeners. */
 export function useTransientNotice(element: Ref<HTMLElement | null>, transient: () => boolean,
-                                   renewal: () => unknown, dismiss: () => void): void {
+    renewal: () => unknown, dismiss: () => void): void {
     let mounted = false;
     let paused = false;
     let listening = false;

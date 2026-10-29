@@ -80,8 +80,8 @@ const content = computed(() => (page.value?.content ?? '').replace(/href="(\/hel
     (_match, href: string) => `href="${helpRoute(href.replaceAll('&amp;', '&')).replaceAll('&', '&amp;')}"`));
 function submitSearch(): void {
     void router.push({path: '/help', query: {
-        q: search.value, locale: locale.value,
-    }});
+            q: search.value, locale: locale.value,
+        }});
 }
 /** Static help does not poll. Deliberate Refresh and failed-read recovery use
  * the same server cooldown and current article/locale key.

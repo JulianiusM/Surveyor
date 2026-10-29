@@ -1,7 +1,7 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import activityController from '../../src/backend/controller/activityController';
-import {readActivityPlan, readActivityRequirements, calculateBaselineRequirement, updateRequirements,
-    setActivityAssignment} from '../../src/backend/controller/activityController';
+import * as activityController from '../../src/backend/controller/activityController';
+import {calculateBaselineRequirement} from '../../src/backend/modules/activity/autoAssignment';
+
 import {applyRecommendations, updateRecommendations} from '../../src/backend/modules/activity/recommendations';
 import * as activityService from '../../src/backend/modules/database/services/ActivityService';
 import * as recommendationService from '../../src/backend/modules/database/services/ActivityRecommendationService';
@@ -60,35 +60,35 @@ describe('Activity production boundaries', () => {
             })));
             await registerEventAttendance(eventId, owner, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
             const dinner = (await activityService.getActivitySlotsFlat(planId)).find(slot => slot.title === 'Dinner cleanup')!;
-            await setActivityAssignment(planId, dinner.id, {assigned: true}, {profile: owner});
+            await activityController.setActivityAssignment(planId, dinner.id, {assigned: true}, {profile: owner});
             expect(await activityService.getActivitySlotAssignments(planId, owner.id)).toEqual([dinner.id]);
             const plan = (await activityService.getActivityPlanById(planId))!;
-            const view = await readActivityPlan(planId, {profile: owner}, undefined, {windowStart: '2028-01-01'});
+            const view = await activityController.readActivityPlan(planId, {profile: owner}, undefined, {windowStart: '2028-01-01'});
             expect(view.data.weeks.flatMap(week => week.days)).toHaveLength(42);
             expect(view.data.slots).toEqual([]);
             expect(view.data.startDate).toBe('2027-06-01');
             expect(view.data.endDate).toBe('2028-06-01');
             const print = await activityController.getScheduleExport(plan, '2028-06-01');
             expect(print.days).toHaveLength(1);
-            const first = await readActivityRequirements(planId, {profile: owner});
-            const last = await readActivityRequirements(planId, {profile: owner}, 3);
+            const first = await activityController.readActivityRequirements(planId, {profile: owner});
+            const last = await activityController.readActivityRequirements(planId, {profile: owner}, 3);
             expect(first.paging).toMatchObject({readOnly: true, page: 1, pages: 3, total: 205, maxDurationDays: 30});
             expect(first.stayRequirements).toHaveLength(100);
             expect(last.stayRequirements).toHaveLength(5);
             expect(last.stayRequirements[0]!.stayDays).toBe(201);
             await expect(calculateBaselineRequirement(planId)).rejects.toMatchObject({cause: 'ACTIVITY_REQUIREMENTS_OVERSIZED'});
-            await expect(updateRequirements(planId, {stayRequirements: []})).rejects.toMatchObject({cause: 'ACTIVITY_REQUIREMENTS_OVERSIZED'});
+            await expect(activityController.updateRequirements(planId, {stayRequirements: []})).rejects.toMatchObject({cause: 'ACTIVITY_REQUIREMENTS_OVERSIZED'});
             // Rejected editing/calculation and bounded reads must preserve every saved duration.
             expect(await repository.countBy({entity: {id: planId}})).toBe(205);
             await expect(activityController.updateProperties(plan, {endDate: '2029-06-01'})).rejects.toMatchObject({cause: 'ACTIVITY_DURATION_LIMIT'});
             await expect(activityController.updateProperties(plan, {endDate: '2028-05-01'})).resolves.toBe('Activity plan updated');
             await activityController.updateProperties(plan, {endDate: '2027-06-10'});
-            await updateRequirements(planId, {stayRequirements: [{stayDays: 1, requiredShifts: 4}]});
+            await activityController.updateRequirements(planId, {stayRequirements: [{stayDays: 1, requiredShifts: 4}]});
             expect(await repository.countBy({entity: {id: planId}})).toBe(196);
             expect(await repository.findOneBy({entity: {id: planId}, stayDays: 201})).toMatchObject({requiredShifts: 0});
             const shortened = (await activityService.getActivityPlanById(planId))!;
             await activityController.updateProperties(shortened, {endDate: '2027-06-20'});
-            const restored = await readActivityRequirements(planId, {profile: owner});
+            const restored = await activityController.readActivityRequirements(planId, {profile: owner});
             expect(restored.stayRequirements).toContainEqual({stayDays: 20, requiredShifts: 4});
             expect(restored.stayRequirements.some(row => row.stayDays > 20)).toBe(false);
         } finally {
@@ -111,7 +111,7 @@ describe('Activity production boundaries', () => {
         await expect(applyRecommendations(planId)).rejects.toMatchObject({cause: 'ACTIVITY_SWAP_PAIR_REQUIRED'});
         expect(await activityService.getActivitySlotAssignments(planId, person.id)).toEqual([first.id]);
         await updateRecommendations(planId, {recommendations: [{id: legacy.id, itemId: second.id, sourceItemId: first.id,
-            profileId: person.id, status: 'APPROVED', operation: 'REASSIGN', manual: true, swapGroup: null}]});
+                profileId: person.id, status: 'APPROVED', operation: 'REASSIGN', manual: true, swapGroup: null}]});
         const saved = await recommendationService.getRecommendations(planId);
         expect(saved).toHaveLength(1);
         expect(saved[0]).toMatchObject({pairingKnown: true, swapGroup: null});
@@ -142,10 +142,10 @@ describe('Activity production boundaries', () => {
         await assignActivitySlot(second.id, people[3]!.id);
 
         const result = await applyRecommendations(planId, {recommendations: people.map((person, index) => ({
-            itemId: index % 2 === 0 ? second.id : first.id,
-            sourceItemId: index % 2 === 0 ? first.id : second.id,
-            profileId: person.id, status: 'APPROVED', operation: 'REASSIGN', manual: true, swapGroup: null,
-        }))});
+                itemId: index % 2 === 0 ? second.id : first.id,
+                sourceItemId: index % 2 === 0 ? first.id : second.id,
+                profileId: person.id, status: 'APPROVED', operation: 'REASSIGN', manual: true, swapGroup: null,
+            }))});
 
         // The first target is a forbidden departure evening. Other independent moves
         // fit after projection; reciprocal endpoints cannot supply pair intent.

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {afterAll, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
-import eventPoolController from '../../src/backend/controller/eventPoolController';
+import * as eventPoolController from '../../src/backend/controller/eventPoolController';
 import {AddOrganizerInvoices1789603200000} from '../../src/backend/migrations/1789603200000-AddOrganizerInvoices';
 import {AddInvoicePoolOrganizerOnlyState1790985600000} from '../../src/backend/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';

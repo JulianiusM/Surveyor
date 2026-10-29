@@ -1,12 +1,12 @@
 import {Request} from 'express';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import activityController from '../../src/backend/controller/activityController';
-import driversController from '../../src/backend/controller/driversController';
+import * as activityController from '../../src/backend/controller/activityController';
+import * as driversController from '../../src/backend/controller/driversController';
 import * as entityAdminController from '../../src/backend/controller/entityAdminController';
-import eventController from '../../src/backend/controller/eventController';
-import eventPoolController from '../../src/backend/controller/eventPoolController';
-import packingController from '../../src/backend/controller/packingController';
-import surveyController from '../../src/backend/controller/surveyController';
+import * as eventController from '../../src/backend/controller/eventController';
+import * as eventPoolController from '../../src/backend/controller/eventPoolController';
+import * as packingController from '../../src/backend/controller/packingController';
+import * as surveyController from '../../src/backend/controller/surveyController';
 import * as userController from '../../src/backend/controller/userController';
 import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
 import * as activityService from '../../src/backend/modules/database/services/ActivityService';

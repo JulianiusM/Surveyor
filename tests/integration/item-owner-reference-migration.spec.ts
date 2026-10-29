@@ -28,7 +28,7 @@ async function columnStorage(table: string, column: string) {
     const rows = await runner.query(`SELECT COLUMN_TYPE AS type, CHARACTER_SET_NAME AS charset,
         COLLATION_NAME AS collation, IS_NULLABLE AS nullable, COLUMN_DEFAULT AS defaultValue, EXTRA AS extra
         FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
-    [table, column]);
+        [table, column]);
     expect(rows).toHaveLength(1);
     return rows[0] as {type: string; charset: string | null; collation: string | null;
         nullable: string; defaultValue: string | null; extra: string};
@@ -112,7 +112,7 @@ describe('item-owner reference migration preserves data and physical identifier 
                 g.payload AS guestPayload FROM \`${table}\` t JOIN users u ON u.id = t.user_id
                 JOIN guests g ON g.id = t.guest_id ORDER BY t.id`);
             expect(ownership).toEqual(['α', 'β'].map(suffix => ({bytes: Buffer.isBuffer(value) ? value.toString('hex').toUpperCase()
-                : Buffer.from(value).toString('hex').toUpperCase(), payload: `${table} retained ${suffix}`, userId: '7', guestPayload: 'guest retained'})));
+                    : Buffer.from(value).toString('hex').toUpperCase(), payload: `${table} retained ${suffix}`, userId: '7', guestPayload: 'guest retained'})));
             const checks = await runner.query('SELECT @@FOREIGN_KEY_CHECKS AS enabled');
             expect(Number(checks[0].enabled)).toBe(1);
             await expect(runner.query(`UPDATE \`${table}\` SET user_id = 2000000000 WHERE id = 1`)).rejects.toThrow();
@@ -229,21 +229,21 @@ describe('item-owner reference migration preserves data and physical identifier 
     });
 
     it.each(['incoming reference', 'unique constraint', 'check constraint', 'generated dependency'] as const)
-    ('preserves every schema object when down would discard an %s', async dependency => {
-        await prepareItemOwners();
-        await migration.up(runner);
-        if (dependency === 'incoming reference') {
-            await runner.query(`CREATE TABLE owner_dependents (id int NOT NULL PRIMARY KEY, user_ref int unsigned NULL,
+        ('preserves every schema object when down would discard an %s', async dependency => {
+            await prepareItemOwners();
+            await migration.up(runner);
+            if (dependency === 'incoming reference') {
+                await runner.query(`CREATE TABLE owner_dependents (id int NOT NULL PRIMARY KEY, user_ref int unsigned NULL,
                 CONSTRAINT retained_owner_reference FOREIGN KEY (user_ref) REFERENCES packing_items(user_id))`);
-        } else if (dependency === 'unique constraint') {
-            await runner.query('ALTER TABLE activity_slots ADD UNIQUE INDEX retained_owner_unique (guest_id)');
-        } else if (dependency === 'check constraint') {
-            await runner.query('ALTER TABLE activity_slots ADD CONSTRAINT retained_owner_check CHECK (user_id IS NULL OR user_id > 0)');
-        } else {
-            await runner.query('ALTER TABLE activity_slots ADD owner_user_double bigint AS (user_id * 2) VIRTUAL');
-        }
-        const before = await snapshotMigrationDatabase(runner);
-        await expect(migration.down(runner)).rejects.toThrow();
-        expect(await snapshotMigrationDatabase(runner)).toEqual(before);
-    });
+            } else if (dependency === 'unique constraint') {
+                await runner.query('ALTER TABLE activity_slots ADD UNIQUE INDEX retained_owner_unique (guest_id)');
+            } else if (dependency === 'check constraint') {
+                await runner.query('ALTER TABLE activity_slots ADD CONSTRAINT retained_owner_check CHECK (user_id IS NULL OR user_id > 0)');
+            } else {
+                await runner.query('ALTER TABLE activity_slots ADD owner_user_double bigint AS (user_id * 2) VIRTUAL');
+            }
+            const before = await snapshotMigrationDatabase(runner);
+            await expect(migration.down(runner)).rejects.toThrow();
+            expect(await snapshotMigrationDatabase(runner)).toEqual(before);
+        });
 });

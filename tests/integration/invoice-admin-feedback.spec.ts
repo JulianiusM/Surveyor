@@ -1,7 +1,7 @@
 import * as invoiceOperations from '../../src/backend/modules/invoice/invoiceOperations';
 import type {Request} from 'express';
 import {afterAll, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
-import eventPoolController from '../../src/backend/controller/eventPoolController';
+import * as eventPoolController from '../../src/backend/controller/eventPoolController';
 import type {Profile} from '../../src/backend/modules/database/entities/user/Profile';
 import * as invoiceService from '../../src/backend/modules/database/services/EventInvoiceService';
 import * as eventService from '../../src/backend/modules/database/services/EventService';
@@ -95,8 +95,8 @@ describe('invoice administration feedback and committed decisions', () => {
         expect(sendEmail).toHaveBeenCalledOnce();
         const saved = (await invoiceService.getInvoiceWithRegistration(poolId, invoiceId))!;
         expect(sendEmail.mock.calls[0][2]).toMatchObject({details: expect.arrayContaining([
-            {label: 'Your accepted invoice amount', value: Number(saved.correctedAmount).toFixed(2)},
-        ])});
+                {label: 'Your accepted invoice amount', value: Number(saved.correctedAmount).toFixed(2)},
+            ])});
     });
 
     it('confirms repeated concurrent closure without duplicate notifications', async () => {

@@ -1,20 +1,20 @@
-import {quickAddSlot, updateSlotAttr} from '../../src/backend/modules/activity/slots';
+import {quickAddSlot, updateSlotAttr, addActivityRole, authorizeSelfAssignment, assignActivityAssignmentRole} from '../../src/backend/modules/activity/slots';
 import {getAssignmentWarnings} from '../../src/backend/modules/activity/recommendations';
 import {getRecommendations, getRecommendationWarningPreview, updateRecommendations, applyRecommendations} from '../../src/backend/modules/activity/recommendations';
 import {randomUUID} from 'node:crypto';
-import {saveGeneratedRecommendations, projectActivityAssignees} from '../../src/backend/modules/activity/autoAssignment';
-import {getRequirements, updateRequirements, calculateBaselineRequirement} from '../../src/backend/controller/activityController';
+import {saveGeneratedRecommendations, projectActivityAssignees, calculateBaselineRequirement} from '../../src/backend/modules/activity/autoAssignment';
+
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {Request} from 'express';
-import activityController from '../../src/backend/controller/activityController';
-import {generateActivityRecommendations, readActivityRecommendationJob} from '../../src/backend/controller/activityController';
-import driversController from '../../src/backend/controller/driversController';
+import * as activityController from '../../src/backend/controller/activityController';
+
+import * as driversController from '../../src/backend/controller/driversController';
 import * as entityAdminController from '../../src/backend/controller/entityAdminController';
-import eventPoolController from '../../src/backend/controller/eventPoolController';
+import * as eventPoolController from '../../src/backend/controller/eventPoolController';
 import * as helpController from '../../src/backend/controller/helpController';
-import eventController from '../../src/backend/controller/eventController';
-import packingController from '../../src/backend/controller/packingController';
-import surveyController from '../../src/backend/controller/surveyController';
+import * as eventController from '../../src/backend/controller/eventController';
+import * as packingController from '../../src/backend/controller/packingController';
+import * as surveyController from '../../src/backend/controller/surveyController';
 import * as userController from '../../src/backend/controller/userController';
 import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
 import {EventRegistration} from '../../src/backend/modules/database/entities/event/EventRegistration';
@@ -66,10 +66,10 @@ let secondParticipant: Profile;
 /** Exercise production admission and await its real queued job before asserting saved recommendations. */
 async function generateQueuedRecommendations(planId: string): Promise<void> {
     const session = {profile: owner, auth: {user: owner.user!}};
-    const queued = await generateActivityRecommendations(planId, session);
+    const queued = await activityController.generateActivityRecommendations(planId, session);
     // Observe the same bounded job API as clients; terminal failures must fail this test immediately.
     for (let attempt = 0; attempt < 100; attempt += 1) {
-        const {job} = await readActivityRecommendationJob(planId, queued.job.id, session);
+        const {job} = await activityController.readActivityRecommendationJob(planId, queued.job.id, session);
         if (!['QUEUED', 'RUNNING'].includes(job.status)) {
             expect(job.status).toBe('COMPLETE');
             return;
@@ -246,14 +246,14 @@ describe('activity plan user stories', () => {
         const [slot] = await activityService.getActivitySlotsFlat(planId);
         await assignActivitySlot(slot.id, participant.id);
         const plan = await activityService.getActivityPlanById(planId);
-        const [role] = await activityController.addActivityRole(plan!, {name: 'Coordinator'});
+        const [role] = await addActivityRole(plan!, {name: 'Coordinator'});
         // Configure the slot through its live shared edit operation with the
         // owner's actual grants before exercising named-role assignment.
         const permissions = await buildPermBundle({
             entityType: 'activity', entityId: planId, ownerId: plan!.ownerId,
         }, [{entityType: 'activitySlot', entityId: slot.id, ownerId: slot.profileId}], {profile: owner});
         await updateSlotAttr(slot.id, {roles: [role.id]}, permissions);
-        await activityController.getRoleAccessMapping().assign({itemId: slot.id, role: 'Coordinator'}, participant.id);
+        await assignActivityAssignmentRole(slot.id, participant.id, 'Coordinator');
         const [participantRoles] = await activityService.getParticipantRolesForPlan(planId);
         expect(participantRoles.participantKey).toBe(`profile:${participant.id}`);
         expect(participantRoles.roleIds).toContain(role.id);
@@ -382,7 +382,7 @@ describe('automatic activity assignment user stories', () => {
         const [slot] = await activityService.getActivitySlotsFlat(planId);
         await assignActivitySlot(slot.id, owner.id);
 
-        const requirements = await getRequirements(planId);
+        const requirements = await activityController.getRequirements(planId);
 
         expect(requirements.participants).toEqual([
             expect.objectContaining({
@@ -398,7 +398,7 @@ describe('automatic activity assignment user stories', () => {
         const planId = await createEventActivityPlan(owner.id, eventId);
         const [slot] = await activityService.getActivitySlotsFlat(planId);
 
-        await expect(activityController.authorizeSelfAssignment(
+        await expect(authorizeSelfAssignment(
             planId,
             slot.id,
             owner.id,
@@ -410,20 +410,20 @@ describe('automatic activity assignment user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'External provider opt-in event');
         const planId = await createEventActivityPlan(owner.id, eventId);
         const [slot] = await activityService.getActivitySlotsFlat(planId);
-        await updateRequirements(planId, {
+        await activityController.updateRequirements(planId, {
             allowExternalAssignees: true,
             roleRequirements: [],
             stayRequirements: [],
             overrides: [],
         });
 
-        await expect(activityController.authorizeSelfAssignment(
+        await expect(authorizeSelfAssignment(
             planId,
             slot.id,
             owner.id,
             'assign',
         )).resolves.toBeUndefined();
-        expect(Boolean((await getRequirements(planId)).plan.allowExternalAssignees)).toBe(true);
+        expect(Boolean((await activityController.getRequirements(planId)).plan.allowExternalAssignees)).toBe(true);
     });
 
     it('rejects slots from another activity plan and unconfigured role names', async () => {
@@ -432,13 +432,13 @@ describe('automatic activity assignment user stories', () => {
         const [firstSlot] = await activityService.getActivitySlotsFlat(firstPlanId);
         const [secondSlot] = await activityService.getActivitySlotsFlat(secondPlanId);
 
-        await expect(activityController.authorizeSelfAssignment(
+        await expect(authorizeSelfAssignment(
             firstPlanId,
             secondSlot.id,
             participant.id,
             'assign',
         )).rejects.toMatchObject({status: 404});
-        await expect(activityController.authorizeSelfAssignment(
+        await expect(authorizeSelfAssignment(
             firstPlanId,
             firstSlot.id,
             participant.id,
@@ -456,13 +456,13 @@ describe('automatic activity assignment user stories', () => {
         const [otherSlot] = await activityService.getActivitySlotsFlat(otherPlanId);
 
         await expect(updateRecommendations(planId, {recommendations: [{
-            itemId: otherSlot.id,
-            profileId: participant.id,
-        }]})).rejects.toMatchObject({status: 400});
+                itemId: otherSlot.id,
+                profileId: participant.id,
+            }]})).rejects.toMatchObject({status: 400});
         await expect(updateRecommendations(planId, {recommendations: [{
-            itemId: slot.id,
-            profileId: owner.id,
-        }]})).rejects.toMatchObject({status: 400});
+                itemId: slot.id,
+                profileId: owner.id,
+            }]})).rejects.toMatchObject({status: 400});
     });
 
     it('enforces a full activity slot as a hard cap when overfill is disabled', async () => {
@@ -471,7 +471,7 @@ describe('automatic activity assignment user stories', () => {
         await activityService.updateActivitySlot(slot.id, {maxAssignees: 1});
         await assignActivitySlot(slot.id, participant.id);
 
-        await expect(activityController.authorizeSelfAssignment(
+        await expect(authorizeSelfAssignment(
             planId,
             slot.id,
             secondParticipant.id,
@@ -488,7 +488,7 @@ describe('automatic activity assignment user stories', () => {
         const [slot] = await activityService.getActivitySlotsFlat(planId);
         await activityService.updateActivitySlot(slot.id, {maxAssignees: 1});
         await assignActivitySlot(slot.id, participant.id);
-        await updateRequirements(planId, {
+        await activityController.updateRequirements(planId, {
             allowOverfillAfterFull: true,
             roleRequirements: [],
             stayRequirements: [],
@@ -500,7 +500,7 @@ describe('automatic activity assignment user stories', () => {
 
         // Canary: the override keeps joining possible, but only after the participant sees the capacity risk.
         expect(warnings).toContainEqual({type: 'over_capacity'});
-        await expect(activityController.authorizeSelfAssignment(
+        await expect(authorizeSelfAssignment(
             planId,
             slot.id,
             secondParticipant.id,
@@ -514,7 +514,7 @@ describe('automatic activity assignment user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Required progress event');
         await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         const planId = await createEventActivityPlan(owner.id, eventId);
-        await updateRequirements(planId, {
+        await activityController.updateRequirements(planId, {
             assignmentMode: 'REQUIRED',
             generalRequiredShifts: 2,
             stayRequirements: createStayRequirementSchedule(3, 2),
@@ -541,7 +541,7 @@ describe('automatic activity assignment user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Incomplete duties event');
         const planId = await createEventActivityPlan(owner.id, eventId);
 
-        await expect(updateRequirements(planId, {
+        await expect(activityController.updateRequirements(planId, {
             assignmentMode: 'REQUIRED',
             stayRequirements: [{stayDays: 3, requiredShifts: 2}],
             roleRequirements: [],
@@ -562,7 +562,7 @@ describe('automatic activity assignment user stories', () => {
         await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         await registerEventAttendance(eventId, secondParticipant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         const planId = await createEventActivityPlan(owner.id, eventId);
-        await updateRequirements(planId, {
+        await activityController.updateRequirements(planId, {
             assignmentMode: 'REQUIRED', generalRequiredShifts: 1, roundingMode: 'CEIL',
             stayRequirements: createStayRequirementSchedule(3, 1),
             roleRequirements: [], overrides: [],
@@ -586,7 +586,7 @@ describe('automatic activity assignment user stories', () => {
         const [arrivalSlot] = await activityService.getActivitySlotsFlat(planId);
         await activityService.updateActivitySlot(arrivalSlot.id, {startTime: '12:00', endTime: '13:00'});
 
-        await updateRequirements(planId, {
+        await activityController.updateRequirements(planId, {
             assignmentMode: 'REQUIRED', generalRequiredShifts: 6, roundingMode: 'CEIL',
             allowArrivalDayEvening: true,
             stayRequirements: [
@@ -597,7 +597,7 @@ describe('automatic activity assignment user stories', () => {
             roleRequirements: [], overrides: [],
         });
 
-        const requirements = await getRequirements(planId);
+        const requirements = await activityController.getRequirements(planId);
         expect(requirements.stayRequirements.map(({stayDays, requiredShifts}) => ({stayDays, requiredShifts}))).toEqual([
             {stayDays: 1, requiredShifts: 1},
             {stayDays: 2, requiredShifts: 1},
@@ -662,7 +662,7 @@ describe('automatic activity assignment user stories', () => {
         await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         await registerEventAttendance(eventId, secondParticipant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         const planId = await createEventActivityPlan(owner.id, eventId);
-        await updateRequirements(planId, {
+        await activityController.updateRequirements(planId, {
             assignmentMode: 'REQUIRED', generalRequiredShifts: 1,
             stayRequirements: createStayRequirementSchedule(3, 1),
             roleRequirements: [], overrides: [],
@@ -682,7 +682,7 @@ describe('automatic activity assignment user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Approved duties event');
         await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         const planId = await createEventActivityPlan(owner.id, eventId);
-        await updateRequirements(planId, {
+        await activityController.updateRequirements(planId, {
             assignmentMode: 'REQUIRED', generalRequiredShifts: 1,
             stayRequirements: createStayRequirementSchedule(3, 1),
             roleRequirements: [], overrides: [],
@@ -692,10 +692,10 @@ describe('automatic activity assignment user stories', () => {
         const recommendation = generated.recommendations[0];
 
         const result = await applyRecommendations(planId, {recommendations: [{
-            itemId: recommendation.item.id,
-            profileId: recommendation.profileId,
-            status: 'APPROVED',
-        }]});
+                itemId: recommendation.item.id,
+                profileId: recommendation.profileId,
+                status: 'APPROVED',
+            }]});
 
         expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toContain(recommendation.item.id);
         expect(result.message).toContain('Applied 1 recommendation');
@@ -705,7 +705,7 @@ describe('automatic activity assignment user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Rejected duties event');
         await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         const planId = await createEventActivityPlan(owner.id, eventId);
-        await updateRequirements(planId, {
+        await activityController.updateRequirements(planId, {
             assignmentMode: 'REQUIRED', generalRequiredShifts: 1,
             stayRequirements: createStayRequirementSchedule(3, 1),
             roleRequirements: [], overrides: [],
@@ -715,11 +715,11 @@ describe('automatic activity assignment user stories', () => {
         const recommendation = generated.recommendations[0];
 
         await applyRecommendations(planId, {recommendations: [{
-            id: recommendation.id,
-            itemId: recommendation.item.id,
-            profileId: recommendation.profileId,
-            status: 'REJECTED',
-        }]});
+                id: recommendation.id,
+                itemId: recommendation.item.id,
+                profileId: recommendation.profileId,
+                status: 'REJECTED',
+            }]});
 
         expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([]);
         expect((await getRecommendations(planId)).recommendations).toEqual([]);
@@ -747,23 +747,23 @@ describe('automatic activity assignment user stories', () => {
         const dinner = (await activityService.getActivitySlotsFlat(planId))
             .find((slot) => slot.title === 'Dinner cleanup')!;
         await updateRecommendations(planId, {recommendations: [{
-            itemId: dinner.id,
-            profileId: participant.id,
-            status: 'PENDING',
-            operation: 'ASSIGN',
-            manual: true,
-        }]});
+                itemId: dinner.id,
+                profileId: participant.id,
+                status: 'PENDING',
+                operation: 'ASSIGN',
+                manual: true,
+            }]});
         const [manualRecommendation] = (await getRecommendations(planId)).recommendations;
         expect(manualRecommendation).toMatchObject({manual: true, status: 'PENDING'});
 
         await applyRecommendations(planId, {recommendations: [{
-            id: manualRecommendation.id,
-            itemId: dinner.id,
-            profileId: participant.id,
-            status: 'REJECTED',
-            operation: 'ASSIGN',
-            manual: false,
-        }]});
+                id: manualRecommendation.id,
+                itemId: dinner.id,
+                profileId: participant.id,
+                status: 'REJECTED',
+                operation: 'ASSIGN',
+                manual: false,
+            }]});
 
         expect(await recommendationService.getRecommendations(planId)).toEqual([]);
         expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([]);
@@ -778,7 +778,7 @@ describe('automatic activity assignment user stories', () => {
                 const planId = await createActivityPlanWithSlot(owner.id);
                 const [slot] = await activityService.getActivitySlotsFlat(planId);
                 await updateRecommendations(planId, {recommendations: [{itemId: slot.id, profileId: participant.id,
-                    status: 'PENDING', operation: 'ASSIGN', manual: true}]});
+                        status: 'PENDING', operation: 'ASSIGN', manual: true}]});
                 const [saved] = await recommendationService.getRecommendations(planId);
                 const id = identity === 'absent' ? undefined : identity === 'uppercase' ? saved.id.toUpperCase() : randomUUID();
                 const review = {id, itemId: slot.id.toUpperCase(), profileId: participant.id.toUpperCase(),
@@ -787,7 +787,7 @@ describe('automatic activity assignment user stories', () => {
                 // Preview resolves the same owned provenance but must not save the submitted status or identity.
                 const preview = await getRecommendationWarningPreview(planId, {recommendations: [review]});
                 expect(preview.warnings).toMatchObject([{recommendation: {id: saved.id, manual: true,
-                    itemId: review.itemId, profileId: review.profileId}}]);
+                        itemId: review.itemId, profileId: review.profileId}}]);
                 expect(await recommendationService.getRecommendations(planId)).toMatchObject([{id: saved.id, status: 'PENDING'}]);
                 await write(planId, {recommendations: [{...review, status: 'REJECTED'}]});
 
@@ -809,7 +809,7 @@ describe('automatic activity assignment user stories', () => {
 
                 const preview = await getRecommendationWarningPreview(planId, {recommendations: [review]});
                 expect(preview.warnings).toMatchObject([{recommendation: {id: saved.id, manual: false,
-                    itemId: review.itemId, profileId: review.profileId}}]);
+                        itemId: review.itemId, profileId: review.profileId}}]);
                 await write(planId, {recommendations: [{...review, status: 'REJECTED'}]});
 
                 expect(await recommendationService.getRecommendations(planId)).toMatchObject([
@@ -835,7 +835,7 @@ describe('automatic activity assignment user stories', () => {
             const saved = (await recommendationService.getRecommendations(planId)).find(row => row.manual)!;
 
             await write(planId, {recommendations: [{id: saved.id.toUpperCase(), itemId: slot.id,
-                profileId: secondParticipant.id, status: 'REJECTED', manual: false}]});
+                    profileId: secondParticipant.id, status: 'REJECTED', manual: false}]});
 
             // ID-first editing still selects the saved manual row, so rejection discards it rather than inventing memory.
             expect(await recommendationService.getRecommendations(planId)).toEqual([]);
@@ -855,7 +855,7 @@ describe('automatic activity assignment user stories', () => {
             const applies = write === applyRecommendations;
 
             await write(planId, {recommendations: [{id, itemId: slot.id.toUpperCase(),
-                profileId: participant.id.toUpperCase(), status: applies ? 'APPROVED' : 'PENDING', manual: true}]});
+                    profileId: participant.id.toUpperCase(), status: applies ? 'APPROVED' : 'PENDING', manual: true}]});
 
             const saved = await recommendationService.getRecommendations(planId);
             expect(saved).toHaveLength(1);
@@ -887,36 +887,36 @@ describe('automatic activity assignment user stories', () => {
         await assignActivitySlot(dinner.id, participant.id);
         await assignActivitySlot(lunch.id, secondParticipant.id);
         await updateRecommendations(planId, {recommendations: [
-            {
-                itemId: lunch.id,
-                sourceItemId: dinner.id,
-                profileId: participant.id,
-                status: 'PENDING',
-                operation: 'REASSIGN',
-                manual: true,
-                swapGroup: 'rejected-manual-swap',
-            },
-            {
-                itemId: dinner.id,
-                sourceItemId: lunch.id,
-                profileId: secondParticipant.id,
-                status: 'PENDING',
-                operation: 'REASSIGN',
-                manual: true,
-                swapGroup: 'rejected-manual-swap',
-            },
-        ]});
+                {
+                    itemId: lunch.id,
+                    sourceItemId: dinner.id,
+                    profileId: participant.id,
+                    status: 'PENDING',
+                    operation: 'REASSIGN',
+                    manual: true,
+                    swapGroup: 'rejected-manual-swap',
+                },
+                {
+                    itemId: dinner.id,
+                    sourceItemId: lunch.id,
+                    profileId: secondParticipant.id,
+                    status: 'PENDING',
+                    operation: 'REASSIGN',
+                    manual: true,
+                    swapGroup: 'rejected-manual-swap',
+                },
+            ]});
         const staged = (await getRecommendations(planId)).recommendations;
 
         await applyRecommendations(planId, {recommendations: staged.map((recommendation, index) => ({
-            id: recommendation.id,
-            itemId: recommendation.item.id,
-            sourceItemId: recommendation.sourceItem?.id,
-            profileId: recommendation.profile.id,
-            status: index === 0 ? 'REJECTED' : 'APPROVED',
-            operation: 'REASSIGN',
-            manual: false,
-        }))});
+                id: recommendation.id,
+                itemId: recommendation.item.id,
+                sourceItemId: recommendation.sourceItem?.id,
+                profileId: recommendation.profile.id,
+                status: index === 0 ? 'REJECTED' : 'APPROVED',
+                operation: 'REASSIGN',
+                manual: false,
+            }))});
 
         expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([dinner.id]);
         expect(await activityService.getActivitySlotAssignments(planId, secondParticipant.id)).toEqual([lunch.id]);
@@ -932,7 +932,7 @@ describe('automatic activity assignment user stories', () => {
         await quickAddSlot(plan!, {
             date: '2027-06-02', title: 'Lunch cleanup', startTime: '12:00', endTime: '13:00',
         }, {profile: owner} as never);
-        await updateRequirements(planId, {
+        await activityController.updateRequirements(planId, {
             assignmentMode: 'REQUIRED', generalRequiredShifts: 2,
             bindingDeadline: '2037-06-01T00:00:00.000Z',
             stayRequirements: createStayRequirementSchedule(3, 2),
@@ -942,11 +942,11 @@ describe('automatic activity assignment user stories', () => {
             .find((slot) => slot.title === 'Dinner cleanup')!;
 
         await applyRecommendations(planId, {recommendations: [{
-            itemId: dinner.id,
-            profileId: participant.id,
-            status: 'APPROVED',
-            operation: 'ASSIGN',
-        }]});
+                itemId: dinner.id,
+                profileId: participant.id,
+                status: 'APPROVED',
+                operation: 'ASSIGN',
+            }]});
 
         const recommendations = (await getRecommendations(planId)).recommendations;
         expect(recommendations).toEqual([]);
@@ -964,11 +964,11 @@ describe('automatic activity assignment user stories', () => {
             .find((slot) => slot.title === 'Dinner cleanup')!;
         await assignActivitySlot(dinner.id, participant.id);
         await updateRecommendations(planId, {recommendations: [{
-            itemId: dinner.id,
-            profileId: participant.id,
-            status: 'APPROVED',
-            operation: 'UNASSIGN',
-        }]});
+                itemId: dinner.id,
+                profileId: participant.id,
+                status: 'APPROVED',
+                operation: 'UNASSIGN',
+            }]});
 
         expect((await getRecommendations(planId)).recommendations).toHaveLength(1);
 
@@ -997,33 +997,33 @@ describe('automatic activity assignment user stories', () => {
         await assignActivitySlot(lunch.id, secondParticipant.id);
 
         await applyRecommendations(planId, {recommendations: [
-            {
-                itemId: lunch.id,
-                sourceItemId: dinner.id,
-                profileId: participant.id,
-                status: 'APPROVED',
-                operation: 'REASSIGN',
-                swapGroup: 'atomic-reviewed-swap',
-            },
-            {
-                itemId: dinner.id,
-                sourceItemId: lunch.id,
-                profileId: secondParticipant.id,
-                status: 'APPROVED',
-                operation: 'REASSIGN',
-                swapGroup: 'atomic-reviewed-swap',
-            },
-        ]});
+                {
+                    itemId: lunch.id,
+                    sourceItemId: dinner.id,
+                    profileId: participant.id,
+                    status: 'APPROVED',
+                    operation: 'REASSIGN',
+                    swapGroup: 'atomic-reviewed-swap',
+                },
+                {
+                    itemId: dinner.id,
+                    sourceItemId: lunch.id,
+                    profileId: secondParticipant.id,
+                    status: 'APPROVED',
+                    operation: 'REASSIGN',
+                    swapGroup: 'atomic-reviewed-swap',
+                },
+            ]});
 
         expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([lunch.id]);
         expect(await activityService.getActivitySlotAssignments(planId, secondParticipant.id)).toEqual([dinner.id]);
 
         await applyRecommendations(planId, {recommendations: [{
-            itemId: lunch.id,
-            profileId: participant.id,
-            status: 'APPROVED',
-            operation: 'UNASSIGN',
-        }]});
+                itemId: lunch.id,
+                profileId: participant.id,
+                status: 'APPROVED',
+                operation: 'UNASSIGN',
+            }]});
 
         expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([]);
         expect(await activityService.getActivitySlotAssignments(planId, secondParticipant.id)).toEqual([dinner.id]);
@@ -1039,11 +1039,11 @@ describe('automatic activity assignment user stories', () => {
         await assignActivitySlot(dinner.id, participant.id);
 
         await expect(updateRecommendations(planId, {recommendations: [{
-            itemId: dinner.id,
-            profileId: participant.id,
-            status: 'PENDING',
-            operation: 'ASSIGN',
-        }]})).rejects.toMatchObject({status: 409});
+                itemId: dinner.id,
+                profileId: participant.id,
+                status: 'PENDING',
+                operation: 'ASSIGN',
+            }]})).rejects.toMatchObject({status: 409});
     });
 });
 

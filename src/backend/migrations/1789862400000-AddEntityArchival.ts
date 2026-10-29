@@ -5,9 +5,10 @@
  * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {MigrationInterface, QueryRunner, Table, TableColumn, TableForeignKey, TableIndex} from 'typeorm';
+import {MigrationInterface, QueryRunner} from 'typeorm';
 import {
-    addColumnIfNotExists, columnExists, createIndexIfNotExists, dropColumnIfExists, dropIndexIfExists, tableExists,
+    addColumnIfNotExists, columnExists, createIndexIfNotExists, dropColumnIfExists, dropIndexIfExists,
+    dropMigrationTable, migrationColumnDefinition, recordMigrationGeneratedColumn, tableExists,
 } from '../modules/database/utils/migration-helper';
 
 // Match the root entities that inherit BaseEntity.archivedAt. Nested records keep
@@ -65,33 +66,25 @@ export class AddEntityArchival1789862400000 implements MigrationInterface {
             profileColumn.generationStrategy = undefined;
             profileColumn.default = undefined;
             profileColumn.isNullable = true; // Matches NumericProfileBase's existing profile relation.
-            await queryRunner.createTable(new Table({
-                name: PREFERENCES,
-                columns: [
-                    new TableColumn({name: 'id', type: 'int', isPrimary: true, isGenerated: true, generationStrategy: 'increment'}),
-                    new TableColumn({name: 'created_at', type: 'timestamp', precision: 6, default: 'CURRENT_TIMESTAMP(6)'}),
-                    new TableColumn({name: 'updated_at', type: 'timestamp', precision: 6, default: 'CURRENT_TIMESTAMP(6)', onUpdate: 'CURRENT_TIMESTAMP(6)'}),
-                    profileColumn,
-                    // A type/id pair can refer to any root table and therefore cannot
-                    // have one root foreign key. Normal domain deletion may leave an
-                    // inert preference; only existing overview roots consume these rows.
-                    new TableColumn({name: 'entity_type', type: 'varchar', length: '32'}),
-                    new TableColumn({name: 'entity_id', type: 'char', length: '36'}),
-                    new TableColumn({name: 'visibility', type: 'enum', enum: ['HIDDEN', 'SHOWN']}),
-                ],
-                indices: [
-                    // One explicit choice is shared by all appearances of the same
-                    // root in this profile's participation and administration overviews.
-                    new TableIndex({name: 'uk_entity_visibility_profile_target', columnNames: ['profile_id', 'entity_type', 'entity_id'], isUnique: true}),
-                    new TableIndex({name: 'idx_entity_visibility_target', columnNames: ['entity_type', 'entity_id']}),
-                ],
-                foreignKeys: [new TableForeignKey({
-                    // Profiles have a concrete table, so their preferences can use the
-                    // same database cascade as other profile-owned settings/relations.
-                    name: 'FK_entity_visibility_profile', columnNames: ['profile_id'], referencedTableName: 'profiles',
-                    referencedColumnNames: ['id'], onDelete: 'CASCADE', onUpdate: 'CASCADE',
-                })],
-            }));
+            // Polymorphic targets have no root FK. The profile FK and unique
+            // target choice retain the original cascade and index definitions.
+            await queryRunner.query(`CREATE TABLE \`${PREFERENCES}\` (
+                \`id\` int NOT NULL AUTO_INCREMENT,
+                \`created_at\` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                \`updated_at\` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+                ${await migrationColumnDefinition(queryRunner, 'profiles', 'id', profileColumn)},
+                \`entity_type\` varchar(32) NOT NULL,
+                \`entity_id\` char(36) NOT NULL,
+                \`visibility\` enum ('HIDDEN', 'SHOWN') NOT NULL,
+                UNIQUE INDEX \`uk_entity_visibility_profile_target\` (\`profile_id\`, \`entity_type\`, \`entity_id\`),
+                INDEX \`idx_entity_visibility_target\` (\`entity_type\`, \`entity_id\`),
+                CONSTRAINT \`FK_entity_visibility_profile\` FOREIGN KEY (\`profile_id\`) REFERENCES \`profiles\` (\`id\`)
+                    ON DELETE CASCADE ON UPDATE CASCADE,
+                PRIMARY KEY (\`id\`)
+            ) ENGINE=InnoDB`);
+            if (profileColumn.generatedType && profileColumn.asExpression) {
+                await recordMigrationGeneratedColumn(queryRunner, PREFERENCES, profileColumn);
+            }
         }
     }
 
@@ -128,7 +121,7 @@ export class AddEntityArchival1789862400000 implements MigrationInterface {
             }
         }
         if (await tableExists(queryRunner, PREFERENCES)) {
-            await queryRunner.dropTable(PREFERENCES);
+            await dropMigrationTable(queryRunner, PREFERENCES);
         }
         for (const table of DATED_TABLES) {
             // Remove indexes before their columns, then remove the shared timestamp

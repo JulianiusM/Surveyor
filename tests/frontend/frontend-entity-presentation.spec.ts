@@ -89,8 +89,8 @@ describe('shared displayed entity header consumers', () => {
                 if (new URL(request.url).pathname.endsWith('/header')) {
                     imageReads++;
                     return new Response(new Blob(['image']), {headers: {
-                        'Content-Type': 'image/png', 'X-Surveyor-Context': session.context,
-                    }});
+                            'Content-Type': 'image/png', 'X-Surveyor-Context': session.context,
+                        }});
                 }
                 return json(view);
             }, {}, `/${kind}/${frontendEventId}`);
@@ -168,8 +168,8 @@ describe('shared displayed entity header consumers', () => {
                     type: 'about:blank', title: 'Not Found', status: 404, detail: 'Image unavailable',
                     requestId: 'removed-header', code: 'NOT_FOUND', messageKey: 'api:errors.NOT_FOUND', params: {},
                 }), {status: 404, headers: {
-                    'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context,
-                }});
+                        'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context,
+                    }});
             }
             return json(view);
         }, {});

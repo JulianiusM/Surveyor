@@ -10,7 +10,7 @@ import {SurveyResponse} from '../../src/backend/modules/database/entities/survey
 import {Guest} from '../../src/backend/modules/database/entities/user/Guest';
 import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
 import * as surveyService from '../../src/backend/modules/database/services/SurveyService';
-import {readOverview} from '../../src/backend/modules/overview/api';
+import {readOverview} from '../../src/backend/controller/userController';
 import type {SessionLike} from '../../src/types/PermissionTypes';
 import type {components} from '../../src/types/api/v1';
 import {persistIntegrationProfile} from '../keywords/coreDomainKeywords';
@@ -26,8 +26,8 @@ function actor(profile: Profile): SessionLike {
 
 function creation(): components['schemas']['SurveyCreateInput'] {
     return {title: 'Monthly gathering', description: 'Choose the recurring day', combinations: [
-        {weekday: 'MON', nthWeek: '1'}, {weekday: 'FRI', nthWeek: 'LAST'},
-    ]};
+            {weekday: 'MON', nthWeek: '1'}, {weekday: 'FRI', nthWeek: 'LAST'},
+        ]};
 }
 
 async function fixture(): Promise<string> {
@@ -121,8 +121,8 @@ describe('versioned Survey production operations', () => {
         expect((await surveys.readSurvey(id, actor(guest))).data.ownAnswers).toEqual({[first!.id]: 'no'});
         await surveys.submitSurveyBallot(id, {answers: {}}, actor(participant));
         expect((await surveys.readSurvey(id, actor(participant))).data).toMatchObject({ownAnswers: {}, responses: [
-            {profileId: guest.id, name: guest.name, answers: {[first!.id]: 'no'}},
-        ]});
+                {profileId: guest.id, name: guest.name, answers: {[first!.id]: 'no'}},
+            ]});
     });
 
     it('projects named native results while excluding unrelated account and guest secrets', async () => {

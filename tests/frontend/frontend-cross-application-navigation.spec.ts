@@ -69,9 +69,9 @@ async function visit(component: Component, props: Record<string, unknown> = {}, 
     const router = createRouter({history: createMemoryHistory(), routes: [...frontendRoutes]});
     await router.push(path);
     const wrapper = mount(component, {props, attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+        }});
     await flushPromises();
 
     // The host remains mounted to exercise its outgoing links independently of

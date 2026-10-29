@@ -1,10 +1,84 @@
-import {hashKey, matchQuery} from '@tanstack/vue-query';
-import type {QueryCacheNotifyEvent, QueryClient, QueryFilters} from '@tanstack/vue-query';
-import {computed, onBeforeUnmount, ref, watch} from 'vue';
+import {hashKey, matchQuery, QueryObserver} from '@tanstack/vue-query';
+import type {Query, QueryCacheNotifyEvent, QueryClient, QueryFilters} from '@tanstack/vue-query';
+import {computed, onBeforeUnmount, ref, shallowRef, watch} from 'vue';
 import type {ComputedRef} from 'vue';
-import type {FrontendContext, FrontendQueryAdmission, FrontendQueryReadPolicy, FrontendQueryRefreshOptions} from '../../types/FrontendUiTypes';
+import type {FrontendContext, FrontendQueryAdmission, FrontendQueryReadPolicy, FrontendQueryRefreshOptions,
+    FrontendRetainedQuery} from '../../types/FrontendUiTypes';
 import {belongsToQueryFamily} from './queryKeys';
-import {ApiFailure, UnconfirmedResponseError} from './transport';
+import {ApiFailure, isReadDenial, UnconfirmedResponseError} from './transport';
+
+/** Retain a caller-selected registered Query while its replacement waits/fails.
+ * A disabled observer prevents inactive GC without reading or copying a DTO.
+ * Scope changes, eviction and denied/cleared data release the same cache lease. */
+export function useQuerySnapshotRetention<T>(client: QueryClient,
+    eligible: (query: Query<T>) => boolean) {
+    const retained = shallowRef<FrontendRetainedQuery<T> | null>(null);
+    const revision = ref(0);
+    let disposeLease: (() => void) | undefined;
+    const unsubscribe = client.getQueryCache().subscribe(receiveRetainedState);
+    // Query.state is not Vue state. Cache updates invalidate these projections;
+    // the registered Query still supplies every displayed value and receipt.
+    const data = computed(() => currentQuery()?.state.data);
+    const updatedAt = computed(() => currentQuery()?.state.dataUpdatedAt);
+    watch(retentionIsInvalid, releaseInvalidScope, {flush: 'sync'});
+    onBeforeUnmount(retire);
+
+    /** Complete caller scope and cache identity both remain required. An old
+     * observer can hold a removed Query after a new alias has taken its key. */
+    function mayRetain(query: FrontendRetainedQuery<T>): boolean {
+        const registered = client.getQueryCache().find<T>({queryKey: query.queryKey, exact: true});
+        if (!registered || registered !== query) return false;
+        return query.state.data !== undefined && !isReadDenial(query.state.error) && eligible(registered);
+    }
+
+    function currentQuery(): FrontendRetainedQuery<T> | undefined {
+        void revision.value;
+        return retained.value && mayRetain(retained.value) ? retained.value : undefined;
+    }
+    function retentionIsInvalid(): boolean {
+        void revision.value;
+        return !!retained.value && !mayRetain(retained.value);
+    }
+    function releaseInvalidScope(invalid: boolean): void { if (invalid) release(); }
+
+    /** Reuse one cache lease; it has no request function or recurring read policy. */
+    function retain(query: FrontendRetainedQuery<T>): boolean {
+        // Reject retired scopes before allocating an observer; repeated placeholder
+        // evaluation of the same registered Query must not accumulate leases.
+        if (!mayRetain(query)) { release(); return false; }
+        if (retained.value === query) return true;
+        release();
+        retained.value = query;
+        // The cache owns the response. This observer prevents GC only and cannot
+        // dispatch a read or become an eligible command-refresh dependency.
+        const lease = new QueryObserver(client, {queryKey: query.queryKey, enabled: false});
+        disposeLease = lease.subscribe(() => {});
+        return true;
+    }
+
+    /** Clear the reference before disposing its observer, so synchronous cache
+     * notifications cannot revive or recursively release the old snapshot. */
+    function release(): void {
+        retained.value = null;
+        const dispose = disposeLease;
+        disposeLease = undefined;
+        dispose?.();
+    }
+
+    /** Explicit authority retirement differs from inactive GC. Removed, denied
+     * or cleared Queries must disappear even during a replacement's outage. */
+    function receiveRetainedState(event: QueryCacheNotifyEvent): void {
+        if (!retained.value || event.query !== retained.value
+            || event.type !== 'removed' && event.type !== 'updated') return;
+        // Invalidate derived values for live updates, or release before another
+        // render can consume a removed/denied Query through its old observer.
+        if (event.type === 'removed' || !mayRetain(retained.value)) release();
+        else revision.value++;
+    }
+    function retire(): void { release(); unsubscribe(); }
+
+    return {data, updatedAt, retain, release};
+}
 
 /** Project the current key's actual invalidation state without another authority
  * flag. Callers decide which controls require this freshness; the cache continues
@@ -34,7 +108,7 @@ export function useQueryInvalidation(client: QueryClient, key: ComputedRef<reado
  * its actual observer so explicit command dependencies can read a paused terminal
  * query without reopening hidden, retired or differently scoped consumers. */
 export function useQueryAdmission(context: FrontendContext, key: ComputedRef<readonly unknown[]>,
-                                  eligible: ComputedRef<boolean>): FrontendQueryAdmission {
+    eligible: ComputedRef<boolean>): FrontendQueryAdmission {
     // A second observer can join an already dispatched/paused read without another
     // fetch action. That real pending operation consumes this visit's first admission.
     const dispatched = ref(hasPendingRead());
@@ -81,7 +155,7 @@ export function useQueryAdmission(context: FrontendContext, key: ComputedRef<rea
  * changes are insufficient: cancellation can return retained data, and manual cache
  * aliases are presentation delivery rather than another successful network read. */
 export function observeQueryReads<T>(client: QueryClient, key: () => readonly unknown[],
-                                     receive: (data: T, updatedAt: number) => void): () => void {
+    receive: (data: T, updatedAt: number) => void): () => void {
     return client.getQueryCache().subscribe(function receiveRead(event): void {
         if (!isNetworkReadSuccess(event) || !matchQuery({queryKey: key(), exact: true}, event.query)) return;
         // The feature's validated query function owns this key's data contract.
@@ -96,7 +170,7 @@ export function observeQueryReads<T>(client: QueryClient, key: () => readonly un
  * The public underlying promise rejects cancellation and carries this actual read,
  * independently of manual cache aliases, timestamps and structural sharing. */
 export async function refetchFreshQuery<T>(client: QueryClient, key: readonly unknown[],
-                                          refetch: () => Promise<unknown>, mayRead: () => boolean): Promise<T> {
+    refetch: () => Promise<unknown>, mayRead: () => boolean): Promise<T> {
     const filter = {queryKey: key, exact: true};
     const previous = client.getQueryCache().find(filter)?.promise;
     await client.cancelQueries(filter);
@@ -120,7 +194,7 @@ export async function refetchFreshQuery<T>(client: QueryClient, key: readonly un
  * Optional dependents may be absent after the caller's own required authority read.
  * Selected read failures still propagate, and required recovery remains strict. */
 export async function refetchFreshQueries(client: QueryClient, filter: QueryFilters, mayRead: () => boolean,
-                                          options: FrontendQueryRefreshOptions = {}): Promise<void> {
+    options: FrontendQueryRefreshOptions = {}): Promise<void> {
     const reads: Promise<unknown>[] = [];
     // TanStack's active filter excludes a terminal-paused observer. Inspect its
     // existing observer metadata instead; a closed region remains ineligible.
@@ -232,7 +306,7 @@ export async function invalidateQueryFamilies(client: QueryClient, families: rea
  * explicit refetch remains attached to the cache instead of a removed Query instance.
  * The caller owns the denial decision and retires its presentation/read generation first. */
 export async function retireQueryFamily(client: QueryClient, family: readonly unknown[], error: Error,
-                                       preservedKey?: readonly unknown[]): Promise<void> {
+    preservedKey?: readonly unknown[]): Promise<void> {
     // A typed denial may itself be a successful response inside this family. Preserve
     // that producing query: canceling it here would discard its decision and recovery read.
     function isRetiredQuery(query: Parameters<typeof belongsToQueryFamily>[0]): boolean {
@@ -264,8 +338,8 @@ export async function retireQueryFamily(client: QueryClient, family: readonly un
  * An optional producing admission family survives even while its observed query
  * is disabled: TanStack counts that observer as inactive during initialization. */
 export async function evictQueryFamilies(client: QueryClient, families: readonly (readonly unknown[])[],
-                                         type: 'all' | 'active' | 'inactive' = 'all',
-                                         preservedFamily?: readonly unknown[]): Promise<void> {
+    type: 'all' | 'active' | 'inactive' = 'all',
+    preservedFamily?: readonly unknown[]): Promise<void> {
     /** Match only caller-selected resource families, preserving unrelated actors and endpoints. */
     function belongsToAffectedFamily(query: Parameters<typeof belongsToQueryFamily>[0]): boolean {
         // A producing denial belongs to the admission owner. Removing a paused

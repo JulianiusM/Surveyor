@@ -9,7 +9,6 @@ import type {NextFunction, Request, Response} from 'express';
 import * as userController from '../../src/backend/controller/userController';
 import {captureApiActor} from '../../src/backend/modules/api/session';
 import {asyncHandler} from '../../src/backend/modules/lib/asyncHandler';
-import {createSessionStore} from '../../src/backend/modules/lib/session';
 import {PERM} from '../../src/backend/modules/lib/permissions';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
 import {Session} from '../../src/backend/modules/database/entities/session/Session';
@@ -34,7 +33,7 @@ beforeAll(async () => {
     app.set('views', path.resolve('src/backend/views'));
     app.use(express.json());
     app.use(session({secret: 'retained-output-real-identity-fixture', resave: false, saveUninitialized: false,
-        store: createSessionStore(AppDataSource.manager)}));
+        store: userService.createSessionStore(AppDataSource.manager)}));
     app.use(flash());
     // Exercise the real identity operations and serialized database-backed Session.
     app.post('/login', asyncHandler(async function login(req, res) {
@@ -109,8 +108,8 @@ describe('retained outputs share captured identity and audience grants', () => {
             [audience]: PERM.ACCESS_VIEW | PERM.DATA_EXPORT | PERM.ACCESS_PARTICIPANTS | PERM.MANAGE_ASSIGNMENTS});
 
         for (const [url, media] of [[`/activity/${plan}/export/schedule`, 'text/html'],
-            [`/event/${event}/export/participants`, 'application/pdf'],
-            [`/event/${event}/export/invoice-pools/${pool.id}/shares`, 'application/pdf']]) {
+        [`/event/${event}/export/participants`, 'application/pdf'],
+        [`/event/${event}/export/invoice-pools/${pool.id}/shares`, 'application/pdf']]) {
             const response = await fetch(origin + url, {headers: {Cookie: cookie}, redirect: 'manual'});
             expect(response.status).toBe(200);
             expect(response.headers.get('content-type')).toContain(media);
@@ -126,7 +125,7 @@ describe('retained outputs share captured identity and audience grants', () => {
         await adminService.updatePerms('activity', plan, {[audience]: 0});
         await adminService.updatePerms('event', event, {[audience]: 0});
         for (const url of [`/activity/${plan}/export/schedule`, `/event/${event}/export/participants`,
-            `/event/${event}/export/invoice-pools/${pool.id}/shares`]) {
+        `/event/${event}/export/invoice-pools/${pool.id}/shares`]) {
             const denied = await fetch(origin + url, {headers: {Cookie: cookie}, redirect: 'manual'});
             expect(denied.status).toBe(403);
             await denied.text();

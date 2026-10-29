@@ -44,7 +44,7 @@ async function mountSettings() {
             writes.push(captured.clone());
             const body = await captured.json() as {profileId: string; mask: number};
             settings = {...settings, access: {...settings.access!, admins: [{profileId: body.profileId,
-                name: 'Alex', isGuest: false, mask: body.mask, editToken: '"edit-adminRegranted"'}]}};
+                        name: 'Alex', isGuest: false, mask: body.mask, editToken: '"edit-adminRegranted"'}]}};
         }
         return new Response(JSON.stringify(captured.method === 'POST' ? {changed: true} : settings), {
             headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context},
@@ -53,15 +53,15 @@ async function mountSettings() {
     const context = createFrontendContext({session}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/packing/:listId', component: PackingSettings, props: {listId}},
-    ]});
+            {path: '/packing/:listId', component: PackingSettings, props: {listId}},
+        ]});
     await router.push(`/packing/${listId}`);
     await router.isReady();
     const wrapper = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-        stubs: {AppDialog: defineComponent({template: '<section><slot name="navigation" /><slot /></section>'})},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+            stubs: {AppDialog: defineComponent({template: '<section><slot name="navigation" /><slot /></section>'})},
+        }});
     await flushPromises();
     await wrapper.findAll('button').find(button => button.text() === 'Administrators')!.trigger('click');
     await wrapper.get('.accordion-button').trigger('click');

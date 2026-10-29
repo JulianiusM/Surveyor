@@ -72,7 +72,7 @@ export function listPermissions(type: ListPersistenceType, manager: EntityManage
     session: SessionLike, caches?: PermEngineCaches): Promise<PermView> {
     comparisonActor(session);
     return evaluateSubject({kind: 'entity', entity: {entityType: type, entityId: list.id,
-        ownerId: list.ownerId, eventId: list.eventId}}, session, caches, manager);
+            ownerId: list.ownerId, eventId: list.eventId}}, session, caches, manager);
 }
 
 /** One actual feature operation owns matching metadata decisions for both list domains. */
@@ -87,7 +87,7 @@ export function saveListMetadata<Type extends ListPersistenceType>(type: Type, i
  * optional Drivers preparation remains inside the same transaction before commit. */
 export async function saveListMetadata<Type extends ListPersistenceType>(type: Type, id: string,
     patch: BasicEntityPropertyPatch, context: ListMetadataContext<Type>): Promise<void | ListMetadataResult<Type>
-    | components['schemas']['EntityDescriptionBaseline']> {
+        | components['schemas']['EntityDescriptionBaseline']> {
     /** Interpret locked evidence, check exactly the requested fields, then perform sparse persistence. */
     async function persistMetadata(manager: EntityManager, row: EntityBase | null) {
         let permissions: PermView | undefined;

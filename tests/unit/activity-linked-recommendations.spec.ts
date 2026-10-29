@@ -17,9 +17,9 @@ function linkedContext(mode: 'FREE' | 'REQUIRED' = 'REQUIRED', overrides: Partia
     return {
         plans: [{id: 'sibling', assignmentMode: mode, startDate: '2027-06-01', endDate: '2027-06-02'}],
         commitments: {[participantKey]: [{
-            id: 'foreign-slot', planId: 'sibling', assignmentMode: mode,
-            day: '2027-06-01', startTime: '09:00:00', endTime: '10:00:00', ...overrides,
-        }]},
+                id: 'foreign-slot', planId: 'sibling', assignmentMode: mode,
+                day: '2027-06-01', startTime: '09:00:00', endTime: '10:00:00', ...overrides,
+            }]},
     };
 }
 
@@ -41,7 +41,7 @@ describe('linked activity recommendation allocation', () => {
         const context = createAutoAssignmentContext({
             participants: [participant], linkedPlans: linkedContext('FREE'),
             slots: [createAutoAssignmentSlot('slot-a', '2027-06-01'),
-                createAutoAssignmentSlot('slot-b', '2027-06-02', {assignedCount: 1})],
+            createAutoAssignmentSlot('slot-b', '2027-06-02', {assignedCount: 1})],
         });
         context.plan.allowOverfillAfterFull = true;
         expect(generateFairRecommendations(context)).toEqual([expect.objectContaining({itemId: 'slot-b'})]);
@@ -83,8 +83,8 @@ describe('linked activity recommendation allocation', () => {
             participants: [participant], slots: [createAutoAssignmentSlot('slot-a', '2027-06-01')],
             overrides: [createParticipantRequirementOverride(participant.profileId!, 2)],
             existingAssignments: {[participantKey]: [{
-                id: 'local', day: '2027-06-01', startTime: '09:00', endTime: '10:00', hasNamedRole: true,
-            }]}, linkedPlans: linkedContext('FREE'),
+                    id: 'local', day: '2027-06-01', startTime: '09:00', endTime: '10:00', hasNamedRole: true,
+                }]}, linkedPlans: linkedContext('FREE'),
         }))).toEqual([]);
     });
 

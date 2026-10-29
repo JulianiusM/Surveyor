@@ -17,10 +17,10 @@
 import type {ParentEntityRelation} from '../../../../../types/EntityRelationTypes';
 
 
-import {Column, Entity, JoinColumn, ManyToOne, RelationId} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, RelationId} from 'typeorm';
 
-import {UuidEntityItem} from "../abstract/BaseEntityItem";
-import {ActivityPlan} from "./ActivityPlan";
+import {UuidEntityItem} from '../abstract/BaseEntityItem';
+import {ActivityPlan} from './ActivityPlan';
 
 @Entity("activity_plan_text_fields", {schema: "surveyor"})
 export class ActivityPlanTextField extends UuidEntityItem implements ParentEntityRelation {

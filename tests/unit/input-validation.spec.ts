@@ -153,7 +153,7 @@ describe('safe generated input diagnostics', () => {
 
     it('numbers an actual combination array row from one while preserving its missing-field identity', () => {
         const problem = invalidInput('createSurvey', {data: {title: 'Monthly meeting', description: '',
-            combinations: [{weekday: 'MON', nthWeek: '1'}, {nthWeek: '2'}]}});
+                combinations: [{weekday: 'MON', nthWeek: '1'}, {nthWeek: '2'}]}});
         const {english, german} = localizedReplies(problem);
         expect(problem.fieldErrors?.find(error => error.diagnostic)?.diagnostic)
             .toEqual({field: 'weekday', rule: 'required', row: 2});
@@ -167,7 +167,7 @@ describe('safe generated input diagnostics', () => {
 
     it('recognizes the actual survey occurrence property instead of falling back to the whole combination list', () => {
         const problem = invalidInput('createSurvey', {data: {title: 'Monthly meeting', description: '',
-            combinations: [{weekday: 'MON', nthWeek: 'PRIVATE_INVALID_OCCURRENCE'}]}});
+                combinations: [{weekday: 'MON', nthWeek: 'PRIVATE_INVALID_OCCURRENCE'}]}});
         const {english, german} = localizedReplies(problem);
         expect(problem.fieldErrors?.find(error => error.diagnostic)?.diagnostic)
             .toEqual({field: 'occurrence', rule: 'enum', row: 1});
@@ -180,7 +180,7 @@ describe('safe generated input diagnostics', () => {
     it('identifies the real activity capacity and event deadline/timezone properties through their existing labels', () => {
         const cases = [
             {operation: 'addActivitySlot', input: {day: '2026-10-24', title: 'Talk', description: '',
-                startTime: null, endTime: null, maxAssignees: false, roles: []}, field: 'capacity'},
+                    startTime: null, endTime: null, maxAssignees: false, roles: []}, field: 'capacity'},
             {operation: 'updateEventMetadata', input: {bindingDeadline: false}, field: 'deadline'},
             {operation: 'updateEventMetadata', input: {deadlineTz: false}, field: 'timezone'},
         ] as const;

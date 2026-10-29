@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import {Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
-import {DefaultEntity} from "../abstract/BaseEntity";
-import {Event} from "../event/Event";
-import {PackingAssignment} from "./PackingAssignment";
-import {PackingItem} from "./PackingItem";
+import {Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from 'typeorm';
+import {DefaultEntity} from '../abstract/BaseEntity';
+import {Event} from '../event/Event';
+import {PackingAssignment} from './PackingAssignment';
+import {PackingItem} from './PackingItem';
 
 @Entity("packing_lists", {schema: "surveyor"})
 export class PackingList extends DefaultEntity {

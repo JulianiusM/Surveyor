@@ -53,7 +53,7 @@ async function ownerEvidence() {
     for (const table of rootTables) {
         evidence.push({table, rows: await runner.query(`SELECT t.id, HEX(t.owner_id) AS ownerBytes,
             t.owner_id IS NOT NULL AND p.id IS NULL AS orphan FROM \`${table}\` t LEFT JOIN profiles p ON p.id = t.owner_id ORDER BY t.id`),
-        columns: await runner.query(`SELECT COLUMN_TYPE, CHARACTER_SET_NAME, COLLATION_NAME, IS_NULLABLE
+            columns: await runner.query(`SELECT COLUMN_TYPE, CHARACTER_SET_NAME, COLLATION_NAME, IS_NULLABLE
             FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'owner_id'`, [table])});
     }
     return evidence;
@@ -128,12 +128,12 @@ async function prepareNumericOwners(): Promise<void> {
 /** Compare every original row, excluding only explicitly converted owner storage. */
 function rowsWithoutOwner(snapshot: Awaited<ReturnType<typeof snapshotMigrationDatabase>>) {
     return snapshot.map(({name, rows}) => ({name, rows: rows.map(saved => {
-        if (!rootTables.includes(name as typeof rootTables[number])) return saved;
-        const row = JSON.parse(saved) as Record<string, unknown>;
-        delete row.owner_id;
-        delete row.owner_profile_id;
-        return JSON.stringify(row);
-    }).sort()}));
+            if (!rootTables.includes(name as typeof rootTables[number])) return saved;
+            const row = JSON.parse(saved) as Record<string, unknown>;
+            delete row.owner_id;
+            delete row.owner_profile_id;
+            return JSON.stringify(row);
+        }).sort()}));
 }
 
 // The complete historical transition, retry and exact full-schema snapshots
@@ -198,30 +198,30 @@ describe('Profile migration preserves proven ownership across the complete appli
     });
 
     it.each(['missing user', 'multiple profiles', 'conflicting temporary', 'missing temporary target'] as const)
-    ('rejects %s mapping before any table, constraint or saved row changes', async scenario => {
-        const {user} = await seedProfileOwnership();
-        await prepareNumericOwners();
-        if (scenario === 'missing user') {
-            const foreignKeys = await runner.query(`SELECT CONSTRAINT_NAME AS name FROM information_schema.KEY_COLUMN_USAGE
+        ('rejects %s mapping before any table, constraint or saved row changes', async scenario => {
+            const {user} = await seedProfileOwnership();
+            await prepareNumericOwners();
+            if (scenario === 'missing user') {
+                const foreignKeys = await runner.query(`SELECT CONSTRAINT_NAME AS name FROM information_schema.KEY_COLUMN_USAGE
                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'surveys' AND COLUMN_NAME = 'owner_id'
                     AND REFERENCED_TABLE_NAME IS NOT NULL`) as Array<{name: string}>;
-            for (const foreignKey of foreignKeys) {
-                await runner.query(`ALTER TABLE surveys DROP FOREIGN KEY \`${foreignKey.name.replaceAll('`', '``')}\``);
+                for (const foreignKey of foreignKeys) {
+                    await runner.query(`ALTER TABLE surveys DROP FOREIGN KEY \`${foreignKey.name.replaceAll('`', '``')}\``);
+                }
+                await runner.query('UPDATE surveys SET owner_id = 2000000000, updated_at = updated_at');
+            } else if (scenario === 'multiple profiles') {
+                await AppDataSource.getRepository(Profile).save(createProfileEntity(user, {name: 'Ambiguous second profile'}));
+            } else {
+                await runner.query('ALTER TABLE surveys ADD owner_profile_id uuid NULL');
+                const otherUser = await AppDataSource.getRepository(User).save(createUserEntity());
+                const otherProfile = await AppDataSource.getRepository(Profile).save(createProfileEntity(otherUser));
+                await runner.query('UPDATE surveys SET owner_profile_id = ?, updated_at = updated_at',
+                    [scenario === 'conflicting temporary' ? otherProfile.id : randomUUID()]);
             }
-            await runner.query('UPDATE surveys SET owner_id = 2000000000, updated_at = updated_at');
-        } else if (scenario === 'multiple profiles') {
-            await AppDataSource.getRepository(Profile).save(createProfileEntity(user, {name: 'Ambiguous second profile'}));
-        } else {
-            await runner.query('ALTER TABLE surveys ADD owner_profile_id uuid NULL');
-            const otherUser = await AppDataSource.getRepository(User).save(createUserEntity());
-            const otherProfile = await AppDataSource.getRepository(Profile).save(createProfileEntity(otherUser));
-            await runner.query('UPDATE surveys SET owner_profile_id = ?, updated_at = updated_at',
-                [scenario === 'conflicting temporary' ? otherProfile.id : randomUUID()]);
-        }
-        const before = await snapshotMigrationDatabase(runner);
-        await expect(migration.up(runner)).rejects.toThrow();
-        expect(await snapshotMigrationDatabase(runner)).toEqual(before);
-    });
+            const before = await snapshotMigrationDatabase(runner);
+            await expect(migration.up(runner)).rejects.toThrow();
+            expect(await snapshotMigrationDatabase(runner)).toEqual(before);
+        });
 
     it('creates exactly one Profile for a verified legacy User with no mapping and retains every other saved value', async () => {
         const {profile} = await seedProfileOwnership();
@@ -251,52 +251,52 @@ describe('Profile migration preserves proven ownership across the complete appli
 
     it.each(['missing sibling identity', 'ambiguous sibling identity', 'dual sibling identity', 'conflicting sibling identity',
         'conflicting entity target', 'conflicting item target', 'long description', 'conflicting title', 'conflicting timestamp'] as const)
-    ('refuses %s before unrelated migration DDL or writes', async scenario => {
-        const {user, profile, packing, activity, slot} = await seedProfileOwnership();
-        if (scenario.includes('sibling identity')) {
-            await runner.query('ALTER TABLE packing_items ADD user_id int NULL, ADD guest_id uuid NULL');
-            if (scenario === 'missing sibling identity') {
-                await runner.query('UPDATE packing_items SET user_id = 2000000000, profile_id = NULL, updated_at = updated_at');
-            } else if (scenario === 'ambiguous sibling identity') {
-                await AppDataSource.getRepository(Profile).save(createProfileEntity(user, {name: 'Second possible sibling owner'}));
-                await runner.query('UPDATE packing_items SET user_id = ?, profile_id = NULL, updated_at = updated_at', [user.id]);
-            } else if (scenario === 'dual sibling identity') {
-                const guest = await AppDataSource.getRepository(Guest).save({id: randomUUID(), username: 'Retained guest', token: randomUUID()});
-                await AppDataSource.getRepository(Profile).save({id: randomUUID(), name: 'Guest profile', guest, defaultForOwner: true});
-                await runner.query('UPDATE packing_items SET user_id = ?, guest_id = ?, profile_id = NULL, updated_at = updated_at', [user.id, guest.id]);
+        ('refuses %s before unrelated migration DDL or writes', async scenario => {
+            const {user, profile, packing, activity, slot} = await seedProfileOwnership();
+            if (scenario.includes('sibling identity')) {
+                await runner.query('ALTER TABLE packing_items ADD user_id int NULL, ADD guest_id uuid NULL');
+                if (scenario === 'missing sibling identity') {
+                    await runner.query('UPDATE packing_items SET user_id = 2000000000, profile_id = NULL, updated_at = updated_at');
+                } else if (scenario === 'ambiguous sibling identity') {
+                    await AppDataSource.getRepository(Profile).save(createProfileEntity(user, {name: 'Second possible sibling owner'}));
+                    await runner.query('UPDATE packing_items SET user_id = ?, profile_id = NULL, updated_at = updated_at', [user.id]);
+                } else if (scenario === 'dual sibling identity') {
+                    const guest = await AppDataSource.getRepository(Guest).save({id: randomUUID(), username: 'Retained guest', token: randomUUID()});
+                    await AppDataSource.getRepository(Profile).save({id: randomUUID(), name: 'Guest profile', guest, defaultForOwner: true});
+                    await runner.query('UPDATE packing_items SET user_id = ?, guest_id = ?, profile_id = NULL, updated_at = updated_at', [user.id, guest.id]);
+                } else {
+                    const otherUser = await AppDataSource.getRepository(User).save(createUserEntity());
+                    await AppDataSource.getRepository(Profile).save(createProfileEntity(otherUser));
+                    await runner.query('UPDATE packing_items SET user_id = ?, updated_at = updated_at', [otherUser.id]);
+                }
+            } else if (scenario === 'conflicting entity target') {
+                const other = await AppDataSource.getRepository(PackingList).save({id: randomUUID(), title: 'Other retained list', owner: profile});
+                await runner.query('ALTER TABLE packing_items ADD list_id uuid NULL');
+                await runner.query('UPDATE packing_items SET list_id = ?, updated_at = updated_at', [other.id]);
+                expect(other.id).not.toBe(packing.id);
+            } else if (scenario === 'conflicting item target') {
+                const otherSlot = await AppDataSource.getRepository(ActivitySlot).save(createActivitySlotEntity({entity: activity, profile,
+                    day: '2030-06-02', title: 'Other retained slot'}));
+                await AppDataSource.getRepository(ActivityAssignment).save({entity: activity, item: slot, profile});
+                await runner.query('ALTER TABLE activity_assignments ADD slot_id uuid NULL');
+                await runner.query('UPDATE activity_assignments SET slot_id = ?, updated_at = updated_at', [otherSlot.id]);
+                expect(otherSlot.id).not.toBe(slot.id);
+            } else if (scenario === 'long description') {
+                await runner.query('UPDATE activity_slots SET description = ?, updated_at = updated_at', ['Retained Unicode payload äβ '.repeat(40)]);
+            } else if (scenario === 'conflicting title') {
+                await AppDataSource.getRepository(ActivityRole).save({title: 'Saved current title', description: 'Retained role', entity: activity});
+                await runner.query('ALTER TABLE activity_roles ADD name varchar(50) NULL');
+                await runner.query('UPDATE activity_roles SET name = ?, updated_at = updated_at', ['Different legacy title']);
             } else {
-                const otherUser = await AppDataSource.getRepository(User).save(createUserEntity());
-                await AppDataSource.getRepository(Profile).save(createProfileEntity(otherUser));
-                await runner.query('UPDATE packing_items SET user_id = ?, updated_at = updated_at', [otherUser.id]);
-            }
-        } else if (scenario === 'conflicting entity target') {
-            const other = await AppDataSource.getRepository(PackingList).save({id: randomUUID(), title: 'Other retained list', owner: profile});
-            await runner.query('ALTER TABLE packing_items ADD list_id uuid NULL');
-            await runner.query('UPDATE packing_items SET list_id = ?, updated_at = updated_at', [other.id]);
-            expect(other.id).not.toBe(packing.id);
-        } else if (scenario === 'conflicting item target') {
-            const otherSlot = await AppDataSource.getRepository(ActivitySlot).save(createActivitySlotEntity({entity: activity, profile,
-                day: '2030-06-02', title: 'Other retained slot'}));
-            await AppDataSource.getRepository(ActivityAssignment).save({entity: activity, item: slot, profile});
-            await runner.query('ALTER TABLE activity_assignments ADD slot_id uuid NULL');
-            await runner.query('UPDATE activity_assignments SET slot_id = ?, updated_at = updated_at', [otherSlot.id]);
-            expect(otherSlot.id).not.toBe(slot.id);
-        } else if (scenario === 'long description') {
-            await runner.query('UPDATE activity_slots SET description = ?, updated_at = updated_at', ['Retained Unicode payload äβ '.repeat(40)]);
-        } else if (scenario === 'conflicting title') {
-            await AppDataSource.getRepository(ActivityRole).save({title: 'Saved current title', description: 'Retained role', entity: activity});
-            await runner.query('ALTER TABLE activity_roles ADD name varchar(50) NULL');
-            await runner.query('UPDATE activity_roles SET name = ?, updated_at = updated_at', ['Different legacy title']);
-        } else {
-            await AppDataSource.getRepository(ActivityAssignment).save({entity: activity, item: slot, profile});
-            await runner.query('ALTER TABLE activity_assignments ADD updatedAt timestamp(6) NULL');
-            await runner.query(`UPDATE activity_assignments SET updated_at = '2002-03-04 05:06:07.654321',
+                await AppDataSource.getRepository(ActivityAssignment).save({entity: activity, item: slot, profile});
+                await runner.query('ALTER TABLE activity_assignments ADD updatedAt timestamp(6) NULL');
+                await runner.query(`UPDATE activity_assignments SET updated_at = '2002-03-04 05:06:07.654321',
                 updatedAt = '2002-03-04 05:06:07.123456'`);
-        }
-        const before = await snapshotMigrationDatabase(runner);
-        await expect(migration.up(runner)).rejects.toThrow();
-        expect(await snapshotMigrationDatabase(runner)).toEqual(before);
-    });
+            }
+            const before = await snapshotMigrationDatabase(runner);
+            await expect(migration.up(runner)).rejects.toThrow();
+            expect(await snapshotMigrationDatabase(runner)).toEqual(before);
+        });
 
     it('preserves a NULL owner without choosing a Profile from unrelated stored identities', async () => {
         await seedProfileOwnership();

@@ -36,7 +36,7 @@ function deferred<T>() {
 /** Persist the fixture's external transition through the real session store.
  * These writes model another server request; no browser field supplies authority. */
 async function replaceStoredContext(store: session.MemoryStore, sessionId: string,
-                                    context: string, csrf: string): Promise<void> {
+    context: string, csrf: string): Promise<void> {
     const current = await readStoredSession(store, sessionId);
     if (!current) throw new Error('The fixture session must exist before its transition.');
     await new Promise<void>(function saveTransition(resolve, reject) {
@@ -268,8 +268,8 @@ describe('frontend admission at the real session response boundary', () => {
     it('leaves a new anonymous visit uninitialized despite forged browser fields', async () => {
         const fixture = await createSessionFixture(false, false, false);
         const response = await fetch(`${fixture.origin}/session`, {headers: {
-            'X-Surveyor-Context': 'browser-forged-context', 'X-CSRF-Token': 'browser-forged-csrf',
-        }});
+                'X-Surveyor-Context': 'browser-forged-context', 'X-CSRF-Token': 'browser-forged-csrf',
+            }});
         expect(response.status).toBe(200);
         const body = await response.json();
         expect(body).toMatchObject({kind: 'anonymous', context: null, csrfToken: null, profiles: []});
@@ -351,8 +351,8 @@ describe('frontend admission at the real session response boundary', () => {
     ])('rejects $name when stored generation changed before admission', async ({context, csrf}) => {
         const fixture = await createSessionFixture(true);
         const response = fetch(`${fixture.origin}/context`, {method: 'POST', headers: {
-            Cookie: fixture.cookie, 'X-Surveyor-Context': context, 'X-CSRF-Token': csrf,
-        }});
+                Cookie: fixture.cookie, 'X-Surveyor-Context': context, 'X-CSRF-Token': csrf,
+            }});
         await fixture.loaded;
         await replaceStoredContext(fixture.store, fixture.sessionId, contextB, csrfB);
         fixture.writes.mockClear();
@@ -371,10 +371,10 @@ describe('frontend admission at the real session response boundary', () => {
     it('does not turn browser identity and capability claims into a stored principal', async () => {
         const fixture = await createSessionFixture();
         const response = await fetch(`${fixture.origin}/private`, {method: 'POST', headers: {
-            Cookie: fixture.cookie, 'Content-Type': 'application/json',
-            'X-Surveyor-Context': contextA, 'X-CSRF-Token': csrfA,
-        }, body: JSON.stringify({auth: {user: {id: 18427}}, profile: {id: 'bb464617-0107-4df9-a072-ee77ee45194c'},
-            actor: {context: contextA}, capabilities: {managePermissions: true, remove: true}})});
+                Cookie: fixture.cookie, 'Content-Type': 'application/json',
+                'X-Surveyor-Context': contextA, 'X-CSRF-Token': csrfA,
+            }, body: JSON.stringify({auth: {user: {id: 18427}}, profile: {id: 'bb464617-0107-4df9-a072-ee77ee45194c'},
+                actor: {context: contextA}, capabilities: {managePermissions: true, remove: true}})});
         expect(response.status).toBe(401);
         expect((await response.json()).code).toBe('AUTH_REQUIRED');
         const stored = await readStoredSession(fixture.store, fixture.sessionId);

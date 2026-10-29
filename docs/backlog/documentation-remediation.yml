@@ -11,31 +11,28 @@ findings:
     severity: medium
     category: ide-verification
     owner: development tooling maintainers
-    title: Seven changed-file WebStorm inspections time out
+    title: Two current-source WebStorm inspections still time out
     implementation_evidence:
-      - src/backend/controller/activityController.ts
-      - src/backend/controller/entityAdminController.ts
-      - src/backend/controller/helpController.ts
-      - src/backend/controller/surveyController.ts
-      - src/backend/controller/userController.ts
       - tests/integration/authentication-workflows.spec.ts
-      - tests/unit/frontend-generation.spec.ts
+      - src/backend/migrations/1786335515684-AddRegistrationDeadlineSettings.ts
     evidence:
-      - Fresh WebStorm requests for the 13 changed files complete for six files and time out for
-        the seven named controller/test files, including repeated requests with a 60-second tool
-        timeout. An alternative IDE lint request also reports all seven as timed out. Those seven
-        inspections have no complete current inventory.
-      - Available UserService SQL-resolution notices concern dynamically composed CTEs and columns
-        verified by source/runtime review; Event's normalization warning is deliberately caught.
-        Available findings are classified separately from the seven unavailable inspections.
-    impact: The requested WebStorm inventory remains incomplete for these seven files. An inspection
+      - Fresh current-source inspections, including a 120-second request and an alternative IDE
+        lint retry, still report timedOut true for the authentication workflow test and provide no
+        complete inspection.
+      - Every other previously unavailable inspection is complete. Activity's three unused contract
+        parameters now follow the existing Event underscore convention with accurate JSDoc; its
+        fresh 120-second inspection returns zero diagnostics without a timedOut field.
+      - The corrected registration-settings migration also returns timedOut true with no completed
+        diagnostics after fresh 60-second and 120-second requests. Its real migration tests, server
+        build, typechecking and fresh two-file Sonar analysis pass; this is a tool-verification gap.
+    impact: The requested WebStorm inventory remains incomplete for these two files. An inspection
       timeout establishes neither a source defect nor a successful inspection.
     closes_when:
-      - Obtain completed WebStorm inspection results for the seven named files when the tool can
-        return them, and classify actual findings against their current source and runtime boundaries.
+      - Obtain completed current-source WebStorm inspections for the two named files
+        and classify its actual findings against source and runtime boundaries.
       - Report any still-unavailable inspection separately; register a new concrete source defect
         only when evidence establishes it.
-    disposition: Only the named IDE inventory is blocked on inspection-tool availability. Completed
-      runtime verification and diagnostic classification are not queued again. Permanently deferred
-      D04V and OPSV rehearsals remain excluded from automatic work selection.
+    disposition: Only this named IDE inventory is blocked on tool availability. Completed Activity,
+      runtime and Sonar verification are not queued again. Permanently deferred D04V and OPSV
+      rehearsals remain excluded from automatic work selection.
 work_packages: []

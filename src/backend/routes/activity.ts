@@ -1,5 +1,5 @@
 import type {Request} from 'express';
-import activityController from '../controller/activityController';
+import * as activityController from '../controller/activityController';
 import {canAccessEntityView} from '../modules/event/linkage';
 import {paramHandler} from '../middleware/paramHandler';
 import {requirePermission} from '../middleware/permissionMiddleware';

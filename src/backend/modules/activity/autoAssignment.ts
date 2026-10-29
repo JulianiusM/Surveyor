@@ -12,13 +12,14 @@ import type {
     AssignmentCandidate, SlotAssignmentMap, ActivityRequirementPreparationInputs, RequirementConfiguration,
     ActivityRecommendationPersistenceContext, ActivityLinkedPlanContext, AutoAssignmentContext,
     AutoAssignmentSlot, RecommendationInput, ActivityRecommendationContext,
-    ActivityRecommendationOperationInput,
+    ActivityRecommendationOperationInput, ActivityRequirementUpdate,
 } from '../../../types/ActivityTypes';
 import type {EntityManager} from 'typeorm';
 import {ActivityPlan} from '../database/entities/activity/ActivityPlan';
 import type {ActivitySlot} from '../database/entities/activity/ActivitySlot';
 import {ActivityAssignmentRecommendation} from '../database/entities/activity/ActivityAssignmentRecommendation';
 import type {ParticipantRow} from '../../../types/EventTypes';
+import type {ParticipantAttendance, RequirementOverrideInput} from '../../../types/ActivityRequirementTypes';
 import * as activityService from '../database/services/ActivityService';
 import * as requirementService from '../database/services/ActivityRequirementService';
 import * as eventService from '../database/services/EventService';
@@ -30,7 +31,8 @@ import type {ActivityAssignment} from '../database/entities/activity/ActivityAss
 import {fingerprintRecommendationContext, RecommendationJobCoordinator, RecommendationQueueFullError} from './recommendationJobs';
 import {projectEventParticipants, uuidKey, sameUuid, indexByUuid} from '../lib/util';
 import {generateFairRecommendations} from './fairAssignment';
-import {countInclusiveDays, hasCompleteStayRequirements, toParticipantKey} from '../../../common/activity/requirements';
+import {countInclusiveDays, hasCompleteStayRequirements, toParticipantKey, calculateRequirementAnalysis,
+    calculateBaselineRequirementForPlan} from '../../../common/activity/requirements';
 import settings from '../settings';
 
 /** Apply the configured duration policy using constant-time civil-day counting. */
@@ -59,9 +61,6 @@ export function requireActivityRequirementWork(plan: Pick<ActivityPlan, 'startDa
             {cause: 'ACTIVITY_REQUIREMENTS_OVERSIZED'});
     }
 }
-
-import type {ParticipantAttendance} from "../../../types/ActivityRequirementTypes";
-
 
 /** Merge known participant identities in supplied group order.
  * Later nonnull attendance/name/role fields replace earlier values; missing
@@ -136,9 +135,222 @@ export async function requireRequirementConfiguration(planId: string, manager?: 
     const configuration = await requirementService.getRequirementConfiguration(planId, manager, includeStayRequirements);
     if (!configuration) throw new APIError('Activity plan not found', {planId}, 404);
     return {...configuration, overrides: configuration.overrides.map(override => ({
-        ...override, profileId: uuidKey(override.profileId),
-        profile: override.profile ? {...override.profile, id: uuidKey(override.profile.id)} : override.profile,
-    }))};
+            ...override, profileId: uuidKey(override.profileId),
+            profile: override.profile ? {...override.profile, id: uuidKey(override.profile.id)} : override.profile,
+        }))};
+}
+
+/** Read and analyze admitted saved requirements through the existing pure engine.
+ * Preserve the independent initial reads and return their context for controller presentation. */
+export async function getActivityRequirementAnalysis(planId: string) {
+    const current = await activityService.getActivityPlanById(planId);
+    if (!current) throw new APIError('Activity plan not found', {planId}, 404);
+    requireActivityRequirementWork(current);
+    // Reuse the admitted plan's existing configuration, participants and slots.
+    const [plan, requirementConfig, assignments, slots, allRoles, slotRoles] = await Promise.all([
+        activityService.getActivityPlanById(planId),
+        requireRequirementConfiguration(planId),
+        activityService.getParticipantAssignmentsWithSlots(planId),
+        activityService.getActivitySlotsFlat(planId),
+        activityService.getAllRoles(planId),
+        activityService.getActivitySlotRoles(planId),
+    ]);
+
+    if (!plan) {
+        throw new APIError('Activity plan not found', {planId}, 404);
+    }
+
+    const {eventParticipants, calculation} = await prepareActivityRequirementContext({plan,
+        configuration: requirementConfig, assignments, slots, slotRoles});
+    // The pure engine remains the sole owner of requirement arithmetic; callers
+    // add their presentation without changing its inputs or saved results.
+    const analysis = calculateRequirementAnalysis(calculation);
+    return {requirementConfig, analysis, allRoles, eventParticipants, calculation};
+}
+
+/** Calculate the existing requirement baseline from saved configuration, attendance and slot capacity. */
+export async function calculateBaselineRequirement(planId: string) {
+    const current = await activityService.getActivityPlanById(planId);
+    if (!current) throw new APIError('Activity plan not found', {planId}, 404);
+    requireActivityRequirementWork(current);
+    // Preserve the existing independent reads; this analysis does not start a write transaction.
+    const [plan, requirementConfig, slots, assignments, slotRoles] = await Promise.all([
+        activityService.getActivityPlanById(planId),
+        requireRequirementConfiguration(planId),
+        activityService.getActivitySlotsFlat(planId),
+        activityService.getParticipantAssignmentsWithSlots(planId),
+        activityService.getActivitySlotRoles(planId),
+    ]);
+
+    if (!plan) {
+        throw new APIError('Activity plan not found', {planId}, 404);
+    }
+
+    // Registered and already assigned identities use the same asynchronous context
+    // as analysis, without changing this operation's preceding independent reads.
+    const {calculation} = await prepareActivityRequirementContext({plan,
+        configuration: requirementConfig, assignments, slots, slotRoles});
+    // Share structural slot inputs while retaining the baseline algorithm's distinct arithmetic.
+    const baseline = calculateBaselineRequirementForPlan(calculation);
+
+    return baseline;
+}
+
+/**
+ * A settings form may no longer list a saved profile after the plan moves to another event.
+ * Preserve those unchanged rows, including omitted rows, inside the same locked transaction.
+ * Versioned editors can explicitly remove an admitted saved ID without deleting unseen rows.
+ * Their existence never authorizes a new target or a changed override for a nonparticipant.
+ */
+async function mergeRequirementOverrides(
+    manager: EntityManager,
+    plan: ActivityPlan,
+    submitted: RequirementOverrideInput[],
+    removedOverrideIds: readonly string[],
+): Promise<RequirementOverrideInput[]> {
+    const {overrides: saved} = await requireRequirementConfiguration(plan.id, manager);
+    const savedById = new Map(saved.map((override) => [override.id, override]));
+    // Removal is deliberate and plan-scoped. Omission still means retention for
+    // former participants; it must never delete a concurrent unseen override.
+    const removedIds = new Set<number>();
+    for (const id of removedOverrideIds) {
+        const numericId = Number(id);
+        if (!Number.isSafeInteger(numericId) || String(numericId) !== id || !savedById.has(numericId) || removedIds.has(numericId)) {
+            throw new APIError('Removed override must identify one saved override belonging to this activity plan', {}, 400, {cause: 'ACTIVITY_OVERRIDE_INVALID'});
+        }
+        removedIds.add(numericId);
+    }
+    const registered = indexByUuid(plan.eventId ? await activityService.getRegisteredProfileIds(manager, plan.eventId) : [], id => id);
+    const result: RequirementOverrideInput[] = [];
+    const submittedIds = new Set<number>();
+    const targetKeys = new Set<string>();
+    for (const input of submitted) {
+        const override = {...input, roleId: input.roleId ?? null};
+        const previous = override.id == null ? undefined : savedById.get(override.id);
+        if (override.id != null && (!previous || submittedIds.has(override.id) || removedIds.has(override.id))) {
+            throw new APIError('Override does not belong to this activity plan or is duplicated', {}, 400, {cause: 'ACTIVITY_OVERRIDE_INVALID'});
+        }
+        const unchanged = previous && sameUuid(previous.profileId, override.profileId)
+            && (previous.roleId ?? null) === (override.roleId ?? null)
+            && previous.requiredShifts === override.requiredShifts;
+        if (!unchanged && (!override.profileId || !registered.has(uuidKey(override.profileId)))) {
+            throw new APIError('Overrides must target participants registered for this event', {}, 400, {cause: 'ACTIVITY_OVERRIDE_PARTICIPANT_REQUIRED'});
+        }
+        override.profileId = unchanged ? previous.profileId : registered.get(uuidKey(override.profileId!))!;
+        const key = `${uuidKey(override.profileId)}:${override.roleId ?? ''}`;
+        if (targetKeys.has(key)) throw new APIError('An override target may only appear once', {}, 400, {cause: 'ACTIVITY_OVERRIDE_DUPLICATE'});
+        targetKeys.add(key);
+        if (override.id != null) submittedIds.add(override.id);
+        result.push(override);
+    }
+    // Omission still removes a current participant's override, as in the existing editor.
+    // A former participant is absent from that editor's choices, so omission must retain
+    // the original row instead of turning an unrelated settings save into data deletion.
+    for (const previous of saved) {
+        if (registered.has(uuidKey(previous.profileId)) || submittedIds.has(previous.id) || removedIds.has(previous.id)) continue;
+        result.push({
+            id: previous.id,
+            profileId: previous.profileId,
+            roleId: previous.roleId ?? null,
+            requiredShifts: previous.requiredShifts,
+        });
+    }
+    return result;
+}
+
+/** Save one coherent requirements configuration under the existing plan lock.
+ * Explicit versioned removal IDs supplement the omission-retention rule;
+ * permissions, current membership checks and persistence remain with their owners. */
+export async function saveActivityRequirementConfiguration(planId: string, input: ActivityRequirementUpdate,
+    removedOverrideIds: readonly string[] = []): Promise<void> {
+    const {roleRequirements, stayRequirements, overrides, ...planSettings} = input;
+    const expectedPlan = await activityService.getActivityPlanById(planId);
+
+    /** Recheck relationship, roles and requirement completeness on the locked
+     * plan, retaining unchanged former-participant overrides before replacing
+     * the approved configuration through the same transaction manager. */
+    async function saveRequirements(manager: EntityManager): Promise<void> {
+        // An unlocked editor baseline cannot authorize saving after a relink.
+        const plan = await requireRecommendationContext(manager, planId);
+        requireActivityRequirementWork(plan);
+        if (expectedPlan && (expectedPlan.eventId ?? null) !== (plan.eventId ?? null) && !sameUuid(expectedPlan.eventId, plan.eventId)) {
+            throw new APIError('Activity plan event changed; reload the requirements', {}, 409, {cause: 'ACTIVITY_CONTEXT_CHANGED'});
+        }
+
+        if (!plan.eventId) {
+            throw new APIError('Event is required to configure participant overrides', {planId}, 400, {cause: 'ACTIVITY_EVENT_REQUIRED'});
+        }
+
+        // Membership and saved-override decisions use this same locked transaction.
+        // Unchanged targets from a former event are retained; new/changed overrides still
+        // require current registration. Checking only the posted rows here would reject a
+        // harmless settings save after relinking and encourage the browser to drop history.
+
+        // Both general role requirements and individual overrides must name
+        // roles owned by this current plan, regardless of submitted ID spelling.
+        const allowedRoleIds = new Set((await activityService.getAllRoles(planId, manager)).map((role) => role.id));
+        const invalidRoleRequirement = roleRequirements.find((requirement) => !allowedRoleIds.has(requirement.roleId));
+        const invalidOverrideRole = overrides.find(
+            (override) => override.roleId != null && !allowedRoleIds.has(Number(override.roleId)),
+        );
+        if (invalidRoleRequirement || invalidOverrideRole) {
+            throw new APIError(
+                'Requirement roles must belong to this activity plan',
+                invalidRoleRequirement ?? invalidOverrideRole,
+                400,
+                {cause: 'ACTIVITY_REQUIREMENT_ROLE_INVALID'},
+            );
+        }
+
+        // REQUIRED mode needs one saved row for every inclusive stay duration;
+        // validate the complete table before settings or overrides can be written.
+        const planDays = countInclusiveDays(plan.startDate, plan.endDate);
+        const invalidStayRequirement = stayRequirements.find((requirement) => requirement.stayDays > planDays);
+        if (invalidStayRequirement) {
+            throw new APIError('Stay duration cannot exceed the activity plan duration', invalidStayRequirement, 400, {cause: 'ACTIVITY_STAY_DURATION_INVALID'});
+        }
+        const targetAssignmentMode = planSettings.assignmentMode ?? plan.assignmentMode;
+        const savedStayDays = new Set(stayRequirements.map((requirement) => requirement.stayDays));
+        if (
+            targetAssignmentMode === "REQUIRED"
+            && (stayRequirements.length !== planDays
+                || Array.from({length: planDays}, (_, index) => index + 1).some((day) => !savedStayDays.has(day)))
+        ) {
+            throw new APIError(
+                `Required mode needs exactly one saved requirement for every stay duration from 1 to ${planDays} days`,
+                {stayRequirements, planDays},
+                400,
+                {cause: 'ACTIVITY_STAY_REQUIREMENTS_INCOMPLETE'},
+            );
+        }
+
+        // Convert bindingDeadline string to Date if present
+        const normalizedSettings: Partial<Pick<ActivityPlan, "assignmentMode" | "generalRequiredShifts" | "roundingMode" | "bindingDeadline" | "allowOverfillAfterFull" | "allowExternalAssignees" | "allowArrivalDayEvening" | "allowDepartureDayMorning">> = {
+            assignmentMode: planSettings.assignmentMode,
+            generalRequiredShifts: planSettings.generalRequiredShifts,
+            roundingMode: planSettings.roundingMode,
+            allowOverfillAfterFull: planSettings.allowOverfillAfterFull,
+            allowExternalAssignees: planSettings.allowExternalAssignees,
+            allowArrivalDayEvening: planSettings.allowArrivalDayEvening,
+            allowDepartureDayMorning: planSettings.allowDepartureDayMorning,
+        };
+
+        if (planSettings.bindingDeadline !== undefined) {
+            if (planSettings.bindingDeadline === null) {
+                normalizedSettings.bindingDeadline = null;
+            } else if (typeof planSettings.bindingDeadline === 'string') {
+                normalizedSettings.bindingDeadline = new Date(planSettings.bindingDeadline);
+            } else {
+                normalizedSettings.bindingDeadline = planSettings.bindingDeadline;
+            }
+        }
+
+        // Merge explicit removals with retained history only after all shared
+        // configuration checks pass, then persist the coherent replacement once.
+        const retainedOverrides = await mergeRequirementOverrides(manager, plan, overrides, removedOverrideIds);
+        await requirementService.replaceRequirements(planId, roleRequirements, retainedOverrides, normalizedSettings, stayRequirements, manager, planDays);
+    }
+    await activityService.withActivityTransaction(saveRequirements);
 }
 
 /**
@@ -314,8 +526,8 @@ export async function prepareActivityRequirementContext(
     const assignedShiftCounts = Object.fromEntries(Object.entries(assignments)
         .map(([participantKey, participantAssignments]) => [participantKey, participantAssignments.length]));
     return {eventParticipants, calculation: {plan, participants: Object.values(attendance),
-        roleRequirements: configuration.roleRequirements, overrides: configuration.overrides,
-        stayRequirements: configuration.stayRequirements, slots: slotsWithRoles, assignedShiftCounts}};
+            roleRequirements: configuration.roleRequirements, overrides: configuration.overrides,
+            stayRequirements: configuration.stayRequirements, slots: slotsWithRoles, assignedShiftCounts}};
 }
 
 /** Project stored role identity and quantities once for both requirement engines. */
@@ -431,7 +643,7 @@ export function recommendationContext(plan: Pick<ActivityPlan, 'eventId' | 'star
 }
 
 /**
- * Assemble algorithm input at the controller boundary. Current registration and the explicit
+ * Assemble algorithm input at the feature boundary. Current registration and the explicit
  * external-assignee policy select participants; saved overrides contribute requirements only.
  * The worker receives values, never repositories or an independent authorization decision.
  */
@@ -637,7 +849,7 @@ export async function applyActivityRecommendationOperations(
             projectedCounts.set(uuidKey(target.id), count + 1);
         }
 
-        // Only the controller decides which removals/additions are valid. The DBAL receives
+        // Only the feature operation decides which removals/additions are valid. The DBAL receives
         // the resulting write set and applies it in this still-locked transaction.
         const rows: {itemId: string; profileId: string; roleId: number}[] = [];
         if (additions.length) {

@@ -56,7 +56,7 @@ describe('Event participant registration', () => {
 
     it.each(['save', 'cancel'] as const)('marks only registration %s pending while the shared command blocks both controls', async kind => {
         const event = createFrontendEventView({requireDietaryInfo: false, registration: {id: '17', arrivalDate: '2027-06-01',
-            departureDate: '2027-06-03', dietary: [], allergyNotes: '', dietComment: ''}});
+                departureDate: '2027-06-03', dietary: [], allergyNotes: '', dietComment: ''}});
         let settle!: (response: Response) => void;
         const mounted = await mountFrontendEvent(EventRegistration, async () => new Promise<Response>(resolve => { settle = resolve; }),
             {event, refresh: async () => {}});
@@ -84,7 +84,7 @@ describe('Event participant registration', () => {
     it('retranslates saved attendance without replacing the independent date draft', async () => {
         vi.stubEnv('TZ', 'America/Los_Angeles');
         const event = createFrontendEventView({registration: {id: '17', arrivalDate: '2027-06-01',
-            departureDate: '2027-06-03', dietary: [], allergyNotes: '', dietComment: ''}});
+                departureDate: '2027-06-03', dietary: [], allergyNotes: '', dietComment: ''}});
         const mounted = await mountFrontendEvent(EventRegistration, async () => json({changed: true}),
             {event, refresh: async () => {}});
         cleanups.push(mounted.dispose);
@@ -105,7 +105,7 @@ describe('Event participant registration', () => {
 
     it.each([false, true])('preserves the native dietary-requirements icon for registered=%s', async registered => {
         const event = createFrontendEventView({registration: registered ? {id: '17', arrivalDate: '2027-06-01',
-            departureDate: '2027-06-03', dietary: [], allergyNotes: '', dietComment: ''} : null});
+                departureDate: '2027-06-03', dietary: [], allergyNotes: '', dietComment: ''} : null});
         const mounted = await mountFrontendEvent(EventRegistration, async () => json({changed: true}),
             {event, refresh: async () => {}});
         cleanups.push(mounted.dispose);
@@ -125,8 +125,8 @@ describe('Event participant registration', () => {
         expect(mounted.request).not.toHaveBeenCalled();
         refresh.mockImplementation(async () => {
             await mounted.wrapper.setProps({event: {...event, registrationCount: 1,
-                registration: {id: '17', arrivalDate: '2027-06-01', departureDate: '2027-06-03',
-                    dietary: [], allergyNotes: '', dietComment: ''}}});
+                    registration: {id: '17', arrivalDate: '2027-06-01', departureDate: '2027-06-03',
+                        dietary: [], allergyNotes: '', dietComment: ''}}});
         });
         await enterDates(mounted.wrapper);
         await mounted.wrapper.get('form').trigger('submit');
@@ -171,8 +171,8 @@ describe('Event participant registration', () => {
             if (outcome === 'rejected') return new Response(JSON.stringify({type: 'about:blank', title: 'Forbidden',
                 status: 403, detail: 'Cancellation is closed.', code: 'EVENT_CANCELLATION_CLOSED',
                 messageKey: 'api:errors.EVENT_CANCELLATION_CLOSED', params: {}, requestId: 'cancellation-rejection'}),
-            {status: 403, headers: {'Content-Type': 'application/problem+json',
-                'X-Surveyor-Context': createFrontendEventSession().context}});
+                {status: 403, headers: {'Content-Type': 'application/problem+json',
+                        'X-Surveyor-Context': createFrontendEventSession().context}});
             current = {...event, registration: null, registrationCount: 0};
             return json({changed: true});
         }, {event, refresh});
@@ -223,7 +223,7 @@ describe('Event participant registration', () => {
             const session = createFrontendEventSession();
             return new Response(JSON.stringify({type: 'about:blank', title: 'Forbidden', status: 403, detail: 'Not allowed',
                 code: 'FORBIDDEN', messageKey: 'api:errors.FORBIDDEN', params: {}, requestId: 'registration-grant-rejection'}),
-            {status: 403, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
+                {status: 403, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
         }, {event, refresh});
         cleanups.push(mounted.dispose);
         await enterDates(mounted.wrapper);
@@ -243,7 +243,7 @@ describe('Event participant registration', () => {
             const session = createFrontendEventSession();
             return new Response(JSON.stringify({type: 'about:blank', title: 'Invalid', status: 400, detail: 'Review the request.',
                 code: 'VALIDATION_FAILED', messageKey: 'api:errors.VALIDATION_FAILED', params: {}, requestId: 'registration-rejection'}),
-            {status: 400, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
+                {status: 400, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
         }, {event, refresh: vi.fn(async () => {})});
         cleanups.push(mounted.dispose);
         await enterDates(mounted.wrapper);

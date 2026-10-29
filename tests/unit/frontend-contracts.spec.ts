@@ -86,9 +86,9 @@ describe('generated v1 contract boundaries', () => {
             throw new Error('Dispatched');
         });
         await expect(transport.client.PUT('/locale', {body: {locale: 'en'}, bodySerializer: () => {
-            serialized++;
-            return JSON.stringify({locale: 'de'});
-        }})).rejects.toThrow('Dispatched');
+                serialized++;
+                return JSON.stringify({locale: 'de'});
+            }})).rejects.toThrow('Dispatched');
         expect(serialized).toBe(1);
     });
 
@@ -135,14 +135,14 @@ describe('generated v1 contract boundaries', () => {
         // A later middleware cannot replace a validated JSON body, or force the
         // guard to clone/read multipart proof streams to inspect a replacement.
         const replacement = {onRequest({request}: {request: globalThis.Request}) {
-            return new globalThis.Request(request, {body: JSON.stringify({locale: 'de', unexpected: true})});
-        }};
+                return new globalThis.Request(request, {body: JSON.stringify({locale: 'de', unexpected: true})});
+            }};
         transport.client.use(replacement);
         await expect(transport.client.PUT('/locale', {body: {locale: 'de'}})).rejects.toBeInstanceOf(InvalidInputError);
         transport.client.eject(replacement);
         await expect(transport.client.GET('/help', {middleware: [{onRequest({request}) {
-            request.headers.set('X-Surveyor-Locale', '');
-        }}]})).rejects.toBeInstanceOf(InvalidInputError);
+                    request.headers.set('X-Surveyor-Locale', '');
+                }}]})).rejects.toBeInstanceOf(InvalidInputError);
         expect(requests).toBe(0);
     });
 
@@ -263,7 +263,7 @@ describe('generated v1 contract boundaries', () => {
         await receiveApiUpload(req, res, upload);
         expect(req.file?.originalname).toBe('camp.png');
         for (const [error, expected] of [[new MulterError('LIMIT_FILE_SIZE'), 'PAYLOAD_TOO_LARGE'],
-            [Object.assign(new Error('Private upload path'), {code: 'EACCES'}), 'INTERNAL_ERROR']] as const) {
+        [Object.assign(new Error('Private upload path'), {code: 'EACCES'}), 'INTERNAL_ERROR']] as const) {
             const rejected: RequestHandler = (_request, _response, next) => next(error);
             await expect(receiveApiUpload(req, res, rejected)).rejects.toMatchObject({code: expected});
             await expect(receiveApiUpload(req, res, rejected)).rejects.not.toHaveProperty('message', 'Private upload path');
@@ -312,7 +312,7 @@ describe('generated v1 contract boundaries', () => {
         // This structural matrix previously occupied a database suite even though
         // its actual owner is the HTTP decoder plus generated request schema.
         const invalidBodies = [{}, {description: undefined}, {title: null}, {title: false}, {title: '   '},
-            {description: false}, {ownerId: itemId}, {title: 'Must not save', description: 'x'.repeat(16001)}];
+        {description: false}, {ownerId: itemId}, {title: 'Must not save', description: 'x'.repeat(16001)}];
         for (const body of invalidBodies) {
             expect(() => validateOperationRequest(packingMetadataRequest(body), 'updatePackingMetadata', normalizePackingMetadataPatch))
                 .toThrow(expect.objectContaining({code: 'VALIDATION_FAILED', status: 400}));
@@ -385,7 +385,7 @@ describe('generated v1 contract boundaries', () => {
 
     it('shares Unicode code-point and UTF-8-byte password limits in both standalone runtimes', () => {
         const valid = ['a'.repeat(15), '7'.repeat(15), ' '.repeat(15), '😀'.repeat(15), '😀'.repeat(18),
-            '界'.repeat(24), 'é'.repeat(36), 'e\u0301'.repeat(15), 'a'.repeat(72)];
+        '界'.repeat(24), 'é'.repeat(36), 'e\u0301'.repeat(15), 'a'.repeat(72)];
         const invalid = ['', 'a'.repeat(14), '😀'.repeat(14), '😀'.repeat(19), '界'.repeat(25), 'é'.repeat(37), 'a'.repeat(73)];
         const registration = {username: 'Account', displayname: 'Account', email: 'account@example.invalid',
             password: 'a'.repeat(15), password_repeat: 'a'.repeat(15)};

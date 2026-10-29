@@ -14,7 +14,7 @@ import * as userController from '../../src/backend/controller/userController';
 import {Session} from '../../src/backend/modules/database/entities/session/Session';
 import {captureApiActor, prepareIdentityReply} from '../../src/backend/modules/api/session';
 import {sendPreparedJson} from '../../src/backend/modules/api/transport';
-import {createSessionStore, readStoredSession} from '../../src/backend/modules/lib/session';
+import {readStoredSession} from '../../src/backend/modules/lib/session';
 import {asyncHandler} from '../../src/backend/modules/lib/asyncHandler';
 import {bootstrap, applyPageEntry, flashPageNotice, renderNativeDocument, persistCompletedWorkflowFeedback,
     admitFrontendDocument} from '../../src/backend/middleware/frontendDocuments';
@@ -50,7 +50,7 @@ beforeAll(async function startFeedbackFixture() {
     app.set('view engine', 'pug');
     app.use(express.json());
     app.use(session({secret: 'document-feedback-integration-only', resave: false, saveUninitialized: false,
-        store: createSessionStore(AppDataSource.manager), cookie: {maxAge: 86_400_000}}));
+        store: userService.createSessionStore(AppDataSource.manager), cookie: {maxAge: 86_400_000}}));
     app.use(flash());
     app.post('/login', asyncHandler(async function login(req, res) {
         const actor = await captureApiActor(req);
@@ -146,7 +146,7 @@ afterAll(async function closeFeedbackFixture() {
 /** The actor returns only signed server cookies; its SID locates actual persistence for assertions. */
 async function loginActor(currentCookie?: string, accountName = username) {
     const response = await fetch(`${origin}/login`, {method: 'POST', headers: {'Content-Type': 'application/json', Connection: 'close',
-        ...(currentCookie ? {Cookie: currentCookie} : {})}, body: JSON.stringify({username: accountName, password: 'test-only-password'})});
+            ...(currentCookie ? {Cookie: currentCookie} : {})}, body: JSON.stringify({username: accountName, password: 'test-only-password'})});
     expect(response.status).toBe(200);
     const cookie = response.headers.getSetCookie()[0]?.split(';')[0] ?? currentCookie!;
     const signed = decodeURIComponent(cookie.slice(cookie.indexOf('=') + 1));
@@ -168,7 +168,7 @@ function request(target: string, cookie?: string, method = 'GET') {
 
 /** The store projection and a fresh HTTP capture must both retain the actual completed logout. */
 async function expectLoggedOut(actor: Awaited<ReturnType<typeof loginActor>>, context: string) {
-    const stored = await readStoredSession(createSessionStore(AppDataSource.manager), actor.sessionId);
+    const stored = await readStoredSession(userService.createSessionStore(AppDataSource.manager), actor.sessionId);
     expect(stored?.frontendContext).toBe(context);
     expect(Boolean(stored?.auth || stored?.profile)).toBe(false);
     const fresh = await request('/actor', actor.cookie);
@@ -240,7 +240,7 @@ describe('document feedback with real Session persistence', () => {
         try {
             await gate.arrived.promise;
             const switched = await fetch(`${origin}/switch`, {method: 'POST', headers: {'Content-Type': 'application/json',
-                Connection: 'close', Cookie: actor.cookie}, body: JSON.stringify({profileId: extraProfile.id})});
+                    Connection: 'close', Cookie: actor.cookie}, body: JSON.stringify({profileId: extraProfile.id})});
             expect(switched.status).toBe(200);
             const completion = await switched.json();
             expect(completion.session.context).not.toBe(actor.context);
@@ -406,7 +406,7 @@ describe('document feedback with real Session persistence', () => {
             const response = await request('/expiry', actor.cookie);
             expect(response.status).toBe(302);
             expect(log).toHaveBeenCalledWith('[frontend]', {code: 'WORKFLOW_FEEDBACK_UNAVAILABLE'});
-            const stored = await readStoredSession(createSessionStore(AppDataSource.manager), actor.sessionId);
+            const stored = await readStoredSession(userService.createSessionStore(AppDataSource.manager), actor.sessionId);
             expect(Boolean(stored?.auth || stored?.profile)).toBe(false);
             expect(stored?.frontendContext).toBeTruthy();
             expect(stored?.frontendContext).not.toBe(actor.context);

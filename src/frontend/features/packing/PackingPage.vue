@@ -268,8 +268,8 @@ async function patch(
         field === 'maxAssignees'
             ? {maxAssignees: value}
             : field === 'title'
-              ? {title: value}
-              : {description: value || null};
+                ? {title: value}
+                : {description: value || null};
     return !!(await command.run((scope) =>
         api.updateItem(listId.value, item.id, patch, token, scope),
         true, false, {success: field === 'description' ? 'common.descriptionUpdated' : 'common.updated'},

@@ -70,8 +70,8 @@ async function mountedCommand(review = false, request?: typeof fetch) {
     const router = createRouter({history: createMemoryHistory(), routes: [{path: '/', component}]});
     await router.push('/');
     const wrapper = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
+        }});
     await flushPromises();
     cleanups.push(() => { wrapper.unmount(); context.queryClient.clear(); context.updates.dispose(); });
     return {context, command, refresh, wrapper};
@@ -90,12 +90,12 @@ async function mountedRetirableCommand(refresh: () => Promise<unknown> = async (
     const page = defineComponent({components: {Editor: editor}, setup() { return {visible}; },
         template: '<Editor v-if="visible" />'});
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/', component: page}, {path: '/away', component: defineComponent({template: '<p>Away</p>'})},
-    ]});
+            {path: '/', component: page}, {path: '/away', component: defineComponent({template: '<p>Away</p>'})},
+        ]});
     await router.push('/');
     const wrapper = mount(defineComponent({template: '<RouterView />'}), {global: {
-        plugins: [router, [I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
+        }});
     await flushPromises();
     cleanups.push(() => { wrapper.unmount(); context.queryClient.clear(); context.updates.dispose(); });
     return {context, command, router, visible};
@@ -530,7 +530,7 @@ describe('reconcile-only commands', () => {
             else {
                 const current = mode === 'actor-change' ? {...session, context: 'replacement-context-1234567890'} : session;
                 finishSession(new Response(JSON.stringify(current), {headers: {'Content-Type': 'application/json',
-                    'X-Surveyor-Context': current.context!}}));
+                        'X-Surveyor-Context': current.context!}}));
             }
             await checking;
             const result = await running;
@@ -772,12 +772,12 @@ describe('reconcile-only commands', () => {
             template: '<ChildDraft />',
         });
         const router = createRouter({history: createMemoryHistory(), routes: [
-            {path: '/', component: parent}, {path: '/away', component: defineComponent({template: '<p>Away</p>'})},
-        ]});
+                {path: '/', component: parent}, {path: '/away', component: defineComponent({template: '<p>Away</p>'})},
+            ]});
         await router.push('/');
         const wrapper = mount(defineComponent({template: '<RouterView />'}), {global: {
-            plugins: [router, [I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
-        }});
+                plugins: [router, [I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
+            }});
         cleanups.push(() => { wrapper.unmount(); context.queryClient.clear(); context.updates.dispose(); });
         await flushPromises();
         expect(identityGuard).toHaveBeenCalledOnce();

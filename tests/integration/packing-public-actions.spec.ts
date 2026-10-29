@@ -4,7 +4,7 @@ import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 import fs from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import * as packing from '../../src/backend/controller/packingController';
-import {requirePackingCreation} from '../../src/backend/controller/packingController';
+
 import * as adminService from '../../src/backend/modules/database/services/EntityAdminService';
 import * as packingService from '../../src/backend/modules/database/services/PackingService';
 import * as userService from '../../src/backend/modules/database/services/UserService';
@@ -96,7 +96,7 @@ describe('native-granted public Packing actions through versioned operations', (
         await expect(packing.changePackingEvent(id, {eventId: null, expectedEventId: null}, actor)).rejects.toMatchObject({status: 401});
         await expect(packing.setPackingArchived(id, true, actor)).rejects.toMatchObject({status: 401});
         await expect(packing.deletePackingList(id, actor)).rejects.toMatchObject({status: 401});
-        expect(() => requirePackingCreation(actor)).toThrowError(expect.objectContaining({status: 401}));
+        expect(() => packing.requirePackingCreation(actor)).toThrowError(expect.objectContaining({status: 401}));
     });
 
     it('allows only independently granted item fields and binds baselines to the actual public context', async () => {

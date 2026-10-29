@@ -146,9 +146,9 @@ async function save(event: Event): Promise<void> {
         // visible local values until dismissal, but discard restores their absent
         // assignment defaults instead of treating those values as persisted.
         baseline.value = JSON.stringify({...draft, rows: draft.rows.map(row => ({...row,
-            selected: draft.assignAll || row.selected,
-            factor: draft.assignAll || row.selected ? row.factor : '1',
-            exempt: (draft.assignAll || row.selected) && row.exempt}))});
+                selected: draft.assignAll || row.selected,
+                factor: draft.assignAll || row.selected ? row.factor : '1',
+                exempt: (draft.assignAll || row.selected) && row.exempt}))});
         dirty.value = false;
     }
 }

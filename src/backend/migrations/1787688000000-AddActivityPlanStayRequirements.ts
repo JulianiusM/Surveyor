@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
+import {MigrationInterface, QueryRunner} from 'typeorm';
 import {
     addColumnIfNotExists,
     createConstraintIfNotExists,
     createUniqueIndexIfNotExists,
     tableExists,
-} from "../modules/database/utils/migration-helper";
+} from '../modules/database/utils/migration-helper';
 
 const TABLE = "activity_plan_stay_requirements";
 const PLAN_TABLE = "activity_plans";

@@ -21,21 +21,23 @@ import {assertEntityPropertyContext} from '../modules/event/linkage';
 import {archiveEntity, classifyArchiveCommandError, getArchivePresentations, restoreEntity} from '../modules/entityArchival';
 import {comparisonToken, entityTag} from '../modules/api/transport';
 import Joi from 'joi';
-import {Survey} from "../modules/database/entities/surveys/Survey";
-import {SurveyCombination} from "../modules/database/entities/surveys/SurveyCombination";
+import {Survey} from '../modules/database/entities/surveys/Survey';
+import {SurveyCombination} from '../modules/database/entities/surveys/SurveyCombination';
 
-import * as surveyService from "../modules/database/services/SurveyService";
-import {ExpectedError, ValidationError} from "../modules/lib/errors";
-import {checkNewImage, performImageSwap, removeImage} from "../modules/lib/fileCommons";
+import * as surveyService from '../modules/database/services/SurveyService';
+import {ValidationError} from '../modules/lib/errors';
+import {checkNewImage, performImageSwap, removeImage} from '../modules/lib/fileCommons';
 import {ApiProblem} from '../modules/api/problem';
+import {addCombination, submitResponses} from '../modules/survey';
+import {requireApiProfileId} from '../modules/api/session';
 import {archiveKey} from '../modules/archive/policy';
 import {getHeaderImageVersion} from '../modules/lib/util';
 import {isOwner} from '../modules/permissionEngine';
 import type {SessionLike} from '../../types/PermissionTypes';
 import type {BasicEntityPropertyPatch} from '../../types/EntityPropertyTypes';
 import type {components} from '../../types/api/v1';
-import type {SurveyAnswer, SurveyMutationPreparation, WeekDay, WeekInMonth} from "../../types/SurveyTypes";
-import type {EntityBase} from "../../types/UserTypes";
+import type {SurveyMutationPreparation, WeekDay, WeekInMonth} from '../../types/SurveyTypes';
+import type {EntityBase} from '../../types/UserTypes';
 import {surveyWeekdays, surveyOccurrences} from '../../common/generated/domainChoices';
 
 const CREATE_TEMPLATE = 'surveyor/survey-create';
@@ -48,7 +50,7 @@ function isNumericOccurrence(value: string): boolean {
 
 /** Normalize legacy form combinations, validate the closed creation shape and
  * project its week values into the existing persisted nthWeek representation. */
-function preprocessCreate(body: any): Partial<Survey> & { combinations: Partial<SurveyCombination>[] } {
+export function preprocessCreate(body: any): Partial<Survey> & { combinations: Partial<SurveyCombination>[] } {
     // The form parser can supply numeric-keyed objects. Missing input becomes
     // an empty set so the existing minimum-choice validator owns its rejection.
     let combos = body.combinations;
@@ -115,7 +117,7 @@ function preprocessCreate(body: any): Partial<Survey> & { combinations: Partial<
 }
 
 /** Persist the preprocessed standalone Survey and its recurring combinations together. */
-async function createEntity(
+export async function createEntity(
     ownerId: string,
     p: Partial<Survey> & { combinations: Partial<SurveyCombination>[] },
 ) {
@@ -134,12 +136,8 @@ async function createEntity(
 }
 
 
-async function afterCreateItems() {
-    // Nothing to do here.
-}
-
 /** Preserve the independent read order for both presentation consumers. */
-async function fetchForView(survey: Survey) {
+export async function fetchForView(survey: Survey) {
     const combinations = await surveyService.getCombinationsBySurveyId(survey.id);
     const responses = await surveyService.getResponsesSorted(survey.id);
     return {survey, combinations, responses};
@@ -151,41 +149,8 @@ async function fetchForDuplicate(survey: Survey) {
 }
 
 /** Preserve standalone deletion after the calling adapter has admitted the Survey. */
-async function deleteEntity(survey: Survey) {
+export async function deleteEntity(survey: Survey) {
     return await surveyService.deleteSurvey(survey.id);
-}
-
-async function addCombination(survey: Survey, weekday: WeekDay, nth: WeekInMonth) {
-    if (!weekday || !nth) throw new ExpectedError('Invalid selection', 'error', 400);
-    await surveyService.addCombination(survey.id, weekday, nth);
-}
-
-/** Replace only the admitted profile's ballot through the existing delete/save
- * sequence. Validation precedes deletion; this operation deliberately retains its
- * established non-atomic persistence rather than promise concurrent replacement. */
-async function submitResponses(survey: Survey, session: SessionLike, body: any) {
-    const answers: { [p: string]: SurveyAnswer } = body;
-    if (session.profile) {
-        const gid = session.profile.id;
-        // Validate every submitted choice against this survey before deleting any
-        // prior answers. An omitted choice is absent from the replacement ballot.
-        const combinations = await surveyService.getCombinationsBySurveyId(survey.id);
-        const allowedCombinationIds = new Set(combinations.map((combination) => combination.id));
-        const hasInvalidEntry = Object.entries(answers).some(([combId, answer]) => {
-            const parsedId = Number(combId);
-            return !Number.isInteger(parsedId)
-                || !allowedCombinationIds.has(parsedId)
-                || !['yes', 'maybe', 'no', ''].includes(answer ?? '');
-        });
-        if (hasInvalidEntry) {
-            throw new ExpectedError('Invalid survey response', 'error', 400, {}, {cause: 'SURVEY_RESPONSE_INVALID'});
-        }
-        // Keep the persistence order and its independently saved rows.
-        await surveyService.deleteResponsesByProfileId(gid, survey.id);
-        for (const [combId, ans] of Object.entries(answers)) {
-            await surveyService.saveResponse(survey.id, gid, Number(combId), ans);
-        }
-    }
 }
 
 async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
@@ -203,7 +168,7 @@ async function deleteHeaderImg(entity: EntityBase) {
  * locking, then check existence under the lock so a concurrent deletion cannot report a false save.
  * The service receives a plain patch and transaction manager, never request-specific error policy.
  */
-async function updateProperties(entity: EntityBase, body: unknown) {
+export async function updateProperties(entity: EntityBase, body: unknown) {
     const patch = normalizeBasicProperties(body);
     await saveSurveyProperties(entity.id, patch);
     return 'Properties updated';
@@ -227,15 +192,9 @@ async function saveSurveyProperties(id: string, patch: BasicEntityPropertyPatch,
     });
 }
 
-/** A captured account or registered guest profile is the survey participant. */
-function requireSurveyProfile(session: SessionLike): string {
-    if (!session.profile?.id) throw new ApiProblem('AUTH_REQUIRED');
-    return session.profile.id;
-}
-
 /** Surveys deliberately use ownership, never a general administrator matrix. */
 function requireSurveyOwner(survey: Survey, session: SessionLike): void {
-    requireSurveyProfile(session);
+    requireApiProfileId(session);
     if (!isOwner(session, survey.ownerId)) throw new ApiProblem('FORBIDDEN');
 }
 
@@ -257,7 +216,7 @@ function surveyHeaderProjection(survey: Survey) {
  * Missing choices remain omitted and display No in the client. No profile email,
  * account identity, raw response handle or stored image path crosses this boundary. */
 export async function readSurvey(id: string, session: SessionLike) {
-    const profileId = requireSurveyProfile(session);
+    const profileId = requireApiProfileId(session);
     const survey = await requireSurvey(id);
     const {combinations, responses} = await fetchForView(survey);
 
@@ -282,7 +241,7 @@ export async function readSurvey(id: string, session: SessionLike) {
 
 /** Account-only creation matches the creation form and its duplicate POST. */
 export function requireSurveyCreation(session: SessionLike): void {
-    requireSurveyProfile(session);
+    requireApiProfileId(session);
     if (!hasAccountProfile(session)) throw new ApiProblem('FORBIDDEN');
 }
 
@@ -297,7 +256,7 @@ export async function createSurvey(body: components['schemas']['SurveyCreateInpu
     // Only admitted upload bytes may supply a persisted path. Creation retains
     // the established transaction and has no fallible postcommit projection read.
     parsed.headerImg = file?.path;
-    const id = await createEntity(requireSurveyProfile(session), parsed);
+    const id = await createEntity(requireApiProfileId(session), parsed);
     return {id};
 }
 
@@ -373,7 +332,7 @@ export async function readSurveySettings(id: string, session: SessionLike): Prom
  * index remains authoritative, including a choice added after the caller read. */
 export async function addSurveyCombination(id: string, body: components['schemas']['SurveyCombinationInput'], session: SessionLike,
     prepare?: SurveyMutationPreparation): Promise<components['schemas']['MutationResult']> {
-    requireSurveyProfile(session);
+    requireApiProfileId(session);
     const survey = await requireSurvey(id);
     prepare?.({changed: true});
     try {
@@ -397,7 +356,7 @@ export async function addSurveyCombination(id: string, body: components['schemas
  * existing meaning, and no stronger concurrent persistence guarantee is added. */
 export async function submitSurveyBallot(id: string, body: components['schemas']['SurveyBallotInput'], session: SessionLike,
     prepare?: SurveyMutationPreparation): Promise<components['schemas']['MutationResult']> {
-    requireSurveyProfile(session);
+    requireApiProfileId(session);
     const survey = await requireSurvey(id);
     prepare?.({changed: true});
     await submitResponses(survey, session, body.answers);
@@ -426,7 +385,7 @@ export async function setSurveyHeader(id: string, file: Express.Multer.File | un
 
 /** Header bytes remain inside the admitted detail-page boundary. */
 export async function readSurveyHeaderPath(id: string, session: SessionLike): Promise<string> {
-    requireSurveyProfile(session);
+    requireApiProfileId(session);
     const survey = await requireSurvey(id);
     if (!survey.headerImg) throw new ApiProblem('NOT_FOUND');
     return survey.headerImg;
@@ -436,7 +395,7 @@ export async function readSurveyHeaderPath(id: string, session: SessionLike): Pr
  * idempotence and separation from permanent deletion and file retention. */
 export async function setSurveyArchived(id: string, archived: boolean, session: SessionLike,
     prepare?: SurveyMutationPreparation): Promise<components['schemas']['MutationResult']> {
-    requireSurveyProfile(session);
+    requireApiProfileId(session);
     try {
         // The existing lifecycle owner performs every decision and persistence
         // step; this adapter has no separate timestamp or automation policy.
@@ -459,20 +418,4 @@ export async function deleteSurvey(id: string, session: SessionLike,
     await deleteEntity(survey);
     if (survey.headerImg) removeImage(survey.headerImg);
     return {changed: true};
-}
-
-export default {
-    updateProperties,
-    preprocessCreate,
-    createEntity,
-    afterCreateItems,
-    fetchForView,
-    fetchForDuplicate,
-    deleteEntity,
-
-    addCombination,
-    submitResponses,
-
-    updateHeaderImg,
-    deleteHeaderImg,
 }

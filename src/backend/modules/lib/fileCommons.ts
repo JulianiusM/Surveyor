@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-import multer from "multer";
-import fs from "node:fs";
-import path from "node:path";
-import {v4 as uuidv4} from "uuid";
-import {EntityBase} from "../../../types/UserTypes";
+import multer from 'multer';
+import fs from 'node:fs';
+import path from 'node:path';
+import {v4 as uuidv4} from 'uuid';
+import {EntityBase} from '../../../types/UserTypes';
 import type {ImageSwapReceipt, UploadFileAllocation} from '../../../types/UtilTypes';
-import {APIError, UploadRejectionError} from "./errors";
+import {APIError, UploadRejectionError} from './errors';
 import {isImageMimeType, uploadFileMedia} from '../../../common/lib/fileMedia';
 
 /** Configure the existing disk uploader with its reviewed media switches.

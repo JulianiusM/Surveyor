@@ -88,9 +88,9 @@ export function analyzeRequirementDraft(config: ActivityRequirementConfiguration
     // Keep absent raw names distinguishable from user text. The shared participant
     // renderer localizes its generic fallback without deriving a name from an ID.
     return {...analysis, participants: analysis.participants.map(person => ({...person, name: person.name ?? '', nameIsFallback: !person.name,
-        count: person.assignedShifts, roleIds: (person.roleIds ?? []).map(String), roles: saved.get(person.participantKey)?.roles ?? [],
-        attendance: person.attendance ? {arrivalDate: person.attendance.arrivalDate ?? null, departureDate: person.attendance.departureDate ?? null} : null,
-        assignmentMode: draft.assignmentMode}))};
+            count: person.assignedShifts, roleIds: (person.roleIds ?? []).map(String), roles: saved.get(person.participantKey)?.roles ?? [],
+            attendance: person.attendance ? {arrivalDate: person.attendance.arrivalDate ?? null, departureDate: person.attendance.departureDate ?? null} : null,
+            assignmentMode: draft.assignmentMode}))};
 }
 
 /** Preserve the distinction between a hard cap and permitted overfill.

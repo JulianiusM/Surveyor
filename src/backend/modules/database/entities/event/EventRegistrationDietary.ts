@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import {BeforeInsert, BeforeUpdate, Column, Entity, Index, JoinColumn, ManyToOne, RelationId} from "typeorm";
-import type {DIETARY} from "../../../../../types/EventTypes";
-import {NumericBase} from "../abstract/TrackedBase";
-import {EventRegistration} from "./EventRegistration";
+import {BeforeInsert, BeforeUpdate, Column, Entity, Index, JoinColumn, ManyToOne, RelationId} from 'typeorm';
+import type {DIETARY} from '../../../../../types/EventTypes';
+import {NumericBase} from '../abstract/TrackedBase';
+import {EventRegistration} from './EventRegistration';
 import {eventDietaryChoices} from '../../../../../common/generated/domainChoices';
 
 @Entity("event_registration_dietary", {schema: "surveyor"})

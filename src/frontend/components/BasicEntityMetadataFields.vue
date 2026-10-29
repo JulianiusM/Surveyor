@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {fieldAttributes as metadataFields} from "../../../.generated/api/v1/browser/validateBasicEntityMetadataPatch.mjs";
+import {fieldAttributes as metadataFields} from '../../../.generated/api/v1/browser/validateBasicEntityMetadataPatch.mjs';
 import {ref} from 'vue';
 import type {EntityMetadataSnapshot, EntityMetadataValues} from '../../types/FrontendEntityMetadataTypes';
 import type {FrontendRead, FrontendRequestScope} from '../../types/FrontendUiTypes';

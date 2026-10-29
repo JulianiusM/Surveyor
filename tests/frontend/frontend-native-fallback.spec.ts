@@ -41,8 +41,8 @@ describe('admitted initial document delivery', () => {
     it('renders one localized startup notice beneath the shared header in the same SSR tree', async () => {
         for (const locale of ['en', 'de']) {
             const result = await render('/help', {session: {...session, locale}, help: {
-                locale, title: 'Synthetic Help', content: '<p>Readable task.</p>', currentDoc: 'fixture.md',
-                docsList: [], docsGroups: [], toc: []}});
+                    locale, title: 'Synthetic Help', content: '<p>Readable task.</p>', currentDoc: 'fixture.md',
+                    docsList: [], docsGroups: [], toc: []}});
             const document = new DOMParser().parseFromString(result.html, 'text/html');
             const notice = document.querySelector('#surveyor-frontend-javascript-required')!;
             expect(document.querySelectorAll('#surveyor-frontend-javascript-required')).toHaveLength(1);

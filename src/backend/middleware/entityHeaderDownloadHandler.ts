@@ -15,14 +15,14 @@ export function createHeaderHandler(read: (id: string, session: SessionLike) => 
     return asyncHandler(/** Read only the actor-admitted header path, constrain it
      * to configured storage, and retain distinct absent/unreadable diagnostics
      * before private file delivery. */
-    async function downloadHeader(req, res) {
-        const actor = await captureApiActor(req);
-        const storedPath = await read(String(req.params.headerId), actor);
-        // Resolve only beneath the configured header root before touching the file.
-        const file = resolveStoredFile(settings.value.headerImgDir, storedPath);
-        if (!file) throw new APIError('No image available', {}, 400);
-        try { await fs.access(file, fs.constants.R_OK); }
-        catch { throw new APIError('No image available', {}, 404); }
-        res.set('Cache-Control', 'private, no-store').sendFile(file);
-    });
+        async function downloadHeader(req, res) {
+            const actor = await captureApiActor(req);
+            const storedPath = await read(String(req.params.headerId), actor);
+            // Resolve only beneath the configured header root before touching the file.
+            const file = resolveStoredFile(settings.value.headerImgDir, storedPath);
+            if (!file) throw new APIError('No image available', {}, 400);
+            try { await fs.access(file, fs.constants.R_OK); }
+            catch { throw new APIError('No image available', {}, 404); }
+            res.set('Cache-Control', 'private, no-store').sendFile(file);
+        });
 }

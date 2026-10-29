@@ -65,6 +65,19 @@ function validateConfig(config) {
             throw new Error(`Missing or invalid policy inventory: ${name}`);
         }
     }
+    const database = config.runtimeDatabaseAccess;
+    if (!database || Object.keys(database).sort().join(',') !== 'dataSourceFile,directory,migrationDirectories,migrationHelperFiles'
+        || !isSourcePath(database.directory) || !config.databaseServiceDirectory.startsWith(database.directory + '/')
+        || !config.requestOwnerDirectories.every(directory => directory.startsWith(database.directory + '/'))
+        || !isSourcePath(database.dataSourceFile) || !database.dataSourceFile.startsWith(database.directory + '/')
+        || !database.dataSourceFile.endsWith('.ts')) throw new Error('Invalid runtime database boundary inventory');
+    for (const name of ['migrationDirectories', 'migrationHelperFiles']) {
+        if (!Array.isArray(database[name]) || !database[name].length
+            || !database[name].every(owner => isSourcePath(owner) && owner.startsWith(database.directory + '/')
+                && (name !== 'migrationHelperFiles' || owner.endsWith('.ts')))) {
+            throw new Error(`Missing or invalid runtime database exception inventory: ${name}`);
+        }
+    }
     const supported = new Set(['.ts', '.mts', '.cts', '.vue']);
     if (!Array.isArray(config.sourceExtensions) || !config.sourceExtensions.length
         || config.sourceExtensions.some(extension => !supported.has(extension))) throw new Error('Invalid source extension inventory');
@@ -303,10 +316,17 @@ function checkSessionOwnership(file, source, lineOffset, config, errors) {
 /** Read the six labels from their authoritative policy instead of maintaining a second wording inventory. */
 function approvalLabels(root) {
     const policy = readSource(root, 'docs/policies/DEVELOPMENT_POLICY.md');
-    const section = policy.slice(policy.indexOf('### Required change explanation'), policy.indexOf('## Implementation principles'));
+    const invalidLabels = 'Cannot identify the six authoritative approval labels';
+    const heading = /^### Required change explanation(?: \([^\r\n]+\))?\r?$/mu.exec(policy);
+    if (!heading) throw new Error(invalidLabels);
+    // Later policy decisions can have their own labelled bullets. Only this
+    // section owns approval fields; deeper explanation headings remain inside it.
+    const remaining = policy.slice(heading.index + heading[0].length);
+    const nextHeading = /^#{1,3}[ \t]+\S/mu.exec(remaining);
+    const section = remaining.slice(0, nextHeading?.index ?? remaining.length);
     const labels = [...section.matchAll(/^- \*\*([^*\r\n]+):\*\*/gmu)].map(match => match[1]);
     if (labels.length !== 6 || labels[0] !== 'Reason' || labels.at(-1) !== 'History') {
-        throw new Error('Cannot identify the six authoritative approval labels');
+        throw new Error(invalidLabels);
     }
     return labels;
 }
@@ -396,10 +416,10 @@ function checkApprovalRequest(options) {
         }
     }
     return {mode: 'approval-request', checkedRequests: requests.length, errors, limitations: [
-        'Structural preflight only: it cannot establish clarity, scope, authorization provenance or approval.',
-        'Independent nonauthor and root semantic review of the exact request remain mandatory before presentation.',
-        'Present every outstanding question and its complete required explanation in the final answer. This tool cannot verify conversation channels or actual delivery.',
-    ]};
+            'Structural preflight only: it cannot establish clarity, scope, authorization provenance or approval.',
+            'Independent nonauthor and root semantic review of the exact request remain mandatory before presentation.',
+            'Present every outstanding question and its complete required explanation in the final answer. This tool cannot verify conversation channels or actual delivery.',
+        ]};
 }
 
 /**
@@ -434,6 +454,229 @@ function checkService(root, file, source, config, errors) {
             && ((ts.isIdentifier(node.expression) && node.expression.text === 'require') || node.expression.kind === ts.SyntaxKind.ImportKeyword)) {
             checkServiceDependency(root, file, source, node, node.arguments[0].text, config, errors);
         }
+        ts.forEachChild(node, visit);
+    }
+    visit(source);
+}
+
+/** Runtime persistence is service-owned. Migrations and their exact shared helper
+ * retain separately declared schema responsibilities, rather than a name-based exception. */
+function isRuntimeDatabaseSource(file, config) {
+    const database = config.runtimeDatabaseAccess;
+    return file.startsWith(database.directory + '/') && !file.endsWith('.d.ts')
+        && !file.startsWith(config.databaseServiceDirectory + '/')
+        && !database.migrationDirectories.some(directory => file.startsWith(directory + '/'))
+        && !database.migrationHelperFiles.includes(file);
+}
+
+/** Trace finite local ORM aliases through lexical symbols, never receiver names.
+ * The in-memory program binds this file only: no application module, DB or library
+ * implementation is loaded, and arbitrary dynamic/interprocedural data flow is unproved. */
+function runtimeOrmBindings(file, source, config) {
+    const program = ts.createProgram([source.fileName], {noResolve: true, noLib: true}, {
+        getSourceFile: name => name === source.fileName ? source : undefined,
+        getDefaultLibFileName: () => '', writeFile() {}, getCurrentDirectory: () => '',
+        getDirectories: () => [], fileExists: name => name === source.fileName,
+        readFile: name => name === source.fileName ? source.text : undefined,
+        getCanonicalFileName: name => name, useCaseSensitiveFileNames: () => true, getNewLine: () => '\n',
+    });
+    const checker = program.getTypeChecker();
+    const roles = new Map();
+    const types = new Map();
+    const namespaces = new Map();
+    const calls = new Map();
+    const declarations = [];
+    const ormTypes = new Map([['DataSource', 'source'], ['EntityManager', 'manager'], ['QueryRunner', 'runner'],
+    ['Repository', 'repository'], ['TreeRepository', 'repository'], ['MongoRepository', 'repository'],
+    ['BaseEntity', 'repository'], ...['QueryBuilder', 'SelectQueryBuilder', 'InsertQueryBuilder', 'UpdateQueryBuilder',
+        'DeleteQueryBuilder', 'SoftDeleteQueryBuilder', 'RestoreQueryBuilder', 'RelationQueryBuilder'].map(name => [name, 'builder'])]);
+    const operations = new Set(['getRepository', 'getTreeRepository', 'getMongoRepository', 'getCustomRepository',
+        'createEntityManager', 'createQueryBuilder', 'createQueryRunner', 'transaction', 'query', 'sql',
+        'find', 'findBy', 'findOne', 'findOneBy', 'findOneOrFail', 'findOneByOrFail', 'findAndCount', 'findAndCountBy',
+        'count', 'countBy', 'exists', 'existsBy', 'sum', 'average', 'minimum', 'maximum',
+        'save', 'remove', 'insert', 'upsert', 'update', 'updateAll', 'delete', 'deleteAll',
+        'softDelete', 'softRemove', 'restore', 'recover', 'increment', 'decrement', 'clear', 'preload', 'merge', 'create',
+        'synchronize', 'dropDatabase', 'runMigrations', 'undoLastMigration',
+        'startTransaction', 'commitTransaction', 'rollbackTransaction', 'getTable', 'getTables', 'hasTable', 'hasColumn',
+        'createTable', 'dropTable', 'addColumn', 'addColumns', 'changeColumn', 'changeColumns', 'dropColumn', 'dropColumns',
+        'createForeignKey', 'dropForeignKey', 'createIndex', 'dropIndex']);
+    const globalCalls = new Set(['getRepository', 'getTreeRepository', 'getMongoRepository', 'getManager',
+        'getConnection', 'createConnection', 'createQueryBuilder', 'getConnectionManager']);
+
+    function symbol(node) { return node && checker.getSymbolAtLocation(node); }
+    function unwrap(node) {
+        while (node && (ts.isParenthesizedExpression(node) || ts.isAsExpression(node)
+            || ts.isTypeAssertionExpression(node) || ts.isNonNullExpression(node) || ts.isAwaitExpression(node))) node = node.expression;
+        return node;
+    }
+    /** Resolve only explicit package/canonical-datasource imports, including literal require/import. */
+    function moduleKind(node) {
+        node = unwrap(node);
+        if (!node) return undefined;
+        if (ts.isIdentifier(node)) return namespaces.get(symbol(node));
+        if (ts.isCallExpression(node) && node.arguments[0] && ts.isStringLiteralLike(node.arguments[0])
+            && (node.expression.kind === ts.SyntaxKind.ImportKeyword || ts.isIdentifier(node.expression)
+                && node.expression.text === 'require' && !symbol(node.expression))) {
+            return importedModule(node.arguments[0].text);
+        }
+        return undefined;
+    }
+    function importedModule(specifier) {
+        if (specifier === 'typeorm') return 'typeorm';
+        if (!specifier.startsWith('.')) return undefined;
+        const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier)).replace(/\.js$/u, '.ts');
+        const expected = config.runtimeDatabaseAccess.dataSourceFile;
+        return resolved === expected || resolved + '.ts' === expected ? 'source' : undefined;
+    }
+    function bindImport(binding, imported, module) {
+        const key = symbol(binding);
+        if (module === 'typeorm' && ormTypes.has(imported)) types.set(key, ormTypes.get(imported));
+        if (module === 'typeorm' && imported === 'BaseEntity') roles.set(key, 'repository');
+        if (module === 'source' && imported === 'AppDataSource') roles.set(key, 'source');
+        if (module === 'typeorm' && globalCalls.has(imported)) calls.set(key, {owner: 'source', method: imported});
+    }
+    /** Collect declarations before fixed-point alias tracing; symbols distinguish shadowed names. */
+    function collect(node) {
+        if (ts.isImportDeclaration(node) && ts.isStringLiteralLike(node.moduleSpecifier)) {
+            const module = importedModule(node.moduleSpecifier.text);
+            const bindings = node.importClause?.namedBindings;
+            if (module && bindings && ts.isNamespaceImport(bindings)) namespaces.set(symbol(bindings.name), module);
+            if (module && bindings && ts.isNamedImports(bindings)) {
+                for (const item of bindings.elements) bindImport(item.name, item.propertyName?.text ?? item.name.text, module);
+            }
+        }
+        if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)
+            && node.moduleReference.expression && ts.isStringLiteralLike(node.moduleReference.expression)) {
+            const module = importedModule(node.moduleReference.expression.text);
+            if (module) namespaces.set(symbol(node.name), module);
+        }
+        if (ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isPropertyDeclaration(node)
+            || ts.isPropertySignature(node) || ts.isTypeAliasDeclaration(node) || ts.isBindingElement(node)
+            || ts.isClassDeclaration(node)) declarations.push(node);
+        ts.forEachChild(node, collect);
+    }
+    /** Only explicit ORM types and transparent local wrappers establish receiver provenance. */
+    function typeRole(node) {
+        if (!node) return undefined;
+        if (ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node)) return node.types.map(typeRole).find(Boolean);
+        if (ts.isParenthesizedTypeNode(node) || ts.isTypeOperatorNode(node)) return typeRole(node.type);
+        if (!ts.isTypeReferenceNode(node)) return undefined;
+        if (ts.isQualifiedName(node.typeName) && namespaces.get(symbol(node.typeName.left)) === 'typeorm') return ormTypes.get(node.typeName.right.text);
+        if (!ts.isIdentifier(node.typeName)) return undefined;
+        const binding = symbol(node.typeName);
+        // Without lib declarations TypeScript may create a transient unresolved
+        // symbol for a standard utility. Any actual local/import declaration
+        // takes precedence and must not inherit that utility's transparent role.
+        return types.get(binding)
+            ?? (!binding?.declarations?.length && ['Readonly', 'Pick', 'Omit', 'Partial', 'Required', 'NonNullable'].includes(node.typeName.text)
+                ? typeRole(node.typeArguments?.[0]) : undefined);
+    }
+    function memberRole(owner, member) {
+        if (member === 'manager' && ['source', 'runner', 'repository'].includes(owner)) return 'manager';
+        if (member === 'queryRunner' && owner === 'manager') return 'runner';
+        if (member === 'dataSource' && ['manager', 'runner', 'repository', 'builder'].includes(owner)) return 'source';
+        return undefined;
+    }
+    function resultRole(operation) {
+        if (!operation) return undefined;
+        if (['getRepository', 'getTreeRepository', 'getMongoRepository', 'getCustomRepository'].includes(operation.method)) return 'repository';
+        if (['getManager', 'createEntityManager'].includes(operation.method)) return 'manager';
+        if (operation.method === 'createQueryRunner') return 'runner';
+        if (['getConnection', 'createConnection'].includes(operation.method)) return 'source';
+        if (operation.method === 'createQueryBuilder' || operation.owner === 'builder'
+            && !/^(?:get|execute|stream)/u.test(operation.method)) return 'builder';
+        return undefined;
+    }
+    /** Recognize typed receivers and local acquisition chains, without guessing unknown properties. */
+    function role(node) {
+        node = unwrap(node);
+        if (!node) return undefined;
+        const key = symbol(ts.isPropertyAccessExpression(node) ? node.name : node);
+        const known = roles.get(key);
+        if (known) return known;
+        if (ts.isNewExpression(node)) return constructorRole(node.expression);
+        if (ts.isCallExpression(node)) return resultRole(call(node));
+        if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
+            const module = moduleKind(node.expression);
+            if (module === 'source' && propertyName(node) === 'AppDataSource') return 'source';
+            if (module === 'typeorm' && propertyName(node) === 'BaseEntity') return 'repository';
+            return memberRole(role(node.expression), propertyName(node));
+        }
+        return undefined;
+    }
+    function constructorRole(node) {
+        node = unwrap(node);
+        if (ts.isIdentifier(node)) return types.get(symbol(node));
+        return node && ts.isPropertyAccessExpression(node) && moduleKind(node.expression) === 'typeorm' ? ormTypes.get(node.name.text) : undefined;
+    }
+    function call(node) {
+        const tagged = ts.isTaggedTemplateExpression(node);
+        const expression = unwrap(tagged ? node.tag : node.expression);
+        if (ts.isIdentifier(expression)) return calls.get(symbol(expression));
+        if (!ts.isPropertyAccessExpression(expression) && !ts.isElementAccessExpression(expression)) return undefined;
+        const method = propertyName(expression);
+        // Modern TypeORM's sql tag dispatches through the same receiver owner.
+        // Its template contents supply no new SQL-text or literal-style rule.
+        if (tagged && method !== 'sql') return undefined;
+        const module = moduleKind(expression.expression);
+        const owner = module === 'typeorm' && globalCalls.has(method) ? 'source' : role(expression.expression);
+        return owner && (owner === 'builder' || operations.has(method)) ? {owner, method} : undefined;
+    }
+    collect(source);
+    // Finite local alias sets grow monotonically. No initializer or callback is executed.
+    let changed = true;
+    while (changed) {
+        const size = roles.size + types.size + namespaces.size + calls.size;
+        for (const node of declarations) {
+            if (!node.name || !ts.isIdentifier(node.name)) continue;
+            const key = symbol(node.name);
+            if (ts.isClassDeclaration(node)) {
+                // Explicit ActiveRecord inheritance has ORM static operations;
+                // unrelated application classes named BaseEntity supply no evidence.
+                for (const clause of node.heritageClauses ?? []) {
+                    if (clause.token === ts.SyntaxKind.ExtendsKeyword
+                        && clause.types.some(type => constructorRole(type.expression) === 'repository')) roles.set(key, 'repository');
+                }
+                continue;
+            }
+            const typed = typeRole(node.type);
+            if (ts.isTypeAliasDeclaration(node)) {
+                if (typed) types.set(key, typed);
+                continue;
+            }
+            if (typed) roles.set(key, typed);
+            const value = role(node.initializer);
+            if (value) roles.set(key, value);
+            const module = moduleKind(node.initializer);
+            if (module) namespaces.set(key, module);
+            if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent) && ts.isVariableDeclaration(node.parent.parent)) {
+                const initializer = node.parent.parent.initializer;
+                const module = moduleKind(initializer);
+                const member = node.propertyName?.text ?? node.name.text;
+                if (module) bindImport(node.name, member, module);
+                const value = memberRole(role(initializer), member);
+                if (value) roles.set(key, value);
+            }
+        }
+        changed = size !== roles.size + types.size + namespaces.size + calls.size;
+    }
+    return {call, constructorRole};
+}
+
+/** Flag recognizable runtime ORM operations outside Services in every source snapshot.
+ * Bootstrap construction/initialization is distinct from CRUD; migrations retain their exact exceptions. */
+function checkRuntimeDatabaseAccess(file, source, lineOffset, config, errors) {
+    if (!isRuntimeDatabaseSource(file, config)) return;
+    const bindings = runtimeOrmBindings(file, source, config);
+    /** A fluent chain is one location; separate callback operations keep their own findings. */
+    function visit(node) {
+        let violation = (ts.isCallExpression(node) || ts.isTaggedTemplateExpression(node)) && bindings.call(node);
+        if (violation && (ts.isPropertyAccessExpression(node.parent) || ts.isElementAccessExpression(node.parent))
+            && ts.isCallExpression(node.parent.parent) && bindings.call(node.parent.parent)) violation = false;
+        if (ts.isNewExpression(node) && bindings.constructorRole(node.expression) === 'source'
+            && file !== config.runtimeDatabaseAccess.dataSourceFile) violation = true;
+        if (violation) errors.push(finding(file, source, node, lineOffset, 'runtime-dbal-owner',
+            'Runtime TypeORM repository/query/transaction operations belong in database Services; retain feature decisions in their existing caller.'));
         ts.forEachChild(node, visit);
     }
     visit(source);
@@ -491,7 +734,7 @@ function hasBodyComment(body, source) {
         // Parser-owned token boundaries correctly handle template substitutions.
         // A context-free scanner could mistake template text for a code comment.
         const comments = [...ts.getLeadingCommentRanges(source.text, node.getFullStart()) ?? [],
-            ...ts.getTrailingCommentRanges(source.text, node.end) ?? []];
+        ...ts.getTrailingCommentRanges(source.text, node.end) ?? []];
         for (const comment of comments) {
             if (comment.pos >= start && comment.end <= body.end) commented = true;
         }
@@ -589,6 +832,7 @@ function checkStagedSources(options, config, errors) {
             const source = ts.createSourceFile(file + '.ts', block.text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
             if (source.parseDiagnostics.length) throw new Error(`Cannot parse staged source: ${file}`);
             checkSessionOwnership(file, source, block.lineOffset, config, errors);
+            checkRuntimeDatabaseAccess(file, source, block.lineOffset, config, errors);
             if (file.startsWith(config.databaseServiceDirectory + '/')) checkService(options.root, file, source, config, errors);
             if (!options.files.length || options.files.includes(file)) {
                 reviewedOperations += checkOperations(file, source, block.lineOffset, ranges, errors);
@@ -617,6 +861,7 @@ function buildReport(options) {
     const ranges = options.all ? null : changedRanges(options.root);
     let checkedSources = 0;
     let checkedServiceSources = 0;
+    let checkedRuntimeDatabaseSources = 0;
     let reviewedOperations = 0;
     const readabilityFiles = [];
     for (const file of files) {
@@ -630,11 +875,13 @@ function buildReport(options) {
         const review = touched.length && (!options.files.length || options.files.includes(file));
         checkedSources += 1;
         if (service) checkedServiceSources += 1;
+        if (isRuntimeDatabaseSource(file, config)) checkedRuntimeDatabaseSources += 1;
         if (review) readabilityFiles.push(file);
         for (const block of sourceBlocks(file, readSource(options.root, file))) {
             const source = ts.createSourceFile(file + '.ts', block.text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
             if (source.parseDiagnostics.length) throw new Error(`Cannot parse source: ${file}`);
             checkSessionOwnership(file, source, block.lineOffset, config, errors);
+            checkRuntimeDatabaseAccess(file, source, block.lineOffset, config, errors);
             if (service) checkService(options.root, file, source, config, errors);
             if (review) reviewedOperations += checkOperations(file, source, block.lineOffset, touched, errors);
         }
@@ -643,9 +890,13 @@ function buildReport(options) {
     // Normal agent checks require HEAD and also certify the separately staged delta.
     const staged = !hasGitHead(options.root) ? {checkedSources: 0, reviewedOperations: 0, inspected: false}
         : {...checkStagedSources(options, config, errors), inspected: true};
-    return {checkedSources, checkedServiceSources, reviewedOperations, readabilityFiles, staged,
+    return {checkedSources, checkedServiceSources, checkedRuntimeDatabaseSources, reviewedOperations, readabilityFiles, staged,
         readabilityScope: options.files.length ? options.files : options.all ? 'all authored sources' : 'working tree changes against HEAD',
-        errors, manualReview: config.manualReview};
+        errors, manualReview: config.manualReview, runtimeDatabaseLimitations: [
+            'Recognizes explicit TypeORM types/imports, the canonical datasource and finite local acquisition/alias chains.',
+            'Arbitrary dynamic names, cross-module return types and untyped callbacks require independent source review; this is not whole-program proof.',
+            'Migration exceptions are exact configured scopes; bootstrap construction/initialization is not a runtime CRUD exemption. SQL text and formatting are not checked.',
+        ]};
 }
 
 /** Fail on observable violations or unavailable prerequisites, without hiding failures. */
@@ -664,6 +915,8 @@ function main() {
             console.log(`DBAL inventory: ${report.checkedServiceSources} files; readability: ${report.readabilityFiles.length} files, `
                 + `${report.reviewedOperations} nontrivial operations. Scope: ${JSON.stringify(report.readabilityScope)}`);
             console.log(`Separate staged delta: ${report.staged.inspected ? report.staged.checkedSources + ' source files checked' : 'no HEAD baseline in this inventory fixture'}.`);
+            console.log(`Runtime ORM boundary: ${report.checkedRuntimeDatabaseSources} non-Service backend files; bounded syntax recognition.`);
+            for (const limitation of report.runtimeDatabaseLimitations) console.log(`- ${limitation}`);
             for (const error of report.errors) {
                 const snapshot = error.snapshot === 'index' ? ' [index]' : ' [worktree]';
                 console.log(`${error.file}:${error.line}${snapshot} [${error.rule}] ${error.message}`);

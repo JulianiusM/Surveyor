@@ -143,7 +143,7 @@ async function guestActor(): Promise<Actor> {
 
 /** Submit exactly the generated adapter's current captured actor/CSRF evidence. */
 function profileCommand(actor: Actor, method: 'POST' | 'PATCH', body: unknown,
-                        proof: SessionProof = actor.session) {
+    proof: SessionProof = actor.session) {
     return actor.agent.dispatch('/api/v1/profiles' + (method === 'PATCH' ? '/current' : ''), method, body, sessionHeaders(proof));
 }
 

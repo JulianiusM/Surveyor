@@ -6,8 +6,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
-import {addColumnIfNotExists, dropColumnIfExists, tableExists} from "../modules/database/utils/migration-helper";
+import {MigrationInterface, QueryRunner} from 'typeorm';
+import {addColumnIfNotExists, dropColumnIfExists, tableExists} from '../modules/database/utils/migration-helper';
 
 export class AddInvoiceSettlementSnapshots1789430400000 implements MigrationInterface {
     name = "AddInvoiceSettlementSnapshots1789430400000";

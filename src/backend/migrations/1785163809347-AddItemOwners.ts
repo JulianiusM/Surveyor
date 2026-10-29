@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
-import type {MigrationInterface, QueryRunner} from "typeorm";
+import type {MigrationInterface, QueryRunner} from 'typeorm';
 import type {MigrationReference} from '../../types/MigrationTypes';
 import {
     applyMigrationReferences,
     assertMigrationColumnCanBeRetired,
     dropColumnIfExists,
+    dropFkConstraint,
     prepareMigrationReferences,
-} from "../modules/database/utils/migration-helper";
+} from '../modules/database/utils/migration-helper';
 
 const ownerReferences: readonly MigrationReference[] = [
     {table: 'packing_items', column: 'user_id', referencedTable: 'users', referencedColumn: 'id',
@@ -62,7 +63,7 @@ export class AddItemOwners1785163809347 implements MigrationInterface {
         for (const reference of [...ownerReferences].reverse()) {
             const table = await queryRunner.getTable(reference.table);
             for (const key of table?.foreignKeys.filter(key => key.columnNames.includes(reference.column)) ?? []) {
-                await queryRunner.dropForeignKey(reference.table, key);
+                await dropFkConstraint(queryRunner, reference.table, key.name!);
             }
             await dropColumnIfExists(queryRunner, reference.table, reference.column);
         }

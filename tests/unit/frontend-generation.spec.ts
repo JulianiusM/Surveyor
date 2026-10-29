@@ -439,16 +439,16 @@ describe('contract and catalog generation', () => {
                 const aliases = {[names.request]: shared, [names.response]: shared};
                 await fs.writeFile(path.join(temporary, 'contracts/api/v1/role-aliases.yaml'), YAML.stringify({schemas: aliases}));
                 await fs.writeFile(path.join(temporary, 'contracts/api/v1/role-owner.yaml'), YAML.stringify({schemas: {
-                    [names.shared]: {type: 'object', additionalProperties: false, required: ['label'], properties: {
-                        label: {type: 'string'}, child: {$ref: '#/schemas/' + names.shared},
-                    }},
-                    NestedCommand: {type: 'object', additionalProperties: false, required: ['value'], properties: {value: shared}},
-                }}));
+                        [names.shared]: {type: 'object', additionalProperties: false, required: ['label'], properties: {
+                                label: {type: 'string'}, child: {$ref: '#/schemas/' + names.shared},
+                            }},
+                        NestedCommand: {type: 'object', additionalProperties: false, required: ['value'], properties: {value: shared}},
+                    }}));
                 // A disconnected same-name declaration is genuinely used by a
                 // parameter. It must not alter the exported response alias.
                 await fs.writeFile(path.join(temporary, 'contracts/api/v1/role-shadow.yaml'), YAML.stringify({schemas: {
-                    [names.response]: shared,
-                }}));
+                        [names.response]: shared,
+                    }}));
                 const exports = {
                     [names.response]: {$ref: './role-aliases.yaml#/schemas/' + names.response},
                     [names.request]: {$ref: './role-aliases.yaml#/schemas/' + names.request},
@@ -456,8 +456,8 @@ describe('contract and catalog generation', () => {
                     RoleResponseEnvelope: {type: 'object', additionalProperties: false, required: ['result'], properties: {result: local(names.response)}},
                     DifferentlyNamedCommandExport: {$ref: './role-owner.yaml#/schemas/NestedCommand'},
                     RoleMultipart: {type: 'object', additionalProperties: false, required: ['data'], properties: {
-                        data: {$ref: './role-owner.yaml#/schemas/NestedCommand'}, image: {type: 'string', format: 'binary'},
-                    }},
+                            data: {$ref: './role-owner.yaml#/schemas/NestedCommand'}, image: {type: 'string', format: 'binary'},
+                        }},
                     RoleParameter: {type: 'object', additionalProperties: false, required: ['value'], properties: {value: shared}},
                     RolePropertyResponse: {type: 'object', additionalProperties: false, properties: {selected: shared}},
                 };
@@ -466,17 +466,17 @@ describe('contract and catalog generation', () => {
                 for (const [name, schema] of ordered) contract.setIn(['components', 'schemas', name], schema);
                 const response = {description: 'Role fixture', content: {'application/json': {schema: local('RoleResponseEnvelope')}}};
                 contract.setIn(['paths', '/role-request'], {post: {operationId: 'roleRequest',
-                    'x-surveyor-command': {retryPolicy: 'reconcile-only', precondition: 'none'},
-                    requestBody: {required: true, content: {'application/json': {schema: local(names.request)}}}, responses: {'200': response}}});
+                        'x-surveyor-command': {retryPolicy: 'reconcile-only', precondition: 'none'},
+                        requestBody: {required: true, content: {'application/json': {schema: local(names.request)}}}, responses: {'200': response}}});
                 contract.setIn(['paths', '/role-multipart'], {post: {operationId: 'roleMultipart',
-                    'x-surveyor-command': {retryPolicy: 'reconcile-only', precondition: 'none'},
-                    requestBody: {required: true, content: {'multipart/form-data': {schema: local('RoleMultipart')}}}, responses: {'200': response}}});
+                        'x-surveyor-command': {retryPolicy: 'reconcile-only', precondition: 'none'},
+                        requestBody: {required: true, content: {'multipart/form-data': {schema: local('RoleMultipart')}}}, responses: {'200': response}}});
                 contract.setIn(['paths', '/role-parameters'], {get: {operationId: 'roleParameters',
-                    'x-surveyor-command': {retryPolicy: 'read', precondition: 'none'}, parameters: [
-                        {name: 'named', in: 'query', schema: local('RoleParameter')},
-                        {name: 'selected', in: 'query', schema: {$ref: '#/components/schemas/RolePropertyResponse/properties/selected'}},
-                        {name: 'shadow', in: 'query', schema: {$ref: './role-shadow.yaml#/schemas/' + names.response}},
-                    ], responses: {'200': response}}});
+                        'x-surveyor-command': {retryPolicy: 'read', precondition: 'none'}, parameters: [
+                            {name: 'named', in: 'query', schema: local('RoleParameter')},
+                            {name: 'selected', in: 'query', schema: {$ref: '#/components/schemas/RolePropertyResponse/properties/selected'}},
+                            {name: 'shadow', in: 'query', schema: {$ref: './role-shadow.yaml#/schemas/' + names.response}},
+                        ], responses: {'200': response}}});
                 await fs.writeFile(entry, contract.toString());
                 const output = path.join(temporary, renamed ? 'renamed-output' : 'original-output');
                 generate('generate-api.mjs', ['--output-root', output], temporary);
@@ -885,13 +885,13 @@ describe('contract and catalog generation', () => {
             parameters.add({name: 'repeated', in: 'query', style: 'form', explode: true,
                 schema: {$ref: './openapi.yaml#/components/schemas/FutureParameterValues'}});
             parameters.add({name: 'structured', in: 'query', schema: {type: 'object', additionalProperties: false,
-                required: ['label'], properties: {label: {type: 'string'}}}});
+                    required: ['label'], properties: {label: {type: 'string'}}}});
             parameters.add({name: 'choice', in: 'query', schema: {oneOf: [
-                {type: 'object', additionalProperties: false, required: ['kind', 'id'],
-                    properties: {kind: {type: 'string', const: 'single'}, id: {type: 'integer'}}},
-                {type: 'object', additionalProperties: false, required: ['kind', 'ids'],
-                    properties: {kind: {type: 'string', const: 'multiple'}, ids: {type: 'array', items: {type: 'integer'}}}},
-            ]}});
+                        {type: 'object', additionalProperties: false, required: ['kind', 'id'],
+                            properties: {kind: {type: 'string', const: 'single'}, id: {type: 'integer'}}},
+                        {type: 'object', additionalProperties: false, required: ['kind', 'ids'],
+                            properties: {kind: {type: 'string', const: 'multiple'}, ids: {type: 'array', items: {type: 'integer'}}}},
+                    ]}});
             parameters.add({name: 'X-Future-Values', in: 'header',
                 schema: {$ref: './openapi.yaml#/components/schemas/FutureParameterValues'}});
             futureContract.setIn(['components', 'schemas', 'PlainTextFixture'], {type: 'string'});
@@ -920,12 +920,12 @@ describe('contract and catalog generation', () => {
             // Exercise their real validators alongside the new shapes below.
             expect(generatedServer.validateGetHelpPageParameters({path: {}, query: {q: 'packing'}, header: {}})).toBe(true);
             expect(generatedServer.validatePackingCreateForm({data: {title: 'Packing fixture', description: null, eventId: null,
-                defaultPermissions: {public: 0, guest: 0, authenticated: 0, participant: 0},
-                items: [{title: 'Tent', description: null, maxAssignees: 1, requiredByAll: false},
+                    defaultPermissions: {public: 0, guest: 0, authenticated: 0, participant: 0},
+                    items: [{title: 'Tent', description: null, maxAssignees: 1, requiredByAll: false},
                     {title: 'Water', description: null, maxAssignees: 2, requiredByAll: false}]}})).toBe(true);
 
             const input = {path: {}, query: {repeated: ['one', 'two'], structured: {label: 'Selection'},
-                choice: {kind: 'multiple', ids: [1, 2]}}, header: {'X-Future-Values': ['first', 'second']}};
+                    choice: {kind: 'multiple', ids: [1, 2]}}, header: {'X-Future-Values': ['first', 'second']}};
             for (const validators of [generatedServer, generatedBrowser]) {
                 // Shape freedom preserves validation: wrong members and invalid
                 // union variants must fail in both actual standalone runtimes.
@@ -1158,7 +1158,7 @@ describe('contract and catalog generation', () => {
             const unsafe = structuredClone(english);
             unsafe.invoiceMessages['finance.__proto__'] = 'base';
             for (const [catalog, message] of [[duplicate, 'Duplicate invoice message target'],
-                [missing, 'Unknown invoice message reference'], [unsafe, 'Invalid invoice message target']] as const) {
+            [missing, 'Unknown invoice message reference'], [unsafe, 'Invalid invoice message target']] as const) {
                 await fs.writeFile(localePath, JSON.stringify(catalog));
                 expect(() => generate('generate-locales.mjs', ['--output-root', destination], temporary)).toThrow(message);
             }
@@ -1257,6 +1257,6 @@ describe('contract and catalog generation', () => {
         execFileSync(process.execPath, [path.join(root, 'node_modules/typescript/bin/tsc'), '--ignoreConfig',
             '--noEmit', '--strict', '--skipLibCheck', '--target', 'ES2024', '--module', 'NodeNext',
             '--moduleResolution', 'NodeNext', '--resolveJsonModule', '--esModuleInterop',
-            path.join(root, 'tests/fixtures/frontend-contracts.mts')], {cwd: root, stdio: 'pipe'});
+        path.join(root, 'tests/fixtures/frontend-contracts.mts')], {cwd: root, stdio: 'pipe'});
     }, 20_000);
 });

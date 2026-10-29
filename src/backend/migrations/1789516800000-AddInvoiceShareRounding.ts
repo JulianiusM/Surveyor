@@ -6,8 +6,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
-import {addColumnIfNotExists, columnExists, dropColumnIfExists, tableExists} from "../modules/database/utils/migration-helper";
+import {MigrationInterface, QueryRunner} from 'typeorm';
+import {addColumnIfNotExists, columnExists, dropColumnIfExists, tableExists} from '../modules/database/utils/migration-helper';
 
 export class AddInvoiceShareRounding1789516800000 implements MigrationInterface {
     name = "AddInvoiceShareRounding1789516800000";

@@ -6,8 +6,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
-import {columnExists} from "../modules/database/utils/migration-helper";
+import {MigrationInterface, QueryRunner} from 'typeorm';
+import {columnExists} from '../modules/database/utils/migration-helper';
 
 const columns = [
     {table: "activity_roles", column: "description", type: "text"},

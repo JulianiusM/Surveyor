@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import {Column} from "typeorm";
-import {NumericEntityItem, UuidEntityItem} from "./BaseEntityItem";
+import {Column} from 'typeorm';
+import {NumericEntityItem, UuidEntityItem} from './BaseEntityItem';
 
 export abstract class UuidDescriptionEntityItem extends UuidEntityItem {
     @Column("text", {name: "description", nullable: true})

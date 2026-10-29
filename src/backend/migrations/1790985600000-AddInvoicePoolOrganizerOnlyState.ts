@@ -6,8 +6,8 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
-import {tableExists} from "../modules/database/utils/migration-helper";
+import {MigrationInterface, QueryRunner} from 'typeorm';
+import {tableExists} from '../modules/database/utils/migration-helper';
 
 /** Add the independent organizer-invoice state to existing installations. */
 export class AddInvoicePoolOrganizerOnlyState1790985600000 implements MigrationInterface {

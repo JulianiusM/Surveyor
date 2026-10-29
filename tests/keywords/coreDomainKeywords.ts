@@ -1,10 +1,12 @@
 import {Request} from 'express';
 import {randomUUID} from 'node:crypto';
-import activityController from '../../src/backend/controller/activityController';
-import driversController from '../../src/backend/controller/driversController';
-import eventController from '../../src/backend/controller/eventController';
-import packingController from '../../src/backend/controller/packingController';
-import surveyController from '../../src/backend/controller/surveyController';
+import * as activityController from '../../src/backend/controller/activityController';
+import {assignActivityAssignmentRole} from '../../src/backend/modules/activity/slots';
+import * as driversController from '../../src/backend/controller/driversController';
+import * as eventController from '../../src/backend/controller/eventController';
+import * as packingController from '../../src/backend/controller/packingController';
+import * as surveyController from '../../src/backend/controller/surveyController';
+import {submitResponses} from '../../src/backend/modules/survey';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
 import {DriversItem} from '../../src/backend/modules/database/entities/drivers/DriversItem';
 import {PackingItem} from '../../src/backend/modules/database/entities/packing/PackingItem';
@@ -16,7 +18,7 @@ import * as eventService from '../../src/backend/modules/database/services/Event
 import * as packingService from '../../src/backend/modules/database/services/PackingService';
 import * as surveyService from '../../src/backend/modules/database/services/SurveyService';
 import * as userService from '../../src/backend/modules/database/services/UserService';
-import {WithRequired} from "../../src/types/UtilTypes";
+import {WithRequired} from '../../src/types/UtilTypes';
 import {
     createActivitySlotEntity,
     createDriversItemEntity,
@@ -143,7 +145,7 @@ export async function registerEventAttendance(
 }
 
 export async function assignActivitySlot(itemId: string, profileId: string): Promise<void> {
-    await activityController.getAssignmentAccessMapping().assign({itemId}, profileId);
+    await assignActivityAssignmentRole(itemId, profileId);
 }
 
 export async function assignDriversItem(itemId: string, profileId: string): Promise<void> {
@@ -168,5 +170,5 @@ export async function submitSurveyResponses(
     answers: Record<number, 'yes' | 'maybe' | 'no'>,
 ): Promise<void> {
     const survey = await surveyService.getSurveyById(surveyId);
-    await surveyController.submitResponses(survey!, {profile} as Request['session'], answers);
+    await submitResponses(survey!, {profile} as Request['session'], answers);
 }

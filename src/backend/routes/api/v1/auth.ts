@@ -115,30 +115,30 @@ function identityMailAdmission(req: Request, res: Response): (recipient: string)
 router.post('/auth/logout', asyncHandler(/** Admit the captured logout command,
  * preserving the existing truthy-token distinction between local completion and
  * provider handoff, including each owner's session and delivery ordering. */
-async function logoutIdentity(req, res) {
-    await admit(req, res, 'logoutIdentity');
-    // Classification follows the existing logout owner, including truthy empty
-    // token objects. Account/guest kind never selects a provider workflow.
-    if (!req.session.tokens) {
-        /** Validate and serialize anonymous confirmation before clearing stored authority becomes final. */
-        function prepareLogoutReply(staged: Request['session']) {
-            return prepareIdentityReply(req, staged, 'logoutIdentity');
+    async function logoutIdentity(req, res) {
+        await admit(req, res, 'logoutIdentity');
+        // Classification follows the existing logout owner, including truthy empty
+        // token objects. Account/guest kind never selects a provider workflow.
+        if (!req.session.tokens) {
+            /** Validate and serialize anonymous confirmation before clearing stored authority becomes final. */
+            function prepareLogoutReply(staged: Request['session']) {
+                return prepareIdentityReply(req, staged, 'logoutIdentity');
+            }
+            const committed = await userController.logoutUserWithSession(req,
+                {context: req.apiActor!.context, prepareResult: prepareLogoutReply});
+            req.session = committed.session;
+            sendPreparedJson(req, res, committed.result);
+            return;
         }
-        const committed = await userController.logoutUserWithSession(req,
-            {context: req.apiActor!.context, prepareResult: prepareLogoutReply});
-        req.session = committed.session;
-        sendPreparedJson(req, res, committed.result);
-        return;
-    }
 
-    // The explicit outcome confirms local persistence even when later provider
-    // discovery or handoff preparation fails. No local identity is restored.
-    const outcome = await userController.logoutUserOidc(req.session, 'outcome');
-    // Local logout completes in the SPA. Only the provider's authoritative end-session URL
-    // requires a full navigation; oidc.logout otherwise returns the application's own root.
-    await sendIdentity(req, res, 'logoutIdentity', null,
-        outcome.redirect === settings.value.rootUrl ? null : outcome.redirect, outcome.providerLogout);
-}));
+        // The explicit outcome confirms local persistence even when later provider
+        // discovery or handoff preparation fails. No local identity is restored.
+        const outcome = await userController.logoutUserOidc(req.session, 'outcome');
+        // Local logout completes in the SPA. Only the provider's authoritative end-session URL
+        // requires a full navigation; oidc.logout otherwise returns the application's own root.
+        await sendIdentity(req, res, 'logoutIdentity', null,
+            outcome.redirect === settings.value.rootUrl ? null : outcome.redirect, outcome.providerLogout);
+    }));
 
 router.post('/auth/register', asyncHandler(async function registerAccount(req, res) {
     await admit(req, res, 'registerAccount');

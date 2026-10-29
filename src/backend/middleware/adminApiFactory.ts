@@ -19,11 +19,10 @@ import type {Request, RequestHandler, Response, Router} from 'express';
 import type {AdminApiCommand, AdminApiInput, AdminApiOperation, AdminApiRead, AdminApiResult,
     EntityAdminApiConfiguration, EntityArchiveApiConfiguration, EntityPropertyApiConfiguration,
     UserSearchApiConfiguration} from '../../types/AdminApiTypes';
-import type {PreparedApiJsonResponse} from '../../types/ApiTransportTypes';
 import type {SessionLike} from '../../types/PermissionTypes';
 import type {EntityType} from '../../types/UtilTypes';
 import {requireApiContext} from '../modules/api/session';
-import {prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../modules/api/transport';
+import {executePreparedJson, prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../modules/api/transport';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {APIError} from '../modules/lib/errors';
 
@@ -90,14 +89,11 @@ function commandHandler<Operation extends AdminApiOperation>(parameter: string,
             return;
         }
 
-        let prepared: PreparedApiJsonResponse;
-        /** Capture immutable bytes at the existing controller-supplied preparation boundary. */
-        function prepareResult(result: AdminApiResult<Operation>): void {
-            prepared = prepareValidatedJson<AdminApiOperation, 200>(request, configuration.operation, 200, result);
-        }
         // Drivers and selected Activity/Survey operations retain their own locks and
         // prepare callbacks. Metadata's returned ETag is set only after that command.
-        const completion = await configuration.execute(input, prepareResult);
+        const {operationResult: completion, prepared} = await executePreparedJson(
+            (result: AdminApiResult<Operation>) => prepareValidatedJson<AdminApiOperation, 200>(request, configuration.operation, 200, result),
+            prepare => configuration.execute(input, prepare));
         if (completion?.etag) response.set('ETag', completion.etag);
         sendPreparedJson(request, response, prepared!);
     }

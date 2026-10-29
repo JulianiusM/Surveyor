@@ -1,5 +1,5 @@
 import type {ComponentPublicInstance, ComputedRef, Ref, ShallowRef} from 'vue';
-import type {QueryClient} from '@tanstack/vue-query';
+import type {Query, QueryClient} from '@tanstack/vue-query';
 import type {i18n} from 'i18next';
 import type {NavigationFailure, RouteLocationNormalized} from 'vue-router';
 import type {components} from './api/v1';
@@ -37,9 +37,9 @@ export interface FrontendCommandReviewOptions {
  * records or capabilities. Matching page and scoped reads consume this same shape. */
 export interface FrontendLoadingSkeleton {
     variant?: 'lines' | 'form' | 'table' | 'cards' | 'article' | 'overview' | 'list-detail'
-        | 'list-create' | 'packing-create' | 'survey' | 'survey-create' | 'activity' | 'activity-create'
-        | 'event' | 'event-admin' | 'event-create' | 'identity'
-        | 'login' | 'profile' | 'roster' | 'workflow' | 'guest';
+    | 'list-create' | 'packing-create' | 'survey' | 'survey-create' | 'activity' | 'activity-create'
+    | 'event' | 'event-admin' | 'event-create' | 'identity'
+    | 'login' | 'profile' | 'roster' | 'workflow' | 'guest';
     rows?: number;
     columns?: number;
     hideColumnOnMobile?: number;
@@ -75,8 +75,8 @@ export type FrontendRequestScope = Pick<components['schemas']['SessionView'], 'c
  * legacy workflow adapters must not manufacture a SessionView after committing work. */
 export type FrontendIdentityConfirmation = Pick<components['schemas']['IdentityResult'], 'personalLink' | 'emailDelivery'>
     & Partial<Pick<components['schemas']['IdentityResult'], 'redirect'>> & {
-    session: Pick<components['schemas']['SessionView'], 'context'>;
-};
+        session: Pick<components['schemas']['SessionView'], 'context'>;
+    };
 
 /** A control and its handler read the same derived operation state. Each owner
  * supplies its existing admission and locks; initialization is shared, while
@@ -124,6 +124,9 @@ export interface FrontendDecodedResponse {
 export interface FrontendQueryRefreshOptions {
     allowEmpty?: boolean;
 }
+
+/** Retention references the registered cache owner, never a copied response. */
+export type FrontendRetainedQuery<T> = Pick<Query<T>, 'queryKey' | 'state'>;
 
 /** Query metadata describes the owning observer's current dispatch eligibility.
  * It contains no DTO, grants or draft fields; the cache owner checks each actual
@@ -192,8 +195,8 @@ export interface FrontendConfirmedNavigation {
     recoveryRetryAt: ComputedRef<number | undefined>;
     recoveryReadError: ComputedRef<Error | null>;
     navigate(destination: string, scope?: FrontendRequestScope, origin?: string,
-             notice?: components['schemas']['EntryNotice'] | null, refreshSession?: boolean,
-             readFamilies?: readonly (readonly unknown[])[]): Promise<boolean>;
+        notice?: components['schemas']['EntryNotice'] | null, refreshSession?: boolean,
+        readFamilies?: readonly (readonly unknown[])[]): Promise<boolean>;
     retry(): Promise<boolean>;
     retryFallback(): Promise<boolean>;
     retryRecovery(): Promise<boolean>;

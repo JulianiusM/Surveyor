@@ -40,7 +40,7 @@ const {list, data, denied, refresh: readFresh, isActive} = useListDetail({resour
     denied: revokeRequirements});
 const {command, refresh, readAction, retryAt} = useListCommands({active: isActive, denied: () => denied.value,
     reading: () => list.isFetching.value, error: () => list.error.value, refresh: readFresh},
-{dirty: () => dirty.value, unknownMessage: 'draft.leaveUnknown'});
+    {dirty: () => dirty.value, unknownMessage: 'draft.leaveUnknown'});
 const readOnly = computed(() => data.value?.paging?.readOnly === true);
 const blocked = computed(() => readOnly.value || props.disabled || command.action.disabled.value || !draft.value);
 const analysis = computed(() => !readOnly.value && configuration.value && draft.value ? analyzeRequirementDraft(configuration.value, draft.value) : null);
@@ -183,23 +183,23 @@ async function save(): Promise<void> {
     const input = requirementInput(draft.value);
     const resource = props.planId;
     await command.run(
-    /** Release only this current actor/resource's confirmed draft before the
+        /** Release only this current actor/resource's confirmed draft before the
      * causal refresh. Removed IDs already committed must never be sent again
      * merely because that following read fails. */
-    async scope => {
-        const result = await api.saveRequirements(resource, input, scope);
-        // Do not publish an old actor's draft into a later visit. The command
-        // owner independently retains pending/unknown status through retirement.
-        if (isActive() && context.isCurrent(scope) && resource === props.planId) {
-            dirty.value = false;
-            calculation.value = null;
-            // This removal is already committed even if the follow-up read
-            // fails. A later edit must not resend IDs which no longer exist.
-            if (draft.value) draft.value.removedOverrideIds = [];
-            emit('changed');
-        }
-        return result;
-    }, true, false, {success: 'activity.requirements.saved'});
+        async scope => {
+            const result = await api.saveRequirements(resource, input, scope);
+            // Do not publish an old actor's draft into a later visit. The command
+            // owner independently retains pending/unknown status through retirement.
+            if (isActive() && context.isCurrent(scope) && resource === props.planId) {
+                dirty.value = false;
+                calculation.value = null;
+                // This removal is already committed even if the follow-up read
+                // fails. A later edit must not resend IDs which no longer exist.
+                if (draft.value) draft.value.removedOverrideIds = [];
+                emit('changed');
+            }
+            return result;
+        }, true, false, {success: 'activity.requirements.saved'});
 }
 </script>
 

@@ -7,15 +7,14 @@ import {dismissFrontendSuccessNotifications, updateEntityDefaultsForE2E, updateE
 import {waitForFrontendHydration} from '../keywords/frontendDynamicKeywords';
 import {PERM} from '../../src/backend/modules/lib/permissions';
 import {createTranslator} from '../../src/common/localization/translator';
-import {getGuestRegistrationNags} from '../../src/backend/modules/lib/guestRegistrationNags';
 
 /** Seed attendance through the integrated API, independently of the Vue control
  * being exercised. Each test owns a separately created Event. */
 async function registerParticipant(request: APIRequestContext, id: string, allergyNotes = 'Peanuts'): Promise<void> {
     const response = await request.put(`/api/v1/events/${id}/registration`, {headers: await frontendEventHeaders(request), data: {
-        arrivalDate: '2030-06-01', departureDate: '2030-06-04',
-        dietary: ['VEGAN', 'ALLERGIES', 'COMMENT'], allergyNotes, dietComment: 'No tomatoes',
-    }});
+            arrivalDate: '2030-06-01', departureDate: '2030-06-04',
+            dietary: ['VEGAN', 'ALLERGIES', 'COMMENT'], allergyNotes, dietComment: 'No tomatoes',
+        }});
     expect(response.status()).toBe(200);
 }
 
@@ -396,7 +395,7 @@ test('keeps deadline rejection drafts, admits independent exceptions and present
         // registration-cancellation confirmation keeps its separate handler.
         const confirmation = guest.waitForEvent('dialog').then(async function acceptEventGuest(dialog) {
             expect(dialog.type()).toBe('confirm');
-            expect(dialog.message()).toBe(getGuestRegistrationNags('event').submitConfirmation);
+            expect(dialog.message()).toBe(createTranslator('en').t('auth.eventGuestConfirmation'));
             await dialog.accept();
         });
         await Promise.all([confirmation, guest.getByRole('button', {name: 'Continue as guest', exact: true}).click()]);

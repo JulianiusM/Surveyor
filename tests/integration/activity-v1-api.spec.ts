@@ -1,13 +1,14 @@
 import {getRecommendations} from '../../src/backend/modules/activity/recommendations';
 import {invalidateEventContext, projectActivityAssignees} from '../../src/backend/modules/activity/autoAssignment';
-import {getRequirements, updateRequirements} from '../../src/backend/controller/activityController';
+
 import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 import {randomUUID} from 'node:crypto';
 import http from 'node:http';
 import express from 'express';
 import session from 'express-session';
 import type {Request} from 'express';
-import nativeActivity, * as activity from '../../src/backend/controller/activityController';
+import * as nativeActivity from '../../src/backend/controller/activityController';
+
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
 import {ActivityPlan} from '../../src/backend/modules/database/entities/activity/ActivityPlan';
 import {ActivitySlot} from '../../src/backend/modules/database/entities/activity/ActivitySlot';
@@ -47,7 +48,7 @@ function creation(eventId: string | null = null): components['schemas']['Activit
 }
 
 async function fixture(eventId: string | null = null) {
-    const {id} = await activity.createActivityPlan(creation(eventId), undefined, actor(owner));
+    const {id} = await nativeActivity.createActivityPlan(creation(eventId), undefined, actor(owner));
     const slot = (await activityService.getActivitySlotsFlat(id))[0];
     return {id, slot};
 }
@@ -65,23 +66,23 @@ describe('versioned Activity production operations', () => {
         const {id} = await fixture();
         const upper = id.toUpperCase();
         const session = actor(owner);
-        const full = await activity.readActivitySettings(upper, session);
-        expect(full.settingsToken).toBe((await activity.readActivitySettings(id, session)).settingsToken);
-        const narrow = await activity.readActivityDefaultsBaseline(id, session);
-        expect((await activity.readActivityDefaultsBaseline(upper, session)).editToken).toBe(narrow.editToken);
+        const full = await nativeActivity.readActivitySettings(upper, session);
+        expect(full.settingsToken).toBe((await nativeActivity.readActivitySettings(id, session)).settingsToken);
+        const narrow = await nativeActivity.readActivityDefaultsBaseline(id, session);
+        expect((await nativeActivity.readActivityDefaultsBaseline(upper, session)).editToken).toBe(narrow.editToken);
         expect(narrow.defaultPermissions).toEqual(full.access!.defaults);
 
-        await activity.setActivityDefaults(upper, {guest: PERM.ACCESS_VIEW}, session, full.settingsToken);
+        await nativeActivity.setActivityDefaults(upper, {guest: PERM.ACCESS_VIEW}, session, full.settingsToken);
         expect(await adminService.getDefaultPerms('activity', id)).toMatchObject({public: PERM.ACCESS_VIEW, guest: PERM.ACCESS_VIEW});
-        await expect(activity.setActivityDefaults(id, {guest: 0}, session, full.settingsToken)).rejects.toMatchObject({status: 412});
-        const latest = await activity.readActivitySettings(upper, session);
-        await expect(activity.setActivityDefaults(upper, {guest: 0}, session, latest.settingsToken.toUpperCase())).rejects.toMatchObject({status: 412});
-        await expect(activity.setActivityDefaults(upper, {guest: 0}, actor(other), latest.settingsToken)).rejects.toMatchObject({status: 403});
+        await expect(nativeActivity.setActivityDefaults(id, {guest: 0}, session, full.settingsToken)).rejects.toMatchObject({status: 412});
+        const latest = await nativeActivity.readActivitySettings(upper, session);
+        await expect(nativeActivity.setActivityDefaults(upper, {guest: 0}, session, latest.settingsToken.toUpperCase())).rejects.toMatchObject({status: 412});
+        await expect(nativeActivity.setActivityDefaults(upper, {guest: 0}, actor(other), latest.settingsToken)).rejects.toMatchObject({status: 403});
 
         await adminService.addAdmin('activity', id, other.id, PERM.MANAGE_PERMISSIONS);
-        const delegated = await activity.readActivitySettings(upper, actor(other));
+        const delegated = await nativeActivity.readActivitySettings(upper, actor(other));
         await adminService.updateAdminPerms('activity', id, other.id, 0);
-        await expect(activity.setActivityDefaults(id, {guest: 0}, actor(other), delegated.settingsToken)).rejects.toMatchObject({status: 403});
+        await expect(nativeActivity.setActivityDefaults(id, {guest: 0}, actor(other), delegated.settingsToken)).rejects.toMatchObject({status: 403});
         expect((await adminService.getDefaultPerms('activity', id)).guest).toBe(PERM.ACCESS_VIEW);
     });
 
@@ -90,31 +91,31 @@ describe('versioned Activity production operations', () => {
         const upper = id.toUpperCase();
         const target = await persistIntegrationProfile({name: 'Activity full-settings administrator target'});
         const session = actor(owner);
-        const full = await activity.readActivitySettings(upper, session);
-        const absent = await activity.readActivityAdminBaseline(id, target.id, session);
+        const full = await nativeActivity.readActivitySettings(upper, session);
+        const absent = await nativeActivity.readActivityAdminBaseline(id, target.id, session);
         expect(absent.mask).toBeNull();
-        expect((await activity.readActivityAdminBaseline(upper, target.id.toUpperCase(), session)).editToken).toBe(absent.editToken);
+        expect((await nativeActivity.readActivityAdminBaseline(upper, target.id.toUpperCase(), session)).editToken).toBe(absent.editToken);
 
-        await activity.setActivityAdmin(upper, target.id.toUpperCase(), PERM.ACCESS_VIEW, session, full.settingsToken);
+        await nativeActivity.setActivityAdmin(upper, target.id.toUpperCase(), PERM.ACCESS_VIEW, session, full.settingsToken);
         expect((await adminService.getAdminGrant('activity', id, target.id))?.perms).toBe(PERM.ACCESS_VIEW);
-        await expect(activity.setActivityAdmin(id, target.id, 0, session, full.settingsToken)).rejects.toMatchObject({status: 412});
-        const granted = await activity.readActivitySettings(upper, session);
+        await expect(nativeActivity.setActivityAdmin(id, target.id, 0, session, full.settingsToken)).rejects.toMatchObject({status: 412});
+        const granted = await nativeActivity.readActivitySettings(upper, session);
         const row = granted.access!.admins.find(candidate => candidate.profileId === target.id)!;
-        const narrow = await activity.readActivityAdminBaseline(id, target.id.toUpperCase(), session);
+        const narrow = await nativeActivity.readActivityAdminBaseline(id, target.id.toUpperCase(), session);
         expect(row.editToken).toBe(narrow.editToken);
-        await activity.setActivityAdmin(id, target.id.toUpperCase(), PERM.EDIT_DESC, session, row.editToken);
-        await expect(activity.setActivityAdmin(upper, target.id, 0, session, row.editToken)).rejects.toMatchObject({status: 412});
-        const current = await activity.readActivitySettings(id, session);
+        await nativeActivity.setActivityAdmin(id, target.id.toUpperCase(), PERM.EDIT_DESC, session, row.editToken);
+        await expect(nativeActivity.setActivityAdmin(upper, target.id, 0, session, row.editToken)).rejects.toMatchObject({status: 412});
+        const current = await nativeActivity.readActivitySettings(id, session);
         const currentRow = current.access!.admins.find(candidate => candidate.profileId === target.id)!;
-        await expect(activity.setActivityAdmin(upper, target.id, 0, actor(other), currentRow.editToken)).rejects.toMatchObject({status: 403});
-        await activity.setActivityAdmin(upper, target.id.toUpperCase(), 0, session, currentRow.editToken);
-        expect((await activity.readActivityAdminBaseline(id, target.id, session)).mask).toBe(0);
+        await expect(nativeActivity.setActivityAdmin(upper, target.id, 0, actor(other), currentRow.editToken)).rejects.toMatchObject({status: 403});
+        await nativeActivity.setActivityAdmin(upper, target.id.toUpperCase(), 0, session, currentRow.editToken);
+        expect((await nativeActivity.readActivityAdminBaseline(id, target.id, session)).mask).toBe(0);
 
         await adminService.addAdmin('activity', id, other.id, PERM.MANAGE_PERMISSIONS);
-        const delegated = await activity.readActivitySettings(upper, actor(other));
+        const delegated = await nativeActivity.readActivitySettings(upper, actor(other));
         const delegatedRow = delegated.access!.admins.find(candidate => candidate.profileId === target.id)!;
         await adminService.updateAdminPerms('activity', id, other.id, 0);
-        await expect(activity.setActivityAdmin(id, target.id.toUpperCase(), PERM.ACCESS_VIEW, actor(other), delegatedRow.editToken)).rejects.toMatchObject({status: 403});
+        await expect(nativeActivity.setActivityAdmin(id, target.id.toUpperCase(), PERM.ACCESS_VIEW, actor(other), delegatedRow.editToken)).rejects.toMatchObject({status: 403});
         expect((await adminService.getAdminGrant('activity', id, target.id))?.perms).toBe(0);
     });
 
@@ -127,70 +128,70 @@ describe('versioned Activity production operations', () => {
         // Native UUID columns may normalize persisted spellings. Actual returned
         // references must agree exactly, while commands still use uppercase aliases.
         const storedMember = await AppDataSource.getRepository(Profile).findOneByOrFail({id: member.id});
-        await activity.createActivityRole(id, {name: 'Mixed identity coordinator'}, actor(owner));
+        await nativeActivity.createActivityRole(id, {name: 'Mixed identity coordinator'}, actor(owner));
         const role = (await activityService.getAllRoles(id)).find(candidate => candidate.title === 'Mixed identity coordinator')!;
         await activityService.addActivitySlotRoles(slot.id, [role.id]);
-        const baseline = await activity.readActivitySlotBaseline(id, slot.id, actor(owner));
-        const alias = await activity.readActivitySlotBaseline(id.toUpperCase(), slot.id.toUpperCase(), actor(owner));
+        const baseline = await nativeActivity.readActivitySlotBaseline(id, slot.id, actor(owner));
+        const alias = await nativeActivity.readActivitySlotBaseline(id.toUpperCase(), slot.id.toUpperCase(), actor(owner));
         expect(alias.values.roles).toEqual([String(role.id)]);
         expect(alias.editToken).toBe(baseline.editToken);
-        await activity.patchActivitySlot(id.toUpperCase(), slot.id, {description: 'Shared identity edit'}, actor(owner), baseline.editToken);
-        await expect(activity.patchActivitySlot(id, slot.id.toUpperCase(), {description: 'Stale edit'}, actor(owner), baseline.editToken)).rejects.toMatchObject({status: 412});
-        await activity.setActivityAssignment(id, slot.id.toUpperCase(), {assigned: true, role: role.title}, actor(member));
+        await nativeActivity.patchActivitySlot(id.toUpperCase(), slot.id, {description: 'Shared identity edit'}, actor(owner), baseline.editToken);
+        await expect(nativeActivity.patchActivitySlot(id, slot.id.toUpperCase(), {description: 'Stale edit'}, actor(owner), baseline.editToken)).rejects.toMatchObject({status: 412});
+        await nativeActivity.setActivityAssignment(id, slot.id.toUpperCase(), {assigned: true, role: role.title}, actor(member));
         const roleMap = await activityService.getParticipantRolesForPlan(id);
         expect(roleMap).toContainEqual({participantKey: 'profile:' + member.id, roleIds: [role.id]});
-        const view = (await activity.readActivityPlan(id.toUpperCase(), actor(member))).data;
+        const view = (await nativeActivity.readActivityPlan(id.toUpperCase(), actor(member))).data;
         expect(view.slots[0]).toMatchObject({selfAssigned: true, roles: [expect.objectContaining({id: String(role.id), self: true})]});
         await recommendationService.saveRecommendations(id, [{itemId: slot.id.toUpperCase(), profileId: member.id.toUpperCase(),
             status: 'PENDING', operation: 'ASSIGN', manual: false}]);
-        const review = await activity.readActivityRecommendations(id.toUpperCase(), actor(owner));
+        const review = await nativeActivity.readActivityRecommendations(id.toUpperCase(), actor(owner));
         const option = review.participantOptions.find(candidate => candidate.profileId === storedMember.id)!;
         const committed = review.existingAssignments.find(candidate => candidate.profile.id === storedMember.id)!;
         expect(option.profileId).toBe(committed.profile.id);
         expect(review.recommendations[0].profile.id).toBe(option.profileId);
         expect(review.recommendations[0].item.id).toBe(committed.item.id);
-        await activity.setActivityAssignment(id.toUpperCase(), slot.id, {assigned: false, role: role.title}, actor(member));
+        await nativeActivity.setActivityAssignment(id.toUpperCase(), slot.id, {assigned: false, role: role.title}, actor(member));
         expect(await activityService.getActivitySlotAssignments(id, member.id)).toEqual([]);
-        await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(member));
-        await activity.setActivityAssignment(id, slot.id.toUpperCase(), {assigned: false}, actor(member));
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: true}, actor(member));
+        await nativeActivity.setActivityAssignment(id, slot.id.toUpperCase(), {assigned: false}, actor(member));
         expect(await activityService.getActivitySlotAssignments(id, member.id)).toEqual([]);
-        await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(member));
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: true}, actor(member));
         const assignment = (await activityService.getActivitySlotAssigneeRows(id))[0];
-        await activity.removeActivityAssignment(id.toUpperCase(), String(assignment.id), actor(owner));
+        await nativeActivity.removeActivityAssignment(id.toUpperCase(), String(assignment.id), actor(owner));
         expect(await activityService.getActivitySlotAssignments(id, member.id)).toEqual([]);
         const foreign = await fixture();
-        await expect(activity.readActivitySlotBaseline(foreign.id.toUpperCase(), slot.id, actor(owner))).rejects.toMatchObject({status: 404});
+        await expect(nativeActivity.readActivitySlotBaseline(foreign.id.toUpperCase(), slot.id, actor(owner))).rejects.toMatchObject({status: 404});
         await adminService.addAdmin('activity', id, other.id, PERM.ITEM_EDIT_DESC);
-        const delegated = await activity.readActivitySlotBaseline(id.toUpperCase(), slot.id, actor(other));
+        const delegated = await nativeActivity.readActivitySlotBaseline(id.toUpperCase(), slot.id, actor(other));
         await adminService.updateAdminPerms('activity', id, other.id, 0);
-        await expect(activity.patchActivitySlot(id, slot.id.toUpperCase(), {description: 'Revoked'}, actor(other), delegated.editToken)).rejects.toMatchObject({status: 403});
+        await expect(nativeActivity.patchActivitySlot(id, slot.id.toUpperCase(), {description: 'Revoked'}, actor(other), delegated.editToken)).rejects.toMatchObject({status: 403});
     });
 
     it('resolves UUID aliases in partial Activity orders while retaining duplicate positions and foreign rejection', async () => {
         const {id, slot} = await fixture();
-        await activity.createActivitySlot(id, {day: '2027-06-03', title: 'Second duty', description: '',
+        await nativeActivity.createActivitySlot(id, {day: '2027-06-03', title: 'Second duty', description: '',
             startTime: null, endTime: null, maxAssignees: 2, roles: []}, actor(owner));
         const second = (await activityService.getActivitySlotsFlat(id)).find(candidate => candidate.id !== slot.id)!;
-        const baseline = await activity.readActivityOrderBaseline(id, actor(owner));
-        expect((await activity.readActivityOrderBaseline(id.toUpperCase(), actor(owner))).editToken).toBe(baseline.editToken);
-        await activity.setActivityOrder(id.toUpperCase(), {order: [{slotId: slot.id.toUpperCase(), position: 7}]}, actor(owner), baseline.editToken);
+        const baseline = await nativeActivity.readActivityOrderBaseline(id, actor(owner));
+        expect((await nativeActivity.readActivityOrderBaseline(id.toUpperCase(), actor(owner))).editToken).toBe(baseline.editToken);
+        await nativeActivity.setActivityOrder(id.toUpperCase(), {order: [{slotId: slot.id.toUpperCase(), position: 7}]}, actor(owner), baseline.editToken);
         expect((await activityService.getActivitySlotById(second.id))?.pos).toBe(second.pos);
         for (const refs of [[slot.id, slot.id], [slot.id.toUpperCase(), slot.id]]) {
-            const current = await activity.readActivityOrderBaseline(id, actor(owner));
-            await activity.setActivityOrder(id.toUpperCase(), {order: refs.map(slotId => ({slotId, position: 9}))}, actor(owner), current.editToken);
+            const current = await nativeActivity.readActivityOrderBaseline(id, actor(owner));
+            await nativeActivity.setActivityOrder(id.toUpperCase(), {order: refs.map(slotId => ({slotId, position: 9}))}, actor(owner), current.editToken);
             expect((await activityService.getActivitySlotById(slot.id))?.pos).toBe(9);
         }
         const foreign = await fixture();
-        const current = await activity.readActivityOrderBaseline(id, actor(owner));
-        await expect(activity.setActivityOrder(id.toUpperCase(), {order: [{slotId: foreign.slot.id.toUpperCase(), position: 0}]}, actor(owner), current.editToken)).rejects.toMatchObject({status: 404});
+        const current = await nativeActivity.readActivityOrderBaseline(id, actor(owner));
+        await expect(nativeActivity.setActivityOrder(id.toUpperCase(), {order: [{slotId: foreign.slot.id.toUpperCase(), position: 0}]}, actor(owner), current.editToken)).rejects.toMatchObject({status: 404});
         expect((await activityService.getActivitySlotById(foreign.slot.id))?.pos).toBe(0);
-        await expect(activity.setActivityOrder(id, {order: [{slotId: slot.id, position: 10}]}, actor(owner), baseline.editToken)).rejects.toMatchObject({status: 412});
+        await expect(nativeActivity.setActivityOrder(id, {order: [{slotId: slot.id, position: 10}]}, actor(owner), baseline.editToken)).rejects.toMatchObject({status: 412});
     });
 
     it('retains selected role mappings and quotas while allowing every slot role to be removed', async () => {
         const {id, slot} = await fixture();
-        await activity.createActivityRole(id, {name: 'Retained coordinator'}, actor(owner));
-        await activity.createActivityRole(id, {name: 'Removable helper'}, actor(owner));
+        await nativeActivity.createActivityRole(id, {name: 'Retained coordinator'}, actor(owner));
+        await nativeActivity.createActivityRole(id, {name: 'Removable helper'}, actor(owner));
         const roles = (await activityService.getAllRoles(id)).filter(role => role.title !== 'default');
         const selected = roles.map(role => role.id);
         await activityService.addActivitySlotRoles(slot.id, selected);
@@ -200,12 +201,12 @@ describe('versioned Activity production operations', () => {
         // comparison against mapping IDs must fail this real-controller journey.
         for (const mapping of mappings) await repository.update(mapping.id, {id: mapping.id + 1_000_000, maxQty: 3});
         const original = await repository.find({where: {item: {id: slot.id}}, order: {id: 'ASC'}});
-        await activity.setActivityAssignment(id, slot.id, {assigned: true, role: roles[0].title}, actor(participant));
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: true, role: roles[0].title}, actor(participant));
         const assignments = await activityService.getActivitySlotAssigneeRows(id);
 
         async function saveRoles(values: number[]): Promise<void> {
-            const baseline = await activity.readActivitySlotBaseline(id, slot.id, actor(owner));
-            await activity.patchActivitySlot(id, slot.id, {roles: values.map(String)}, actor(owner), baseline.editToken);
+            const baseline = await nativeActivity.readActivitySlotBaseline(id, slot.id, actor(owner));
+            await nativeActivity.patchActivitySlot(id, slot.id, {roles: values.map(String)}, actor(owner), baseline.editToken);
         }
         await saveRoles(selected);
         expect(await repository.find({where: {item: {id: slot.id}}, order: {id: 'ASC'}})).toEqual(original);
@@ -213,7 +214,7 @@ describe('versioned Activity production operations', () => {
         expect(await repository.find({where: {item: {id: slot.id}}})).toEqual([original.find(row => row.roleId === selected[0])]);
         await saveRoles([]);
         expect(await repository.find({where: {item: {id: slot.id}}})).toEqual([]);
-        expect((await activity.readActivitySlotBaseline(id, slot.id, actor(owner))).values.roles).toEqual([]);
+        expect((await nativeActivity.readActivitySlotBaseline(id, slot.id, actor(owner))).values.roles).toEqual([]);
         // Removal is idempotent and does not delete the plan's reusable roles.
         await saveRoles([]);
         expect((await activityService.getAllRoles(id)).filter(role => role.title !== 'default').map(role => role.id)).toEqual(selected);
@@ -226,14 +227,14 @@ describe('versioned Activity production operations', () => {
 
     it('uses stored UUID text scope with the original comparison token and preserves foreign-field denial', async () => {
         const {id} = await fixture();
-        await activity.createActivityTextField(id, {title: 'Mixed text identity', text: 'Before'}, actor(owner));
-        const field = (await activity.readActivityPlan(id, actor(owner))).data.textFields[0];
+        await nativeActivity.createActivityTextField(id, {title: 'Mixed text identity', text: 'Before'}, actor(owner));
+        const field = (await nativeActivity.readActivityPlan(id, actor(owner))).data.textFields[0];
         const foreign = await fixture();
-        await expect(activity.patchActivityTextField(foreign.id.toUpperCase(), field.id.toUpperCase(), {text: 'Foreign'}, actor(owner), field.editToken)).rejects.toMatchObject({status: 404});
-        await activity.patchActivityTextField(id.toUpperCase(), field.id.toUpperCase(), {text: 'After'}, actor(owner), field.editToken);
+        await expect(nativeActivity.patchActivityTextField(foreign.id.toUpperCase(), field.id.toUpperCase(), {text: 'Foreign'}, actor(owner), field.editToken)).rejects.toMatchObject({status: 404});
+        await nativeActivity.patchActivityTextField(id.toUpperCase(), field.id.toUpperCase(), {text: 'After'}, actor(owner), field.editToken);
         expect((await activityService.getActivityPlanTextFieldById(field.id))?.text).toBe('After');
-        await expect(activity.patchActivityTextField(id, field.id, {text: 'Stale'}, actor(owner), field.editToken)).rejects.toMatchObject({status: 412});
-        await activity.removeActivityTextField(id.toUpperCase(), field.id.toUpperCase(), actor(owner));
+        await expect(nativeActivity.patchActivityTextField(id, field.id, {text: 'Stale'}, actor(owner), field.editToken)).rejects.toMatchObject({status: 412});
+        await nativeActivity.removeActivityTextField(id.toUpperCase(), field.id.toUpperCase(), actor(owner));
         expect(await activityService.getActivityPlanTextFieldById(field.id)).toBeNull();
     });
 
@@ -250,35 +251,35 @@ describe('versioned Activity production operations', () => {
             stayRequirements: [{stayDays: 1, requiredShifts: 0}, {stayDays: 2, requiredShifts: 1}, {stayDays: 3, requiredShifts: 2}],
             overrides: [{profileId: member.id, roleId: null, requiredShifts: 0}],
         };
-        await activity.saveActivityRequirements(id.toUpperCase(), input, actor(owner));
-        const loaded = await activity.readActivityRequirements(id, actor(owner));
+        await nativeActivity.saveActivityRequirements(id.toUpperCase(), input, actor(owner));
+        const loaded = await nativeActivity.readActivityRequirements(id, actor(owner));
         expect(loaded.overrides[0]).toMatchObject({id: expect.stringMatching(/^[1-9]\d*$/u), profileId: member.id, requiredShifts: 0});
         expect(loaded.participants).toContainEqual(expect.objectContaining({participantKey: 'profile:' + member.id, requiredShifts: 0, source: 'override'}));
-        await activity.saveActivityRequirements(id, {...input, overrides: [{...input.overrides[0], id: loaded.overrides[0].id,
-            profileId: member.id.toUpperCase()}]}, actor(owner));
-        await expect(activity.saveActivityRequirements(id, {...input, overrides: [input.overrides[0],
+        await nativeActivity.saveActivityRequirements(id, {...input, overrides: [{...input.overrides[0], id: loaded.overrides[0].id,
+                profileId: member.id.toUpperCase()}]}, actor(owner));
+        await expect(nativeActivity.saveActivityRequirements(id, {...input, overrides: [input.overrides[0],
             {...input.overrides[0], profileId: member.id.toUpperCase()}]}, actor(owner))).rejects.toMatchObject({status: 400, cause: 'ACTIVITY_OVERRIDE_DUPLICATE'});
-        await expect(activity.saveActivityRequirements(id, {...input, overrides: [{...input.overrides[0], profileId: other.id}]}, actor(owner))).rejects.toMatchObject({status: 400, cause: 'ACTIVITY_OVERRIDE_PARTICIPANT_REQUIRED'});
+        await expect(nativeActivity.saveActivityRequirements(id, {...input, overrides: [{...input.overrides[0], profileId: other.id}]}, actor(owner))).rejects.toMatchObject({status: 400, cause: 'ACTIVITY_OVERRIDE_PARTICIPANT_REQUIRED'});
     });
 
     it('shares one admitted job across UUID aliases and invalidates the same record after real configuration reads', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'UUID job admission Event');
         const {id} = await fixture(eventId);
         const foreign = await fixture();
-        await updateRequirements(id, {assignmentMode: 'REQUIRED', bindingDeadline: '2020-01-01T00:00:00Z',
+        await nativeActivity.updateRequirements(id, {assignmentMode: 'REQUIRED', bindingDeadline: '2020-01-01T00:00:00Z',
             stayRequirements: [{stayDays: 1, requiredShifts: 0}, {stayDays: 2, requiredShifts: 0}, {stayDays: 3, requiredShifts: 1}]});
         // Admission, permission and requirements reads use the real persistence
         // boundary. Hold only scheduled draining so invalidation is deterministic.
         vi.useFakeTimers({toFake: ['setImmediate']});
         try {
-            const first = await activity.generateActivityRecommendations(id, actor(owner));
-            const alias = await activity.generateActivityRecommendations(id.toUpperCase(), actor(owner));
+            const first = await nativeActivity.generateActivityRecommendations(id, actor(owner));
+            const alias = await nativeActivity.generateActivityRecommendations(id.toUpperCase(), actor(owner));
             expect(alias).toMatchObject({coalesced: true, job: {id: first.job.id}});
-            const observed = await activity.readActivityRecommendationJob(id.toUpperCase(), first.job.id.toUpperCase(), actor(owner));
+            const observed = await nativeActivity.readActivityRecommendationJob(id.toUpperCase(), first.job.id.toUpperCase(), actor(owner));
             expect(observed.job.id).toBe(first.job.id);
-            await expect(activity.readActivityRecommendationJob(foreign.id, first.job.id.toUpperCase(), actor(owner))).rejects.toMatchObject({status: 404});
+            await expect(nativeActivity.readActivityRecommendationJob(foreign.id, first.job.id.toUpperCase(), actor(owner))).rejects.toMatchObject({status: 404});
             invalidateEventContext(id);
-            expect(await activity.readActivityRecommendationJob(id.toUpperCase(), first.job.id, actor(owner))).toMatchObject({job: {status: 'STALE'}});
+            expect(await nativeActivity.readActivityRecommendationJob(id.toUpperCase(), first.job.id, actor(owner))).toMatchObject({job: {status: 'STALE'}});
         } finally {
             invalidateEventContext(id);
             await vi.runAllTimersAsync();
@@ -288,10 +289,10 @@ describe('versioned Activity production operations', () => {
 
     it('deletes an owned plan with assignments and shared text through the HTTP adapter', async () => {
         const {id, slot} = await fixture();
-        await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
-        await activity.createActivityTextField(id, {title: 'Instructions', text: 'Bring water'}, actor(owner));
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
+        await nativeActivity.createActivityTextField(id, {title: 'Instructions', text: 'Bring water'}, actor(owner));
 
-        await expect(activity.deleteActivityPlan(id, actor(other))).rejects.toMatchObject({status: 403});
+        await expect(nativeActivity.deleteActivityPlan(id, actor(other))).rejects.toMatchObject({status: 403});
         expect(await activityService.getActivityPlanById(id)).not.toBeNull();
 
         const context = 'activity-delete-context-123456789012345';
@@ -318,9 +319,9 @@ describe('versioned Activity production operations', () => {
             const cookie = seed.headers.get('set-cookie')?.split(';', 1)[0];
             expect(cookie).toBeTruthy();
             const response = await fetch(`${origin}/api/v1/activity-plans/${id}`, {method: 'DELETE', headers: {
-                Cookie: cookie!, 'X-Surveyor-Context': context, 'X-CSRF-Token': csrf,
-                'X-Surveyor-Api-Compatibility': apiCompatibility,
-            }});
+                    Cookie: cookie!, 'X-Surveyor-Context': context, 'X-CSRF-Token': csrf,
+                    'X-Surveyor-Api-Compatibility': apiCompatibility,
+                }});
             expect(response.status).toBe(200);
             expect(await response.json()).toEqual({changed: true});
         } finally {
@@ -336,11 +337,11 @@ describe('versioned Activity production operations', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Deletion migration event');
         await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id);
         const {id, slot} = await fixture(eventId);
-        await activity.createActivityRole(id, {name: 'Coordinator'}, actor(owner));
+        await nativeActivity.createActivityRole(id, {name: 'Coordinator'}, actor(owner));
         const role = (await activityService.getAllRoles(id)).find(candidate => candidate.title === 'Coordinator')!;
         await activityService.addActivitySlotRoles(slot.id, [role.id]);
-        await activity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(participant));
-        await activity.saveActivityRequirements(id, {
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(participant));
+        await nativeActivity.saveActivityRequirements(id, {
             assignmentMode: 'REQUIRED', generalRequiredShifts: 2, roundingMode: 'FLOOR', bindingDeadline: null,
             allowOverfillAfterFull: false, allowExternalAssignees: false, allowArrivalDayEvening: true,
             allowDepartureDayMorning: true, roleRequirements: [{roleId: String(role.id), requiredShifts: 1}],
@@ -365,7 +366,7 @@ describe('versioned Activity production operations', () => {
             for (const table of tables) {
                 expect((await runner.getTable(table))?.foreignKeys.find(key => key.columnNames[0] === 'role_id')?.onDelete).toBe('RESTRICT');
             }
-            await expect(activity.deleteActivityPlan(id, actor(owner))).rejects.toMatchObject({driverError: {code: 'ER_ROW_IS_REFERENCED_2'}});
+            await expect(nativeActivity.deleteActivityPlan(id, actor(owner))).rejects.toMatchObject({driverError: {code: 'ER_ROW_IS_REFERENCED_2'}});
 
             await migration.up(runner);
             await migration.up(runner);
@@ -373,7 +374,7 @@ describe('versioned Activity production operations', () => {
                 expect((await runner.getTable(table))?.foreignKeys.find(key => key.columnNames[0] === 'role_id')?.onDelete).toBe('CASCADE');
                 expect(await runner.query(`SELECT * FROM \`${table}\` WHERE role_id = ?`, [role.id])).toEqual(savedRows[index]);
             }
-            await activity.deleteActivityPlan(id, actor(owner));
+            await nativeActivity.deleteActivityPlan(id, actor(owner));
             expect(await activityService.getActivityPlanById(id)).toBeNull();
             for (const table of tables) {
                 expect(await runner.query(`SELECT * FROM \`${table}\` WHERE role_id = ?`, [role.id])).toEqual([]);
@@ -389,11 +390,11 @@ describe('versioned Activity production operations', () => {
         input.startDate = '2027-03-27';
         input.endDate = '2027-03-30';
         input.slots[0].day = '2027-03-28';
-        const {id} = await activity.createActivityPlan(input, undefined, actor(owner));
+        const {id} = await nativeActivity.createActivityPlan(input, undefined, actor(owner));
         const slot = (await activityService.getActivitySlotsFlat(id))[0];
-        await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
 
-        const view = (await activity.readActivityPlan(id, actor(owner))).data;
+        const view = (await nativeActivity.readActivityPlan(id, actor(owner))).data;
         const validate = contractValidator('ActivityView');
         expect(validate(view), JSON.stringify(validate.errors)).toBe(true);
         expect(view.weeks).toEqual([
@@ -423,8 +424,8 @@ describe('versioned Activity production operations', () => {
             stayRequirements: [{stayDays: 1, requiredShifts: 0}, {stayDays: 2, requiredShifts: 1}, {stayDays: 3, requiredShifts: 2}],
             overrides: [{profileId: participant.id, roleId: null, requiredShifts: 0}],
         };
-        await activity.saveActivityRequirements(id, input, actor(owner));
-        const data = await activity.readActivityRequirements(id, actor(owner));
+        await nativeActivity.saveActivityRequirements(id, input, actor(owner));
+        const data = await nativeActivity.readActivityRequirements(id, actor(owner));
         const validateRequirements = contractValidator('ActivityRequirements');
         expect(validateRequirements(data), JSON.stringify(validateRequirements.errors)).toBe(true);
         expect(data.overrides).toEqual([{id: expect.stringMatching(/^[1-9]\d*$/u), profileId: participant.id, profileName: participant.name,
@@ -433,17 +434,17 @@ describe('versioned Activity production operations', () => {
         expect(data.calculationContext.participants).toContainEqual(expect.objectContaining({profileId: participant.id}));
         expect(data.overrideTargets).toContainEqual(expect.objectContaining({profileId: participant.id,
             label: participant.name, nameIsFallback: false}));
-        const nativeRequirements = await getRequirements(id);
+        const nativeRequirements = await nativeActivity.getRequirements(id);
         expect(data.overrides[0].id).toBe(String(nativeRequirements.overrides[0].id));
         const nativeTarget = nativeRequirements.overrideTargets.find(target => target.profileId === participant.id);
         expect(nativeTarget).toMatchObject({label: participant.name});
         expect(nativeTarget).not.toHaveProperty('nameIsFallback');
         expect(JSON.stringify(data)).not.toContain('password');
         expect(data).not.toHaveProperty('owner');
-        await expect(activity.readActivityRequirements(id, actor(other))).rejects.toMatchObject({status: 403});
+        await expect(nativeActivity.readActivityRequirements(id, actor(other))).rejects.toMatchObject({status: 403});
         await adminService.addAdmin('activity', id, other.id, PERM.MANAGE_ASSIGNMENTS);
-        await expect(activity.saveActivityRequirements(id, input, actor(other))).rejects.toMatchObject({status: 403});
-        expect((await activity.readActivityPlan(id, actor(other))).data.capabilities.manageRecommendations).toBe(true);
+        await expect(nativeActivity.saveActivityRequirements(id, input, actor(other))).rejects.toMatchObject({status: 403});
+        expect((await nativeActivity.readActivityPlan(id, actor(other))).data.capabilities.manageRecommendations).toBe(true);
     });
 
     it('identifies authored participant fallbacks without changing literal names or native payloads', async () => {
@@ -457,11 +458,11 @@ describe('versioned Activity production operations', () => {
         const {id, slot} = await fixture();
         await activityService.updateActivitySlot(slot.id, {maxAssignees: 3});
         for (const profile of [unnamed, literalParticipant, literalProfile])
-            await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(profile));
+            await nativeActivity.setActivityAssignment(id, slot.id, {assigned: true}, actor(profile));
 
-        const view = (await activity.readActivityPlan(id, actor(owner))).data;
-        const recommendations = await activity.readActivityRecommendations(id, actor(owner));
-        const requirements = await activity.readActivityRequirements(id, actor(owner));
+        const view = (await nativeActivity.readActivityPlan(id, actor(owner))).data;
+        const recommendations = await nativeActivity.readActivityRecommendations(id, actor(owner));
+        const requirements = await nativeActivity.readActivityRequirements(id, actor(owner));
         expect(contractValidator('ActivityView')(view)).toBe(true);
         expect(contractValidator('ActivityRecommendations')(recommendations)).toBe(true);
         expect(contractValidator('ActivityRequirements')(requirements)).toBe(true);
@@ -494,9 +495,9 @@ describe('versioned Activity production operations', () => {
         const {id, slot} = await fixture();
         await recommendationService.saveRecommendations(id, [{itemId: slot.id, profileId: participant.id,
             status: 'PENDING', operation: 'ASSIGN', manual: false}]);
-        await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
 
-        const snapshot = await activity.readActivityRecommendations(id, actor(owner));
+        const snapshot = await nativeActivity.readActivityRecommendations(id, actor(owner));
         expect(contractValidator('ActivityRecommendations')(snapshot)).toBe(true);
         expect(snapshot.recommendations).toMatchObject([{item: {id: slot.id}, profile: {id: participant.id}, status: 'PENDING', manual: false}]);
         expect((await recommendationService.getRecommendations(id))[0].status).toBe('PENDING');
@@ -504,26 +505,26 @@ describe('versioned Activity production operations', () => {
         expect(snapshot.recommendations[0]).not.toHaveProperty('entity');
         expect(snapshot.recommendations[0].profile).toEqual({id: participant.id, name: participant.name});
 
-        const entered = await activity.readActivityRecommendations(id, actor(owner), true);
+        const entered = await nativeActivity.readActivityRecommendations(id, actor(owner), true);
         expect(entered.recommendations).toEqual([]);
         expect((await recommendationService.getRecommendations(id))[0].status).toBe('APPLIED');
-        await expect(activity.readActivityRecommendations(id, actor(other))).rejects.toMatchObject({status: 403});
-        await expect(activity.generateActivityRecommendations(id, actor(owner))).rejects.toMatchObject({status: 409});
+        await expect(nativeActivity.readActivityRecommendations(id, actor(other))).rejects.toMatchObject({status: 403});
+        await expect(nativeActivity.generateActivityRecommendations(id, actor(owner))).rejects.toMatchObject({status: 409});
     });
 
     it('retains generated provenance and applies only the submitted reviewed manual batch', async () => {
         const {id, slot} = await fixture();
         await recommendationService.saveRecommendations(id, [{itemId: slot.id, profileId: participant.id,
             status: 'PENDING', operation: 'ASSIGN', manual: false}]);
-        const loaded = await activity.readActivityRecommendations(id, actor(owner));
+        const loaded = await nativeActivity.readActivityRecommendations(id, actor(owner));
         const generated = loaded.recommendations[0];
         const review: components['schemas']['ActivityRecommendationReview'] = {recommendations: [
-            {id: generated.id, itemId: slot.id, profileId: participant.id, status: 'REJECTED', operation: 'ASSIGN', manual: true},
-            {itemId: slot.id, profileId: other.id, status: 'APPROVED', operation: 'ASSIGN', manual: true},
-        ]};
-        const preview = await activity.previewActivityRecommendations(id, review, actor(owner));
+                {id: generated.id, itemId: slot.id, profileId: participant.id, status: 'REJECTED', operation: 'ASSIGN', manual: true},
+                {itemId: slot.id, profileId: other.id, status: 'APPROVED', operation: 'ASSIGN', manual: true},
+            ]};
+        const preview = await nativeActivity.previewActivityRecommendations(id, review, actor(owner));
         expect(contractValidator('ActivityRecommendationPreview')(preview)).toBe(true);
-        const applied = await activity.applyActivityRecommendations(id, {...review, overlapConfirmation: preview.overlapConfirmation}, actor(owner));
+        const applied = await nativeActivity.applyActivityRecommendations(id, {...review, overlapConfirmation: preview.overlapConfirmation}, actor(owner));
         expect(contractValidator('ActivityRecommendationApplyResult')(applied)).toBe(true);
         expect(applied).toMatchObject({applied: 1, skipped: 0});
         expect((await recommendationService.getRecommendations(id)).find(row => row.profileId === participant.id)).toMatchObject({manual: false, status: 'REJECTED'});
@@ -537,8 +538,8 @@ describe('versioned Activity production operations', () => {
             status: 'APPROVED', operation: 'ASSIGN', manual: true}]);
         const saved = (await recommendationService.getRecommendations(id))[0];
         const input = {recommendations: [{id: saved.id, itemId: slot.id, profileId: participant.id,
-            status: 'APPROVED' as const, operation: 'ASSIGN' as const, manual: true}]};
-        await expect(activity.applyActivityRecommendations(id, input, actor(owner), function rejectCompletion() {
+                status: 'APPROVED' as const, operation: 'ASSIGN' as const, manual: true}]};
+        await expect(nativeActivity.applyActivityRecommendations(id, input, actor(owner), function rejectCompletion() {
             throw new Error('Synthetic response preparation failure');
         })).rejects.toThrow('Synthetic response preparation failure');
         expect(await activityService.getActivitySlotAssignments(id, participant.id)).toEqual([]);
@@ -549,7 +550,7 @@ describe('versioned Activity production operations', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Generation failure camp');
         for (const profile of [participant, other]) await eventService.register(eventId, '2027-06-01', '2027-06-03', profile.id);
         const {id, slot} = await fixture(eventId);
-        await updateRequirements(id, {assignmentMode: 'REQUIRED', bindingDeadline: '2020-01-01T00:00:00Z',
+        await nativeActivity.updateRequirements(id, {assignmentMode: 'REQUIRED', bindingDeadline: '2020-01-01T00:00:00Z',
             stayRequirements: [{stayDays: 1, requiredShifts: 0}, {stayDays: 2, requiredShifts: 0}, {stayDays: 3, requiredShifts: 1}]});
         await recommendationService.saveRecommendations(id, [{itemId: slot.id, profileId: participant.id,
             status: 'APPROVED', operation: 'ASSIGN', manual: true}]);
@@ -564,11 +565,11 @@ describe('versioned Activity production operations', () => {
         const request = {headers: {}, apiActor: {context: 'activity-completion-fixture'}, get: () => undefined,
             acceptsLanguages: () => ['en']} as unknown as Request;
         try {
-            const result = await activity.applyActivityRecommendations(id, {recommendations: [{id: saved.id,
-                itemId: slot.id, profileId: participant.id, status: 'APPROVED', operation: 'ASSIGN', manual: true}]}, actor(owner),
-            function prepareApplication(variants) {
-                prepared = prepareValidatedJsonVariants(request, 'applyActivityRecommendations', 200, variants);
-            });
+            const result = await nativeActivity.applyActivityRecommendations(id, {recommendations: [{id: saved.id,
+                    itemId: slot.id, profileId: participant.id, status: 'APPROVED', operation: 'ASSIGN', manual: true}]}, actor(owner),
+                function prepareApplication(variants) {
+                    prepared = prepareValidatedJsonVariants(request, 'applyActivityRecommendations', 200, variants);
+                });
             expect(result).toMatchObject({applied: 1, skipped: 0, generationOutcome: 'failed'});
             expect(JSON.parse(prepared!.failed.json)).toEqual(result);
             expect(prepared!.failed.status).toBe(200);
@@ -585,19 +586,19 @@ describe('versioned Activity production operations', () => {
         await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id);
         const {id} = await fixture(eventId);
         const second = await fixture(eventId);
-        await updateRequirements(id, {assignmentMode: 'REQUIRED', bindingDeadline: '2020-01-01T00:00:00Z',
+        await nativeActivity.updateRequirements(id, {assignmentMode: 'REQUIRED', bindingDeadline: '2020-01-01T00:00:00Z',
             stayRequirements: [{stayDays: 1, requiredShifts: 0}, {stayDays: 2, requiredShifts: 0}, {stayDays: 3, requiredShifts: 1}]});
-        expect((await activity.readActivityRecommendations(id, actor(owner))).autoGenerationJob).toBeNull();
-        const queued = await activity.generateActivityRecommendations(id, actor(owner));
+        expect((await nativeActivity.readActivityRecommendations(id, actor(owner))).autoGenerationJob).toBeNull();
+        const queued = await nativeActivity.generateActivityRecommendations(id, actor(owner));
         expect(contractValidator('ActivityRecommendationQueued')(queued)).toBe(true);
-        const observed = await activity.readActivityRecommendationJob(id, queued.job.id, actor(owner));
+        const observed = await nativeActivity.readActivityRecommendationJob(id, queued.job.id, actor(owner));
         expect(observed.job.id).toBe(queued.job.id);
         expect(contractValidator('ActivityRecommendationJobResult')(observed)).toBe(true);
-        await expect(activity.readActivityRecommendationJob(second.id, queued.job.id, actor(owner))).rejects.toMatchObject({status: 404});
-        await expect(activity.readActivityRecommendationJob(id, queued.job.id, actor(other))).rejects.toMatchObject({status: 403});
+        await expect(nativeActivity.readActivityRecommendationJob(second.id, queued.job.id, actor(owner))).rejects.toMatchObject({status: 404});
+        await expect(nativeActivity.readActivityRecommendationJob(id, queued.job.id, actor(other))).rejects.toMatchObject({status: 403});
         // Wait for this fixture's existing worker before database teardown or another schema reset.
         for (let attempt = 0; attempt < 100; attempt += 1) {
-            const current = await activity.readActivityRecommendationJob(id, queued.job.id, actor(owner));
+            const current = await nativeActivity.readActivityRecommendationJob(id, queued.job.id, actor(owner));
             if (!['QUEUED', 'RUNNING'].includes(current.job.status)) {
                 expect(current.job.status).toBe('COMPLETE');
                 return;
@@ -612,75 +613,75 @@ describe('versioned Activity production operations', () => {
         const {id, slot} = await fixture(eventId);
         await adminService.addAdmin('activity', id, other.id, PERM.MANAGE_ASSIGNMENTS);
         await eventService.register(eventId, '2027-06-01', '2027-06-03', other.id);
-        await activity.removeActivitySlot(id, slot.id, actor(owner));
-        const empty = (await activity.readActivityPlan(id, actor(other))).data;
+        await nativeActivity.removeActivitySlot(id, slot.id, actor(owner));
+        const empty = (await nativeActivity.readActivityPlan(id, actor(other))).data;
         expect(empty.slots).toEqual([]);
         expect(empty.capabilities.rulesWorkspace).toBe(true);
 
         const standalone = await fixture();
-        expect((await activity.readActivityPlan(standalone.id, actor(owner))).data.capabilities.rulesWorkspace).toBe(false);
+        expect((await nativeActivity.readActivityPlan(standalone.id, actor(owner))).data.capabilities.rulesWorkspace).toBe(false);
         const itemOnly = await fixture(eventId);
         await adminService.addAdmin('activitySlot', itemOnly.slot.id, other.id, PERM.MANAGE_ASSIGNMENTS);
-        expect((await activity.readActivityPlan(itemOnly.id, actor(other))).data.capabilities.rulesWorkspace).toBe(false);
+        expect((await nativeActivity.readActivityPlan(itemOnly.id, actor(other))).data.capabilities.rulesWorkspace).toBe(false);
     });
 
     it('pauses/resumes only standalone schedules through the existing lifecycle owner', async () => {
         const {id} = await fixture();
-        expect(await activity.readActivitySettings(id, actor(owner))).toMatchObject({capabilities: {manageAutomation: true}, archive: {hasAutomaticSchedule: true}});
-        await activity.setActivityAutomaticArchival(id, {paused: true}, actor(owner));
+        expect(await nativeActivity.readActivitySettings(id, actor(owner))).toMatchObject({capabilities: {manageAutomation: true}, archive: {hasAutomaticSchedule: true}});
+        await nativeActivity.setActivityAutomaticArchival(id, {paused: true}, actor(owner));
         expect(await activityService.getActivityPlanById(id)).toMatchObject({autoArchivePaused: true, archivedAt: null});
-        await activity.setActivityAutomaticArchival(id, {paused: false}, actor(owner));
+        await nativeActivity.setActivityAutomaticArchival(id, {paused: false}, actor(owner));
         expect(await activityService.getActivityPlanById(id)).toMatchObject({autoArchivePaused: false, archivedAt: null});
-        await expect(activity.setActivityAutomaticArchival(id, {paused: true}, actor(other))).rejects.toMatchObject({status: 403});
+        await expect(nativeActivity.setActivityAutomaticArchival(id, {paused: true}, actor(other))).rejects.toMatchObject({status: 403});
         const eventId = await createIntegrationEvent(owner.id, 'Parent scheduled activity');
         const linked = await fixture(eventId);
-        expect(await activity.readActivitySettings(linked.id, actor(owner))).toMatchObject({capabilities: {manageAutomation: false}, archive: {hasAutomaticSchedule: false}});
-        await expect(activity.setActivityAutomaticArchival(linked.id, {paused: true}, actor(owner))).rejects.toMatchObject({status: 409});
+        expect(await nativeActivity.readActivitySettings(linked.id, actor(owner))).toMatchObject({capabilities: {manageAutomation: false}, archive: {hasAutomaticSchedule: false}});
+        await expect(nativeActivity.setActivityAutomaticArchival(linked.id, {paused: true}, actor(owner))).rejects.toMatchObject({status: 409});
         expect((await activityService.getActivityPlanById(linked.id))?.autoArchivePaused).toBe(false);
     });
 
     it('projects fresh export authority and retains a date-only settings editor', async () => {
         const {id} = await fixture();
-        expect((await activity.readActivitySettings(id, actor(owner))).capabilities.export).toBe(true);
+        expect((await nativeActivity.readActivitySettings(id, actor(owner))).capabilities.export).toBe(true);
         await adminService.addAdmin('activity', id, other.id, PERM.EDIT_META);
-        const dateOnly = await activity.readActivitySettings(id, actor(other));
+        const dateOnly = await nativeActivity.readActivitySettings(id, actor(other));
         expect(dateOnly.editableFields).toEqual(['startDate', 'endDate']);
         expect(dateOnly.capabilities.export).toBe(false);
         await adminService.updateAdminPerms('activity', id, other.id, PERM.EDIT_META | PERM.DATA_EXPORT);
-        expect((await activity.readActivitySettings(id, actor(other))).capabilities.export).toBe(true);
+        expect((await nativeActivity.readActivitySettings(id, actor(other))).capabilities.export).toBe(true);
     });
 
     it('projects native role-creation browser admission independently of the unchanged server method', async () => {
         const {id} = await fixture();
         await adminService.addAdmin('activity', id, other.id, PERM.MANAGE_ASSIGNMENTS);
-        expect((await activity.readActivityPlan(id, actor(other))).data.capabilities.roleCreationAdmission).toBe(false);
+        expect((await nativeActivity.readActivityPlan(id, actor(other))).data.capabilities.roleCreationAdmission).toBe(false);
         // This direct method retains the existing server grant; the browser has
         // its separate presentation admission, as on the unchanged native page.
-        await activity.createActivityRole(id, {name: 'Server-admitted role'}, actor(other));
+        await nativeActivity.createActivityRole(id, {name: 'Server-admitted role'}, actor(other));
         await adminService.updateAdminPerms('activity', id, other.id, PERM.MANAGE_ASSIGNMENTS | PERM.EDIT_META);
-        expect((await activity.readActivityPlan(id, actor(other))).data.capabilities.roleCreationAdmission).toBe(true);
+        expect((await nativeActivity.readActivityPlan(id, actor(other))).data.capabilities.roleCreationAdmission).toBe(true);
     });
 
     it('keeps inline title/capacity admission separate from visible fields and the broader modal fallback', async () => {
         const {id} = await fixture();
         await adminService.addAdmin('activity', id, other.id, PERM.EDIT_TITLE | PERM.EDIT_CAPACITY | PERM.ITEM_EDIT_META);
-        const visible = (await activity.readActivityPlan(id, actor(other))).data.slots[0];
+        const visible = (await nativeActivity.readActivityPlan(id, actor(other))).data.slots[0];
         expect(visible.capabilities).toMatchObject({editMeta: true, inlineMetadataAdmission: false});
         await adminService.updateAdminPerms('activity', id, other.id, PERM.ITEM_EDIT);
-        expect((await activity.readActivityPlan(id, actor(other))).data.slots[0].capabilities.inlineMetadataAdmission).toBe(true);
+        expect((await nativeActivity.readActivityPlan(id, actor(other))).data.slots[0].capabilities.inlineMetadataAdmission).toBe(true);
     });
 
     it('creates native root/slot content, sharing and a fresh duplicate without assignments or history', async () => {
         const input = creation();
-        const {id} = await activity.createActivityPlan(input, undefined, actor(owner));
-        const view = (await activity.readActivityPlan(id, actor(owner))).data;
+        const {id} = await nativeActivity.createActivityPlan(input, undefined, actor(owner));
+        const view = (await nativeActivity.readActivityPlan(id, actor(owner))).data;
         expect(view).toMatchObject({title: input.title, description: input.description, startDate: input.startDate, endDate: input.endDate});
         expect(view.slots).toMatchObject([{title: 'Kitchen', day: '2027-06-02', position: 0, assignedCount: 0}]);
         expect(view.slots[0].id).not.toBe(input.slots[0].id);
         expect(await adminService.getDefaultPerms('activity', id)).toEqual(input.defaultPermissions);
         expect(contractValidator('ActivityView')(view)).toBe(true);
-        await activity.setActivityAssignment(id, view.slots[0].id, {assigned: true}, actor(participant));
-        const duplicate = await activity.readActivityDuplicate(id, actor(owner));
+        await nativeActivity.setActivityAssignment(id, view.slots[0].id, {assigned: true}, actor(participant));
+        const duplicate = await nativeActivity.readActivityDuplicate(id, actor(owner));
         expect(duplicate).toMatchObject({title: input.title, description: input.description, startDate: input.startDate, endDate: input.endDate, eventId: null});
         expect(duplicate.slots[0].id).not.toBe(view.slots[0].id);
         expect(duplicate).not.toHaveProperty('assignments');
@@ -689,10 +690,10 @@ describe('versioned Activity production operations', () => {
 
         // Existing native slot edits permit values that cannot create a new
         // slot. Duplication must display those values for deliberate correction.
-        const baseline = await activity.readActivitySlotBaseline(id, view.slots[0].id, actor(owner));
-        await activity.patchActivitySlot(id, view.slots[0].id, {title: '', maxAssignees: -2}, actor(owner), baseline.editToken);
+        const baseline = await nativeActivity.readActivitySlotBaseline(id, view.slots[0].id, actor(owner));
+        await nativeActivity.patchActivitySlot(id, view.slots[0].id, {title: '', maxAssignees: -2}, actor(owner), baseline.editToken);
         expect(await activityService.getActivitySlotById(view.slots[0].id)).toMatchObject({title: '', maxAssignees: -2});
-        const editable = await activity.readActivityDuplicate(id, actor(owner));
+        const editable = await nativeActivity.readActivityDuplicate(id, actor(owner));
         expect(editable.slots[0]).toMatchObject({title: '', maxAssignees: -2});
         expect(contractValidator('ActivityDuplicate')(editable)).toBe(true);
         const copiedInput: components['schemas']['ActivityCreateInput'] = {title: editable.title, description: editable.description ?? '',
@@ -700,21 +701,21 @@ describe('versioned Activity production operations', () => {
             slots: editable.slots, defaultPermissions: editable.defaultPermissions};
         expect(contractValidator('ActivityCreateInput')(copiedInput)).toBe(false);
         const beforeCorrection = await AppDataSource.getRepository(ActivityPlan).count();
-        await expect(activity.createActivityPlan(copiedInput, undefined, actor(owner))).rejects.toMatchObject({name: 'ValidationError'});
+        await expect(nativeActivity.createActivityPlan(copiedInput, undefined, actor(owner))).rejects.toMatchObject({name: 'ValidationError'});
         expect(await AppDataSource.getRepository(ActivityPlan).count()).toBe(beforeCorrection);
 
         // Correcting the local copy restores normal creation; the original
         // persisted slot stays untouched until an explicit edit of that plan.
         copiedInput.slots = copiedInput.slots.map(slot => ({...slot, title: 'Corrected kitchen', maxAssignees: 1}));
         expect(contractValidator('ActivityCreateInput')(copiedInput)).toBe(true);
-        const corrected = await activity.createActivityPlan(copiedInput, undefined, actor(owner));
+        const corrected = await nativeActivity.createActivityPlan(copiedInput, undefined, actor(owner));
         expect((await activityService.getActivitySlotsFlat(corrected.id))[0]).toMatchObject({title: 'Corrected kitchen', maxAssignees: 1});
 
         // Nullable and legacy zero capacities use the native browser's truthy
         // fallback. Real DBAL writes model both stored representations.
         for (const capacity of [null, 0]) {
             await activityService.updateActivitySlot(view.slots[0].id, {maxAssignees: capacity});
-            const defaulted = await activity.readActivityDuplicate(id, actor(owner));
+            const defaulted = await nativeActivity.readActivityDuplicate(id, actor(owner));
             expect(defaulted.slots[0]).toMatchObject({title: '', maxAssignees: 1});
             expect(contractValidator('ActivityDuplicate')(defaulted)).toBe(true);
         }
@@ -722,10 +723,10 @@ describe('versioned Activity production operations', () => {
 
     it('rejects unauthorized creation/event attachment and rolls back a failed precommit response', async () => {
         const before = await AppDataSource.getRepository(ActivityPlan).count();
-        await expect(activity.createActivityPlan(creation(), undefined, {})).rejects.toMatchObject({status: 401});
+        await expect(nativeActivity.createActivityPlan(creation(), undefined, {})).rejects.toMatchObject({status: 401});
         const forbidden = await createIntegrationEvent(other.id, 'Unrelated event');
-        await expect(activity.createActivityPlan(creation(forbidden), undefined, actor(owner))).rejects.toMatchObject({status: 403});
-        await expect(activity.createActivityPlan(creation(), undefined, actor(owner), () => {
+        await expect(nativeActivity.createActivityPlan(creation(forbidden), undefined, actor(owner))).rejects.toMatchObject({status: 403});
+        await expect(nativeActivity.createActivityPlan(creation(), undefined, actor(owner), () => {
             throw new Error('Cannot prepare the declared creation response');
         })).rejects.toThrow('Cannot prepare the declared creation response');
         expect(await AppDataSource.getRepository(ActivityPlan).count()).toBe(before);
@@ -733,13 +734,13 @@ describe('versioned Activity production operations', () => {
 
     it('omits participant names, attendance and removable handles without the corresponding grant', async () => {
         const {id, slot} = await fixture();
-        await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
-        await activity.createActivityRole(id, {name: 'Coordinator'}, actor(owner));
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
+        await nativeActivity.createActivityRole(id, {name: 'Coordinator'}, actor(owner));
         const role = (await activityService.getAllRoles(id)).find(candidate => candidate.title === 'Coordinator')!;
         await activityService.addActivitySlotRoles(slot.id, [role.id]);
-        await activity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(participant));
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(participant));
 
-        const hidden = (await activity.readActivityPlan(id, actor(other))).data;
+        const hidden = (await nativeActivity.readActivityPlan(id, actor(other))).data;
         expect(hidden.participants).toEqual([]);
         expect(hidden.counters.participants).toBeNull();
         expect(hidden.slots[0].assignees).toEqual([]);
@@ -747,13 +748,13 @@ describe('versioned Activity production operations', () => {
         expect(JSON.stringify(hidden)).not.toContain(participant.name);
         expect(JSON.stringify(hidden)).not.toContain(participant.id);
 
-        const visible = (await activity.readActivityPlan(id, actor(owner))).data;
+        const visible = (await nativeActivity.readActivityPlan(id, actor(owner))).data;
         expect(visible.participants).toContainEqual(expect.objectContaining({name: participant.name, assignedShifts: 1}));
         expect(visible.slots[0].roles[0].assigneeName).toBe(participant.name);
         expect(visible.slots[0].roles[0].id).toBe(String(role.id));
         expect(visible.allRoles.find(candidate => candidate.title === 'Coordinator')?.id).toBe(String(role.id));
         expect(visible.participants.find(person => person.name === participant.name)?.roleIds).toContain(String(role.id));
-        const baseline = await activity.readActivitySlotBaseline(id, slot.id, actor(owner));
+        const baseline = await nativeActivity.readActivitySlotBaseline(id, slot.id, actor(owner));
         expect(baseline.values.roles).toContain(String(role.id));
         expect(contractValidator('ActivityView')(visible)).toBe(true);
     });
@@ -763,17 +764,17 @@ describe('versioned Activity production operations', () => {
         const {id, slot} = await fixture(eventId);
         await adminService.updatePerms('activity', id, {public: 0, authenticated: 0, guest: 0, participant: 0});
         await adminService.addAdmin('activity', id, other.id, PERM.EDIT_DESC | PERM.ITEM_EDIT_DESC);
-        await expect(activity.readActivityPlan(id, actor(other))).rejects.toMatchObject({status: 403});
-        const metadata = await activity.readActivityMetadata(id, actor(other));
+        await expect(nativeActivity.readActivityPlan(id, actor(other))).rejects.toMatchObject({status: 403});
+        const metadata = await nativeActivity.readActivityMetadata(id, actor(other));
         expect(metadata.data.values).toEqual({description: creation().description});
-        await activity.patchActivityMetadata(id, {description: 'Delegated root instructions'}, actor(other), metadata.etag);
-        await expect(activity.patchActivityMetadata(id, {description: 'Stale root instructions'}, actor(other), metadata.etag)).rejects.toMatchObject({status: 412});
+        await nativeActivity.patchActivityMetadata(id, {description: 'Delegated root instructions'}, actor(other), metadata.etag);
+        await expect(nativeActivity.patchActivityMetadata(id, {description: 'Stale root instructions'}, actor(other), metadata.etag)).rejects.toMatchObject({status: 412});
 
-        const baseline = await activity.readActivitySlotBaseline(id, slot.id, actor(other));
+        const baseline = await nativeActivity.readActivitySlotBaseline(id, slot.id, actor(other));
         expect(baseline.values).toEqual({description: 'Clean the kitchen'});
-        await activity.patchActivitySlot(id, slot.id, {description: 'Delegated kitchen instructions'}, actor(other), baseline.editToken);
-        await expect(activity.patchActivitySlot(id, slot.id, {description: 'Stale kitchen instructions'}, actor(other), baseline.editToken)).rejects.toMatchObject({status: 412});
-        await expect(activity.patchActivitySlot(id, slot.id, {title: 'Forbidden title'}, actor(other), baseline.editToken)).rejects.toMatchObject({status: 403});
+        await nativeActivity.patchActivitySlot(id, slot.id, {description: 'Delegated kitchen instructions'}, actor(other), baseline.editToken);
+        await expect(nativeActivity.patchActivitySlot(id, slot.id, {description: 'Stale kitchen instructions'}, actor(other), baseline.editToken)).rejects.toMatchObject({status: 412});
+        await expect(nativeActivity.patchActivitySlot(id, slot.id, {title: 'Forbidden title'}, actor(other), baseline.editToken)).rejects.toMatchObject({status: 403});
         expect(await activityService.getActivitySlotById(slot.id)).toMatchObject({title: 'Kitchen', description: 'Delegated kitchen instructions'});
     });
 
@@ -784,41 +785,41 @@ describe('versioned Activity production operations', () => {
         await adminService.updatePerms('activitySlot', slot.id, {public: PERM.EDIT_DESC});
         const first: ApiActor = {context: 'activity-public-a'};
         const second: ApiActor = {context: 'activity-public-b'};
-        const baseline = await activity.readActivitySlotBaseline(id, slot.id, first);
+        const baseline = await nativeActivity.readActivitySlotBaseline(id, slot.id, first);
         expect(baseline.values).toEqual({description: 'Clean the kitchen'});
-        await expect(activity.readActivityPlan(id, first)).rejects.toMatchObject({status: 401});
-        await expect(activity.patchActivitySlot(id, slot.id, {description: 'Wrong actor'}, second, baseline.editToken)).rejects.toMatchObject({status: 412});
-        await activity.patchActivitySlot(id, slot.id, {description: 'Public edit'}, first, baseline.editToken);
+        await expect(nativeActivity.readActivityPlan(id, first)).rejects.toMatchObject({status: 401});
+        await expect(nativeActivity.patchActivitySlot(id, slot.id, {description: 'Wrong actor'}, second, baseline.editToken)).rejects.toMatchObject({status: 412});
+        await nativeActivity.patchActivitySlot(id, slot.id, {description: 'Public edit'}, first, baseline.editToken);
         expect((await activityService.getActivitySlotById(slot.id))?.description).toBe('Public edit');
     });
 
     it('preserves named-role versus whole-slot membership and independent role quotas', async () => {
         const {id, slot} = await fixture();
-        await activity.createActivityRole(id, {name: 'Coordinator'}, actor(owner));
+        await nativeActivity.createActivityRole(id, {name: 'Coordinator'}, actor(owner));
         const role = (await activityService.getAllRoles(id)).find(candidate => candidate.title === 'Coordinator')!;
         await activityService.addActivitySlotRoles(slot.id, [role.id]);
-        await activity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(participant));
-        await expect(activity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(other))).rejects.toMatchObject({status: 409});
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(participant));
+        await expect(nativeActivity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(other))).rejects.toMatchObject({status: 409});
         // Releasing a sole named role ends membership. An ordinary signup plus a
         // named role retains the signup when only that named role is released.
-        await activity.setActivityAssignment(id, slot.id, {assigned: false, role: 'Coordinator'}, actor(participant));
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: false, role: 'Coordinator'}, actor(participant));
         expect(await activityService.getActivitySlotAssignments(id, participant.id)).toEqual([]);
-        await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
-        await activity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(participant));
-        await activity.setActivityAssignment(id, slot.id, {assigned: false, role: 'Coordinator'}, actor(participant));
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(participant));
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: false, role: 'Coordinator'}, actor(participant));
         expect(await activityService.getActivitySlotAssignments(id, participant.id)).toEqual([slot.id]);
-        await activity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(participant));
-        await activity.setActivityAssignment(id, slot.id, {assigned: false}, actor(participant));
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: true, role: 'Coordinator'}, actor(participant));
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: false}, actor(participant));
         expect(await activityService.getActivitySlotAssignments(id, participant.id)).toEqual([]);
     });
 
     it('serializes competing named-role signups and retains the separate SQL integrity constraint', async () => {
         const {id, slot} = await fixture();
-        await activity.createActivityRole(id, {name: 'Single coordinator'}, actor(owner));
+        await nativeActivity.createActivityRole(id, {name: 'Single coordinator'}, actor(owner));
         const role = (await activityService.getAllRoles(id)).find(candidate => candidate.title === 'Single coordinator')!;
         await activityService.addActivitySlotRoles(slot.id, [role.id]);
         const results = await Promise.allSettled([participant, other].map(profile =>
-            activity.setActivityAssignment(id, slot.id, {assigned: true, role: role.title}, actor(profile))));
+            nativeActivity.setActivityAssignment(id, slot.id, {assigned: true, role: role.title}, actor(profile))));
         expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
         expect(results.find(result => result.status === 'rejected')).toMatchObject({reason: {status: 409}});
 
@@ -843,18 +844,18 @@ describe('versioned Activity production operations', () => {
     it('keeps external signup, capacity, overfill and deadline decisions with existing server owners', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Participant camp');
         const {id, slot} = await fixture(eventId);
-        await expect(activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant))).rejects.toMatchObject({status: 403});
+        await expect(nativeActivity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant))).rejects.toMatchObject({status: 403});
         await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id);
         await activityService.updateActivitySlot(slot.id, {maxAssignees: 1});
-        await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
         await AppDataSource.getRepository(ActivityPlan).update(id, {allowExternalAssignees: true});
-        await expect(activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(other))).rejects.toMatchObject({status: 409});
+        await expect(nativeActivity.setActivityAssignment(id, slot.id, {assigned: true}, actor(other))).rejects.toMatchObject({status: 409});
         await AppDataSource.getRepository(ActivityPlan).update(id, {allowOverfillAfterFull: true});
-        expect((await activity.previewActivityAssignment(id, slot.id, {}, actor(other))).warnings).toContainEqual({type: 'over_capacity'});
-        await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(other));
-        expect((await activity.readActivityPlan(id, actor(owner))).data.slots[0].assignedCount).toBe(2);
+        expect((await nativeActivity.previewActivityAssignment(id, slot.id, {}, actor(other))).warnings).toContainEqual({type: 'over_capacity'});
+        await nativeActivity.setActivityAssignment(id, slot.id, {assigned: true}, actor(other));
+        expect((await nativeActivity.readActivityPlan(id, actor(owner))).data.slots[0].assignedCount).toBe(2);
         await AppDataSource.getRepository(ActivityPlan).update(id, {bindingDeadline: new Date('2020-01-01T00:00:00Z')});
-        await expect(activity.setActivityAssignment(id, slot.id, {assigned: false}, actor(participant))).rejects.toMatchObject({status: 403});
+        await expect(nativeActivity.setActivityAssignment(id, slot.id, {assigned: false}, actor(participant))).rejects.toMatchObject({status: 403});
     });
 
     it('requires a fresh exact warning review after a sibling commitment changes and hides private sibling details', async () => {
@@ -862,50 +863,50 @@ describe('versioned Activity production operations', () => {
         await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id);
         const first = await fixture(eventId);
         const second = await fixture(eventId);
-        await activity.setActivityAssignment(second.id, second.slot.id, {assigned: true}, actor(participant));
+        await nativeActivity.setActivityAssignment(second.id, second.slot.id, {assigned: true}, actor(participant));
         await adminService.updatePerms('activity', second.id, {public: 0, participant: 0, authenticated: 0, guest: 0});
-        const preview = await activity.previewActivityAssignment(first.id, first.slot.id, {}, actor(participant));
+        const preview = await nativeActivity.previewActivityAssignment(first.id, first.slot.id, {}, actor(participant));
         expect(preview.warnings).toContainEqual(expect.objectContaining({type: 'overlap', overlapDetails: [], conflicts: []}));
         expect(preview.overlapConfirmation).toBeTruthy();
         expect(JSON.stringify(preview)).not.toContain(second.id);
         expect(JSON.stringify(preview)).not.toContain(second.slot.id);
         await activityService.updateActivitySlot(second.slot.id, {startTime: '09:15', endTime: '10:00'});
-        await expect(activity.setActivityAssignment(first.id, first.slot.id, {assigned: true, overlapConfirmation: preview.overlapConfirmation}, actor(participant))).rejects.toMatchObject({status: 409});
+        await expect(nativeActivity.setActivityAssignment(first.id, first.slot.id, {assigned: true, overlapConfirmation: preview.overlapConfirmation}, actor(participant))).rejects.toMatchObject({status: 409});
         expect(await activityService.getActivitySlotAssignments(first.id, participant.id)).toEqual([]);
-        const fresh = await activity.previewActivityAssignment(first.id, first.slot.id, {}, actor(participant));
-        await activity.setActivityAssignment(first.id, first.slot.id, {assigned: true, overlapConfirmation: fresh.overlapConfirmation}, actor(participant));
+        const fresh = await nativeActivity.previewActivityAssignment(first.id, first.slot.id, {}, actor(participant));
+        await nativeActivity.setActivityAssignment(first.id, first.slot.id, {assigned: true, overlapConfirmation: fresh.overlapConfirmation}, actor(participant));
         expect(await activityService.getActivitySlotAssignments(first.id, participant.id)).toEqual([first.slot.id]);
         expect(await activityService.getActivitySlotAssignments(second.id, participant.id)).toEqual([second.slot.id]);
     });
 
     it('keeps shared text grants, sparse audience edits and ordering comparisons separate from local filters', async () => {
         const {id, slot} = await fixture();
-        await activity.createActivityTextField(id, {title: 'Instructions', text: 'Bring water'}, actor(owner));
-        const field = (await activity.readActivityPlan(id, actor(participant))).data.textFields[0];
-        await expect(activity.patchActivityTextField(id, field.id, {title: 'Forbidden title', text: 'New text'}, actor(participant), field.editToken)).rejects.toMatchObject({status: 403});
-        await activity.patchActivityTextField(id, field.id, {text: 'Bring snacks'}, actor(participant), field.editToken);
-        await expect(activity.patchActivityTextField(id, field.id, {text: 'Old draft'}, actor(participant), field.editToken)).rejects.toMatchObject({status: 412});
-        const defaults = await activity.readActivityDefaultsBaseline(id, actor(owner));
-        await activity.setActivityDefaults(id, {guest: PERM.ACCESS_VIEW}, actor(owner), defaults.editToken);
+        await nativeActivity.createActivityTextField(id, {title: 'Instructions', text: 'Bring water'}, actor(owner));
+        const field = (await nativeActivity.readActivityPlan(id, actor(participant))).data.textFields[0];
+        await expect(nativeActivity.patchActivityTextField(id, field.id, {title: 'Forbidden title', text: 'New text'}, actor(participant), field.editToken)).rejects.toMatchObject({status: 403});
+        await nativeActivity.patchActivityTextField(id, field.id, {text: 'Bring snacks'}, actor(participant), field.editToken);
+        await expect(nativeActivity.patchActivityTextField(id, field.id, {text: 'Old draft'}, actor(participant), field.editToken)).rejects.toMatchObject({status: 412});
+        const defaults = await nativeActivity.readActivityDefaultsBaseline(id, actor(owner));
+        await nativeActivity.setActivityDefaults(id, {guest: PERM.ACCESS_VIEW}, actor(owner), defaults.editToken);
         expect(await adminService.getDefaultPerms('activity', id)).toMatchObject({public: PERM.ACCESS_VIEW, guest: PERM.ACCESS_VIEW});
-        await expect(activity.setActivityDefaults(id, {guest: 0}, actor(owner), defaults.editToken)).rejects.toMatchObject({status: 412});
+        await expect(nativeActivity.setActivityDefaults(id, {guest: 0}, actor(owner), defaults.editToken)).rejects.toMatchObject({status: 412});
 
-        const order = await activity.readActivityOrderBaseline(id, actor(owner));
-        await activity.setActivityOrder(id, {order: [{slotId: slot.id, position: 10}]}, actor(owner), order.editToken);
-        await expect(activity.setActivityOrder(id, {order: [{slotId: slot.id, position: 20}]}, actor(owner), order.editToken)).rejects.toMatchObject({status: 412});
+        const order = await nativeActivity.readActivityOrderBaseline(id, actor(owner));
+        await nativeActivity.setActivityOrder(id, {order: [{slotId: slot.id, position: 10}]}, actor(owner), order.editToken);
+        await expect(nativeActivity.setActivityOrder(id, {order: [{slotId: slot.id, position: 20}]}, actor(owner), order.editToken)).rejects.toMatchObject({status: 412});
         expect((await activityService.getActivitySlotById(slot.id))?.pos).toBe(10);
     });
 
     it('rejects cross-plan slot/text/assignment identifiers and preserves printable schedule ownership', async () => {
         const first = await fixture();
         const second = await fixture();
-        await expect(activity.removeActivitySlot(first.id, second.slot.id, actor(owner))).rejects.toMatchObject({status: 404});
-        await activity.createActivityTextField(second.id, {title: 'Private notes', text: 'Second plan'}, actor(owner));
+        await expect(nativeActivity.removeActivitySlot(first.id, second.slot.id, actor(owner))).rejects.toMatchObject({status: 404});
+        await nativeActivity.createActivityTextField(second.id, {title: 'Private notes', text: 'Second plan'}, actor(owner));
         const field = (await activityService.getActivityPlanTextFields(second.id))[0];
-        await expect(activity.removeActivityTextField(first.id, field.id, actor(owner))).rejects.toMatchObject({status: 404});
-        await activity.setActivityAssignment(second.id, second.slot.id, {assigned: true}, actor(participant));
+        await expect(nativeActivity.removeActivityTextField(first.id, field.id, actor(owner))).rejects.toMatchObject({status: 404});
+        await nativeActivity.setActivityAssignment(second.id, second.slot.id, {assigned: true}, actor(participant));
         const assignment = (await activityService.getActivitySlotAssigneeRows(second.id).then(projectActivityAssignees))[second.slot.id][0];
-        await expect(activity.removeActivityAssignment(first.id, String(assignment.id), actor(owner))).rejects.toMatchObject({status: 404});
+        await expect(nativeActivity.removeActivityAssignment(first.id, String(assignment.id), actor(owner))).rejects.toMatchObject({status: 404});
         const exported = await nativeActivity.getScheduleExport((await activityService.getActivityPlanById(second.id))!);
         expect(exported.weeks.flatMap(week => week.days.flatMap(day => day.slots))).toContainEqual(expect.objectContaining({id: second.slot.id}));
         expect(exported.textFields).toContainEqual(expect.objectContaining({id: field.id, text: 'Second plan'}));

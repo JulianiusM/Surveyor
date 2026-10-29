@@ -15,7 +15,7 @@
  */
 
 // TypeORM-based implementation of the packing list module
-import {type EntityManager} from "typeorm";
+import {type EntityManager} from 'typeorm';
 import {getLockedListAssignment} from './ListService';
 import type {BasicEntityPropertyPatch} from '../../../../types/EntityPropertyTypes';
 import {generateUniqueId, groupByUuid} from '../../lib/util';
@@ -24,7 +24,7 @@ import {PackingAssignment} from '../entities/packing/PackingAssignment';
 import {PackingItem} from '../entities/packing/PackingItem';
 import {PackingList} from '../entities/packing/PackingList';
 
-import * as entityAdminService from "./EntityAdminService";
+import * as entityAdminService from './EntityAdminService';
 
 // Packing Lists
 export async function createPackingList(listId: string, ownerId: string, title: string, desc: string, eventId?: string, headerImg?: string | null,) {

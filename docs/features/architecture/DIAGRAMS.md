@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; developers; architecture reviewers
 owner: architecture maintainers
 status: current
-last-verified: 2026-10-28
+last-verified: 2026-10-29
 verification-baseline: docs-baseline-2026-09-06-ci-repair
-verification-scope: structural; 32 source-derived views including approved identity and Event transaction boundaries; no live installation or deployment certification
+verification-scope: Overview projection and session-store persistence source ownership corrected; existing 32 structural views and approved identity/Event boundaries retained; no live installation or deployment certification
 source-anchors: src/backend/server.ts; src/backend/app.ts; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; src/backend/modules/activity/; src/backend/modules/invoice/; src/frontend/; src/common/; src/types/; contracts/api/v1/; scripts/generate-api.mjs; scripts/generate-locales.mjs; package.json; .github/workflows/
 next-review: architecture-or-delivery-change
 -->
@@ -82,7 +82,7 @@ flowchart LR
   Business <-->|"Provider I/O"| IdP
 ```
 
-Source owners: [`src/backend/app.ts`](../../../src/backend/app.ts), [`src/backend/server.ts`](../../../src/backend/server.ts), [`src/backend/modules/frontendRenderer.ts`](../../../src/backend/modules/frontendRenderer.ts), [`src/backend/modules/database/dataSource.ts`](../../../src/backend/modules/database/dataSource.ts), [`src/backend/modules/lib/session.ts`](../../../src/backend/modules/lib/session.ts), [`src/backend/modules/activity/recommendationJobs.ts`](../../../src/backend/modules/activity/recommendationJobs.ts), [`src/backend/modules/invoice/proofs.ts`](../../../src/backend/modules/invoice/proofs.ts).
+Source owners: [`src/backend/app.ts`](../../../src/backend/app.ts), [`src/backend/server.ts`](../../../src/backend/server.ts), [`src/backend/modules/frontendRenderer.ts`](../../../src/backend/modules/frontendRenderer.ts), [`src/backend/modules/database/dataSource.ts`](../../../src/backend/modules/database/dataSource.ts), [`src/backend/modules/database/services/UserService.ts`](../../../src/backend/modules/database/services/UserService.ts), [`src/backend/modules/lib/session.ts`](../../../src/backend/modules/lib/session.ts), [`src/backend/modules/activity/recommendationJobs.ts`](../../../src/backend/modules/activity/recommendationJobs.ts), [`src/backend/modules/invoice/proofs.ts`](../../../src/backend/modules/invoice/proofs.ts).
 
 ### Backend components and responsibility boundaries
 
@@ -128,7 +128,7 @@ Source owners: [`src/backend/server.ts`](../../../src/backend/server.ts), [`src/
 flowchart LR
   Common["Landing / common messages"] --> Document["Document/SSR shell + shared navigation"]
   Identity["Identity and profiles<br/>Local login/register/activate/reset;<br/>guest login/recovery; profile selection,<br/>management/migration/deactivation/deletion"] --> Users["userController + auth/profiles/session API<br/>identity feature + UserService<br/>SQL session owner + SMTP/OIDC"]
-  Overview["Overview<br/>Owned/involved collections;<br/>search, pagination and personal visibility"] --> UO["Overview adapter → userController<br/>Permissions + EntityLifecycleService"]
+  Overview["Overview<br/>Owned/involved collections;<br/>search, pagination and personal visibility"] --> UO["Overview API in userController<br/>Permissions + EntityLifecycleService"]
   Survey["Surveys<br/>Create/duplicate; combinations;<br/>ballot/results; settings"] --> SC["surveyController → SurveyService"]
   Packing["Packing<br/>Items, quantities, assignments, packed state;<br/>metadata, permissions, admins, optional Event"] --> PC["packingController → PackingService / ListService"]
   Drivers["Drivers<br/>Trips/items, seats, assignments;<br/>metadata, permissions, admins, optional Event"] --> DC["driversController → DriverService / ListService"]
@@ -150,7 +150,7 @@ flowchart LR
   SC --- Shared
 ```
 
-Source owners: [`src/frontend/routes/index.ts`](../../../src/frontend/routes/index.ts), [`src/frontend/features/event/EventPage.vue`](../../../src/frontend/features/event/EventPage.vue), [`src/backend/routes/api/v1.ts`](../../../src/backend/routes/api/v1.ts), [`src/backend/routes/api/v1/events.ts`](../../../src/backend/routes/api/v1/events.ts), [`src/backend/routes/surveyFlow.ts`](../../../src/backend/routes/surveyFlow.ts), [`src/backend/controller/helpController.ts`](../../../src/backend/controller/helpController.ts), [`src/backend/modules/overview/api.ts`](../../../src/backend/modules/overview/api.ts).
+Source owners: [`src/frontend/routes/index.ts`](../../../src/frontend/routes/index.ts), [`src/frontend/features/event/EventPage.vue`](../../../src/frontend/features/event/EventPage.vue), [`src/backend/routes/api/v1.ts`](../../../src/backend/routes/api/v1.ts), [`src/backend/routes/api/v1/events.ts`](../../../src/backend/routes/api/v1/events.ts), [`src/backend/routes/surveyFlow.ts`](../../../src/backend/routes/surveyFlow.ts), [`src/backend/controller/helpController.ts`](../../../src/backend/controller/helpController.ts), [`src/backend/controller/userController.ts`](../../../src/backend/controller/userController.ts).
 
 ### Browser and SSR component architecture
 

@@ -19,7 +19,7 @@ import {createEntityAdminApiRouter, createEntityArchiveApiRouter, createEntityPr
 import {attachAssignRoutes} from '../../../middleware/assignFlowFactory';
 import {createEntityHeaderUpdateRouter} from '../../../middleware/entityHeaderUpdateHandler';
 import {sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
-import {patchPackingMetadata, readPackingMetadata, setPackingSelfAssignment} from '../../../controller/packingController';
+
 
 const router = Router();
 router.use(createGuestFlowApiRouter(packingFlow));
@@ -27,10 +27,10 @@ router.use(createGuestFlowApiRouter(packingFlow));
 createEntityPropertyApiRouter<'packing'>(router, {
     entityType: 'packing', parameter: 'listId',
     read: {operation: 'getPackingMetadata', requireProfile: true,
-        read: ({id, actor}) => readPackingMetadata(id, actor)},
+        read: ({id, actor}) => packingApi.readPackingMetadata(id, actor)},
     update: {operation: 'updatePackingMetadata', requireProfile: true, delivery: 'result',
         normalize: normalizePackingMetadataPatch,
-        execute: ({id, body, ifMatch, actor}) => patchPackingMetadata(id, body, ifMatch, actor)},
+        execute: ({id, body, ifMatch, actor}) => packingApi.patchPackingMetadata(id, body, ifMatch, actor)},
     event: {operation: 'changePackingEvent', requireProfile: true, delivery: 'result',
         async execute({id, body, actor, ifMatch}) {
             return {data: await packingApi.changePackingEvent(id, body, actor, ifMatch)};
@@ -57,9 +57,9 @@ attachAssignRoutes(router, {
     path: '/:listId/items/:itemId/self-assignment',
     entityParameter: 'listId', itemParameter: 'itemId', requireProfile: true,
     assign: {operation: 'assignPackingItem', delivery: 'result',
-        execute: ({entityId, itemId, actor}) => setPackingSelfAssignment(entityId, itemId, true, actor)},
+        execute: ({entityId, itemId, actor}) => packingApi.setPackingSelfAssignment(entityId, itemId, true, actor)},
     unassign: {operation: 'unassignPackingItem', delivery: 'result',
-        execute: ({entityId, itemId, actor}) => setPackingSelfAssignment(entityId, itemId, false, actor)},
+        execute: ({entityId, itemId, actor}) => packingApi.setPackingSelfAssignment(entityId, itemId, false, actor)},
 });
 
 router.get('/:listId/settings', asyncHandler(async function getPackingSettings(req, res) {

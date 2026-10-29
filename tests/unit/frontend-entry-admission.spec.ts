@@ -55,7 +55,7 @@ describe('shared server-owned page admission', () => {
         const destination = '/packing/84305c09-5386-47bc-b62d-520b8a8edbb2/duplicate';
         const result = await packingFlow.readCreateEntry({}, destination);
         expect(result).toEqual({entry: {kind: 'redirect', url: `/users/login?next=${encodeURIComponent(destination)}`,
-            notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, context: null});
+                notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, context: null});
         expect(contractValidator('EntityCreationEntry')(result)).toBe(true);
         expect(getAccountPageEntry({auth: {guest: new Guest()}, profile: new Profile()}, '/users/login', '/activity/source/duplicate').kind)
             .toBe('redirect');
@@ -138,8 +138,8 @@ describe('shared server-owned page admission', () => {
         const results = await Promise.all(entries);
         for (const [index, type] of resourceTypes.entries()) {
             expect(results[index]).toMatchObject({entry: {kind: 'redirect',
-                url: `/users/login?next=${encodeURIComponent(`/${type}/source/duplicate`)}`,
-                notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, context: null});
+                    url: `/users/login?next=${encodeURIComponent(`/${type}/source/duplicate`)}`,
+                    notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, context: null});
         }
         expect(results[0]).toHaveProperty('selectedEvent', null);
         expect(results[1]).toHaveProperty('selectedEvent', null);
@@ -171,9 +171,9 @@ describe('shared server-owned page admission', () => {
                 tokens: {id_token: 'provider-logout-evidence'},
                 save(done: (error?: unknown) => void) { done(); }};
             return {session: stored, sessionID: 'fixture', sessionStore: {
-                get(_id: string, done: (error: unknown, session: typeof stored) => void) { done(null, stored); },
-                createSession(req: Request) { req.session = stored as unknown as Request['session']; },
-            }} as unknown as Request;
+                    get(_id: string, done: (error: unknown, session: typeof stored) => void) { done(null, stored); },
+                    createSession(req: Request) { req.session = stored as unknown as Request['session']; },
+                }} as unknown as Request;
         }
         const document = request();
         await expect(captureApiActor(document)).rejects.toMatchObject({code: 'AUTH_REQUIRED'});

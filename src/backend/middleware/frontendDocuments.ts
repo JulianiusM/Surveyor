@@ -12,7 +12,7 @@ import type {FrontendBootstrap} from '../../types/FrontendTypes';
 import * as userController from '../controller/userController';
 import {frontendIdentityFeedback, safeFrontendReturn} from '../../common/lib/frontendIdentity';
 import {readGuestLinkHandoff} from '../modules/lib/frontendSession';
-import {APIError, ExpectedError, ValidationError} from '../modules/lib/errors';
+import {APIError, ExpectedError, ValidationError, errorCategory} from '../modules/lib/errors';
 import type {components} from '../../types/api/v1';
 
 /**
@@ -23,29 +23,29 @@ import type {components} from '../../types/api/v1';
 export const admitFrontendDocument = asyncHandler(/** Select locale before actor
  * admission. Only confirmed identity expiry enters logout/notice persistence;
  * operational failures keep their existing outer error boundary. */
-async function admitFrontendDocument(req, res, next) {
-    // Select presentation language before identity admission so any ensuing
-    // document outcome uses this request's existing locale precedence.
-    applyPresentationLocale(req);
-    try {
-        // Retain provider-token evidence until the ordinary logout owner can
-        // finish its existing handoff; only a successfully captured actor continues.
-        await captureApiActor(req);
-        next();
-    } catch (error) {
-        // A store outage or other error remains an operational failure. Only
-        // confirmed expired/invalid identity enters the established logout journey.
-        if (!(error instanceof ApiProblem) || error.code !== 'AUTH_REQUIRED') throw error;
-        const session = req.session;
-        req.flash('error', 'Session has expired');
-        const destination = await userController.logoutUserOidc(session);
+    async function admitFrontendDocument(req, res, next) {
+        // Select presentation language before identity admission so any ensuing
+        // document outcome uses this request's existing locale precedence.
+        applyPresentationLocale(req);
+        try {
+            // Retain provider-token evidence until the ordinary logout owner can
+            // finish its existing handoff; only a successfully captured actor continues.
+            await captureApiActor(req);
+            next();
+        } catch (error) {
+            // A store outage or other error remains an operational failure. Only
+            // confirmed expired/invalid identity enters the established logout journey.
+            if (!(error instanceof ApiProblem) || error.code !== 'AUTH_REQUIRED') throw error;
+            const session = req.session;
+            req.flash('error', 'Session has expired');
+            const destination = await userController.logoutUserOidc(session);
 
-        // Persist the bounded frontend notice after logout, then deliver its chosen
-        // destination. No submitted text or provider evidence enters the notice.
-        await persistCompletedWorkflowFeedback(req, {kind: 'error', messageKey: 'auth.sessionExpired'});
-        res.redirect(destination);
-    }
-});
+            // Persist the bounded frontend notice after logout, then deliver its chosen
+            // destination. No submitted text or provider evidence enters the notice.
+            await persistCompletedWorkflowFeedback(req, {kind: 'error', messageKey: 'auth.sessionExpired'});
+            res.redirect(destination);
+        }
+    });
 
 export function applyPresentationLocale(req: Request): void {
     // Document language hints select presentation before configuration denial;
@@ -251,8 +251,7 @@ export async function renderFrontendError(error: unknown, req: Request, res: Res
         // A handled document no longer reaches the outer error logger. Preserve
         // operational reporting without putting tokens, URLs or error data in it.
         if (status >= 500) {
-            const category = error instanceof Error && /^[A-Za-z][A-Za-z0-9]{0,63}$/u.test(error.name)
-                ? error.name : 'UnexpectedError';
+            const category = errorCategory(error);
             console.error('[frontend]', {method: req.method, status, category});
         }
     } catch (renderError) {

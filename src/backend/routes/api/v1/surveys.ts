@@ -5,34 +5,19 @@
  * You may obtain a copy at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {Router, type Request, type Response} from 'express';
+import {Router} from 'express';
 import * as surveyApi from '../../../controller/surveyController';
 import {createGuestFlowApiRouter, createGuestFlowGuestRouter} from '../../../middleware/guestFlowFactory';
 import {surveyFlow} from '../../surveyFlow';
 import type {components} from '../../../../types/api/v1';
-import type {PreparedApiJsonResponse} from '../../../../types/ApiTransportTypes';
-import type {SurveyMutationOperation, SurveyMutationPreparation} from '../../../../types/SurveyTypes';
 import {requireApiContext} from '../../../modules/api/session';
-import {prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
+import {executePreparedJson, prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import {createEntityHeaderUpdateRouter} from '../../../middleware/entityHeaderUpdateHandler';
 import {createEntityArchiveApiRouter, createEntityPropertyApiRouter} from '../../../middleware/adminApiFactory';
 
 const router = Router();
 router.use(createGuestFlowApiRouter(surveyFlow));
-
-/** Prepare invariant command bytes before invoking the unchanged business write.
- * Delivery after success never performs another schema check, projection read or
- * mutable-session admission. Failure does not trigger replay or rollback claims. */
-async function sendSurveyCommand(req: Request, res: Response, operation: SurveyMutationOperation,
-    execute: (prepare: SurveyMutationPreparation) => Promise<unknown>): Promise<void> {
-    let prepared: PreparedApiJsonResponse;
-    function prepareResult(result: components['schemas']['MutationResult']): void {
-        prepared = prepareValidatedJson(req, operation, 200, result);
-    }
-    await execute(prepareResult);
-    sendPreparedJson(req, res, prepared!);
-}
 
 router.get('/:surveyId/settings', asyncHandler(async function getSurveySettings(req, res) {
     const actor = await requireApiContext(req, res, true);
@@ -54,7 +39,10 @@ router.put('/:surveyId/ballot', asyncHandler(async function submitSurveyBallot(r
     const actor = await requireApiContext(req, res, true);
     validateOperationRequest(req, 'submitSurveyBallot');
     // Preparation precedes the existing delete/save sequence; no replay is added.
-    await sendSurveyCommand(req, res, 'submitSurveyBallot', prepare => surveyApi.submitSurveyBallot(String(req.params.surveyId), req.body, actor, prepare));
+    const {prepared} = await executePreparedJson(
+        (result: components['schemas']['MutationResult']) => prepareValidatedJson(req, 'submitSurveyBallot', 200, result),
+        prepare => surveyApi.submitSurveyBallot(String(req.params.surveyId), req.body, actor, prepare));
+    sendPreparedJson(req, res, prepared!);
 }));
 
 /** Every admitted profile may create a recurring choice through the same owner. */
@@ -62,7 +50,10 @@ router.post('/:surveyId/combinations', asyncHandler(async function addSurveyComb
     const actor = await requireApiContext(req, res, true);
     validateOperationRequest(req, 'addSurveyCombination');
     // Generated weekday/occurrence decoding precedes the shared insertion.
-    await sendSurveyCommand(req, res, 'addSurveyCombination', prepare => surveyApi.addSurveyCombination(String(req.params.surveyId), req.body, actor, prepare));
+    const {prepared} = await executePreparedJson(
+        (result: components['schemas']['MutationResult']) => prepareValidatedJson(req, 'addSurveyCombination', 200, result),
+        prepare => surveyApi.addSurveyCombination(String(req.params.surveyId), req.body, actor, prepare));
+    sendPreparedJson(req, res, prepared!);
 }));
 
 createEntityHeaderUpdateRouter(router, {

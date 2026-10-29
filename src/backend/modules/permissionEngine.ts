@@ -20,24 +20,29 @@ import type {
     Audience,
     EntityDescriptor,
     EntityPermissionQueryScope,
+    EntityAdministratorCommand,
+    EntityAdministratorOutcome,
+    EntityAdministratorGrantReview,
     ItemDescriptor,
     PermBundle,
+    PermData,
     PermEngineCaches,
     PermType,
     PermView,
     SaveOpts,
     SessionLike,
     Subject
-} from "../../types/PermissionTypes";
-import type {CombEntityType, EntityType} from "../../types/UtilTypes";
+} from '../../types/PermissionTypes';
+import type {CombEntityType, EntityType} from '../../types/UtilTypes';
 import type {EntityPropertyField} from '../../types/EntityPropertyTypes';
 import type {EventMethod} from '../../types/EventTypes';
 import {APIError} from './lib/errors';
+import {ApiProblem} from './api/problem';
 import * as entityAdminService from './database/services/EntityAdminService';
-import {getProfilePerms, updatePerms} from './database/services/EntityAdminService';
+import * as userService from './database/services/UserService';
 import {isRegisteredForEvent} from './database/services/EventService';
 import {ALL_MASK, getInitialPerms, getPermMeta, getPresets, hasPerm, PERM, toMaskFromBodyValue} from './lib/permissions';
-import {jsonReplacer, normalizeToArray, sameUuid, uuidKey} from "./lib/util";
+import {jsonReplacer, normalizeToArray, sameUuid, uuidKey} from './lib/util';
 
 function keyUser(t: CombEntityType, id: string, profileId: string) {
     return `${t}:${uuidKey(id)}:${uuidKey(profileId)}`;
@@ -132,7 +137,7 @@ async function loadUserPerms(t: CombEntityType, id: string, profileId: string | 
         } else {
             // Publish the DBAL result only in this evaluation's caller-owned cache.
             // Passing the manager preserves the locked command's read boundary.
-            const u = await getProfilePerms(t, id, profileId, manager);
+            const u = await entityAdminService.getProfilePerms(t, id, profileId, manager);
             caches?.userPerms?.set?.(k, u);
             return u;
         }
@@ -417,12 +422,80 @@ export async function saveDefaultPermsFromBody(
     // Persist (upsert per audience). updatePerms ignores undefined fields.
     // Locked controller commands retain their existing transaction; direct callers
     // omit the manager and use the DBAL's unchanged application-manager default.
-    await updatePerms(entityType, entityId, {
+    await entityAdminService.updatePerms(entityType, entityId, {
         guest: partial.guest,
         participant: partial.participant,
         authenticated: partial.authenticated,
         public: partial.public,
     }, opts.manager);
+}
+
+/** One feature-owned administrator operation for normalized direct/versioned intent.
+ * The profile check and required mask have one owner. A versioned caller may
+ * compare its reviewed grant and choose add/update inside its existing locked
+ * transaction; direct callers retain their direct command and persistence defaults.
+ * Domain outcomes leave each adapter's established error/feedback shape unchanged. */
+export async function applyEntityAdministrator(
+    entityType: CombEntityType, entityId: string, profileId: string,
+    command: EntityAdministratorCommand, manager?: EntityManager,
+    reviewCurrentGrant?: () => Promise<EntityAdministratorCommand | void>,
+): Promise<EntityAdministratorOutcome> {
+    // Both adapters retain profile-first diagnostics. The optional review callback
+    // runs only after this evidence and inside the supplied caller transaction.
+    const profile = await userService.getProfileById(profileId, manager);
+    if (!profile) return 'profile-missing';
+
+    const approved = await reviewCurrentGrant?.() ?? command;
+    if (approved.kind !== 'remove' && approved.mask === undefined) return 'mask-required';
+
+    // Persist normalized intent through the existing DBAL. Zero is a stored mask;
+    // only an explicit remove command selects deletion.
+    if (approved.kind === 'remove') {
+        await entityAdminService.removeAdmin(entityType, entityId, profileId, manager);
+    } else if (approved.kind === 'add') {
+        await entityAdminService.addAdmin(entityType, entityId, profile.id, approved.mask!, approved.createdBy, manager);
+    } else {
+        await entityAdminService.updateAdminPerms(entityType, entityId, profileId, approved.mask!, manager);
+    }
+    return 'saved';
+}
+
+/** Persist an admitted sparse default patch through the existing collector, then
+ * compare only its supplied audiences with the already reviewed complete baseline. */
+export async function saveReviewedEntityDefaults(type: EntityType, id: string, defaults: PermData,
+    current: Record<Audience, number>, manager?: EntityManager) {
+    // Omitted audiences stay untouched; the collector retains its exact numeric-mask
+    // semantics and the caller's existing transaction, without another baseline read.
+    await saveDefaultPermsFromBody(type, id, {defaultPerms: defaults}, {manager, inputFormat: 'masks'});
+    return {changed: Object.keys(defaults).some(audience => defaults[audience as keyof typeof defaults]
+            !== current[audience as keyof typeof current])};
+}
+
+/** Apply a reviewed grant through the caller's existing validation/transaction order.
+ * The adapter compares its token; this owner selects add/update/removal and outcomes. */
+export async function saveReviewedEntityAdministrator(type: EntityType, id: string, profileId: string,
+    mask: number | null, session: SessionLike, reviewCurrentGrant: EntityAdministratorGrantReview,
+    manager?: EntityManager, reviewOrder: 'profile-first' | 'review-first' = 'profile-first') {
+    let previousMask: number | null = null;
+    /** Read and compare the existing row before choosing the normalized business command. */
+    async function reviewGrant(): Promise<EntityAdministratorCommand> {
+        const current = await entityAdminService.getAdminGrant(type, id, profileId, manager);
+        previousMask = current?.perms ?? null;
+        reviewCurrentGrant(previousMask, Boolean(current));
+        return mask === null ? {kind: 'remove'}
+            : {kind: current ? 'update' : 'add', mask, createdBy: session.profile?.userId};
+    }
+
+    // Activity retains its review-first direct path. Other callers still check the
+    // profile before comparing a grant, with exactly the supplied optional manager.
+    const initial: EntityAdministratorCommand = mask === null ? {kind: 'remove'}
+        : {kind: 'add', mask, createdBy: session.profile?.userId};
+    const outcome = reviewOrder === 'review-first'
+        ? await applyEntityAdministrator(type, id, profileId, await reviewGrant(), manager)
+        : await applyEntityAdministrator(type, id, profileId, initial, manager, reviewGrant);
+    if (outcome === 'profile-missing') throw new ApiProblem('NOT_FOUND');
+    if (outcome === 'mask-required') throw new ApiProblem('VALIDATION_FAILED');
+    return {changed: previousMask !== mask};
 }
 
 // One closed field policy drives both renderer projection and request authorization.

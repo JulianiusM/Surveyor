@@ -15,17 +15,17 @@
  */
 
 // src/backend/modules/database/driversService.ts
-import {Brackets, DeepPartial, EntityNotFoundError, type EntityManager} from "typeorm";
+import {Brackets, DeepPartial, EntityNotFoundError, Equal, type EntityManager} from 'typeorm';
 import {getLockedListAssignment} from './ListService';
 import type {BasicEntityPropertyPatch} from '../../../../types/EntityPropertyTypes';
-import type {DriversItemAssignee, EnrichedDriversItem} from "../../../../types/DriversTypes";
+import type {DriversItemAssignee, EnrichedDriversItem} from '../../../../types/DriversTypes';
 import {generateUniqueId, groupByUuid} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {DriversAssignment} from '../entities/drivers/DriversAssignment';
 import {DriversItem} from '../entities/drivers/DriversItem';
 import {DriversList} from '../entities/drivers/DriversList';
 
-import * as entityAdminService from "./EntityAdminService";
+import * as entityAdminService from './EntityAdminService';
 
 /** Persist a controller-approved root through the supplied manager. Direct
  * creation retains its existing standalone write; v1 supplies its transaction. */
@@ -189,12 +189,12 @@ export async function getDriversItemById(itemId: string): Promise<EnrichedDriver
         .createQueryBuilder("pi")
         .leftJoinAndSelect("pi.profile", "p")
         .addSelect((qb) =>
-                qb
-                    .select("COUNT(*)")
-                    .from("drivers_assignments", "da")
-                    .where("da.item_id = pi.id")
+            qb
+                .select("COUNT(*)")
+                .from("drivers_assignments", "da")
+                .where("da.item_id = pi.id")
             , "pi_assignedCount")
-        .where("pi.id = :itemId", {itemId})
+        .where({id: Equal(itemId)})
         .getRawAndEntities();
 
     if (entities.length === 0) {
@@ -224,7 +224,7 @@ export async function getDriversAssignmentCounts(
         .createQueryBuilder("da")
         .select("da.item_id", "itemId")
         .addSelect("COUNT(*)", "cnt")
-        .where("da.entity_id = :listId", {listId})
+        .where({entity: {id: Equal(listId)}})
         .groupBy("da.item_id")
         .getRawMany<{ itemId: string; cnt: string }>();
 

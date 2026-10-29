@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {EventRegistrationDietary} from "../backend/modules/database/entities/event/EventRegistrationDietary";
+import {EventRegistrationDietary} from '../backend/modules/database/entities/event/EventRegistrationDietary';
 import type {components} from './api/v1';
 
 export type CreateEventDTO = {
@@ -27,6 +27,12 @@ export type CreateEventDTO = {
     bindingDeadline?: string | null;
     allowOverfillAfterFull?: boolean;
 };
+
+/** Admitted local deadline values retain absent, cleared and explicit-zone distinctions. */
+export interface EventPropertyDateInput {
+    bindingDeadline?: string | null;
+    deadlineTz?: string;
+}
 
 export type DIETARY = components['schemas']['EventDietaryChoice'];
 

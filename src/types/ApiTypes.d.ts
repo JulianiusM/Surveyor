@@ -15,6 +15,6 @@ export type ApiProblemCode = components['schemas']['Problem']['code'];
 export type ApiProblemParameters<Code extends ApiProblemCode> = Extract<components['schemas']['Problem'], {code: Code}>['params'];
 export type ApiProblemArguments = {
     [Code in ApiProblemCode]: {} extends ApiProblemParameters<Code>
-        ? [code: Code, params?: ApiProblemParameters<Code>]
-        : [code: Code, params: ApiProblemParameters<Code>]
+    ? [code: Code, params?: ApiProblemParameters<Code>]
+    : [code: Code, params: ApiProblemParameters<Code>]
 }[ApiProblemCode];

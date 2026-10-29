@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import {Column, Entity, JoinColumn, ManyToOne, RelationId} from "typeorm";
-import {NumericBase} from "../abstract/TrackedBase";
-import {EventInvoicePool} from "./EventInvoicePool";
-import {EventRegistration} from "./EventRegistration";
+import {Column, Entity, JoinColumn, ManyToOne, RelationId} from 'typeorm';
+import {NumericBase} from '../abstract/TrackedBase';
+import {EventInvoicePool} from './EventInvoicePool';
+import {EventRegistration} from './EventRegistration';
 
 /**
  * Signed adjustment assigned to a participant. Negative amounts are rebates.

@@ -169,7 +169,7 @@ const panels = computed(() => {
             icon: 'bi-three-dots',
             enabled:
                 state.capabilities.manageArchive || state.capabilities.duplicate || state.capabilities.remove
-                    || state.capabilities.export && props.exportLink,
+                || state.capabilities.export && props.exportLink,
         },
     ].filter((candidate) => candidate.enabled);
 });

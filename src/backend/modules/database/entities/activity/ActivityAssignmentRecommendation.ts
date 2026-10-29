@@ -17,10 +17,10 @@
 import type {RecommendationStatus, RecommendationOperation} from '../../../../../types/ActivityTypes';
 
 
-import {Column, Entity, JoinColumn, ManyToOne, RelationId} from "typeorm";
-import {DefaultUuidEntityItemAssignment} from "../abstract/ProfileEntityItemAssignment";
-import {ActivityPlan} from "./ActivityPlan";
-import {ActivitySlot} from "./ActivitySlot";
+import {Column, Entity, JoinColumn, ManyToOne, RelationId} from 'typeorm';
+import {DefaultUuidEntityItemAssignment} from '../abstract/ProfileEntityItemAssignment';
+import {ActivityPlan} from './ActivityPlan';
+import {ActivitySlot} from './ActivitySlot';
 export const RECOMMENDATION_STATUS: RecommendationStatus[] = ["PENDING", "APPROVED", "APPLIED", "REJECTED"];
 export const RECOMMENDATION_OPERATION: RecommendationOperation[] = ["ASSIGN", "REASSIGN", "UNASSIGN"];
 

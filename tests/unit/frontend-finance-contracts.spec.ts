@@ -23,7 +23,7 @@ describe('finance decimal transport preserves existing business inputs', () => {
         expect(error).toBeInstanceOf(InvalidInputError);
         expect(request).not.toHaveBeenCalled();
         expect(error.diagnostic).toMatchObject({field: {label: kind === 'settlement'
-            ? 'validation.fields.settlementStatus' : 'validation.fields.revision'}, rule: kind === 'settlement' ? 'type' : 'minimum'});
+                    ? 'validation.fields.settlementStatus' : 'validation.fields.revision'}, rule: kind === 'settlement' ? 'type' : 'minimum'});
         for (const locale of ['en', 'de']) {
             const messages = createTranslator(locale);
             const explanation = formatInputDiagnostic(messages, error.diagnostic!);

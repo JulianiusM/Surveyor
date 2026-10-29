@@ -148,7 +148,7 @@ describe('entity archival migration rehearsal', () => {
         }));
         itemId = item.id;
         refs = [{type: 'event', id: eventId}, {type: 'activity', id: activityId},
-            {type: 'packing', id: packing.id}, {type: 'drivers', id: drivers.id}, {type: 'survey', id: survey.id}];
+        {type: 'packing', id: packing.id}, {type: 'drivers', id: drivers.id}, {type: 'survey', id: survey.id}];
     });
 
     afterAll(async () => {

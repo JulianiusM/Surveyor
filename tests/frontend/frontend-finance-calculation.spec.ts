@@ -32,7 +32,7 @@ afterEach(async () => {
 /** Mount the actual dialog, generated validator and shared command state. Only
  * HTTP delivery is supplied so malformed and unknown responses stay observable. */
 async function mountReview(handler = async (request: Request) => json(request.method === 'GET' ? preview : {changed: true}),
-                           props: Record<string, unknown> = {}) {
+    props: Record<string, unknown> = {}) {
     const mounted = await mountFrontendEvent(FinanceCalculationReview, handler, {eventId, pool, savedShares: [],
         open: true, active: true, hasPendingEdits: () => false, refresh: vi.fn(async () => {}), ...props});
     cleanups.push(mounted.dispose);
@@ -91,7 +91,7 @@ describe('P9 saved calculation review', () => {
             if (request.method === 'GET') return json({...preview, revision});
             return new Response(JSON.stringify({type: 'https://surveyor.invalid/problems/resource-conflict', title: 'Conflict',
                 status: 409, requestId: 'p9-conflict', code: 'RESOURCE_CONFLICT', messageKey: 'api:errors.RESOURCE_CONFLICT', params: {}, detail: 'Pool changed'}),
-            {status: 409, headers: {'Content-Type': 'application/problem+json'}});
+                {status: 409, headers: {'Content-Type': 'application/problem+json'}});
         });
         await button(mounted.dialog, 'Close pool & calculate').trigger('click'); await flushPromises();
         expect(mounted.dialog.text()).toContain('<Reviewed payer>');

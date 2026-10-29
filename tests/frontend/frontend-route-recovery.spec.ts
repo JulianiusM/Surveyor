@@ -65,7 +65,7 @@ async function mountedDenial(initial: boolean) {
         if (path === '/api/v1/session') value = state.session;
         else if (path.endsWith('/entry')) {
             value = {entry: state.denied && path.includes(firstList)
-                ? {kind: 'denied', status: 404, messageKey: 'packing.notFound'} : {kind: 'render'}, guest: null};
+                    ? {kind: 'denied', status: 404, messageKey: 'packing.notFound'} : {kind: 'render'}, guest: null};
         } else if (path.startsWith('/api/v1/packing-lists/')) {
             const id = path.includes(secondList) ? secondList : firstList;
             value = {entityType: 'packing', id, title: `Admitted ${id}`, description: null,
@@ -75,7 +75,7 @@ async function mountedDenial(initial: boolean) {
                     reorder: false, manageSettings: false}, counters: {participants: 0, open: 0, empty: 0}, items: []};
         } else throw new Error(`Unexpected mounted-denial read: ${path}`);
         return new Response(JSON.stringify(value), {headers: {'Content-Type': 'application/json',
-            'X-Surveyor-Context': state.session.context}});
+                'X-Surveyor-Context': state.session.context}});
     }
 
     const path = initial ? firstPacking : '/';
@@ -154,7 +154,7 @@ describe('dynamic-content automatic document replacement', () => {
         // Creation/copy/guest visits remain deliberate recovery in every family,
         // even when their saved detail/admin counterpart is dynamic content.
         ...families.flatMap(family => [`/${family}/create`,
-            `/${family}/${firstList}/duplicate`, `/${family}/${firstList}/guest`]),
+        `/${family}/${firstList}/duplicate`, `/${family}/${firstList}/guest`]),
         '/users/profile', '/users/profile/manage',
         '/users/profile/create', '/users/profile/migrate/request',
         '/users/profile/migrate/show', '/users/profile/delete', '/users/account/delete',
@@ -189,20 +189,20 @@ describe('dynamic-content automatic document replacement', () => {
 
     it.each(['/users/dashboard', ...families.map(family => `/${family}/${firstList}`), eventAdmin])(
         'retains one guarded automatic startup recovery for dynamic %s', async path => {
-        window.history.replaceState({}, '', path);
-        const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {});
-        const {router, context} = createFrontendApp({session, initialUrl: path}, true);
-        try {
-            context.updates.chunkFailed();
-            await Promise.resolve();
-            expect(reload).toHaveBeenCalledOnce();
-            expect(context.updates.requestReload()).toBe(false);
-            await router.isReady();
-        } finally {
-            router.options.history.destroy();
-            context.start()();
-        }
-    });
+            window.history.replaceState({}, '', path);
+            const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {});
+            const {router, context} = createFrontendApp({session, initialUrl: path}, true);
+            try {
+                context.updates.chunkFailed();
+                await Promise.resolve();
+                expect(reload).toHaveBeenCalledOnce();
+                expect(context.updates.requestReload()).toBe(false);
+                await router.isReady();
+            } finally {
+                router.options.history.destroy();
+                context.start()();
+            }
+        });
 
     it('keeps an admitted static error document at an otherwise dynamic URL', async () => {
         window.history.replaceState({}, '', packing);

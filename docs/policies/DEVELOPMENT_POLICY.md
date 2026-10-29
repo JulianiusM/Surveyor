@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; developers; AI coding agents
 owner: project maintainers
 status: current
-last-verified: 2026-10-28
+last-verified: 2026-10-29
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: 2026-10-28 maintainer amendments establish completed frontend cutover, current-source review and controller/feature/DBAL ownership; direct prose plans and individual approval requirements retained
+verification-scope: explicit 2026-10-29 R1–R6 convention approvals and separate R7 registration-settings rollback correction recorded; earlier ownership, lifecycle, direct prose plan and individual approval requirements retained
 source-anchors: AGENTS.md; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/development-check.json; scripts/check-development-policy.mjs; scripts/tests/development-policy-check.test.mjs; docs/DEVELOPMENT.md; docs/ARCHITECTURE.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; src/; tests/; package.json
 next-review: explicit-maintainer-policy-amendment
 -->
@@ -260,6 +260,50 @@ boolean checked channel and adopt it in both Event flag presentations and the di
 existing string model API, native flag names/default values/unchecked omission, dietary submitted values, layout,
 labels/icons, disabled behavior and feature-owned drafts. This resolves IMP-192's pending approval; it does not
 authorize unrelated checkbox, backend or form-behavior changes.
+
+### Approved convention decisions (2026-10-29)
+
+The maintainer explicitly approves each **R1–R6** from the immediately preceding convention-review final answer.
+These identifiers refer to that explanation, not earlier requests using the same identifiers. The following
+bounded amendments preserve the original decisions above and resolve the named conflicts:
+
+- **R1 — Runtime persistence:** database access stays in Services, using native TypeORM repository methods first
+  and structured query builders otherwise. Where TypeORM has no equivalent API, short SQL expressions with supplied
+  values bound as parameters and composition of ORM-generated queries are permitted. Handwritten complete queries
+  and direct raw execution are prohibited outside migrations. Preserve exact provider/proof identity, coherent
+  Overview grouping/counts/paging and the connection-held proof-maintenance lock.
+- **R2 — Migrations:** use explicit QueryRunner SQL and the existing shared guards for migration schema writes.
+  The earlier keep-unchanged requirement for committed `1789603200000-AddOrganizerInvoices.ts` is lifted solely for
+  equivalent conversion to this style. Preserve migration identities, statement order, physical attributes, data,
+  timestamps, foreign keys, triggers, retry guards and rollback refusals; verify affected up/down paths with
+  disposable historical-schema fixtures. Do not replay applied migrations, alter their records or rewrite installed
+  archives. Permanent operator-rehearsal deferrals remain in force.
+- **R3 — Personal visibility:** the existing `entityArchival` feature owns locked membership/write decisions;
+  `userController` retains input admission and response preparation. Keep the same callback point, manager, target
+  lock, membership guard and precommit receipt preparation, including direct callers' existing completion behavior.
+- **R4 — Source formatting:** authored TypeScript, JavaScript and Vue script blocks use four-space code indentation
+  and module import paths enclosed in single quotes. This narrowly supersedes local-format preservation for those
+  mechanical edits. Preserve parsed behavior and literal values, prose, generated files, template/JSON syntax,
+  meaningful wrapping and names; add no formatter dependency, hook or delivery prerequisite. The protected migration
+  remains subject to R2's equivalent-conversion boundary.
+- **R5 — Profile selection:** the existing `identity` feature owns account-profile ownership checks and selection
+  of an explicit default or the oldest profile. Controllers retain Session replacement, context rotation, save,
+  completion and the existing transition callback. Preserve query order, supplied manager, errors, empty-roster
+  behavior and account/guest separation; introduce no additional identity transaction.
+- **R6 — Permission administration:** the existing `permissionEngine` owns the remaining administrator/default-grant
+  business decisions. This supersedes only the business placement in the October 26 retained-controller assignment.
+  Shared controller adapters for Packing, Drivers, Event and Activity retain decoding, admission and comparison
+  projection; shared item-request coordination stays separate. Reuse existing collectors and DBAL owners, preserving
+  validation order, omitted/zero grants, tokens, managers, locks and rollback behavior.
+
+**Registration-settings rollback correction (2026-10-29, R7):** following the convention-review answer, the
+maintainer explicitly approves correcting the three `evente` rollback targets in
+`1786335515684-AddRegistrationDeadlineSettings.ts` to `events`. Unlike R2's equivalent conversion, this intentionally
+removes the three registration date-change, cancellation and dietary-change settings columns, including their stored
+values, when rollback is explicitly invoked. Preserve Event and Activity rows, unrelated columns/tables, the other
+rollback statement, migration identity and existing guards; verify actual up/down behavior on disposable historical
+schemas, including an unrelated `evente` sentinel. This source correction does not replay applied migrations or
+rewrite installed archives. Operator rehearsals remain permanently deferred.
 
 ## Implementation principles
 

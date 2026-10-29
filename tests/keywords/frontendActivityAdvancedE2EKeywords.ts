@@ -1,9 +1,9 @@
-import {patchActivitySlotForE2E, createActivityRoleForE2E} from './frontendActivityE2EKeywords';
+import {patchActivitySlotForE2E, createActivityRoleForE2E, createActivityForE2E,
+    assignActivityForE2E, captureActivityPresentation, readActivityForE2E} from './frontendActivityE2EKeywords';
 import {commandHeadersForE2E, createProfileForE2E, selectProfileForE2E, updateEntityMetadataForE2E} from './e2eCoreKeywords';
 import {expect, type APIRequestContext, type Locator, type Page, type TestInfo} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import type {components} from '../../src/types/api/v1';
-import {createActivityForE2E, assignActivityForE2E, captureActivityPresentation, readActivityForE2E} from './frontendActivityE2EKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from './frontendEventE2EKeywords';
 import {waitForFrontendHydration} from './frontendDynamicKeywords';
 
@@ -48,14 +48,14 @@ export async function createAdvancedActivityForE2E(request: APIRequestContext,
     const roleId = await createActivityRoleForE2E(request, plan.id, 'Kitchen lead');
     const days = Math.round((Date.parse(plan.view.endDate) - Date.parse(plan.view.startDate)) / 86_400_000) + 1;
     expect((await request.put(`/api/v1/activity-plans/${plan.id}/requirements`, {headers: await commandHeadersForE2E(request), data: {
-        assignmentMode: 'REQUIRED', generalRequiredShifts: 2, roundingMode: 'CEIL', bindingDeadline: null,
-        allowOverfillAfterFull: false, allowExternalAssignees: false,
-        allowArrivalDayEvening: true, allowDepartureDayMorning: true,
-        roleRequirements: [{roleId, requiredShifts: 0}],
-        stayRequirements: Array.from({length: days}, (_, index) => ({stayDays: index + 1,
-            requiredShifts: index === 0 ? 0 : index === days - 1 ? 2 : 1})),
-        overrides: options.recommendation ? [{profileId: owner.id, roleId: null, requiredShifts: 1}] : [],
-    }})).status()).toBe(200);
+            assignmentMode: 'REQUIRED', generalRequiredShifts: 2, roundingMode: 'CEIL', bindingDeadline: null,
+            allowOverfillAfterFull: false, allowExternalAssignees: false,
+            allowArrivalDayEvening: true, allowDepartureDayMorning: true,
+            roleRequirements: [{roleId, requiredShifts: 0}],
+            stayRequirements: Array.from({length: days}, (_, index) => ({stayDays: index + 1,
+                requiredShifts: index === 0 ? 0 : index === days - 1 ? 2 : 1})),
+            overrides: options.recommendation ? [{profileId: owner.id, roleId: null, requiredShifts: 1}] : [],
+        }})).status()).toBe(200);
     if (options.assigned) await assignActivityForE2E(request, plan.id, plan.view.slots[0]!.id);
     if (options.recommendation) {
         await savePendingActivityRecommendationsForE2E(request, plan.id, [{
@@ -97,8 +97,8 @@ export async function createActivitySwapPairsForE2E(request: APIRequestContext) 
             expect(profile).toBeTruthy();
             await selectProfileForE2E(request, profile!.id);
             expect((await request.put(`/api/v1/events/${plan.event.id}/registration`, {headers: await commandHeadersForE2E(request), data: {
-                arrivalDate: plan.attendance.startDate, departureDate: plan.attendance.endDate, dietary: ['MEAT'],
-            }})).status()).toBe(200);
+                    arrivalDate: plan.attendance.startDate, departureDate: plan.attendance.endDate, dietary: ['MEAT'],
+                }})).status()).toBe(200);
             await assignActivityForE2E(request, plan.id, slot.id);
             additional.push({id: profile!.id, name});
         }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {fieldAttributes as activityFields} from "../../../../.generated/api/v1/browser/validateActivityCreateInput.mjs";
+import {fieldAttributes as activityFields} from '../../../../.generated/api/v1/browser/validateActivityCreateInput.mjs';
 import {computed, ref} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {EntityMetadataSnapshot, EntityMetadataValues} from '../../../types/FrontendEntityMetadataTypes';

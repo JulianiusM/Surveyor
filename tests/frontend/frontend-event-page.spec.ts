@@ -71,8 +71,8 @@ describe('Event page read dependencies', () => {
             return new Response(JSON.stringify({type: 'about:blank', title: 'Please wait', status: 429,
                 code: 'RATE_LIMITED', messageKey: 'api:errors.RATE_LIMITED', params: {},
                 detail: 'The roster is temporarily unavailable.', requestId: 'dependent-refresh-failure'}),
-            {status: 429, headers: {'Content-Type': 'application/problem+json', 'Retry-After': '1',
-                'X-Surveyor-Context': createFrontendEventSession().context}});
+                {status: 429, headers: {'Content-Type': 'application/problem+json', 'Retry-After': '1',
+                        'X-Surveyor-Context': createFrontendEventSession().context}});
         }, {});
         cleanups.push(mounted.dispose);
         await vi.waitFor(() => expect(mounted.context.queryClient.isFetching()).toBe(0));
@@ -199,7 +199,7 @@ describe('Event page read dependencies', () => {
         const admin = draftKind !== 'registration';
         const childId = '22222222-2222-4222-8222-222222222222';
         const view = createFrontendEventView({registration: {id: '17', arrivalDate: '2027-06-01',
-            departureDate: '2027-06-03', dietary: [], allergyNotes: '', dietComment: ''},
+                departureDate: '2027-06-03', dietary: [], allergyNotes: '', dietComment: ''},
             capabilities: {...createFrontendEventView().capabilities, participants: true, items: true, manageRegistrations: true}});
         const person: components['schemas']['EventParticipant'] = {id: '17', profileId: childId, name: 'Guest',
             email: null, arrivalDate: '2027-06-01', departureDate: '2027-06-03', dietary: []};
@@ -275,7 +275,7 @@ describe('Event page read dependencies', () => {
         const detailPath = `/api/v1/events/${frontendEventId}`;
         const intentQuery = '?view=' + (admin ? 'admin' : 'detail');
         const expected = [detailPath + intentQuery, `${detailPath}/participants`,
-            `${detailPath}/things-to-do` + intentQuery, ...(admin ? [`${detailPath}/links`] : [])];
+        `${detailPath}/things-to-do` + intentQuery, ...(admin ? [`${detailPath}/links`] : [])];
         expect(reads.slice(before)).toHaveLength(expected.length);
         expect(reads.slice(before)).toEqual(expect.arrayContaining(expected));
         expect(mounted.wrapper.get('.card-header').text()).toContain(view.title);
@@ -300,12 +300,12 @@ describe('Event page read dependencies', () => {
         let denied = false;
         const mounted = await mountFrontendEvent(EventPage, async request => new URL(request.url).pathname.endsWith('/things-to-do')
             ? json({items: []}) : denied
-            ? new Response(JSON.stringify({type: 'about:blank', title: 'Unavailable', status,
-                detail: 'Event projection unavailable', requestId: 'event-detail-denial',
-                code: status === 404 ? 'NOT_FOUND' : 'FORBIDDEN',
-                messageKey: status === 404 ? 'api:errors.NOT_FOUND' : 'api:errors.FORBIDDEN', params: {}}),
-            {status, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': createFrontendEventSession().context}})
-            : json(view), {});
+                ? new Response(JSON.stringify({type: 'about:blank', title: 'Unavailable', status,
+                    detail: 'Event projection unavailable', requestId: 'event-detail-denial',
+                    code: status === 404 ? 'NOT_FOUND' : 'FORBIDDEN',
+                    messageKey: status === 404 ? 'api:errors.NOT_FOUND' : 'api:errors.FORBIDDEN', params: {}}),
+                    {status, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': createFrontendEventSession().context}})
+                : json(view), {});
         cleanups.push(mounted.dispose);
         mounted.router.addRoute({path: '/event/:eventId/admin', component: EventPage});
         await mounted.router.push(`/event/${frontendEventId}/admin`);
@@ -313,7 +313,7 @@ describe('Event page read dependencies', () => {
         const actor = mounted.context.session.value?.context;
         const detail = eventKeys.detail(actor, frontendEventId, true);
         const siblings = [eventKeys.things(actor, frontendEventId, true), eventKeys.things(actor, frontendEventId),
-            eventKeys.participants(actor, frontendEventId), eventKeys.links(actor, frontendEventId), eventKeys.editors(actor, frontendEventId)];
+        eventKeys.participants(actor, frontendEventId), eventKeys.links(actor, frontendEventId), eventKeys.editors(actor, frontendEventId)];
         for (const key of siblings) mounted.context.queryClient.setQueryData(key, {private: key});
         const errors = vi.fn();
         mounted.wrapper.vm.$.appContext.config.errorHandler = errors;
@@ -406,7 +406,7 @@ describe('Event page read dependencies', () => {
                 headerReads++;
                 if (headerReads === 1) return new Response(JSON.stringify({type: 'about:blank', title: 'Not Found', status: 404,
                     detail: 'Image unavailable', requestId: 'event-image-recovery', code: 'NOT_FOUND', messageKey: 'api:errors.NOT_FOUND', params: {}}),
-                {status: 404, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': createFrontendEventSession().context}});
+                    {status: 404, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': createFrontendEventSession().context}});
                 return new Response(new Blob(['image']), {headers: {'Content-Type': 'image/png', 'X-Surveyor-Context': createFrontendEventSession().context}});
             }
             return json(view);

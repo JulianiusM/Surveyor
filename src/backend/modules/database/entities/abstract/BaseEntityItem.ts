@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import {Column, PrimaryGeneratedColumn} from "typeorm";
-import {TrackedBase} from "./TrackedBase";
+import {Column, PrimaryGeneratedColumn} from 'typeorm';
+import {TrackedBase} from './TrackedBase';
 
 export abstract class BaseEntityItem extends TrackedBase {
     @Column("varchar", {name: "title", length: 255})

@@ -1,12 +1,12 @@
-import {quickAddSlot} from '../../src/backend/modules/activity/slots';
+import {quickAddSlot, addActivityRole, assignActivityAssignmentRole} from '../../src/backend/modules/activity/slots';
 import {getAssignmentWarningPreview} from '../../src/backend/modules/activity/recommendations';
 import {applyRecommendations, getRecommendationWarningPreview} from '../../src/backend/modules/activity/recommendations';
 import {buildPlanRecommendationContext, saveGeneratedRecommendations} from '../../src/backend/modules/activity/autoAssignment';
-import {updateRequirements} from '../../src/backend/controller/activityController';
+
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {Request} from 'express';
 import {randomUUID} from 'node:crypto';
-import activityController from '../../src/backend/controller/activityController';
+import * as activityController from '../../src/backend/controller/activityController';
 import {changeEntityEvent} from '../../src/backend/modules/event/linkage';
 import {generateFairRecommendations} from '../../src/backend/modules/activity/fairAssignment';
 import {fingerprintRecommendationContext} from '../../src/backend/modules/activity/recommendationJobs';
@@ -53,11 +53,11 @@ function participantSession(): Request['session'] {
 function ownerSession() { return {profile: owner}; }
 
 async function assign(slotId: string, overlapConfirmation?: string): Promise<void> {
-    await activityController.getAssignmentAccessMapping().assign({itemId: slotId, overlapConfirmation}, participant.id);
+    await assignActivityAssignmentRole(slotId, participant.id, 'default', overlapConfirmation);
 }
 
 async function requireOneShift(planId: string): Promise<void> {
-    await updateRequirements(planId, {
+    await activityController.updateRequirements(planId, {
         assignmentMode: 'REQUIRED', stayRequirements: createStayRequirementSchedule(3, 1),
         roleRequirements: [], overrides: [],
     });
@@ -87,14 +87,12 @@ describe('activity plan interlinking', () => {
         const {first, second} = await createLinkedFixture();
         await assign(second.slot.id);
         const plan = (await activityService.getActivityPlanById(first.id))!;
-        const [role] = await activityController.addActivityRole(plan, {name: 'Coordinator'});
+        const [role] = await addActivityRole(plan, {name: 'Coordinator'});
         await activityService.addActivitySlotRoles(first.slot.id, [role.id]);
-        await expect(activityController.getRoleAccessMapping().assign({itemId: first.slot.id, role: 'Coordinator'}, participant.id))
+        await expect(assignActivityAssignmentRole(first.slot.id, participant.id, 'Coordinator'))
             .rejects.toMatchObject({status: 409});
         const preview = await getAssignmentWarningPreview(first.id, first.slot.id, participantSession());
-        await activityController.getRoleAccessMapping().assign({
-            itemId: first.slot.id, role: 'Coordinator', overlapConfirmation: preview.overlapConfirmation,
-        }, participant.id);
+        await assignActivityAssignmentRole(first.slot.id, participant.id, 'Coordinator', preview.overlapConfirmation);
         expect((await activityService.getParticipantRolesForPlan(first.id))[0].roleIds).toContain(role.id);
     });
 

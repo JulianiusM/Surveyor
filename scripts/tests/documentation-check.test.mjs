@@ -355,8 +355,8 @@ test('delta payload links use final destinations while outer links stay profile-
         '[Control](../CONTROL.md)\n<!-- delta:links -->\n[Development](DEVELOPMENT.md)\n<!-- /delta:links -->\n');
     write(root, second, `# Development delta\n${metadata}\n<!-- delta:body -->\nDevelopment content.\n<!-- /delta:body -->\n`);
     write(root, 'docs/operations-review/boundary.json', JSON.stringify({stagingMode: 'deltas', replacements: [
-        {source, target: 'docs/ARCHITECTURE.md'}, {source: second, target: 'docs/DEVELOPMENT.md'},
-    ]}));
+            {source, target: 'docs/ARCHITECTURE.md'}, {source: second, target: 'docs/DEVELOPMENT.md'},
+        ]}));
     const config = JSON.parse(fs.readFileSync(path.join(root, 'docs/policies/documentation-check.json'), 'utf8'));
     const discovered = discoverTaskProfiles(root, config);
     assert.equal(discovered.replacementsBySource.size, 0);
@@ -635,9 +635,9 @@ test('an alternate profile resolves candidate links at final locations using sta
     write(root, `${directory}/candidates/architecture.md`, `# Architecture\n${metadata}\n\n[Development](DEVELOPMENT.md)\n[Project](../README.md)\n`);
     write(root, `${directory}/candidates/development.md`, `# Development\n${metadata}\n\n[Architecture](ARCHITECTURE.md)\n`);
     write(root, `${directory}/replacements.json`, JSON.stringify({replacements: [
-        {source: `${directory}/candidates/architecture.md`, target: 'docs/ARCHITECTURE.md'},
-        {source: `${directory}/candidates/development.md`, target: 'docs/DEVELOPMENT.md'},
-    ]}));
+            {source: `${directory}/candidates/architecture.md`, target: 'docs/ARCHITECTURE.md'},
+            {source: `${directory}/candidates/development.md`, target: 'docs/DEVELOPMENT.md'},
+        ]}));
     write(root, `${directory}/NOTES.md`, `# Review notes\n${metadata}\n`);
     const {report} = inspect(root, true);
     assert.equal(report.summary.totalErrors, 0, JSON.stringify(report.errors));
@@ -658,8 +658,8 @@ test('a mapped project README preserves its legitimate combined audience', t => 
     const entryMetadata = metadata.replace('audience: test fixture', 'audience: developers; operators; end users');
     write(root, `${directory}/candidates/PROJECT.md`, `# Project\n${entryMetadata}\n`);
     write(root, `${directory}/replacements.json`, JSON.stringify({replacements: [
-        {source: `${directory}/candidates/PROJECT.md`, target: 'README.md'},
-    ]}));
+            {source: `${directory}/candidates/PROJECT.md`, target: 'README.md'},
+        ]}));
     assert.equal(inspect(root, true).report.summary.totalErrors, 0);
 });
 
@@ -731,8 +731,8 @@ test('duplicate replacement destinations within and across profiles have no sele
         writeTaskProfile(root, directory, 'replacement-manifest: replacements.json\nstaging-directory: candidates');
         write(root, `${directory}/candidates/GUIDE.md`, `# Candidate\n${metadata}\n`);
         write(root, `${directory}/replacements.json`, JSON.stringify({replacements: [
-            {source: `${directory}/candidates/GUIDE.md`, target: 'docs/DEVELOPMENT.md'},
-        ]}));
+                {source: `${directory}/candidates/GUIDE.md`, target: 'docs/DEVELOPMENT.md'},
+            ]}));
     }
     const conflicting = inspect(root).report;
     assert.ok(conflicting.errors.some(error => error.type === 'duplicate-profile-replacement'));
@@ -741,9 +741,9 @@ test('duplicate replacement destinations within and across profiles have no sele
     const directory = directories[0];
     write(root, `${directory}/candidates/SECOND.md`, `# Second candidate\n${metadata}\n`);
     write(root, `${directory}/replacements.json`, JSON.stringify({replacements: [
-        {source: `${directory}/candidates/GUIDE.md`, target: 'docs/ARCHITECTURE.md'},
-        {source: `${directory}/candidates/SECOND.md`, target: 'docs/ARCHITECTURE.md'},
-    ]}));
+            {source: `${directory}/candidates/GUIDE.md`, target: 'docs/ARCHITECTURE.md'},
+            {source: `${directory}/candidates/SECOND.md`, target: 'docs/ARCHITECTURE.md'},
+        ]}));
     const duplicate = inspect(root).report;
     assert.ok(duplicate.errors.some(error => error.type === 'duplicate-profile-replacement'));
     assert.equal(duplicate.summary.stagedReplacements, 1); // Only the unaffected second profile contributes.

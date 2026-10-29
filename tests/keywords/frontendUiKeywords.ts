@@ -19,7 +19,7 @@ export async function flushFrontendPromises(): Promise<void> {
 /** Return a normal admitted wire response; tests replace no decoder or production owner. */
 export function frontendEventJson(value: unknown): Response {
     return new Response(JSON.stringify(value), {headers: {'Content-Type': 'application/json',
-        'X-Surveyor-Context': createFrontendEventSession().context}});
+            'X-Surveyor-Context': createFrontendEventSession().context}});
 }
 
 /** Mount the actual Event consumer with request-local identity, routing and query owners.
@@ -31,15 +31,15 @@ export async function mountFrontendEvent(component: Component, handler: (request
     context.hydrated.value = true;
     context.visible.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/event/:eventId', component: withShell ? component : defineComponent({template: '<p>Event host</p>'}),
-            props: withShell ? () => props : undefined},
-        {path: '/packing/:listId', component: defineComponent({template: '<p>Packing destination</p>'})},
-    ]});
+            {path: '/event/:eventId', component: withShell ? component : defineComponent({template: '<p>Event host</p>'}),
+                props: withShell ? () => props : undefined},
+            {path: '/packing/:listId', component: defineComponent({template: '<p>Packing destination</p>'})},
+        ]});
     await router.push(path);
     const wrapper = mount(withShell ? App : component, {props: withShell ? undefined : props, attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+        }});
     await flushFrontendPromises();
 
     async function dispose(): Promise<void> {

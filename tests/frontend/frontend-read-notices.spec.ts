@@ -29,15 +29,15 @@ async function mounted(initialError: Error | null, ready = true) {
     const common = ref(true);
     const hostReady = ref(ready);
     const source = defineComponent({components: {StatusNotice}, setup() {
-        const target = ref<HTMLElement | null>(null);
-        provide(noticeTargetKey, target);
-        return {readError, commonError, common, hostReady, target};
-    }, template: '<section><div v-if="hostReady" ref="target" data-frontend-notices></div>'
-        + '<StatusNotice class="local-read" :read-error="readError" :last-updated-at="1700000000000" :retry-at="1900000000000">Ordinary read</StatusNotice>'
-        + '<StatusNotice v-if="common" class="common-read" placement="notification" :read-error="commonError">Confirmed action; read failed</StatusNotice></section>'});
+            const target = ref<HTMLElement | null>(null);
+            provide(noticeTargetKey, target);
+            return {readError, commonError, common, hostReady, target};
+        }, template: '<section><div v-if="hostReady" ref="target" data-frontend-notices></div>'
+            + '<StatusNotice class="local-read" :read-error="readError" :last-updated-at="1700000000000" :retry-at="1900000000000">Ordinary read</StatusNotice>'
+            + '<StatusNotice v-if="common" class="common-read" placement="notification" :read-error="commonError">Confirmed action; read failed</StatusNotice></section>'});
     const wrapper = mount(source, {attachTo: document.body, global: {
-        plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[frontendContextKey as symbol]: context},
+        }});
     cleanups.push(() => { wrapper.unmount(); context.queryClient.clear(); });
     await flushPromises();
     return {wrapper, context, readError, commonError, common, hostReady};

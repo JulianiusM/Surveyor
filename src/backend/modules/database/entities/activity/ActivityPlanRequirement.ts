@@ -17,11 +17,11 @@
 import type {ParentEntityRelation} from '../../../../../types/EntityRelationTypes';
 
 
-import {Column, Entity, Index, JoinColumn, ManyToOne, RelationId} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, RelationId} from 'typeorm';
 
-import {NumericBase} from "../abstract/TrackedBase";
-import {ActivityPlan} from "./ActivityPlan";
-import {ActivityRole} from "./ActivityRole";
+import {NumericBase} from '../abstract/TrackedBase';
+import {ActivityPlan} from './ActivityPlan';
+import {ActivityRole} from './ActivityRole';
 
 @Entity("activity_plan_requirements", {schema: "surveyor"})
 @Index("uk_plan_role", ["entity", "role"], {unique: true})

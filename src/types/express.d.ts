@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import "express";
-import type {TokenEndpointResponse} from "openid-client";
-import type {Guest} from "../backend/modules/database/entities/user/Guest";
-import type {Profile} from "../backend/modules/database/entities/user/Profile";
-import type {User} from "../backend/modules/database/entities/user/User";
+import 'express';
+import type {TokenEndpointResponse} from 'openid-client';
+import type {Guest} from '../backend/modules/database/entities/user/Guest';
+import type {Profile} from '../backend/modules/database/entities/user/Profile';
+import type {User} from '../backend/modules/database/entities/user/User';
 import type {ApiActor} from './ApiTypes';
 
 declare module "express" {

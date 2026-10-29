@@ -42,9 +42,9 @@ describe('frontend identity destinations', () => {
         '/../../api/private', '/../outside', '/frontend-pilotish', '/FRONTEND-PILOTish',
         '/frontend-pilot/help', '/home',
         '/\r\nLocation: https://outside.invalid', 'javascript:alert(1)'])
-    ('keeps an unsafe or unrelated return inside the frontend: %j', value => {
-        expect(safeFrontendReturn(value)).toBe('/users/dashboard');
-    });
+        ('keeps an unsafe or unrelated return inside the frontend: %j', value => {
+            expect(safeFrontendReturn(value)).toBe('/users/dashboard');
+        });
 });
 
 describe('personal Dashboard page admission', () => {
@@ -74,9 +74,9 @@ describe('committed guest-link document handoff', () => {
 
     it.each([undefined, handoff.personalLink, '{malformed', JSON.stringify({...handoff, context: 'another-context'}),
         JSON.stringify({...handoff, personalLink: 123}), JSON.stringify({personalLink: handoff.personalLink})])
-    ('discards unscoped or malformed flash data without admitting a private link: %j', value => {
-        expect(readGuestLinkHandoff(value, handoff.context)).toBeUndefined();
-    });
+        ('discards unscoped or malformed flash data without admitting a private link: %j', value => {
+            expect(readGuestLinkHandoff(value, handoff.context)).toBeUndefined();
+        });
 });
 
 describe('native identity configuration presentation', () => {

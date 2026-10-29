@@ -34,7 +34,7 @@ const session: components['schemas']['SessionView'] & {context: string; csrfToke
 };
 function json(value: unknown, status = 200, responseContext: components['schemas']['SessionView']['context'] = session.context): Response {
     return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
-        ...(responseContext === null ? {} : {'X-Surveyor-Context': responseContext})}});
+            ...(responseContext === null ? {} : {'X-Surveyor-Context': responseContext})}});
 }
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -47,41 +47,41 @@ afterEach(async () => {
 
 /** Exercise shared guest presentation with Packing's real feature adapter. */
 const PackingGuestFixture = defineComponent({setup() {
-    const context = useFrontend();
-    const route = useRoute();
-    const api = usePackingApi(context);
-    return () => {
-        const id = String(route.params.listId);
-        return h(GuestEntryPage, {resourceId: id, destination: '/packing/' + id,
-            titleKey: 'app.packing', queryKey: packingKeys.guest(context.session.value?.context, id),
-            readEntry: (scope: FrontendRequestScope, signal?: AbortSignal) => api.guestEntry(id, scope, signal),
-            registerGuest: (input: components['schemas']['GuestRegistrationInput'], scope: FrontendRequestScope) => api.registerGuest(id, input, scope)});
-    };
-}});
+        const context = useFrontend();
+        const route = useRoute();
+        const api = usePackingApi(context);
+        return () => {
+            const id = String(route.params.listId);
+            return h(GuestEntryPage, {resourceId: id, destination: '/packing/' + id,
+                titleKey: 'app.packing', queryKey: packingKeys.guest(context.session.value?.context, id),
+                readEntry: (scope: FrontendRequestScope, signal?: AbortSignal) => api.guestEntry(id, scope, signal),
+                registerGuest: (input: components['schemas']['GuestRegistrationInput'], scope: FrontendRequestScope) => api.registerGuest(id, input, scope)});
+        };
+    }});
 
 /** Real route reuse, commands and generated validators; only the HTTP boundary is replaced. */
 async function mounted(path: string, handler: (request: Request) => Promise<Response>,
-                       bootstrap: Partial<FrontendBootstrap> = {}, useShell = false) {
+    bootstrap: Partial<FrontendBootstrap> = {}, useShell = false) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
     const context = createFrontendContext({session, ...bootstrap}, true, request);
     context.hydrated.value = true;
     context.visible.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/users/register', component: IdentityPage, meta: {identityMode: 'register'}},
-        {name: 'identity-test-login', path: '/users/login', component: IdentityPage, meta: {identityMode: 'login'}},
-        {path: '/users/forgot-password', component: IdentityPage, meta: {identityMode: 'forgot'}},
-        {path: '/users/reset-password/:token', component: IdentityPage, meta: {identityMode: 'reset'}},
-        {path: '/users/activate/:token', component: IdentityPage, meta: {identityMode: 'activate'}},
-        {path: '/users/oidc/login', component: IdentityPage, meta: {identityMode: 'oidc'}},
-        {path: '/guest/recovery', component: IdentityPage, meta: {identityMode: 'recovery'}},
-        {path: '/packing/:listId/guest', component: PackingGuestFixture},
-        {path: '/packing/:listId/duplicate', component: defineComponent({template: '<p>Duplicate destination</p>'})},
-        {path: '/packing/:listId', component: defineComponent({template: '<p>Canonical detail</p>'})},
-        {path: '/users/dashboard', component: PackingHome},
-        {path: '/', component: defineComponent({template: '<p>Public landing</p>'})},
-        {path: '/packing/create', component: defineComponent({template: '<p>Create</p>'})},
-        {path: '/help', component: defineComponent({template: '<p>Help</p>'})},
-    ]});
+            {path: '/users/register', component: IdentityPage, meta: {identityMode: 'register'}},
+            {name: 'identity-test-login', path: '/users/login', component: IdentityPage, meta: {identityMode: 'login'}},
+            {path: '/users/forgot-password', component: IdentityPage, meta: {identityMode: 'forgot'}},
+            {path: '/users/reset-password/:token', component: IdentityPage, meta: {identityMode: 'reset'}},
+            {path: '/users/activate/:token', component: IdentityPage, meta: {identityMode: 'activate'}},
+            {path: '/users/oidc/login', component: IdentityPage, meta: {identityMode: 'oidc'}},
+            {path: '/guest/recovery', component: IdentityPage, meta: {identityMode: 'recovery'}},
+            {path: '/packing/:listId/guest', component: PackingGuestFixture},
+            {path: '/packing/:listId/duplicate', component: defineComponent({template: '<p>Duplicate destination</p>'})},
+            {path: '/packing/:listId', component: defineComponent({template: '<p>Canonical detail</p>'})},
+            {path: '/users/dashboard', component: PackingHome},
+            {path: '/', component: defineComponent({template: '<p>Public landing</p>'})},
+            {path: '/packing/create', component: defineComponent({template: '<p>Create</p>'})},
+            {path: '/help', component: defineComponent({template: '<p>Help</p>'})},
+        ]});
     // Substitute fixture views without copying production loading declarations.
     for (const route of router.getRoutes()) {
         route.meta.loadingSkeleton = frontendRoutes.find(candidate => candidate.path === route.path)?.meta?.loadingSkeleton;
@@ -90,9 +90,9 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
     await router.push(path);
     await router.isReady();
     const wrapper = mount(useShell ? App : defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+        }});
     let mountedFixture = true;
     function unmountFixture(): void {
         if (!mountedFixture) return;
@@ -165,7 +165,7 @@ describe('identity forms and packing overview navigation', () => {
             detail: 'Wait before checking this link again.', requestId: 'reset-read-cooldown'};
         const {wrapper, context, request} = await mounted('/users/reset-password/fixture-token', async () => unavailable
             ? new Response(JSON.stringify(issue), {status, headers: {'Content-Type': 'application/problem+json',
-                'X-Surveyor-Context': session.context, 'Retry-After': '5'}})
+                    'X-Surveyor-Context': session.context, 'Retry-After': '5'}})
             : json({valid: true}));
         const retry = wrapper.findAll('button').find(button => button.text() === context.messages.value.t('common.retry'))!;
         expect(wrapper.find('form').exists()).toBe(false);
@@ -196,7 +196,7 @@ describe('identity forms and packing overview navigation', () => {
         const path = `/packing/${eventId}/guest`;
         const {wrapper, context, request} = await mounted(path, async () => unavailable
             ? new Response(JSON.stringify(issue), {status, headers: {'Content-Type': 'application/problem+json',
-                'X-Surveyor-Context': session.context, 'Retry-After': '5'}})
+                    'X-Surveyor-Context': session.context, 'Retry-After': '5'}})
             : json({id: eventId, title: 'Guest title authority'}),
             {initialUrl: path, guestEntry: {id: eventId, title: 'Guest title authority'}});
         const input = wrapper.get<HTMLInputElement>('#guest-name');
@@ -622,9 +622,9 @@ describe('identity forms and packing overview navigation', () => {
             }, {}, true);
         let failedDelivery = true;
         router.addRoute({path: destination, component: async function loadConfirmedDestination() {
-            if (failedDelivery) throw new Error('Failed to fetch dynamically imported module');
-            return defineComponent({template: '<p>Delivered signed-in destination</p>'});
-        }});
+                if (failedDelivery) throw new Error('Failed to fetch dynamically imported module');
+                return defineComponent({template: '<p>Delivered signed-in destination</p>'});
+            }});
         router.onError(() => {});
 
         await wrapper.get('#username').setValue('account');
@@ -854,7 +854,7 @@ describe('identity forms and packing overview navigation', () => {
     it('renders an explicitly supplied recovery completion independently of local account configuration', async () => {
         const path = '/guest/recovery';
         const result = await render(path, {session: {...session,
-            shell: {...session.shell, localLoginEnabled: false}}, initialUrl: path,
+                shell: {...session.shell, localLoginEnabled: false}}, initialUrl: path,
             pageCompletion: {context: session.context, destination: path, messageKey: 'auth.recoverySent', kind: 'success'}});
         expect(result.html).toContain('Success');
         expect(result.html).toContain('The link(s) to your guest account(s)');
@@ -1425,7 +1425,7 @@ describe('identity forms and packing overview navigation', () => {
         const {context, router, request} = await mounted('/users/login', async () => json(session));
         context.session.value = {...session, profiles: [...session.profiles, {id: eventId, name: 'Other profile'}]};
         const header = mount(AppHeader, {attachTo: document.body, global: {plugins: [router, [I18NextVue, {i18next: context.i18next}]],
-            provide: {[frontendContextKey as symbol]: context}}});
+                provide: {[frontendContextKey as symbol]: context}}});
         try {
             const confirm = vi.fn(() => false);
             vi.stubGlobal('confirm', confirm);

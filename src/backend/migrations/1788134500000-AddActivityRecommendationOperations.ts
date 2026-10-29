@@ -4,14 +4,15 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
+import {MigrationInterface, QueryRunner} from 'typeorm';
 import {
     addColumnIfNotExists,
     createConstraintIfNotExists,
     dropColumnIfExists,
+    dropFkConstraint,
     dropFkConstraintIfExists,
     tableExists,
-} from "../modules/database/utils/migration-helper";
+} from '../modules/database/utils/migration-helper';
 
 const TABLE = "activity_assignment_recommendations";
 const SOURCE_FK = "fk_activity_recommendation_source_item";
@@ -127,7 +128,7 @@ export class AddActivityRecommendationOperations1788134500000 implements Migrati
         for (const foreignKey of table?.foreignKeys.filter(
             (candidate) => candidate.columnNames.includes("source_item_id"),
         ) ?? []) {
-            await queryRunner.dropForeignKey(TABLE, foreignKey);
+            await dropFkConstraint(queryRunner, TABLE, foreignKey.name!);
         }
         await dropFkConstraintIfExists(queryRunner, TABLE, SOURCE_FK);
         await dropColumnIfExists(queryRunner, TABLE, "source_item_id");

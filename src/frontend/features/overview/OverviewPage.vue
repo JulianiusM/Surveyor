@@ -108,7 +108,7 @@ function receiveHiddenNavigation(query: LocationQuery): void {
 /** Accept only the current region's admitted read or denial. A late old actor/locale
  * cannot remove a new receipt, and retiring one region preserves sibling authority. */
 function updateCounts(collection: Region['collection'], region: Region['region'],
-                      source: FrontendOverviewCountRead | null, scope: FrontendRequestScope): void {
+    source: FrontendOverviewCountRead | null, scope: FrontendRequestScope): void {
     if (!context.isCurrent(scope, true)) return;
     // Store a reference to source authority, never the server's numeric membership.
     const sources = countSources.value[collection] ?? {};

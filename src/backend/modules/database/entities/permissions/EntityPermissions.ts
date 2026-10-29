@@ -15,10 +15,10 @@
  */
 
 // src/backend/modules/database/entities/common/EntityPermissions.ts
-import {Column, Entity, Index} from "typeorm";
-import type {Audience} from "../../../../../types/PermissionTypes";
-import type {CombEntityType} from "../../../../../types/UtilTypes";
-import {NumericBase} from "../abstract/TrackedBase";
+import {Column, Entity, Index} from 'typeorm';
+import type {Audience} from '../../../../../types/PermissionTypes';
+import type {CombEntityType} from '../../../../../types/UtilTypes';
+import {NumericBase} from '../abstract/TrackedBase';
 
 export const ENTITY_PERM_AUDIENCE: Audience[] = ["participant", "guest", "authenticated", "public"];
 
@@ -34,6 +34,6 @@ export class EntityPermissions extends NumericBase {
     @Column("enum", {name: "audience", enum: ENTITY_PERM_AUDIENCE})
     audience!: Audience;
 
-    @Column("int", {name: "perms", unsigned: true, default: () => "0"})
+    @Column("int", {name: "perms", unsigned: true, default: 0})
     perms!: number;
 }

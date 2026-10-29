@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import {NextFunction, Request, Response, Router} from "express";
-import {asyncParamHandler} from "../modules/lib/asyncHandler";
-import {ExpectedError} from "../modules/lib/errors";
-import type {ResourceLoader} from "../../types/UtilTypes";
+import {NextFunction, Request, Response, Router} from 'express';
+import {asyncParamHandler} from '../modules/lib/asyncHandler';
+import {ExpectedError} from '../modules/lib/errors';
+import type {ResourceLoader} from '../../types/UtilTypes';
 
 export function paramHandler(param: string, router: Router, getById: ResourceLoader, entityType: string) {
     handleParam(param, router, getById, entityType, new ExpectedError(`${entityType} not found`, 'error', 404));

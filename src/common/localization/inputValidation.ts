@@ -104,7 +104,7 @@ export function fieldDiagnostic(error: ErrorObject): FieldDiagnostic | undefined
     const field = knownName ? fieldNames[knownName]! : 'request';
     const rule = error.keyword === 'pattern' && error.params.pattern === '\\S' ? 'nonBlank'
         : rules.has(error.keyword as FieldDiagnostic['rule'])
-        ? error.keyword as FieldDiagnostic['rule'] : 'invalid';
+            ? error.keyword as FieldDiagnostic['rule'] : 'invalid';
     const diagnostic: FieldDiagnostic = {field, rule};
 
     // Constraints come from this actual validator failure. The display layer

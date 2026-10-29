@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import {EntityManager, In} from "typeorm";
-import type {RecommendationInput} from "../../../../types/ActivityTypes";
-import {AppDataSource} from "../dataSource";
-import {ActivityAssignmentRecommendation} from "../entities/activity/ActivityAssignmentRecommendation";
+import {EntityManager, In} from 'typeorm';
+import type {RecommendationInput} from '../../../../types/ActivityTypes';
+import {AppDataSource} from '../dataSource';
+import {ActivityAssignmentRecommendation} from '../entities/activity/ActivityAssignmentRecommendation';
 
 
 /** DBAL-only recommendation reads/writes. Reconciliation and validity decisions belong to the controller. */

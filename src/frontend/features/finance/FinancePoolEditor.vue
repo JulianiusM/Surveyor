@@ -134,7 +134,7 @@ async function save(): Promise<void> {
         registrations: [...draft.registrations]};
     const result = await command.run(scope => pool ? api.settings(props.eventId, pool.id, settings, scope)
         : api.createPool(props.eventId, creation, scope), true, true, {success: pool
-        ? pool.status === 'CLOSED' ? 'finance.poolSettingsSavedClosed' : 'finance.poolSettingsSaved' : 'finance.poolCreated'});
+                ? pool.status === 'CLOSED' ? 'finance.poolSettingsSavedClosed' : 'finance.poolSettingsSaved' : 'finance.poolCreated'});
     if (!result) return;
     // A settings confirmation adopts the submitted values, never a stale read.
     if (pool) baseline.value = JSON.stringify(draft); else resetDraft();

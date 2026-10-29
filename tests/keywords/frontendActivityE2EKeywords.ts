@@ -17,11 +17,11 @@ export async function createActivityForE2E(request: APIRequestContext, eventId?:
     Object.assign(input.form, {startDate: period.startDate, endDate: period.endDate,
         'defaultPerms[public][0]': 'ACCESS_VIEW',
         slots: JSON.stringify({[period.startDate]: [
-            {id: randomUUID(), day: period.startDate, pos: 0, title: 'Breakfast help', description: 'Serve breakfast',
-                startTime: '09:00', endTime: '10:00', maxAssignees: 2},
-            {id: randomUUID(), day: period.startDate, pos: 1, title: 'Lunch help', description: 'Prepare lunch',
-                startTime: '12:00', endTime: '13:00', maxAssignees: 1},
-        ]}), ...(eventId ? {event_id: eventId} : {})});
+                {id: randomUUID(), day: period.startDate, pos: 0, title: 'Breakfast help', description: 'Serve breakfast',
+                    startTime: '09:00', endTime: '10:00', maxAssignees: 2},
+                {id: randomUUID(), day: period.startDate, pos: 1, title: 'Lunch help', description: 'Prepare lunch',
+                    startTime: '12:00', endTime: '13:00', maxAssignees: 1},
+            ]}), ...(eventId ? {event_id: eventId} : {})});
     if (eventId) input.createPath += `?eventId=${eventId}`;
     const resource = await createResourceViaForm(request, input);
     return {...resource, view: await readActivityForE2E(request, resource.id)};
@@ -141,7 +141,7 @@ export async function captureActivityCreationPresentation(page: Page, info: Test
 
     const messages = createTranslator(locale);
     const labels = [messages.t('packing.title') + ' *', messages.t('packing.description'),
-        messages.t('activity.startTime'), messages.t('activity.endTime'), messages.t('activity.maxParticipants')];
+    messages.t('activity.startTime'), messages.t('activity.endTime'), messages.t('activity.maxParticipants')];
     const failures = await surface.evaluate(function inspectInitialSlotLabels(element, expected) {
         const root = element as HTMLElement;
         const failures: string[] = [];

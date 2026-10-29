@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import {Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
-import {UuidDefaultEntityItem} from "../abstract/ProfileEntityItem";
-import {ActivityAssignment} from "./ActivityAssignment";
-import {ActivityPlan} from "./ActivityPlan";
-import {ActivitySlotRole} from "./ActivitySlotRole";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from 'typeorm';
+import {UuidDefaultEntityItem} from '../abstract/ProfileEntityItem';
+import {ActivityAssignment} from './ActivityAssignment';
+import {ActivityPlan} from './ActivityPlan';
+import {ActivitySlotRole} from './ActivitySlotRole';
 
 @Entity("activity_slots", {schema: "surveyor"})
 export class ActivitySlot extends UuidDefaultEntityItem {
@@ -37,7 +37,7 @@ export class ActivitySlot extends UuidDefaultEntityItem {
     @Column("int", {
         name: "max_assignees",
         nullable: true,
-        default: () => "'1'",
+        default: 1,
     })
     maxAssignees?: number | null;
 

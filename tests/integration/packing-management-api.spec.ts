@@ -12,8 +12,8 @@ import * as packingService from '../../src/backend/modules/database/services/Pac
 import * as userService from '../../src/backend/modules/database/services/UserService';
 import * as packing from '../../src/backend/controller/packingController';
 import {packingFlow} from '../../src/backend/routes/packingFlow';
-import {readOverview, setOverviewVisibility} from '../../src/backend/modules/overview/api';
-import packingController from '../../src/backend/controller/packingController';
+import {readOverview, setOverviewVisibility} from '../../src/backend/controller/userController';
+
 import {changeEntityEvent, getEntityViewAdmission} from '../../src/backend/modules/event/linkage';
 import {archiveEntity, restoreEntity} from '../../src/backend/modules/entityArchival';
 
@@ -35,7 +35,7 @@ function creation(eventId: string | null = null): components['schemas']['Packing
     return {title: 'Complete packing', description: null, eventId,
         defaultPermissions: {public: PERM.ACCESS_VIEW, guest: 0, authenticated: 0, participant: 0},
         items: [{title: 'Tent', description: 'Shared shelter', maxAssignees: 2, requiredByAll: false},
-            {title: 'Water', description: null, maxAssignees: 1, requiredByAll: true}]};
+        {title: 'Water', description: null, maxAssignees: 1, requiredByAll: true}]};
 }
 async function fixture() { return (await packing.createPackingList(creation(), undefined, actor(owner))).id; }
 
@@ -50,8 +50,8 @@ async function expectPackingReadOrder(id: string, stage: string) {
     // Read through both existing native consumers before comparing the API's
     // detail, duplicate draft and minimal order baseline on the same fixture.
     const nativeItems = await packingService.getPackingItems(id);
-    const nativeView = await packingController.fetchForView(list, request);
-    const nativeDuplicate = await packingController.fetchForDuplicate(list);
+    const nativeView = await packing.fetchForView(list, request);
+    const nativeDuplicate = await packing.fetchForDuplicate(list);
     const nativeIds = nativeItems.map(item => item.id);
     const nativeTitles = nativeItems.map(item => item.title);
     expect(nativeView.items.map(item => item.id), `${stage}: native detail`).toEqual(nativeIds);
@@ -91,16 +91,16 @@ describe('complete versioned packing management', () => {
                 {title: 'Third submitted food', description: '', maxAssignees: 2, requiredByAll: false},
             ]),
         };
-        const parsed = Object.assign(packingController.preprocessCreate(body), {_body: body});
-        const id = await packingController.createEntity(owner.id, parsed);
-        await packingController.afterCreateItems(id, parsed);
+        const parsed = Object.assign(packing.preprocessCreate(body), {_body: body});
+        const id = await packing.createEntity(owner.id, parsed);
+        await packing.afterCreateItems(id, parsed);
         const initial = await expectPackingReadOrder(id, 'native creation');
         expect(initial).toHaveLength(3);
         expect(initial.map(item => item.pos)).toEqual([0, 0, 0]);
 
         // Native Quick Add also retains its original default position. Compare
         // both surfaces after the real write, without assuming its insertion rank.
-        await packingController.quickAddItem((await packingService.getPackingListById(id))!,
+        await packing.quickAddItem((await packingService.getPackingListById(id))!,
             {title: 'Fourth quick-added torch', description: '', maxAssignees: '2'}, actor(owner));
         const added = await expectPackingReadOrder(id, 'native Quick Add');
         expect(added).toHaveLength(4);
@@ -108,7 +108,7 @@ describe('complete versioned packing management', () => {
 
         // Partial, non-dense native ordering can leave several tied rows. Its
         // existing adapter must remain intact while each API read matches it.
-        await packingController.reorderItems(id, [
+        await packing.reorderItems(id, [
             {itemId: added[0].id, position: 7},
             {itemId: added[1].id, position: 7},
         ]);
@@ -232,7 +232,7 @@ describe('complete versioned packing management', () => {
 
         // Native matrix fields have always carried named keys. A raw numeric
         // scalar remains an unknown key and clears only its submitted audience.
-        await packingController.updateSettings(id, {defaultPerms: {guest: mask}});
+        await packing.updateSettings(id, {defaultPerms: {guest: mask}});
         expect(await adminService.getDefaultPerms('packing', id)).toMatchObject({public: mask, guest: 0});
     });
 
@@ -246,17 +246,17 @@ describe('complete versioned packing management', () => {
 
         // Original native ordering accepts explicit, sparse positions and ignores
         // rows outside its root. It has never required a complete rendered table.
-        await packingController.reorderItems(id, [{itemId: first.id, position: 7}, {itemId: foreignItem.id, position: 9}]);
+        await packing.reorderItems(id, [{itemId: first.id, position: 7}, {itemId: foreignItem.id, position: 9}]);
         expect(await packingService.getPackingItemById(first.id)).toMatchObject({pos: 7});
         expect(await packingService.getPackingItemById(second.id)).toMatchObject({pos: 1});
         expect(await packingService.getPackingItemById(foreignItem.id)).toMatchObject({pos: 0});
-        await packingController.reorderItems(id, [{itemId: first.id, position: 8}, {itemId: first.id, position: 9}]);
+        await packing.reorderItems(id, [{itemId: first.id, position: 8}, {itemId: first.id, position: 9}]);
         expect(await packingService.getPackingItemById(first.id)).toMatchObject({pos: 9});
 
         // A later malformed SQL scalar must not retroactively roll back a native
         // row already saved. Only the versioned command owns an atomic full order.
-        await expect(packingController.reorderItems(id, [{itemId: first.id, position: 11},
-            {itemId: second.id, position: 'not-a-number'}])).rejects.toBeInstanceOf(QueryFailedError);
+        await expect(packing.reorderItems(id, [{itemId: first.id, position: 11},
+        {itemId: second.id, position: 'not-a-number'}])).rejects.toBeInstanceOf(QueryFailedError);
         expect(await packingService.getPackingItemById(first.id)).toMatchObject({pos: 11});
         expect(await packingService.getPackingItemById(second.id)).toMatchObject({pos: 1});
 
@@ -277,31 +277,31 @@ describe('complete versioned packing management', () => {
         const form = {title: 'Original native creation', description: '', event_id: '',
             items: JSON.stringify(creation().items.map(item => ({...item, description: item.description ?? ''}))),
             defaultPerms: {public: ['ACCESS_VIEW'], guest: []}};
-        const data = Object.assign(packingController.preprocessCreate(form), {_body: form});
-        const id = await packingController.createEntity(owner.id, data);
+        const data = Object.assign(packing.preprocessCreate(form), {_body: form});
+        const id = await packing.createEntity(owner.id, data);
         expect(await packingService.getPackingListById(id)).toMatchObject({eventId: null});
         expect(await adminService.getDefaultPerms('packing', id)).toEqual({});
         // Preserve the original position/pos adapter behavior; API creation's
         // independently tested ordered transaction must not rewrite native creation.
         const items = await packingService.getPackingItems(id);
         expect(items.map(item => item.pos)).toEqual([0, 0]);
-        await packingController.afterCreateItems(id, data);
+        await packing.afterCreateItems(id, data);
         expect(await adminService.getDefaultPerms('packing', id)).toMatchObject({public: PERM.ACCESS_VIEW, guest: 0});
         await adminService.updatePerms('packing', id, {public: PERM.ACCESS_VIEW | PERM.ITEM_EDIT, guest: PERM.ITEM_ADD});
-        await packingController.afterCreateItems(id, data);
+        await packing.afterCreateItems(id, data);
         expect(await adminService.getDefaultPerms('packing', id)).toMatchObject({public: PERM.ACCESS_VIEW, guest: 0});
 
         // Observe native hook delegation and target selection against the real
         // repositories. Route/session authorization belongs to its HTTP boundary;
         // the established request factory supplies this unused hook parameter.
         const [unrelatedId, unrelatedItem] = await createPackingListWithItem(owner.id);
-        await packingController.deleteItem(items[0].id);
+        await packing.deleteItem(items[0].id);
         expect(await packingService.getPackingItemById(items[0].id)).toBeNull();
         expect(await packingService.getPackingItemById(items[1].id)).toMatchObject({entityId: id});
         expect(await packingService.getPackingItemById(unrelatedItem.id)).toMatchObject({entityId: unrelatedId});
 
         const list = (await packingService.getPackingListById(id))!;
-        await packingController.deleteEntity(list, createApiRequest({profileId: owner.id}).session);
+        await packing.deleteEntity(list, createApiRequest({profileId: owner.id}).session);
         expect(await packingService.getPackingListById(id)).toBeNull();
         expect(await packingService.getPackingItemById(items[1].id)).toBeNull();
         expect(await packingService.getPackingListById(unrelatedId)).toMatchObject({ownerId: owner.id});
@@ -311,18 +311,18 @@ describe('complete versioned packing management', () => {
     it('retains raw native Everyone persistence and its omitted-flag and vanished-row outcomes', async () => {
         const id = await fixture();
         const item = (await packing.readPackingList(id, actor(owner))).data.items[0];
-        await expect(packingController.updateRequired(item.id, {})).resolves.toBe('Requirement updated');
+        await expect(packing.updateRequired(item.id, {})).resolves.toBe('Requirement updated');
         expect(Boolean((await packingService.getPackingItemById(item.id))!.requiredByAll)).toBe(false);
         // The native writer forwards raw values to a tinyint column. Textual
         // booleans are not JSON booleans and retain MariaDB's scalar rejection.
-        await expect(packingController.updateRequired(item.id, {flag: 'false'})).rejects.toBeInstanceOf(QueryFailedError);
-        await expect(packingController.updateRequired(item.id, {flag: '1'})).resolves.toBe('Requirement updated');
+        await expect(packing.updateRequired(item.id, {flag: 'false'})).rejects.toBeInstanceOf(QueryFailedError);
+        await expect(packing.updateRequired(item.id, {flag: '1'})).resolves.toBe('Requirement updated');
         expect(Boolean((await packingService.getPackingItemById(item.id))!.requiredByAll)).toBe(true);
         const current = (await packing.readPackingList(id, actor(owner))).data.items.find(row => row.id === item.id)!;
         await packing.updatePackingItem(id, item.id, {requiredByAll: false}, current.editToken, actor(owner));
         expect(Boolean((await packingService.getPackingItemById(item.id))!.requiredByAll)).toBe(false);
-        await expect(packingController.updateRequired(randomUUID(), {flag: true})).resolves.toBe('Requirement updated');
-        await expect(packingController.updateItemDescription(randomUUID(), {description: 'Vanished row'}))
+        await expect(packing.updateRequired(randomUUID(), {flag: true})).resolves.toBe('Requirement updated');
+        await expect(packing.updateItemDescription(randomUUID(), {description: 'Vanished row'}))
             .rejects.toMatchObject({status: 500, message: 'Unknown error while saving'});
     });
 
@@ -421,7 +421,7 @@ describe('complete versioned packing management', () => {
             expect(await packingService.getPackingListById(id)).toMatchObject({headerImg: newPath});
 
             const nativeEntity = (await packingService.getPackingListById(id))!;
-            await expect(packingController.deleteHeaderImg(nativeEntity)).resolves.toBe('Image deleted');
+            await expect(packing.deleteHeaderImg(nativeEntity)).resolves.toBe('Image deleted');
             await Promise.all(observations);
             expect(removals.at(-1)).toEqual({path: newPath, persisted: null});
         } finally {
@@ -473,7 +473,7 @@ describe('complete versioned packing management', () => {
             const before = (await packing.readPackingList(id, actor(owner))).data.items;
             const native = before[0];
             const versioned = before[1];
-            const nativeWrite = packingController.updateItemAttr(native.id,
+            const nativeWrite = packing.updateItemAttr(native.id,
                 {field: 'maxAssignees', value: scenario.value});
             if (Object.hasOwn(scenario, 'saved')) await nativeWrite;
             else await expect(nativeWrite).rejects.toBeInstanceOf(QueryFailedError);
@@ -491,18 +491,18 @@ describe('complete versioned packing management', () => {
         const id = await fixture();
         await adminService.updatePerms('packing', id, {public: PERM.ACCESS_VIEW | PERM.ITEM_EDIT_DESC});
         const frontendBaseline = (await packing.readPackingList(id, actor(editor))).data.items[0];
-        await packingController.updateItemDescription(frontendBaseline.id, {description: 'Native edit'});
+        await packing.updateItemDescription(frontendBaseline.id, {description: 'Native edit'});
         await expect(packing.updatePackingItem(id, frontendBaseline.id, {description: 'Stale frontend edit'}, frontendBaseline.editToken, actor(editor)))
             .rejects.toMatchObject({status: 412});
         const current = (await packing.readPackingList(id, actor(editor))).data.items[0];
         await packing.updatePackingItem(id, current.id, {description: 'Frontend edit'}, current.editToken, actor(editor));
         // Legacy item endpoints ignore extra expectedValue fields. A versioned
         // token must protect the API without silently adding native preconditions.
-        await packingController.updateItemDescription(current.id, {description: 'Stale native edit', expectedValue: current.description});
+        await packing.updateItemDescription(current.id, {description: 'Stale native edit', expectedValue: current.description});
         expect((await packingService.getPackingItemById(current.id))!.description).toBe('Stale native edit');
         await expect(packing.updatePackingItem(id, current.id, {description: 'Stale frontend edit'}, current.editToken, actor(editor)))
             .rejects.toMatchObject({status: 412});
-        await packingController.updateItemAttr(current.id, {field: 'title', value: 'Updated item'});
+        await packing.updateItemAttr(current.id, {field: 'title', value: 'Updated item'});
         expect((await packingService.getPackingItemById(current.id))!.title).toBe('Updated item');
 
         const entity = (await packingService.getPackingListById(id))!;
@@ -510,9 +510,9 @@ describe('complete versioned packing management', () => {
         await packing.patchPackingMetadata(id, {title: 'Frontend setup edit'}, metadata.etag, actor(owner));
         // Unlike item endpoints, original native properties reject unsupported
         // body keys through Joi. Their unchanged error is validation, not a new412.
-        await expect(packingController.updateProperties(entity, {title: 'Stale native setup', expectedValues: {title: entity.title}}))
+        await expect(packing.updateProperties(entity, {title: 'Stale native setup', expectedValues: {title: entity.title}}))
             .rejects.toMatchObject({status: 400});
-        await packingController.updateProperties(entity, {description: 'Independent native setup'});
+        await packing.updateProperties(entity, {description: 'Independent native setup'});
         expect(await packingService.getPackingListById(id)).toMatchObject({title: 'Frontend setup edit', description: 'Independent native setup'});
 
         // A relink after native route discovery supersedes that route's permission
@@ -522,7 +522,7 @@ describe('complete versioned packing management', () => {
         const settings = await packing.readPackingSettings(id, actor(owner));
         await packing.changePackingEvent(id, {eventId, expectedEventId: null}, actor(owner), settings.settingsToken);
         const conflict = {status: 409, message: 'The linked event changed. Reload and try again.'};
-        await expect(packingController.updateProperties(entity, {title: 'Retired native context'})).rejects.toMatchObject(conflict);
+        await expect(packing.updateProperties(entity, {title: 'Retired native context'})).rejects.toMatchObject(conflict);
         expect(await packingService.getPackingListById(id)).toMatchObject({title: 'Frontend setup edit', eventId});
     });
 
@@ -539,17 +539,17 @@ describe('complete versioned packing management', () => {
         const entity = (await packingService.getPackingListById(id))!;
         // Native route middleware owns field grants; these original controller
         // hooks must not add the v1 detail-page admission check as a second policy.
-        await packingController.updateProperties(entity, {title: 'Native title-only grant'});
-        await packingController.updateItemDescription(item.id, {description: 'Native child grant'});
-        await packingController.quickAddItem(entity, {title: 'Native add-only grant'}, actor(editor));
-        await packingController.quickAddItem(entity, {title: 'Another native addition'}, actor(editor));
+        await packing.updateProperties(entity, {title: 'Native title-only grant'});
+        await packing.updateItemDescription(item.id, {description: 'Native child grant'});
+        await packing.quickAddItem(entity, {title: 'Native add-only grant'}, actor(editor));
+        await packing.quickAddItem(entity, {title: 'Another native addition'}, actor(editor));
         const items = await packingService.getPackingItems(id);
         expect(items.map(entry => entry.title)).toEqual(expect.arrayContaining(['Tent', 'Water', 'Native add-only grant', 'Another native addition']));
         expect(items).toHaveLength(4);
         expect(items.filter(entry => entry.profileId === editor.id)).toEqual([
             expect.objectContaining({pos: 0}), expect.objectContaining({pos: 0}),
         ]);
-        await packingController.deleteHeaderImg(entity);
+        await packing.deleteHeaderImg(entity);
         expect(await packingService.getPackingListById(id)).toMatchObject({title: 'Native title-only grant'});
         expect(await packingService.getPackingItemById(item.id)).toMatchObject({description: 'Native child grant'});
         await adminService.updateAdminPerms('packing', id, editor.id, PERM.ITEM_ADD);
@@ -576,7 +576,7 @@ describe('complete versioned packing management', () => {
         expect(metadata.data.values).toEqual({title: creation().title});
         await packing.patchPackingMetadata(id, {title: 'Independent versioned title'}, metadata.etag, actor(editor));
         const entity = (await packingService.getPackingListById(id))!;
-        await packingController.updateProperties(entity, {title: 'Independent native title'});
+        await packing.updateProperties(entity, {title: 'Independent native title'});
         expect(await packingService.getPackingListById(id)).toMatchObject({title: 'Independent native title'});
 
         // Obtain only this action's permitted current values. The actor never had
@@ -585,7 +585,7 @@ describe('complete versioned packing management', () => {
         expect(itemBaseline.values).toEqual({description: 'Shared shelter'});
         expect(itemBaseline.editableFields).toEqual(['description']);
         await packing.updatePackingItem(id, item.id, {description: 'Independent versioned description'}, itemBaseline.editToken, actor(editor));
-        await packingController.updateItemDescription(item.id, {description: 'Independent native description'});
+        await packing.updateItemDescription(item.id, {description: 'Independent native description'});
         expect(await packingService.getPackingItemById(item.id)).toMatchObject({description: 'Independent native description'});
         const titleOnly = await packing.readPackingSettings(id, actor(editor));
         expect(titleOnly.access).toBeNull();
@@ -596,7 +596,7 @@ describe('complete versioned packing management', () => {
         expect(management.editableFields).toEqual([]);
         expect(management.access).not.toBeNull();
         await packing.updatePackingDefaults(id, {guest: PERM.ITEM_ADD}, actor(editor), management.settingsToken);
-        await packingController.updateSettings(id, {defaultPerms: {guest: ['ITEM_EDIT']}});
+        await packing.updateSettings(id, {defaultPerms: {guest: ['ITEM_EDIT']}});
         expect(await adminService.getDefaultPerms('packing', id)).toMatchObject({guest: PERM.ITEM_EDIT});
         await expect(packing.readPackingList(id, actor(editor))).rejects.toMatchObject({status: 403});
         await expect(packing.readPackingMetadata(id, actor(editor))).rejects.toMatchObject({status: 403});

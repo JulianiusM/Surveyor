@@ -46,25 +46,25 @@ describe('directly addressed invoice notifications', () => {
     afterEach(() => { vi.restoreAllMocks(); });
 
     it.each(['submitted', 'accepted', 'closed', 'rejected', 'corrected', 'saved-rejected', 'retracted'])
-    ('addresses the %s invoice notice and its context labels directly to the recipient', (action) => {
-        notifyInvoice(action);
-        expect(delivery).toHaveBeenCalledTimes(1);
-        const [recipient, subject, content] = delivery.mock.calls[0];
-        const message = content as StructuredEmailContent;
-        expect(recipient).toEqual({name: 'Taylor', address: 'taylor@example.test'});
-        expect(subject).toMatch(/^Your /u);
-        expect(message.heading).toMatch(/^Your /u);
-        expect(message.paragraphs!.join(' ')).toMatch(/your /u);
-        expect(message.details).toContainEqual({label: 'Your invoice', value: '#7'});
-        expect(message.details).toContainEqual({label: 'Your event', value: 'Shared trip'});
-        expect(message.details).toContainEqual({label: 'Your invoice pool', value: 'Travel'});
-        expect(message.action!.label).toBe('View your invoice history');
-        // Ordinary content never calls the recipient a participant or payer; authored source values remain intact.
-        expect(JSON.stringify(message)).not.toMatch(/this participant|the payer|this invoice/u);
-        const rendered = renderEmail(subject, message, recipient);
-        expect(rendered.text).toContain('Your invoice: #7');
-        expect(rendered.html).toContain('View your invoice history');
-    });
+        ('addresses the %s invoice notice and its context labels directly to the recipient', (action) => {
+            notifyInvoice(action);
+            expect(delivery).toHaveBeenCalledTimes(1);
+            const [recipient, subject, content] = delivery.mock.calls[0];
+            const message = content as StructuredEmailContent;
+            expect(recipient).toEqual({name: 'Taylor', address: 'taylor@example.test'});
+            expect(subject).toMatch(/^Your /u);
+            expect(message.heading).toMatch(/^Your /u);
+            expect(message.paragraphs!.join(' ')).toMatch(/your /u);
+            expect(message.details).toContainEqual({label: 'Your invoice', value: '#7'});
+            expect(message.details).toContainEqual({label: 'Your event', value: 'Shared trip'});
+            expect(message.details).toContainEqual({label: 'Your invoice pool', value: 'Travel'});
+            expect(message.action!.label).toBe('View your invoice history');
+            // Ordinary content never calls the recipient a participant or payer; authored source values remain intact.
+            expect(JSON.stringify(message)).not.toMatch(/this participant|the payer|this invoice/u);
+            const rendered = renderEmail(subject, message, recipient);
+            expect(rendered.text).toContain('Your invoice: #7');
+            expect(rendered.html).toContain('View your invoice history');
+        });
 
     it('addresses an organizer about their recorded invoice without implying event registration', () => {
         const invoice = savedInvoice();
@@ -112,7 +112,7 @@ describe('directly addressed invoice notifications', () => {
     it('uses recipient-specific frozen responsibility wording instead of the shared ledger description', () => {
         const person = participant(1, 'Taylor');
         const savedPool = {name: 'Travel', status: 'CLOSED', shares: [{registrationId: 1, baseShareAmount: 0,
-            extraAmount: 0, invoiceCreditAmount: 0, paymentCreditAmount: 25, shareAmount: -25, isPaid: false}],
+                extraAmount: 0, invoiceCreditAmount: 0, paymentCreditAmount: 25, shareAmount: -25, isPaid: false}],
             calculationSnapshot: {settledRegistrationIds: [1], assignments: [{registrationId: 1, isExempt: true}], takeovers: []},
         } as unknown as EventInvoicePool;
         expect(notifyPoolShareSettlements(event, savedPool, new Map([[1, person]]), 'responsibility-changed', session)).toEqual({count: 1});
@@ -127,15 +127,15 @@ describe('directly addressed invoice notifications', () => {
         const person = participant(1, 'Taylor');
         const note = 'Taylor: previous payment recorded • Author note <credit> & original wording';
         const savedPool = {name: 'Travel', status: 'CLOSED', shares: [{registrationId: 1, baseShareAmount: 75,
-            extraAmount: 0, invoiceCreditAmount: 0, paymentCreditAmount: 50, shareAmount: 25, isPaid: false, note}],
+                extraAmount: 0, invoiceCreditAmount: 0, paymentCreditAmount: 50, shareAmount: 25, isPaid: false, note}],
         } as unknown as EventInvoicePool;
         notifyPoolShareSettlements(event, savedPool, new Map([[1, person]]), 'requested', session);
         const [recipient, subject, content] = delivery.mock.calls[0];
         const message = content as StructuredEmailContent;
         expect(message.heading).toBe('Your calculated balance: 25.00 · Payment due');
         expect(message.sections).toEqual([{title: 'Saved calculation notes', items: [
-            'Taylor: previous payment recorded', 'Author note <credit> & original wording',
-        ]}]);
+                'Taylor: previous payment recorded', 'Author note <credit> & original wording',
+            ]}]);
         expect(JSON.stringify(message.sectionGroups)).not.toContain('Author note');
         const rendered = renderEmail(subject, message, recipient);
         expect(rendered.text.indexOf('Author note <credit> & original wording'))

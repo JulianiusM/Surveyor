@@ -33,6 +33,32 @@ import {validateInvoiceFactor} from './distribution';
 import {collectSettledRegistrationIds, projectInvoiceShares} from './settlements';
 import {comparePoolTakeovers, invoiceAppliedTakeovers, invoiceHasAppliedTakeoverEvidence, invoiceSettledShareImpact} from './coverage';
 
+/** Keep the caller's preview comparison before the locked write's own revision
+ * check, preserving their separately authored conflict diagnostics. */
+export function assertPoolPreviewRevision(pool: EventInvoicePool, expectedRevision?: number): void {
+    if (expectedRevision !== undefined && expectedRevision !== pool.calculationRevision) {
+        throw new APIError(invoiceText('thePreviewIsOutOfDatePreviewTheCalculation'), {}, 409, {cause: invoiceRejectionCause('thePreviewIsOutOfDatePreviewTheCalculation', 409)});
+    }
+}
+
+/** Recalculation requires a saved closed calculation. Early admission retains
+ * its 400, while a changed locked snapshot retains its concurrent 409. */
+export function assertPoolRecalculationAllowed(pool: EventInvoicePool, status: 400 | 409 = 400): void {
+    if (pool.status !== 'CLOSED') {
+        throw new APIError(invoiceText('onlyClosedPoolsCanBeRecalculated'), {}, status,
+            {cause: invoiceRejectionCause('onlyClosedPoolsCanBeRecalculated', status)});
+    }
+}
+
+/** Notifications describe the saved calculation only, at the requested revision;
+ * validate before management-fence admission or any external delivery. */
+export function assertPoolNotificationAllowed(pool: EventInvoicePool, expectedRevision?: number): void {
+    if (pool.status !== 'CLOSED') throw new APIError(invoiceText('closeThePoolBeforeSendingSettlementEmails'), {}, 400, {cause: invoiceRejectionCause('closeThePoolBeforeSendingSettlementEmails')});
+    if (expectedRevision !== undefined && expectedRevision !== pool.calculationRevision) {
+        throw new APIError(invoiceText('theSettlementChangedReloadBeforeSendingEmails'), {}, 409, {cause: invoiceRejectionCause('theSettlementChangedReloadBeforeSendingEmails', 409)});
+    }
+}
+
 /** Update allocation settings under the pool lock, distinguishing notification-only changes. */
 export async function saveInvoicePoolSettings(poolId: string, distribution: InvoicePoolDistribution, description?: string,
     sendCalculationEmails?: boolean, roundUpShares?: boolean, management?: InvoiceManagementContext): Promise<void> {
@@ -148,7 +174,7 @@ export async function commitPoolCalculation(poolId: string, _approvedInvoiceIds:
         const pool = requireLockedPool(row);
         // Reject stale previews and invalid transitions before replacing any share rows.
         if (expectedRevision !== undefined && pool.calculationRevision !== expectedRevision) throw new APIError(invoiceText('poolInputsChangedDuringCalculationReloadAndCalculateAgain'), {}, 409, {cause: invoiceRejectionCause('poolInputsChangedDuringCalculationReloadAndCalculateAgain', 409)});
-        if (recalculate && pool.status !== 'CLOSED') throw new APIError(invoiceText('onlyClosedPoolsCanBeRecalculated'), {}, 409, {cause: invoiceRejectionCause('onlyClosedPoolsCanBeRecalculated', 409)});
+        if (recalculate) assertPoolRecalculationAllowed(pool, 409);
         if (!recalculate && pool.status === 'CLOSED') throw new APIError(invoiceText('poolIsAlreadyClosed'), {}, 409, {cause: invoiceRejectionCause('poolIsAlreadyClosed', 409)});
         const rows = await invoiceService.getCalculationRows(manager, pool);
         // Compare the final pending inputs with the applied snapshot read under this same lock.

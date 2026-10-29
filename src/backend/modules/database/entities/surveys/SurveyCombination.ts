@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
-import type {WeekDay, WeekInMonth} from "../../../../../types/SurveyTypes";
-import {NumericDefaultEntityItem} from "../abstract/ProfileEntityItem";
-import {Survey} from "./Survey";
-import {SurveyResponse} from "./SurveyResponse";
+import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, RelationId,} from 'typeorm';
+import type {WeekDay, WeekInMonth} from '../../../../../types/SurveyTypes';
+import {NumericDefaultEntityItem} from '../abstract/ProfileEntityItem';
+import {Survey} from './Survey';
+import {SurveyResponse} from './SurveyResponse';
 import {surveyWeekdays, surveyOccurrences} from '../../../../../common/generated/domainChoices';
 
 @Index("combinations_single_entry", ["weekday", "entity", "nthWeek"], {

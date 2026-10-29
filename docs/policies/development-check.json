@@ -2,6 +2,12 @@
   "schemaVersion": 1,
   "declarationDirectory": "src/types",
   "databaseServiceDirectory": "src/backend/modules/database/services",
+  "runtimeDatabaseAccess": {
+    "directory": "src/backend",
+    "dataSourceFile": "src/backend/modules/database/dataSource.ts",
+    "migrationDirectories": ["src/backend/migrations"],
+    "migrationHelperFiles": ["src/backend/modules/database/utils/migration-helper.ts"]
+  },
   "requestOwnerDirectories": ["src/backend/controller", "src/backend/middleware", "src/backend/routes", "src/backend/modules/api"],
   "requestErrorModules": ["src/backend/modules/lib/errors.ts"],
   "sourceExtensions": [".ts", ".mts", ".cts", ".vue"],

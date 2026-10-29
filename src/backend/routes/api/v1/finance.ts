@@ -1,12 +1,6 @@
 import {Router} from 'express';
-import invoiceController, {
-    admitEventInvoiceSubmission, closeEventInvoice, readEventFinance, readEventFinanceBreakdown,
-    readEventInvoiceProof, retractEventInvoice,
-    admitEventFinanceOrganizer, createEventFinancePool, updateEventFinanceSettings,
-    changeEventFinanceSubmissionState, recordEventOrganizerInvoice, reviewEventFinanceInvoice,
-    updateEventFinanceAssignments, addEventFinanceAdjustment, removeEventFinanceAdjustment, updateEventFinanceTakeovers,
-    previewEventFinancePool, calculateEventFinancePool, rollbackEventFinancePool, notifyEventFinancePool, settleEventFinanceShare,
-} from '../../../controller/eventPoolController';
+import * as invoiceController from '../../../controller/eventPoolController';
+
 import {requireApiContext} from '../../../modules/api/session';
 import {ApiProblem, declaredApiProblem} from '../../../modules/api/problem';
 import {requestLocale} from '../../../modules/lib/http';
@@ -28,7 +22,7 @@ router.post('/pools', asyncHandler(async function createPool(req, res) {
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'createEventFinancePool');
     const reply = prepareValidatedJson(req, 'createEventFinancePool', 200, {changed: true});
-    await createEventFinancePool(String(req.params.eventId), req.body, actor);
+    await invoiceController.createEventFinancePool(String(req.params.eventId), req.body, actor);
     sendPreparedJson(req, res, reply);
 }));
 
@@ -36,7 +30,7 @@ router.post('/pools/:poolId/settings', asyncHandler(async function saveSettings(
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'updateEventFinanceSettings');
     const reply = prepareValidatedJson(req, 'updateEventFinanceSettings', 200, {changed: true});
-    await updateEventFinanceSettings(String(req.params.eventId), String(req.params.poolId), req.body, actor);
+    await invoiceController.updateEventFinanceSettings(String(req.params.eventId), String(req.params.poolId), req.body, actor);
     sendPreparedJson(req, res, reply);
 }));
 
@@ -44,7 +38,7 @@ router.post('/pools/:poolId/submission-state', asyncHandler(async function saveS
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'changeEventFinanceSubmissionState');
     const reply = prepareValidatedJson(req, 'changeEventFinanceSubmissionState', 200, {changed: true});
-    await changeEventFinanceSubmissionState(String(req.params.eventId), String(req.params.poolId), req.body, actor);
+    await invoiceController.changeEventFinanceSubmissionState(String(req.params.eventId), String(req.params.poolId), req.body, actor);
     sendPreparedJson(req, res, reply);
 }));
 
@@ -52,34 +46,34 @@ router.post('/pools/:poolId/submission-state', asyncHandler(async function saveS
 router.post('/pools/:poolId/invoices/organizer', asyncHandler(/** Admit organizer
  * authority before upload processing, validate the complete multipart input,
  * and hand proof retention to the business owner only when its operation starts. */
-async function recordOrganizerCost(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    const event = await admitEventFinanceOrganizer(String(req.params.eventId), actor, true);
-    try {
-        // The closed multipart schema distinguishes optional bytes from client-supplied filenames and unknown parts.
-        await receiveApiUpload(req, res, uploadProof);
-        validateOperationRequest(req, 'recordEventOrganizerInvoice', body => decodeApiMultipartData(body, req.file, 'proof'));
-        const reply = prepareValidatedJson(req, 'recordEventOrganizerInvoice', 200, {changed: true});
-        await recordEventOrganizerInvoice(event, String(req.params.poolId), req.body.data, actor, req.file);
-        sendPreparedJson(req, res, reply);
-    } finally {
-        // The same owner handles partial uploads, structural/business rejection
-        // and uncertain commit. A cleanup failure cannot reject a saved invoice.
-        await finishInvoiceProofRequest(req);
-    }
-}));
+    async function recordOrganizerCost(req, res) {
+        const actor = await requireApiContext(req, res, true);
+        const event = await invoiceController.admitEventFinanceOrganizer(String(req.params.eventId), actor, true);
+        try {
+            // The closed multipart schema distinguishes optional bytes from client-supplied filenames and unknown parts.
+            await receiveApiUpload(req, res, uploadProof);
+            validateOperationRequest(req, 'recordEventOrganizerInvoice', body => decodeApiMultipartData(body, req.file, 'proof'));
+            const reply = prepareValidatedJson(req, 'recordEventOrganizerInvoice', 200, {changed: true});
+            await invoiceController.recordEventOrganizerInvoice(event, String(req.params.poolId), req.body.data, actor, req.file);
+            sendPreparedJson(req, res, reply);
+        } finally {
+            // The same owner handles partial uploads, structural/business rejection
+            // and uncertain commit. A cleanup failure cannot reject a saved invoice.
+            await finishInvoiceProofRequest(req);
+        }
+    }));
 
 /** Keep the shared JSON review transport uniform while explicit operation IDs retain their distinct generated contracts. */
 function registerInvoiceReview(path: string, operation: 'approveEventFinanceInvoice' | 'declineEventFinanceInvoice'
     | 'closeEventOrganizerInvoice' | 'reviseEventFinanceInvoice' | 'rejectAcceptedEventFinanceInvoice',
-    action: Parameters<typeof reviewEventFinanceInvoice>[3]): void {
+    action: Parameters<typeof invoiceController.reviewEventFinanceInvoice>[3]): void {
     router.post(`/pools/:poolId/invoices/:invoiceId/${path}`, asyncHandler(async function reviewInvoice(req, res) {
         // Only retroactive review requires an invoice actor; existing initial review accepts the independent method grant.
         const actor = await requireApiContext(req, res, action === 'revise' || action === 'reject');
         validateOperationRequest(req, operation);
         // Prepare the fixed receipt before any shared operation writes; sending cannot introduce a new admission failure.
         const reply = prepareValidatedJson(req, operation, 200, {changed: true});
-        await reviewEventFinanceInvoice(String(req.params.eventId), String(req.params.poolId), String(req.params.invoiceId), action, req.body, actor);
+        await invoiceController.reviewEventFinanceInvoice(String(req.params.eventId), String(req.params.poolId), String(req.params.invoiceId), action, req.body, actor);
         sendPreparedJson(req, res, reply);
     }));
 }
@@ -94,7 +88,7 @@ router.post('/pools/:poolId/assignments', asyncHandler(async function saveAssign
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'updateEventFinanceAssignments');
     const reply = prepareValidatedJson(req, 'updateEventFinanceAssignments', 200, {changed: true});
-    await updateEventFinanceAssignments(String(req.params.eventId), String(req.params.poolId), req.body, actor);
+    await invoiceController.updateEventFinanceAssignments(String(req.params.eventId), String(req.params.poolId), req.body, actor);
     sendPreparedJson(req, res, reply);
 }));
 
@@ -102,7 +96,7 @@ router.post('/pools/:poolId/adjustments', asyncHandler(async function addAdjustm
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'addEventFinanceAdjustment');
     const reply = prepareValidatedJson(req, 'addEventFinanceAdjustment', 200, {changed: true});
-    await addEventFinanceAdjustment(String(req.params.eventId), String(req.params.poolId), req.body, actor);
+    await invoiceController.addEventFinanceAdjustment(String(req.params.eventId), String(req.params.poolId), req.body, actor);
     sendPreparedJson(req, res, reply);
 }));
 
@@ -110,7 +104,7 @@ router.post('/pools/:poolId/adjustments/:surchargeId/remove', asyncHandler(async
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'removeEventFinanceAdjustment');
     const reply = prepareValidatedJson(req, 'removeEventFinanceAdjustment', 200, {changed: true});
-    await removeEventFinanceAdjustment(String(req.params.eventId), String(req.params.poolId), String(req.params.surchargeId), actor);
+    await invoiceController.removeEventFinanceAdjustment(String(req.params.eventId), String(req.params.poolId), String(req.params.surchargeId), actor);
     sendPreparedJson(req, res, reply);
 }));
 
@@ -122,7 +116,7 @@ function registerTakeoverCommand(organizer: boolean): void {
         validateOperationRequest(req, operation);
         // Both commands retain a fixed prevalidated receipt and invoke the shared operation exactly once.
         const reply = prepareValidatedJson(req, operation, 200, {changed: true});
-        await updateEventFinanceTakeovers(String(req.params.eventId), String(req.params.poolId), req.body, actor, organizer);
+        await invoiceController.updateEventFinanceTakeovers(String(req.params.eventId), String(req.params.poolId), req.body, actor, organizer);
         sendPreparedJson(req, res, reply);
     }));
 }
@@ -134,7 +128,7 @@ registerTakeoverCommand(true);
 router.get('/pools/:poolId/preview', asyncHandler(async function previewCalculation(req, res) {
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'previewEventFinancePool');
-    const result = await previewEventFinancePool(String(req.params.eventId), String(req.params.poolId), actor, requestLocale(req));
+    const result = await invoiceController.previewEventFinancePool(String(req.params.eventId), String(req.params.poolId), actor, requestLocale(req));
     res.vary('Accept-Language');
     sendValidatedJson(req, res, 'previewEventFinancePool', 200, result);
 }));
@@ -147,7 +141,7 @@ function registerCalculationCommand(recalculate: boolean): void {
         validateOperationRequest(req, operation);
         // Prepare the fixed receipt before entering shared persistence and its postcommit notification behavior.
         const reply = prepareValidatedJson(req, operation, 200, {changed: true});
-        await calculateEventFinancePool(String(req.params.eventId), String(req.params.poolId), req.body, actor, recalculate);
+        await invoiceController.calculateEventFinancePool(String(req.params.eventId), String(req.params.poolId), req.body, actor, recalculate);
         sendPreparedJson(req, res, reply);
     }));
 }
@@ -158,14 +152,14 @@ registerCalculationCommand(true);
 router.post('/pools/:poolId/rollback', asyncHandler(async function restoreCalculationInputs(req, res) {
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'rollbackEventFinancePool');
-    const result = await rollbackEventFinancePool(String(req.params.eventId), String(req.params.poolId), req.body ?? {}, actor);
+    const result = await invoiceController.rollbackEventFinancePool(String(req.params.eventId), String(req.params.poolId), req.body ?? {}, actor);
     sendValidatedJson(req, res, 'rollbackEventFinancePool', 200, result);
 }));
 
 router.post('/pools/:poolId/notify', asyncHandler(async function requestSettlementEmails(req, res) {
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'notifyEventFinancePool');
-    const result = await notifyEventFinancePool(String(req.params.eventId), String(req.params.poolId), req.body ?? {}, actor);
+    const result = await invoiceController.notifyEventFinancePool(String(req.params.eventId), String(req.params.poolId), req.body ?? {}, actor);
     sendValidatedJson(req, res, 'notifyEventFinancePool', 200, result);
 }));
 
@@ -173,14 +167,14 @@ router.post('/pools/:poolId/shares/:shareId/settlement', asyncHandler(async func
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'settleEventFinanceShare');
     const reply = prepareValidatedJson(req, 'settleEventFinanceShare', 200, {changed: true});
-    await settleEventFinanceShare(String(req.params.eventId), String(req.params.poolId), String(req.params.shareId), req.body.isPaid, actor);
+    await invoiceController.settleEventFinanceShare(String(req.params.eventId), String(req.params.poolId), String(req.params.shareId), req.body.isPaid, actor);
     sendPreparedJson(req, res, reply);
 }));
 
 router.get('/', asyncHandler(async function getEventFinance(req, res) {
     const actor = await requireApiContext(req, res, true);
     validateOperationRequest(req, 'getEventFinance');
-    const result = await readEventFinance(String(req.params.eventId), actor, 'participant', requestLocale(req));
+    const result = await invoiceController.readEventFinance(String(req.params.eventId), actor, 'participant', requestLocale(req));
     res.vary('Accept-Language');
     sendValidatedJson(req, res, 'getEventFinance', 200, result);
 }));
@@ -188,7 +182,7 @@ router.get('/', asyncHandler(async function getEventFinance(req, res) {
 router.get('/organizer', asyncHandler(async function getEventOrganizerFinance(req, res) {
     const actor = await requireApiContext(req, res, true);
     validateOperationRequest(req, 'getEventOrganizerFinance');
-    const result = await readEventFinance(String(req.params.eventId), actor, 'organizer', requestLocale(req));
+    const result = await invoiceController.readEventFinance(String(req.params.eventId), actor, 'organizer', requestLocale(req));
     res.vary('Accept-Language');
     sendValidatedJson(req, res, 'getEventOrganizerFinance', 200, result);
 }));
@@ -196,7 +190,7 @@ router.get('/organizer', asyncHandler(async function getEventOrganizerFinance(re
 router.get('/pools/:poolId/shares/:shareId', asyncHandler(async function getEventFinanceBreakdown(req, res) {
     const actor = await requireApiContext(req, res, true);
     validateOperationRequest(req, 'getEventFinanceBreakdown');
-    const result = await readEventFinanceBreakdown(String(req.params.eventId), String(req.params.poolId),
+    const result = await invoiceController.readEventFinanceBreakdown(String(req.params.eventId), String(req.params.poolId),
         String(req.params.shareId), actor, req.query.audience as components['schemas']['FinanceView']['audience'], requestLocale(req));
     res.vary('Accept-Language');
     sendValidatedJson(req, res, 'getEventFinanceBreakdown', 200, result);
@@ -206,35 +200,35 @@ router.get('/pools/:poolId/shares/:shareId', asyncHandler(async function getEven
 router.post('/pools/:poolId/invoices', asyncHandler(/** Admit participant submission,
  * prepare the declared receipt and preserve locked conflict diagnostics. Structural
  * rejection cleans this upload; entered business work owns its proof lifetime. */
-async function submitEventInvoice(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    const event = await admitEventInvoiceSubmission(String(req.params.eventId), actor);
-    try {
-        // The generated multipart schema validates the data object and actual uploaded proof descriptor together.
-        await receiveApiUpload(req, res, uploadProof);
-        validateOperationRequest(req, 'submitEventInvoice', body => decodeApiMultipartData(body, req.file, 'proof'));
-        const reply = prepareValidatedJson(req, 'submitEventInvoice', 200, {changed: true});
-        // The existing business operation repeats pool state/assignment checks and owns its recorded behavior.
+    async function submitEventInvoice(req, res) {
+        const actor = await requireApiContext(req, res, true);
+        const event = await invoiceController.admitEventInvoiceSubmission(String(req.params.eventId), actor);
         try {
-            await invoiceController.submitInvoice(event, String(req.params.poolId), req.body.data, actor, req.file);
-        } catch (error) {
-            // Its exposed conflicts are locked precommit rejections, so retain a definite result instead of unknown delivery.
-            if (error instanceof APIError && error.status === 409) throw declaredApiProblem(error) ?? new ApiProblem('RESOURCE_CONFLICT');
-            throw error;
+            // The generated multipart schema validates the data object and actual uploaded proof descriptor together.
+            await receiveApiUpload(req, res, uploadProof);
+            validateOperationRequest(req, 'submitEventInvoice', body => decodeApiMultipartData(body, req.file, 'proof'));
+            const reply = prepareValidatedJson(req, 'submitEventInvoice', 200, {changed: true});
+            // The existing business operation repeats pool state/assignment checks and owns its recorded behavior.
+            try {
+                await invoiceController.submitInvoice(event, String(req.params.poolId), req.body.data, actor, req.file);
+            } catch (error) {
+                // Its exposed conflicts are locked precommit rejections, so retain a definite result instead of unknown delivery.
+                if (error instanceof APIError && error.status === 409) throw declaredApiProblem(error) ?? new ApiProblem('RESOURCE_CONFLICT');
+                throw error;
+            }
+            sendPreparedJson(req, res, reply);
+        } finally {
+            // Finishing a request releases ownership, never blindly unlinks bytes:
+            // the shared proof owner checks durable state and all live references.
+            await finishInvoiceProofRequest(req);
         }
-        sendPreparedJson(req, res, reply);
-    } finally {
-        // Finishing a request releases ownership, never blindly unlinks bytes:
-        // the shared proof owner checks durable state and all live references.
-        await finishInvoiceProofRequest(req);
-    }
-}));
+    }));
 
 router.post('/pools/:poolId/invoices/:invoiceId/retract', asyncHandler(async function retractInvoice(req, res) {
     const actor = await requireApiContext(req, res, true);
     validateOperationRequest(req, 'retractEventInvoice');
     const reply = prepareValidatedJson(req, 'retractEventInvoice', 200, {changed: true});
-    await retractEventInvoice(String(req.params.eventId), String(req.params.poolId), String(req.params.invoiceId), req.body, actor);
+    await invoiceController.retractEventInvoice(String(req.params.eventId), String(req.params.poolId), String(req.params.invoiceId), req.body, actor);
     sendPreparedJson(req, res, reply);
 }));
 
@@ -242,14 +236,14 @@ router.post('/pools/:poolId/invoices/:invoiceId/close', asyncHandler(async funct
     const actor = await requireApiContext(req, res, true);
     validateOperationRequest(req, 'closeEventInvoice');
     const reply = prepareValidatedJson(req, 'closeEventInvoice', 200, {changed: true});
-    await closeEventInvoice(String(req.params.eventId), String(req.params.poolId), String(req.params.invoiceId), actor);
+    await invoiceController.closeEventInvoice(String(req.params.eventId), String(req.params.poolId), String(req.params.invoiceId), actor);
     sendPreparedJson(req, res, reply);
 }));
 
 router.get('/pools/:poolId/invoices/:invoiceId/proof', asyncHandler(async function getEventInvoiceProof(req, res) {
     const actor = await requireApiContext(req, res, true);
     validateOperationRequest(req, 'getEventInvoiceProof');
-    const proofPath = await readEventInvoiceProof(String(req.params.eventId), String(req.params.poolId), String(req.params.invoiceId), actor);
+    const proofPath = await invoiceController.readEventInvoiceProof(String(req.params.eventId), String(req.params.poolId), String(req.params.invoiceId), actor);
     await sendStoredApiBinary(req, res, 'getEventInvoiceProof', 200, settings.value.invoiceDir, proofPath);
 }));
 

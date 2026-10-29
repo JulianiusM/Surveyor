@@ -15,11 +15,11 @@
  */
 
 import 'reflect-metadata';
-import bcrypt from "bcryptjs";
+import bcrypt from 'bcryptjs';
 import * as dotenv from 'dotenv';
 import {DataSource} from 'typeorm';
-import {Profile} from "../src/backend/modules/database/entities/user/Profile";
-import {User} from "../src/backend/modules/database/entities/user/User";
+import {Profile} from '../src/backend/modules/database/entities/user/Profile';
+import {User} from '../src/backend/modules/database/entities/user/User';
 
 dotenv.config({path: process.env.E2E_DOTENV_FILE ?? '.env.e2e'});
 
@@ -46,7 +46,8 @@ export const E2EDataSource = new DataSource({
     entities: ['src/backend/modules/database/entities/**/*.ts'],
     migrations: ['src/backend/migrations/*.ts'],
     subscribers: ['src/backend/modules/database/subscribers/**/*.ts'],
-    // Never use synchronize in CI; rely on migrations.
+    // Disable implicit synchronization; the guarded reset below explicitly
+    // prepares the disposable entity schema before optional historical migrations.
     synchronize: false,
     logging: false,
 });
@@ -56,13 +57,10 @@ async function main() {
 
     console.log("Resetting E2E database...")
 
-    // Clear all tables (TypeORM v0.3+)
+    // Delegate schema clearing and its foreign-key-check lifecycle to TypeORM.
     const qr = E2EDataSource.createQueryRunner();
     await qr.connect();
-    // MariaDB: speed up truncation
-    await qr.query('SET FOREIGN_KEY_CHECKS = 0');
     await qr.clearDatabase(); // drops all tables
-    await qr.query('SET FOREIGN_KEY_CHECKS = 1');
     await qr.release();
 
     console.log("Purged...")

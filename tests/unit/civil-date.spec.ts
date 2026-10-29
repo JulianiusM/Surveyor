@@ -77,29 +77,29 @@ describe('shared civil calendar presentation', () => {
 
     it.each([
         {start: '2032-02-28', end: '2032-03-02', weeks: [
-            {start: '2032-02-23', days: ['2032-02-28', '2032-02-29']},
-            {start: '2032-03-01', days: ['2032-03-01', '2032-03-02']}]},
+                {start: '2032-02-23', days: ['2032-02-28', '2032-02-29']},
+                {start: '2032-03-01', days: ['2032-03-01', '2032-03-02']}]},
         {start: '2027-12-31', end: '2028-01-03', weeks: [
-            {start: '2027-12-27', days: ['2027-12-31', '2028-01-01', '2028-01-02']},
-            {start: '2028-01-03', days: ['2028-01-03']}]},
+                {start: '2027-12-27', days: ['2027-12-31', '2028-01-01', '2028-01-02']},
+                {start: '2028-01-03', days: ['2028-01-03']}]},
         {start: '0099-01-01', end: '0099-01-02', weeks: [
-            {start: '0098-12-29', days: ['0099-01-01', '0099-01-02']}]},
+                {start: '0098-12-29', days: ['0099-01-01', '0099-01-02']}]},
         {start: '0000-01-01', end: '0000-01-02', weeks: [
-            {start: '-000001-12-27', days: ['0000-01-01', '0000-01-02']}]},
+                {start: '-000001-12-27', days: ['0000-01-01', '0000-01-02']}]},
         {start: '1000-01-01', end: '1000-01-02', weeks: [
-            {start: '0999-12-30', days: ['1000-01-01', '1000-01-02']}]},
+                {start: '0999-12-30', days: ['1000-01-01', '1000-01-02']}]},
         {start: '9999-12-30', end: '9999-12-31', weeks: [
-            {start: '9999-12-27', days: ['9999-12-30', '9999-12-31']}]},
+                {start: '9999-12-27', days: ['9999-12-30', '9999-12-31']}]},
     ])('clips $start through $end to their actual Monday weeks', ({start, end, weeks}) => {
         expect(civilDateWeeks(start, end)).toEqual(weeks);
     });
 
     it.each(['', '2027-02-29', '2027-04-31', '2027-13-01', '2027-06-1', '2027-06-01T12:00:00Z'])
-    ('rejects an invalid civil input without normalizing it: %s', value => {
-        expect(formatCivilDate(value, 'en')).toBeNull();
-        expect(civilDateWeeks(value, '2027-06-03')).toEqual([]);
-        expect(civilDateWeeks('2027-06-01', value)).toEqual([]);
-    });
+        ('rejects an invalid civil input without normalizing it: %s', value => {
+            expect(formatCivilDate(value, 'en')).toBeNull();
+            expect(civilDateWeeks(value, '2027-06-03')).toEqual([]);
+            expect(civilDateWeeks('2027-06-01', value)).toEqual([]);
+        });
 
     it('keeps an inverted range empty and does not mutate later calls or date inputs', () => {
         expect(civilDateWeeks('2027-06-03', '2027-06-01')).toEqual([]);

@@ -369,7 +369,7 @@ try {
     // Local contract validation needs neither analytics nor remote update checks.
     // Keep both real commands and their failures, removing only ancillary network work.
     const cliOptions = {cwd: root, stdio: 'pipe', env: {...process.env,
-        REDOCLY_TELEMETRY: 'off', REDOCLY_SUPPRESS_UPDATE_NOTICE: 'true'}};
+            REDOCLY_TELEMETRY: 'off', REDOCLY_SUPPRESS_UPDATE_NOTICE: 'true'}};
     execFileSync(process.execPath, [cli, 'lint', entry, '--extends', 'minimal'], cliOptions);
     const bundled = path.join(temporary, 'openapi.json');
     execFileSync(process.execPath, [cli, 'bundle', entry, '--output', bundled], cliOptions);

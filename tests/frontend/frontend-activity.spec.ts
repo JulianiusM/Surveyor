@@ -56,7 +56,7 @@ afterEach(async () => {
 
 function json(value: unknown, status = 200): Response {
     return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
-        'X-Surveyor-Context': session.context, ETag: '"fixture"'}});
+            'X-Surveyor-Context': session.context, ETag: '"fixture"'}});
 }
 
 /** Mount production components and generated transport; only HTTP delivery is
@@ -67,17 +67,17 @@ async function mounted(component: Component, handler: (request: Request) => Prom
     const context = createFrontendContext({session}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/activity/create', component}, {path: '/activity/:planId/duplicate', component},
-        {path: '/activity/:planId', component: component === ActivityPage ? component : defineComponent({template: '<p>Created plan</p>'})},
-        {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
-    ]});
+            {path: '/activity/create', component}, {path: '/activity/:planId/duplicate', component},
+            {path: '/activity/:planId', component: component === ActivityPage ? component : defineComponent({template: '<p>Created plan</p>'})},
+            {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
+        ]});
     await router.push(path);
     const stopInitial = observeInitialDocument(context, router);
     const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-        stubs,
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+            stubs,
+        }});
     await flushPromises();
     cleanups.push(async () => {root.unmount(); stopInitial(); await context.queryClient.cancelQueries(); context.queryClient.clear();});
     if (component === ActivityPage) {
@@ -351,7 +351,7 @@ describe('Activity production frontend consumers', () => {
         let writes = 0;
         const {wrapper} = await mounted(ActivityPage, async request => {
             if (request.method === 'GET') return json({...view, slots: [{...slot, selfAssigned: true, assignedCount: 1,
-                roles: [{id: '1', name: 'Kitchen lead', maxQty: 1, assignedQty: 0, assignmentId: null, assigneeName: null, self: false}]}]});
+                    roles: [{id: '1', name: 'Kitchen lead', maxQty: 1, assignedQty: 0, assignmentId: null, assigneeName: null, self: false}]}]});
             if (new URL(request.url).pathname.endsWith('/warnings')) {
                 previews += 1;
                 return json({warnings: [{type: 'over_capacity'}]});
@@ -385,7 +385,7 @@ describe('Activity production frontend consumers', () => {
 
     it('retains safe role occupancy when private assignee identities are redacted', async () => {
         const {wrapper} = await mounted(ActivityPage, async () => json({...view, slots: [{...slot,
-            roles: [{id: '1', name: 'Kitchen lead', maxQty: 1, assignedQty: 1, assignmentId: null, assigneeName: null, self: false}]}]}));
+                roles: [{id: '1', name: 'Kitchen lead', maxQty: 1, assignedQty: 1, assignmentId: null, assigneeName: null, self: false}]}]}));
         expect(wrapper.get('.role-assignment').text()).toBe('Kitchen lead: Assigned');
         expect(wrapper.find('[data-action="take-role"]').exists()).toBe(false);
     });
@@ -396,8 +396,8 @@ describe('Activity production frontend consumers', () => {
                 assignedShifts: 1, roles: ['default'], roleIds: [], requiredShifts: 0, remainingShifts: 0,
                 source: 'none', attendanceDays: 2, attendance: {arrivalDate: '2030-06-01', departureDate: '2030-06-02'}, assignmentMode: 'FREE'};
             let current: components['schemas']['ActivityView'] = {...view, participants: [person], textFields: [{id: otherId,
-                title: 'Shared notes', text: 'Saved instructions', editToken: '"text-fixture"',
-                capabilities: {edit: true, editTitle: true, delete: true}}]};
+                    title: 'Shared notes', text: 'Saved instructions', editToken: '"text-fixture"',
+                    capabilities: {edit: true, editTitle: true, delete: true}}]};
             const {wrapper, context, request} = await mounted(ActivityPage, async () => json(current));
 
             // Shared text is a real independent business draft outside the panels.
@@ -473,7 +473,7 @@ describe('Activity production frontend consumers', () => {
 
     it('retires advanced caches on Event unlink even when independent grants remain enabled', async () => {
         let current: components['schemas']['ActivityView'] = {...view, currentEventId: otherId, capabilities: {...view.capabilities,
-            manageRequirements: true, manageRecommendations: true, rulesWorkspace: true}};
+                manageRequirements: true, manageRecommendations: true, rulesWorkspace: true}};
         // Isolate the parent's admitted-subtree/cache ownership. Each advanced
         // child's actual read, draft and denial lifecycle has its own mounted cases.
         const {wrapper, context} = await mounted(ActivityPage, async () => json(current), undefined,
@@ -496,16 +496,16 @@ describe('Activity production frontend consumers', () => {
 
     it('preserves authoritative schedule time ordering when saved positions differ', async () => {
         const {wrapper} = await mounted(ActivityPage, async () => json({...view, slots: [
-            {...slot, position: 1}, {...slot, id: otherId, title: 'Evening help', startTime: '18:00:00', endTime: '19:00:00', position: 0},
-        ]}));
+                {...slot, position: 1}, {...slot, id: otherId, title: 'Evening help', startTime: '18:00:00', endTime: '19:00:00', position: 0},
+            ]}));
         expect(wrapper.findAll('.slot-container .slot').map(element => element.attributes('data-slotid'))).toEqual([slotId, otherId]);
     });
 
     it('releases removed role assignees and fields while keeping valid selections in the actual dialog', async () => {
         let current: components['schemas']['ActivityView'] = {...view, slots: [{...slot,
-            roles: [{id: '1', name: 'Kitchen lead', maxQty: 1, assignedQty: 1, assignmentId: '10', assigneeName: 'Alex', self: false},
+                roles: [{id: '1', name: 'Kitchen lead', maxQty: 1, assignedQty: 1, assignmentId: '10', assigneeName: 'Alex', self: false},
                 {id: '2', name: 'Helper', maxQty: 1, assignedQty: 1, assignmentId: '11', assigneeName: 'Blair', self: false}],
-            assignees: [{assignmentId: '10', name: 'Alex', roles: ['Kitchen lead']},
+                assignees: [{assignmentId: '10', name: 'Alex', roles: ['Kitchen lead']},
                 {assignmentId: '11', name: 'Blair', roles: ['Helper']}]}]};
         const writes: unknown[] = [];
         const {wrapper, context} = await mounted(ActivityPage, async request => {
@@ -523,8 +523,8 @@ describe('Activity production frontend consumers', () => {
         expect(document.querySelector<HTMLSelectElement>('[data-role-name="Kitchen lead"] select')!.value).toBe('');
         expect(document.querySelector<HTMLSelectElement>('[data-role-name="Helper"] select')!.value).toBe('11');
         current = {...current, slots: [{...current.slots[0], roles: [...current.slots[0].roles,
-            {id: '3', name: 'constructor', maxQty: 1, assignedQty: 1, assignmentId: '11', assigneeName: 'Blair', self: false},
-            {id: '4', name: '__proto__', maxQty: 1, assignedQty: 1, assignmentId: '11', assigneeName: 'Blair', self: false}]}]};
+                {id: '3', name: 'constructor', maxQty: 1, assignedQty: 1, assignmentId: '11', assigneeName: 'Blair', self: false},
+                {id: '4', name: '__proto__', maxQty: 1, assignedQty: 1, assignmentId: '11', assigneeName: 'Blair', self: false}]}]};
         await context.queryClient.invalidateQueries({queryKey: activityKeys.detail(session.context, planId)});
         await flushPromises();
         expect(document.querySelector<HTMLSelectElement>('[data-role-name="constructor"] select')!.value).toBe('11');
@@ -562,7 +562,7 @@ describe('Activity production frontend consumers', () => {
         title.value = 'My unsaved slot title';
         title.dispatchEvent(new Event('input', {bubbles: true}));
         current = {...view, slots: view.slots.map(slot => slot.id === slotId
-            ? {...slot, editToken: '"revoked-title"', capabilities: {...slot.capabilities, editTitle: false}} : slot)};
+                ? {...slot, editToken: '"revoked-title"', capabilities: {...slot.capabilities, editTitle: false}} : slot)};
         await context.queryClient.invalidateQueries({queryKey: activityKeys.detail(session.context, planId)});
         await flushPromises();
         const retained = document.querySelector<HTMLInputElement>('#slotEditorTitleInput')!;
@@ -575,7 +575,7 @@ describe('Activity production frontend consumers', () => {
 
     it('submits an explicit empty role set after removing the final selected slot role', async () => {
         let current = {...view, slots: [{...slot, roles: [{id: '1', name: 'Kitchen lead', maxQty: 1,
-            assignedQty: 0, assignmentId: null, assigneeName: null, self: false}]}]};
+                    assignedQty: 0, assignmentId: null, assigneeName: null, self: false}]}]};
         const patches: components['schemas']['ActivitySlotPatch'][] = [];
         const {wrapper} = await mounted(ActivityPage, async request => {
             if (request.method === 'PATCH') {
@@ -713,8 +713,8 @@ describe('Activity production frontend consumers', () => {
 
     it('retains a shared-text title draft and blocks partial saving after title authority is lost even when Review is attempted', async () => {
         let current: components['schemas']['ActivityView'] = {...view, textFields: [{id: otherId,
-            title: 'Saved title', text: 'Saved instructions', editToken: '"text-opening"',
-            capabilities: {edit: true, editTitle: true, delete: true}}]};
+                title: 'Saved title', text: 'Saved instructions', editToken: '"text-opening"',
+                capabilities: {edit: true, editTitle: true, delete: true}}]};
         const {wrapper, context, request} = await mounted(ActivityPage, async () => json(current));
         await wrapper.get('.text-field-edit').trigger('click');
         await flushPromises();
@@ -725,7 +725,7 @@ describe('Activity production frontend consumers', () => {
         text.value = 'Keep my unfinished instructions';
         text.dispatchEvent(new Event('input', {bubbles: true}));
         current = {...current, textFields: [{...current.textFields[0]!, editToken: '"text-without-title"',
-            capabilities: {edit: true, editTitle: false, delete: false}}]};
+                capabilities: {edit: true, editTitle: false, delete: false}}]};
         await context.queryClient.invalidateQueries({queryKey: activityKeys.detail(session.context, planId)});
         await flushPromises();
         const review = new DOMWrapper(document.body).findAll('button')
@@ -784,7 +784,7 @@ describe('Activity production frontend consumers', () => {
         settle(new Response(JSON.stringify({type: 'about:blank', title: 'Validation failed', status: 400,
             detail: 'Role creation was rejected.', requestId: 'fixture', code: 'VALIDATION_FAILED',
             messageKey: 'api:errors.VALIDATION_FAILED', params: {}}),
-        {status: 400, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}}));
+            {status: 400, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}}));
         await flushPromises();
         expect(create.isConnected).toBe(true);
         expect(create.disabled).toBe(false);
@@ -967,7 +967,7 @@ describe('Activity production frontend consumers', () => {
         await slotInputs[5]!.setValue('Lunch');
         const control = field === 'title' ? wrapper.get<HTMLInputElement>('#title')
             : field === 'description' ? wrapper.get<HTMLInputElement>('#create-description')
-            : wrapper.findAll<HTMLInputElement>('.slot input')[field === 'slot-title' ? 5 : field === 'slot-description' ? 6 : 9]!;
+                : wrapper.findAll<HTMLInputElement>('.slot input')[field === 'slot-title' ? 5 : field === 'slot-description' ? 6 : 9]!;
         await control.setValue(value);
         const retained = control.element;
         const chooser = wrapper.get<HTMLInputElement>('#create-header').element;
@@ -1074,8 +1074,8 @@ describe('Activity production frontend consumers', () => {
             count: 0, assignedShifts: 0, requiredShifts: 0, remainingShifts: 0, source: 'none', roles: [], roleIds: [],
             attendanceDays: 2, attendance: null, assignmentMode: 'FREE'};
         const {wrapper, context, request} = await mounted(ActivityPage, async () => json({...view, participants: [person,
-            {...person, participantKey: planId, nameIsFallback: false},
-            {...person, participantKey: slotId, name: 'Profile #' + otherId, nameIsFallback: false}]}));
+                {...person, participantKey: planId, nameIsFallback: false},
+                {...person, participantKey: slotId, name: 'Profile #' + otherId, nameIsFallback: false}]}));
         await wrapper.findAll('[role="tab"]').find(button => button.text() === 'Participants')!.trigger('click');
         expect(wrapper.findAll('.participant-status-person strong').map(node => node.text()))
             .toEqual(['Participant', 'Participant', 'Profile #' + otherId]);
@@ -1104,7 +1104,7 @@ describe('Activity production frontend consumers', () => {
         let token: string | null = null;
         const {wrapper} = await mounted(ActivityPage, async request => {
             if (request.method === 'GET') return json({...view, textFields: [{id: otherId, title: 'Notes', text: 'Original notes',
-                editToken: '"text-original"', capabilities: {edit: true, editTitle: false, delete: false}}]});
+                    editToken: '"text-original"', capabilities: {edit: true, editTitle: false, delete: false}}]});
             token = request.headers.get('If-Match');
             submitted = await request.json();
             return json({changed: true});

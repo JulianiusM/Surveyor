@@ -3,7 +3,7 @@ import {getAccountPageEntry, registerGuestWithSession} from '../controller/userC
 import {safeFrontendReturn} from '../../common/lib/frontendIdentity';
 import {captureApiActor, prepareGuestIdentityReplies, requireApiContext} from '../modules/api/session';
 import {ApiProblem} from '../modules/api/problem';
-import {decodeApiMultipartData, prepareValidatedJson, receiveApiUpload, sendPreparedJson,
+import {decodeApiMultipartData, executePreparedJson, prepareValidatedJson, receiveApiUpload, sendPreparedJson,
     sendStoredApiBinary, sendValidatedJson, validateOperationRequest} from '../modules/api/transport';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {prepareFileUploader, removeImage} from '../modules/lib/fileCommons';
@@ -69,31 +69,31 @@ export function createGuestFlow<Type extends EntityType, Root extends EntityBase
         return config.withRoot(id, /** Project entry admission without exposing a
          * missing root. Guest entry precedes linked-event policy; ordinary and
          * administration views retain their independent feature checks. */
-        async function readEntry(root, manager): Promise<GuestFlowResourceEntry> {
-            // Missing roots do not reveal an owner, title, settings or related rows.
-            if (!root) return {entry: {kind: 'denied', status: 404, messageKey: `${config.entityType}.notFound`}, guest: null};
-            const resourceId = config.detailAddress === 'stored' ? root.id : id;
-            const url = `/${config.entityType}/${encodeURIComponent(resourceId)}`;
-            const query = config.entityType === 'event' && regToken ? `?${new URLSearchParams({regToken})}` : '';
+            async function readEntry(root, manager): Promise<GuestFlowResourceEntry> {
+                // Missing roots do not reveal an owner, title, settings or related rows.
+                if (!root) return {entry: {kind: 'denied', status: 404, messageKey: `${config.entityType}.notFound`}, guest: null};
+                const resourceId = config.detailAddress === 'stored' ? root.id : id;
+                const url = `/${config.entityType}/${encodeURIComponent(resourceId)}`;
+                const query = config.entityType === 'event' && regToken ? `?${new URLSearchParams({regToken})}` : '';
 
-            // Guest entry intentionally precedes linked-event admission. A current
-            // profile returns to detail without registering or consuming a token.
-            if (view === 'guest') {
-                return actor.profile ? {entry: {kind: 'redirect', url: `${url}${query}`, notice: null}, guest: null}
-                    : {entry: {kind: 'render'}, guest: {id: config.guestAddress === 'stored' ? root.id : id, title: root.title}};
-            }
+                // Guest entry intentionally precedes linked-event admission. A current
+                // profile returns to detail without registering or consuming a token.
+                if (view === 'guest') {
+                    return actor.profile ? {entry: {kind: 'redirect', url: `${url}${query}`, notice: null}, guest: null}
+                        : {entry: {kind: 'render'}, guest: {id: config.guestAddress === 'stored' ? root.id : id, title: root.title}};
+                }
 
-            const admission = await config.pageAdmission(root, actor, manager);
-            if (admission === 'guest') return {entry: {kind: 'redirect', url: `${url}/guest${query}`, notice: null}, guest: null};
-            if (admission === 'event-registration-required') {
-                return {entry: {kind: 'denied', status: 400, messageKey: `${config.entityType}.eventRegistrationRequired`}, guest: null};
-            }
-            // Event administration retains its separate controller method grant.
-            if (view === 'admin' && config.adminAdmission && !await config.adminAdmission(root, actor, manager)) {
-                return {entry: {kind: 'denied', status: 403, messageKey: 'api:errors.FORBIDDEN'}, guest: null};
-            }
-            return {entry: {kind: 'render'}, guest: null};
-        });
+                const admission = await config.pageAdmission(root, actor, manager);
+                if (admission === 'guest') return {entry: {kind: 'redirect', url: `${url}/guest${query}`, notice: null}, guest: null};
+                if (admission === 'event-registration-required') {
+                    return {entry: {kind: 'denied', status: 400, messageKey: `${config.entityType}.eventRegistrationRequired`}, guest: null};
+                }
+                // Event administration retains its separate controller method grant.
+                if (view === 'admin' && config.adminAdmission && !await config.adminAdmission(root, actor, manager)) {
+                    return {entry: {kind: 'denied', status: 403, messageKey: 'api:errors.FORBIDDEN'}, guest: null};
+                }
+                return {entry: {kind: 'render'}, guest: null};
+            });
     }
 
     return {config, readCreateEntry, readResourceEntry, readGuestEntry};
@@ -127,19 +127,19 @@ export function createGuestFlowRouter<Type extends EntityType, Root extends Enti
     router.get(`/:${config.parameter}/duplicate`, asyncHandler(/** Seed the document
      * from the feature's duplication grant and error adapter, without applying
      * account-only creation admission to this read. */
-    async function renderDuplicate(request, response) {
-        const state = await bootstrap(request);
-        try {
-            // Duplication has its own controller grant; it never inherits detail
-            // admission or the account-only creation POST requirement.
-            const result = await config.duplicate(documentResourceId(request), await captureApiActor(request), request.query.eventId);
-            config.document.seedDuplicate(state, result);
-        } catch (error) {
-            throw config.document.duplicateError ? config.document.duplicateError(error) : error;
-        }
-        if (config.document.duplicatePageEntry) state.pageEntry = {kind: 'render'};
-        await renderFrontend(response, request.originalUrl, state);
-    }));
+        async function renderDuplicate(request, response) {
+            const state = await bootstrap(request);
+            try {
+                // Duplication has its own controller grant; it never inherits detail
+                // admission or the account-only creation POST requirement.
+                const result = await config.duplicate(documentResourceId(request), await captureApiActor(request), request.query.eventId);
+                config.document.seedDuplicate(state, result);
+            } catch (error) {
+                throw config.document.duplicateError ? config.document.duplicateError(error) : error;
+            }
+            if (config.document.duplicatePageEntry) state.pageEntry = {kind: 'render'};
+            await renderFrontend(response, request.originalUrl, state);
+        }));
 
     const views: Array<'detail' | 'guest' | 'admin'> = config.document.admin ? ['detail', 'guest', 'admin'] : ['detail', 'guest'];
     for (const view of views) {
@@ -225,37 +225,34 @@ export function createGuestFlowApiRouter<Type extends EntityType, Root extends E
     router.post('/', asyncHandler(/** Admit creation before allocating uploads,
      * validate the complete multipart contract, and retain each feature's image
      * ownership and receipt stage through success or uncertain completion. */
-    async function createResource(request, response) {
-        // Reject nonaccounts before multipart processing allocates a temporary file.
-        const actor = await requireApiContext(request, response, true);
-        config.requireCreation(actor);
-        let imageOwned = false;
-        let prepared: PreparedApiJsonResponse | undefined;
-        try {
-            // Identity admission precedes disk writes. The generated operation
-            // validates the entire multipart data object before domain parsing.
-            await receiveApiUpload(request, response, upload);
-            validateOperationRequest(request, operations.create.operation, body => decodeApiMultipartData(body, request.file));
-            if (config.creation.imageOwnership === 'controller-entry') imageOwned = true;
-            const input = (request.body as {data: GuestFlowSchemas[Type]['input']}).data;
-            /** Prepare immutable transport bytes at the controller's own commit boundary. */
-            function prepareCreation(result: GuestFlowSchemas[Type]['created']): void {
-                prepared = operations.create.prepare(request, result);
+        async function createResource(request, response) {
+            // Reject nonaccounts before multipart processing allocates a temporary file.
+            const actor = await requireApiContext(request, response, true);
+            config.requireCreation(actor);
+            let imageOwned = false;
+            try {
+                // Identity admission precedes disk writes. The generated operation
+                // validates the entire multipart data object before domain parsing.
+                await receiveApiUpload(request, response, upload);
+                validateOperationRequest(request, operations.create.operation, body => decodeApiMultipartData(body, request.file));
+                if (config.creation.imageOwnership === 'controller-entry') imageOwned = true;
+                const input = (request.body as {data: GuestFlowSchemas[Type]['input']}).data;
+                function retainImage(): void { imageOwned = true; }
+                const {operationResult: result, prepared} = await executePreparedJson(
+                    (data: GuestFlowSchemas[Type]['created']) => operations.create.prepare(request, data),
+                    prepare => config.create(input, request.file, actor, {prepare, retainImage}));
+                imageOwned = true;
+                if (config.creation.location) response.location(`${config.apiPath}/${encodeURIComponent(result.id)}`);
+                // Drivers/Activity prepare under their existing controller boundary.
+                // Other features retain their established after-success serialization.
+                if (config.creation.receipt === 'controller') sendPreparedJson(request, response, prepared!);
+                else operations.create.send(request, response, result);
+            } finally {
+                // A committed or uncertain image must survive an interrupted response
+                // or a later inherited defaults failure. Never infer rollback from I/O.
+                if (!imageOwned && request.file) removeImage(request.file.path);
             }
-            function retainImage(): void { imageOwned = true; }
-            const result = await config.create(input, request.file, actor, {prepare: prepareCreation, retainImage});
-            imageOwned = true;
-            if (config.creation.location) response.location(`${config.apiPath}/${encodeURIComponent(result.id)}`);
-            // Drivers/Activity prepare under their existing controller boundary.
-            // Other features retain their established after-success serialization.
-            if (config.creation.receipt === 'controller') sendPreparedJson(request, response, prepared!);
-            else operations.create.send(request, response, result);
-        } finally {
-            // A committed or uncertain image must survive an interrupted response
-            // or a later inherited defaults failure. Never infer rollback from I/O.
-            if (!imageOwned && request.file) removeImage(request.file.path);
-        }
-    }));
+        }));
 
     /** Read protected detail through the feature controller before conditional delivery. */
     router.get(resourcePath, asyncHandler(async function getResource(request, response) {
@@ -288,22 +285,21 @@ export function createGuestFlowApiRouter<Type extends EntityType, Root extends E
     router.delete(resourcePath, asyncHandler(/** Delegate permanent deletion after
      * its own profile/input admission, preserving the feature-selected receipt
      * preparation stage instead of treating archival as deletion authority. */
-    async function deleteResource(request, response) {
-        // Desired lifecycle state and permanent deletion remain different operations.
-        const actor = await requireApiContext(request, response, config.deletion.profile);
-        validateOperationRequest(request, operations.remove.operation);
-        let prepared: PreparedApiJsonResponse | undefined;
-        /** Capture the bounded deletion receipt before the selected irreversible stage. */
-        function prepareDeletion(result: components['schemas']['MutationResult']): void {
-            prepared = operations.remove.prepare(request, result);
-        }
-        // Existing Activity deletion prepares invariant bytes before business
-        // admission; Drivers/Survey retain their controller-owned preparation.
-        if (config.deletion.receipt === 'before-command') prepareDeletion({changed: true});
-        const result = await config.remove(String(request.params[config.parameter]), actor, prepareDeletion);
-        if (config.deletion.receipt === 'after-success') operations.remove.send(request, response, result);
-        else sendPreparedJson(request, response, prepared!);
-    }));
+        async function deleteResource(request, response) {
+            // Desired lifecycle state and permanent deletion remain different operations.
+            const actor = await requireApiContext(request, response, config.deletion.profile);
+            validateOperationRequest(request, operations.remove.operation);
+            // Existing Activity deletion prepares invariant bytes before business
+            // admission; Drivers/Survey retain their controller-owned preparation.
+            const {operationResult: result, prepared} = await executePreparedJson(
+                (data: components['schemas']['MutationResult']) => operations.remove.prepare(request, data),
+                function removeResource(prepare) {
+                    if (config.deletion.receipt === 'before-command') prepare({changed: true});
+                    return config.remove(String(request.params[config.parameter]), actor, prepare);
+                });
+            if (config.deletion.receipt === 'after-success') operations.remove.send(request, response, result);
+            else sendPreparedJson(request, response, prepared!);
+        }));
 
     return router;
 }
@@ -328,31 +324,31 @@ export function createGuestFlowGuestRouter<Type extends EntityType, Root extends
     router.post(route, asyncHandler(/** Validate old-context evidence before public
      * title lookup, preserve the admitted destination/capability, and deliver the
      * identity owner's committed session and preprepared SMTP outcome. */
-    async function registerGuest(request, response) {
-        // Validate old-context evidence and the declared command before public title lookup.
-        await requireApiContext(request, response);
-        const operation = config.operations.registerGuest;
-        validateOperationRequest(request, operation);
-        const entry = await flow.readGuestEntry(String(request.params[config.parameter]));
-        const body = request.body as components['schemas']['GuestRegistrationInput'];
-        // All five entry flows share one client budget. Optional recovery mail
-        // reserves its independent budget before identity/token writes begin.
-        await getIdentityAdmission().guestCreation(request, response);
-        if (body.email) await getIdentityAdmission().mail(request, response, body.email);
-        const token = config.entityType === 'event' && typeof request.query.regToken === 'string'
-            ? `?${new URLSearchParams({regToken: request.query.regToken})}` : '';
-        const next = `/${config.entityType}/${entry.id}${token}`;
+        async function registerGuest(request, response) {
+            // Validate old-context evidence and the declared command before public title lookup.
+            await requireApiContext(request, response);
+            const operation = config.operations.registerGuest;
+            validateOperationRequest(request, operation);
+            const entry = await flow.readGuestEntry(String(request.params[config.parameter]));
+            const body = request.body as components['schemas']['GuestRegistrationInput'];
+            // All five entry flows share one client budget. Optional recovery mail
+            // reserves its independent budget before identity/token writes begin.
+            await getIdentityAdmission().guestCreation(request, response);
+            if (body.email) await getIdentityAdmission().mail(request, response, body.email);
+            const token = config.entityType === 'event' && typeof request.query.regToken === 'string'
+                ? `?${new URLSearchParams({regToken: request.query.regToken})}` : '';
+            const next = `/${config.entityType}/${entry.id}${token}`;
 
-        /** Capture both SMTP outcomes before the existing identity transaction commits. */
-        function prepareGuestReply(staged: Request['session'], personalLink: string): Record<RegistrationEmailDelivery, PreparedApiJsonResponse> {
-            return prepareGuestIdentityReplies(request, staged, personalLink, operation);
-        }
-        // Only the existing identity operation creates/adopts Session state.
-        // Returning to an Event never consumes a registration capability here.
-        const committed = await registerGuestWithSession(body.username, body.email ?? undefined, request,
-            {frontend: true, next, context: request.apiActor!.context, prepareResult: prepareGuestReply});
-        request.session = committed.session;
-        sendPreparedJson(request, response, committed.result);
-    }));
+            /** Capture both SMTP outcomes before the existing identity transaction commits. */
+            function prepareGuestReply(staged: Request['session'], personalLink: string): Record<RegistrationEmailDelivery, PreparedApiJsonResponse> {
+                return prepareGuestIdentityReplies(request, staged, personalLink, operation);
+            }
+            // Only the existing identity operation creates/adopts Session state.
+            // Returning to an Event never consumes a registration capability here.
+            const committed = await registerGuestWithSession(body.username, body.email ?? undefined, request,
+                {frontend: true, next, context: request.apiActor!.context, prepareResult: prepareGuestReply});
+            request.session = committed.session;
+            sendPreparedJson(request, response, committed.result);
+        }));
     return router;
 }

@@ -95,8 +95,8 @@ describe('activity recommendation allocation', () => {
         const item = createActivitySlotEntity({id: slotId});
         const row = Object.assign(new ActivityAssignment(), {id: 42, item, profile, activityAssignmentRoles: []});
         expect(projectActivityAssignees([row])).toEqual({[slotId.toLowerCase()]: [
-            {id: 42, profileId, name: '', roles: []},
-        ]});
+                {id: 42, profileId, name: '', roles: []},
+            ]});
         expect(mergeParticipants([{profileId, name: 'First', arrivalDate: '2027-06-01'}], [
             {profileId: profileId.toLowerCase(), name: 'Latest', departureDate: '2027-06-03'},
         ])).toEqual([{profileId: profileId.toLowerCase(), name: 'Latest', arrivalDate: '2027-06-01', departureDate: '2027-06-03'}]);
@@ -125,9 +125,9 @@ describe('activity recommendation allocation', () => {
             Object.assign(new ActivityAssignment(), {id: 2, item, profile: absentName, activityAssignmentRoles: []}),
         ];
         expect(projectActivityAssignees(rows)).toEqual({'slot-one': [
-            {id: 9, profileId: 'profile-first', name: '', roles: ['Second role', 'First role']},
-            {id: 2, profileId: 'profile-second', name: '—', roles: []},
-        ]});
+                {id: 9, profileId: 'profile-first', name: '', roles: ['Second role', 'First role']},
+                {id: 2, profileId: 'profile-second', name: '—', roles: []},
+            ]});
         expect(rows[0].profile.name).toBe('');
         expect(rows[0].activityAssignmentRoles).toBe(roles);
     });

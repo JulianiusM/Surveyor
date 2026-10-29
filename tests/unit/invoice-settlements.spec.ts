@@ -63,8 +63,8 @@ describe('active carried invoice settlements', () => {
 
     it('orders active IDs deterministically and groups each payer’s cumulative signed evidence', () => {
         const previous = [{registrationId: 2, paymentCreditAmount: -5, shareAmount: 0, isPaid: false},
-            {registrationId: 1, paymentCreditAmount: 30, shareAmount: -10, isPaid: true},
-            {registrationId: 1, paymentCreditAmount: -20, shareAmount: 0, isPaid: false}];
+        {registrationId: 1, paymentCreditAmount: 30, shareAmount: -10, isPaid: true},
+        {registrationId: 1, paymentCreditAmount: -20, shareAmount: 0, isPaid: false}];
         expect(collectSettledRegistrationIds(previous)).toEqual([2]);
         expect(collectSettledRegistrationIds([...previous].reverse())).toEqual([2]);
     });
@@ -101,10 +101,10 @@ describe('active carried invoice settlements', () => {
 describe('factual invoice calculation notes', () => {
     it('keeps an exempt participant’s actual nights instead of borrowing missing billable cost metadata', () => {
         const registrations = [{id: 1, arrivalDate: '2027-06-01', departureDate: '2027-06-04'},
-            {id: 2, arrivalDate: '2027-06-01', departureDate: '2027-06-04'}] as EventRegistration[];
+        {id: 2, arrivalDate: '2027-06-01', departureDate: '2027-06-04'}] as EventRegistration[];
         const pool = {status: 'CLOSED', distributionMethod: 'NIGHTS', assignAll: true, subtractPersonalInvoices: false,
             assignments: [{registrationId: 1, registration: registrations[0], isExempt: true, factor: 1},
-                {registrationId: 2, registration: registrations[1], isExempt: false, factor: 1}],
+            {registrationId: 2, registration: registrations[1], isExempt: false, factor: 1}],
             invoices: [{status: 'APPROVED', amount: 60, registrationId: 2}], surcharges: [], takeovers: [],
         } as unknown as EventInvoicePool;
         const participants = [{id: 1, name: 'Exempt participant'}, {id: 2, name: 'Ordinary participant'}] as ParticipantRow[];
@@ -129,17 +129,17 @@ describe('frozen active carried-share responsibility', () => {
 
     it('uses a saved exemption and ignores a pending exemption that has not been applied', () => {
         expect(invoiceSettledShareImpact({status: 'CLOSED', calculationSnapshot: {settledRegistrationIds: [1],
-            takeovers: [], assignments: [{registrationId: 1, isExempt: true}]}}, 1)).toEqual({registrationId: 1, reason: 'exempt'});
+                takeovers: [], assignments: [{registrationId: 1, isExempt: true}]}}, 1)).toEqual({registrationId: 1, reason: 'exempt'});
         expect(invoiceSettledShareImpact({status: 'CLOSED', calculationSnapshot: {settledRegistrationIds: [1],
-            takeovers: [], assignments: [{registrationId: 1, isExempt: false}]}}, 1)).toBeNull();
+                takeovers: [], assignments: [{registrationId: 1, isExempt: false}]}}, 1)).toBeNull();
     });
 
     it('requires active carried-settlement identity and a financially closed snapshot before showing an indicator', () => {
         expect(invoiceSettledShareImpact({status: 'CLOSED', calculationSnapshot: {
-            takeovers: [], assignments: [{registrationId: 1, isExempt: true}]}}, 1)).toBeNull();
+                takeovers: [], assignments: [{registrationId: 1, isExempt: true}]}}, 1)).toBeNull();
         expect(invoiceSettledShareImpact({status: 'OPEN', calculationSnapshot: {settledRegistrationIds: [1],
-            takeovers: [], assignments: [{registrationId: 1, isExempt: true}]}}, 1)).toBeNull();
+                takeovers: [], assignments: [{registrationId: 1, isExempt: true}]}}, 1)).toBeNull();
         expect(invoiceSettledShareImpact({status: 'CLOSED', calculationSnapshot: {settledRegistrationIds: [],
-            takeovers: [], assignments: [{registrationId: 1, isExempt: true}]}}, 1)).toBeNull();
+                takeovers: [], assignments: [{registrationId: 1, isExempt: true}]}}, 1)).toBeNull();
     });
 });

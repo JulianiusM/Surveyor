@@ -164,8 +164,8 @@ test('preserves canonical packing HTML 404s, standalone guest entry and public d
             headers: headersFor(anonymous), params: {returnTo: duplicateReturn},
         });
         expect(await createEntry.json()).toEqual({entry: {kind: 'redirect',
-            url: `/users/login?next=${encodeURIComponent(duplicateReturn)}`,
-            notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, context: null});
+                url: `/users/login?next=${encodeURIComponent(duplicateReturn)}`,
+                notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, context: null});
         await expectProblem(await request.get('/api/v1/packing-lists/create-context', {headers: headersFor(anonymous)}), 401, 'AUTH_REQUIRED');
         const ownerGuest = await page.request.get(`/packing/${list.id}/guest?locale=en`, {maxRedirects: 0});
         expect(ownerGuest.status()).toBe(302);
@@ -872,10 +872,10 @@ test('honors native public method grants without disclosing protected packing pr
     const event = await createResourceViaForm(request, createE2EEvent());
     const input = createE2EPackingList();
     Object.assign(input.form, {event_id: event.id, items: JSON.stringify([
-        {title: 'Tent', description: 'Private baseline fixture', maxAssignees: 2, requiredByAll: false},
-        {title: 'Stove', description: 'Shared stove', maxAssignees: 1, requiredByAll: false},
-        {title: 'Spare item', description: '', maxAssignees: 1, requiredByAll: false},
-    ])});
+            {title: 'Tent', description: 'Private baseline fixture', maxAssignees: 2, requiredByAll: false},
+            {title: 'Stove', description: 'Shared stove', maxAssignees: 1, requiredByAll: false},
+            {title: 'Spare item', description: '', maxAssignees: 1, requiredByAll: false},
+        ])});
     const list = await createResourceViaForm(request, input);
     const rootPath = `/api/v1/packing-lists/${list.id}`;
     const ownerRead = await request.get(rootPath, {headers: headersFor(owner)});
@@ -910,8 +910,8 @@ test('honors native public method grants without disclosing protected packing pr
         await expectProblem(await first.get(`${itemPath}/edit-baseline`, {headers: publicHeaders}), 403, 'FORBIDDEN');
         await expectProblem(await first.get(`${rootPath}/description`, {headers: publicHeaders}), 403, 'FORBIDDEN');
         await updateEntityDefaultKeysForE2E(request, 'packing-lists', list.id, {public: [
-            'EDIT_DESC', 'EDIT_META', 'ITEM_EDIT', 'ITEM_DELETE', 'MANAGE_ASSIGNMENTS', 'MANAGE_PERMISSIONS',
-        ]});
+                'EDIT_DESC', 'EDIT_META', 'ITEM_EDIT', 'ITEM_DELETE', 'MANAGE_ASSIGNMENTS', 'MANAGE_PERMISSIONS',
+            ]});
 
         // A method grant does not admit full page/settings/image reads or replace
         // profile-owned creation, self-assignment, property, lifecycle or deletion rules.
@@ -1075,7 +1075,7 @@ test('reauthorizes a conditional read before returning 304 or private content', 
         const adminBaseline = await request.get(adminPath + '/edit-baseline', {headers: await commandHeadersForE2E(request)});
         expect(adminBaseline.status()).toBe(200);
         expect((await request.delete(adminPath, {headers: {...await commandHeadersForE2E(request),
-            'If-Match': (await adminBaseline.json()).editToken}})).status()).toBe(200);
+                'If-Match': (await adminBaseline.json()).editToken}})).status()).toBe(200);
         const revoked = await guestContext.request.get(path, {headers: conditionalHeaders});
         await expectProblem(revoked, 403, 'FORBIDDEN');
         expect(await revoked.text()).not.toContain(list.title);
@@ -1123,8 +1123,8 @@ test('preserves native signed capacity edits and SQL rounding through the versio
     const title = `Capacity transport ${randomUUID().slice(0, 8)}`;
     Object.assign(input, {title, expectedViewText: title});
     Object.assign(input.form, {title, items: JSON.stringify([
-        {title: 'Versioned capacity', description: '', maxAssignees: 1, requiredByAll: false},
-    ])});
+            {title: 'Versioned capacity', description: '', maxAssignees: 1, requiredByAll: false},
+        ])});
     const list = await createResourceViaForm(request, input);
     const session = await bootstrap(request);
     const headers = headersFor(session);
@@ -1189,16 +1189,16 @@ test('uses typed multipart, item/settings drafts and scoped binary transport for
     const creation = {title: `Typed packing ${randomUUID()}`, description: null, eventId: null,
         defaultPermissions: (await creationContext.json()).defaults,
         items: [{title: 'Tent', description: null, maxAssignees: 2, requiredByAll: false},
-            {title: 'Water', description: 'Drink bottle', maxAssignees: 1, requiredByAll: true}]};
+        {title: 'Water', description: 'Drink bottle', maxAssignees: 1, requiredByAll: true}]};
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX2kAAAAASUVORK5CYII=', 'base64');
     await expectProblem(await request.post('/api/v1/packing-lists', {headers, data: creation}), 415, 'UNSUPPORTED_MEDIA_TYPE');
     await expectProblem(await request.post('/api/v1/packing-lists', {headers, multipart: {data: '{bad-json'}}), 400, 'INVALID_JSON');
     await expectProblem(await request.post('/api/v1/packing-lists', {headers, multipart: {
-        data: JSON.stringify({...creation, items: [{...creation.items[0], maxAssignees: false}]}),
-    }}), 400, 'VALIDATION_FAILED');
+            data: JSON.stringify({...creation, items: [{...creation.items[0], maxAssignees: false}]}),
+        }}), 400, 'VALIDATION_FAILED');
     const created = await request.post('/api/v1/packing-lists', {headers, multipart: {
-        data: JSON.stringify(creation), image: {name: 'header.png', mimeType: 'image/png', buffer: png},
-    }});
+            data: JSON.stringify(creation), image: {name: 'header.png', mimeType: 'image/png', buffer: png},
+        }});
     expect(created.status()).toBe(201);
     const id = (await created.json()).id as string;
     const root = `/api/v1/packing-lists/${id}`;
@@ -1238,8 +1238,8 @@ test('uses typed multipart, item/settings drafts and scoped binary transport for
     expect((await view()).items.map(item => item.id)).toEqual(reversed);
     const beforeHeader = await settings();
     expect((await request.put(`${root}/header`, {headers: {...headers, 'If-Match': beforeHeader.settingsToken}, multipart: {
-        image: {name: 'replacement.png', mimeType: 'image/png', buffer: png},
-    }})).status()).toBe(200);
+            image: {name: 'replacement.png', mimeType: 'image/png', buffer: png},
+        }})).status()).toBe(200);
     const afterHeader = await settings();
     expect(afterHeader.headerVersion).not.toBe(beforeHeader.headerVersion);
     // A changed image does not invalidate an independently reviewed audience mask.

@@ -1,13 +1,14 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
+import {randomUUID} from 'node:crypto';
 import {Request} from 'express';
-import activityController from '../../src/backend/controller/activityController';
-import driversController from '../../src/backend/controller/driversController';
+import * as activityController from '../../src/backend/controller/activityController';
+import * as driversController from '../../src/backend/controller/driversController';
 import * as entityAdminController from '../../src/backend/controller/entityAdminController';
-import eventPoolController from '../../src/backend/controller/eventPoolController';
+import * as eventPoolController from '../../src/backend/controller/eventPoolController';
 import * as helpController from '../../src/backend/controller/helpController';
-import eventController from '../../src/backend/controller/eventController';
-import packingController from '../../src/backend/controller/packingController';
-import surveyController from '../../src/backend/controller/surveyController';
+import * as eventController from '../../src/backend/controller/eventController';
+import * as packingController from '../../src/backend/controller/packingController';
+import * as surveyController from '../../src/backend/controller/surveyController';
 import * as userController from '../../src/backend/controller/userController';
 import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
 import {PERM} from '../../src/backend/modules/lib/permissions';
@@ -56,6 +57,50 @@ afterAll(async () => {
 });
 
 describe('permission user stories', () => {
+    it.each(['packing', 'drivers', 'event', 'activity'] as const)(
+        '%s preserves administrator target and comparison rejection order', async function retainsAdministratorAdmissionOrder(type) {
+            // Use each public feature command and real persisted root. Activity's
+            // direct path deliberately reviews comparison evidence before the profile;
+            // the other roots retain their locked profile-first diagnostics.
+            let entityId: string;
+            if (type === 'packing') [entityId] = await createPackingListWithItem(owner.id);
+            else if (type === 'drivers') [entityId] = await createDriversListWithItem(owner.id);
+            else if (type === 'activity') entityId = await createActivityPlanWithSlot(owner.id);
+            else entityId = await createIntegrationEvent(owner.id, 'Administrator admission order');
+            const session = {profile: owner, auth: {user: owner.user!}};
+            const commands = {
+                packing: packingController.setPackingAdmin,
+                drivers: driversController.setDriversAdmin,
+                event: eventController.setEventAdmin,
+                activity: activityController.setActivityAdmin,
+            };
+            const baselines = {
+                packing: packingController.readPackingAdminBaseline,
+                drivers: driversController.readDriversAdminBaseline,
+                event: eventController.readEventAdminBaseline,
+                activity: activityController.readActivityAdminBaseline,
+            };
+            expect((await baselines[type](entityId, participant.id, session)).mask).toBeNull();
+            const missingProfile = randomUUID();
+
+            // A missing target and invalid comparison must not silently exchange
+            // diagnostic precedence when the business owner moves between modules.
+            await expect(commands[type](entityId, missingProfile, 0, session))
+                .rejects.toMatchObject({status: type === 'activity' ? 428 : 404});
+            await expect(commands[type](entityId, missingProfile, 0, session, 'stale-token'))
+                .rejects.toMatchObject({status: type === 'activity' ? 412 : 404});
+            expect(await adminService.getAdminGrant(type, entityId, missingProfile)).toBeNull();
+
+            // Direct administration also retains profile-before-mask errors. No
+            // rejected command may create an absent grant, including a zero grant.
+            await expect(entityAdminController.updateAdmin(type, entityId, missingProfile, {}))
+                .rejects.toThrow('Not Found');
+            await expect(entityAdminController.updateAdmin(type, entityId, participant.id, {}))
+                .rejects.toThrow('Either mask or perms must be provided');
+            expect(await adminService.getAdminGrant(type, entityId, participant.id)).toBeNull();
+        },
+    );
+
     it('delegates, lists, updates and revokes event administration while accepting an unchanged mask', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Permission workflow event');
         const viewAdmin = PERM.ACCESS_VIEW;

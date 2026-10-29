@@ -19,7 +19,7 @@ import type {ActivityPlanRequirement} from '../backend/modules/database/entities
 import type {ActivityPlanRequirementOverride} from '../backend/modules/database/entities/activity/ActivityPlanRequirementOverride';
 import type {ActivityPlanStayRequirement} from '../backend/modules/database/entities/activity/ActivityPlanStayRequirement';
 import type {ActivitySlot} from '../backend/modules/database/entities/activity/ActivitySlot';
-import type {ParticipantAttendance} from './ActivityRequirementTypes';
+import type {ParticipantAttendance, RequirementOverrideInput, RoleRequirementInput, StayRequirementInput} from './ActivityRequirementTypes';
 import type {components} from './api/v1';
 
 
@@ -336,6 +336,15 @@ export type PlanRequirementSettings = Partial<Pick<
     | "allowDepartureDayMorning"
 >>;
 
+/** Request-decoded requirement settings and replacement rows; business admission
+ * and stored deadline conversion remain with the locked feature operation. */
+export interface ActivityRequirementUpdate extends Omit<PlanRequirementSettings, 'bindingDeadline'> {
+    bindingDeadline?: string | Date | null;
+    roleRequirements: RoleRequirementInput[];
+    stayRequirements: StayRequirementInput[];
+    overrides: RequirementOverrideInput[];
+}
+
 export interface RequirementConfiguration {
     plan: Pick<
         ActivityPlan,
@@ -357,7 +366,7 @@ export interface RequirementConfiguration {
 }
 
 /** Already loaded inputs for the shared asynchronous requirement context.
- * Each controller retains its own initial read set and supplies its manager explicitly. */
+ * Each operation retains its own initial read set and supplies its manager explicitly. */
 export interface ActivityRequirementPreparationInputs {
     plan: ActivityPlan;
     configuration: RequirementConfiguration;

@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import type {EntityManager} from "typeorm";
+import type {EntityManager} from 'typeorm';
 import type {BasicEntityPropertyPatch} from '../../../../types/EntityPropertyTypes';
-import type {BasePicked, GroupedResponses, SurveyAnswer, WeekDay, WeekInMonth} from "../../../../types/SurveyTypes";
+import type {BasePicked, GroupedResponses, SurveyAnswer, WeekDay, WeekInMonth} from '../../../../types/SurveyTypes';
 import {generateUniqueId} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {Survey} from '../entities/surveys/Survey';
@@ -42,37 +42,37 @@ export async function createSurveyTx(ownerId: string, title: string, desc: strin
     week: WeekInMonth,
 }[], headerImg?: string | null,): Promise<string> {
     return await AppDataSource.transaction(
-    /** Save the new root first, then materialize combinations without carrying response rows from another survey. */
-    async (manager) => {
-        const surveyId = generateUniqueId();
+        /** Save the new root first, then materialize combinations without carrying response rows from another survey. */
+        async (manager) => {
+            const surveyId = generateUniqueId();
 
-        // Child combinations refer to this generated identity only after the
-        // root has been saved; a later failure rolls both sets back together.
-        const survey: Survey = manager.create(Survey, {
-            id: surveyId,
-            owner: {id: ownerId},
-            title,
-            description: desc,
-            headerImg,
+            // Child combinations refer to this generated identity only after the
+            // root has been saved; a later failure rolls both sets back together.
+            const survey: Survey = manager.create(Survey, {
+                id: surveyId,
+                owner: {id: ownerId},
+                title,
+                description: desc,
+                headerImg,
+            });
+            await manager.save(survey);
+
+            const plainCombos = combinations.map(c => ({
+                entity: {id: surveyId},
+                // Survey combinations inherit the generic item title column; keep it deterministic
+                // so form-created surveys persist with the same production entity shape as other item lists.
+                title: `${c.week} ${c.weekday}`,
+                weekday: c.weekday,
+                nthWeek: c.week,
+            }));
+
+            // Preserve input order and the ORM's empty-array behavior when there
+            // are no selected combinations; IDs remain database-generated numeric values.
+            const comboEntities = manager.create(SurveyCombination, plainCombos);
+
+            await manager.save(comboEntities);
+            return surveyId;
         });
-        await manager.save(survey);
-
-        const plainCombos = combinations.map(c => ({
-            entity: {id: surveyId},
-            // Survey combinations inherit the generic item title column; keep it deterministic
-            // so form-created surveys persist with the same production entity shape as other item lists.
-            title: `${c.week} ${c.weekday}`,
-            weekday: c.weekday,
-            nthWeek: c.week,
-        }));
-
-        // Preserve input order and the ORM's empty-array behavior when there
-        // are no selected combinations; IDs remain database-generated numeric values.
-        const comboEntities = manager.create(SurveyCombination, plainCombos);
-
-        await manager.save(comboEntities);
-        return surveyId;
-    });
 }
 
 export async function addCombination(surveyId: string, weekday: WeekDay, nthWeek: WeekInMonth) {

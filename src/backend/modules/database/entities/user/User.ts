@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import {BeforeInsert, BeforeUpdate, Column, Entity, Index, OneToMany,} from "typeorm";
+import {BeforeInsert, BeforeUpdate, Column, Entity, Index, OneToMany,} from 'typeorm';
 
-import {NumericBase} from "../abstract/TrackedBase";
-import {Profile} from "./Profile";
+import {NumericBase} from '../abstract/TrackedBase';
+import {Profile} from './Profile';
 
 @Index("email", ["email"], {unique: true})
 @Index("username", ["username"], {unique: true})

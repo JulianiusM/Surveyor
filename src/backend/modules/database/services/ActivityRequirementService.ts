@@ -19,17 +19,17 @@ import type {PlanRequirementSettings, RequirementConfiguration} from '../../../.
 
 import type {
     RequirementOverrideInput, RoleRequirementInput, StayRequirementInput, RequirementPageSection,
-} from "../../../../types/ActivityRequirementTypes";
+} from '../../../../types/ActivityRequirementTypes';
 import type {
     EntityManager, ObjectLiteral, SelectQueryBuilder,
-} from "typeorm";
-import {Between, LessThanOrEqual} from 'typeorm';
+} from 'typeorm';
+import {Between, Equal, LessThanOrEqual} from 'typeorm';
 import {countInclusiveDays} from '../../../../common/activity/requirements';
-import {AppDataSource} from "../dataSource";
-import {ActivityPlan} from "../entities/activity/ActivityPlan";
-import {ActivityPlanRequirement} from "../entities/activity/ActivityPlanRequirement";
-import {ActivityPlanRequirementOverride} from "../entities/activity/ActivityPlanRequirementOverride";
-import {ActivityPlanStayRequirement} from "../entities/activity/ActivityPlanStayRequirement";
+import {AppDataSource} from '../dataSource';
+import {ActivityPlan} from '../entities/activity/ActivityPlan';
+import {ActivityPlanRequirement} from '../entities/activity/ActivityPlanRequirement';
+import {ActivityPlanRequirementOverride} from '../entities/activity/ActivityPlanRequirementOverride';
+import {ActivityPlanStayRequirement} from '../entities/activity/ActivityPlanStayRequirement';
 
 /** Count and fetch one bounded SQL page without hydrating the complete saved collection. */
 async function readRequirementRows<Row extends ObjectLiteral>(query: SelectQueryBuilder<Row>, requestedPage: number) {
@@ -51,7 +51,7 @@ export async function getRequirementPage(planId: string, section: RequirementPag
     // row identities/names while the common page owner bounds every SQL read.
     if (section === 'roles') {
         const query = manager.getRepository(ActivityPlanRequirement).createQueryBuilder('requirement')
-            .leftJoinAndSelect('requirement.role', 'role').where('requirement.entity_id = :planId', {planId})
+            .leftJoinAndSelect('requirement.role', 'role').where({entity: {id: Equal(planId)}})
             .orderBy('requirement.id', 'ASC');
         const result = await readRequirementRows(query, requestedPage);
         return {...empty, roleRequirements: result.rows, total: result.total, pages: result.pages, page: result.page};
@@ -59,12 +59,12 @@ export async function getRequirementPage(planId: string, section: RequirementPag
     if (section === 'overrides') {
         const query = manager.getRepository(ActivityPlanRequirementOverride).createQueryBuilder('requirement')
             .leftJoinAndSelect('requirement.role', 'role').leftJoinAndSelect('requirement.profile', 'profile')
-            .where('requirement.entity_id = :planId', {planId}).orderBy('requirement.id', 'ASC');
+            .where({entity: {id: Equal(planId)}}).orderBy('requirement.id', 'ASC');
         const result = await readRequirementRows(query, requestedPage);
         return {...empty, overrides: result.rows, total: result.total, pages: result.pages, page: result.page};
     }
     const query = manager.getRepository(ActivityPlanStayRequirement).createQueryBuilder('requirement')
-        .where('requirement.entity_id = :planId', {planId}).orderBy('requirement.stay_days', 'ASC');
+        .where({entity: {id: Equal(planId)}}).orderBy('requirement.stay_days', 'ASC');
     const result = await readRequirementRows(query, requestedPage);
     return {...empty, stayRequirements: result.rows, total: result.total, pages: result.pages, page: result.page};
 }

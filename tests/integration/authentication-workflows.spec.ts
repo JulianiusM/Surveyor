@@ -13,9 +13,9 @@ import {Guest} from '../../src/backend/modules/database/entities/user/Guest';
 import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
 import {Session} from '../../src/backend/modules/database/entities/session/Session';
 import * as userService from '../../src/backend/modules/database/services/UserService';
-import email from "../../src/backend/modules/email";
+import email from '../../src/backend/modules/email';
 import * as emailOwner from '../../src/backend/modules/email';
-import {createSessionStore, persistSession, readStoredSession} from '../../src/backend/modules/lib/session';
+import {persistSession, readStoredSession} from '../../src/backend/modules/lib/session';
 import {rotateFrontendSessionContext} from '../../src/backend/modules/lib/frontendSession';
 import {captureApiActor, prepareAccountRegistrationReplies, prepareGuestIdentityReplies, prepareIdentityReply, sessionView} from '../../src/backend/modules/api/session';
 import {prepareValidatedJson, sendPreparedJson} from '../../src/backend/modules/api/transport';
@@ -557,12 +557,12 @@ describe('approved profile migration locking and completion', () => {
 
 /** Construct the ordinary library Session without persisting an anonymous visitor. */
 function identityRequest(): Request {
-    const store = createSessionStore(AppDataSource.manager);
+    const store = userService.createSessionStore(AppDataSource.manager);
     const req = {sessionID: randomUUID(), sessionStore: store,
         get: function getHeader(name: string) { return name.toLowerCase() === 'x-surveyor-locale' ? 'en' : undefined; },
     } as unknown as Request;
     store.createSession(req, {cookie: {expires: new Date(Date.now() + 86_400_000), originalMaxAge: 86_400_000,
-        httpOnly: true, secure: false, path: '/', sameSite: 'lax'}} as SessionData);
+            httpOnly: true, secure: false, path: '/', sameSite: 'lax'}} as SessionData);
     return req;
 }
 
@@ -697,7 +697,7 @@ async function ordinaryIdentityFixture(kind: OrdinaryIdentityKind, storedZero = 
                 defaultForOwner: false, user: user!});
             const current = await userService.getUserById(account.id);
             req.session.auth = {user: current!};
-            req.session.profile = userController.getDefaultProfile(current!.profiles);
+            req.session.profile = identity.getDefaultProfile(current!.profiles);
             await persistSession(req.session);
             req.apiActor = {context: req.session.frontendContext!, auth: req.session.auth, profile: req.session.profile};
             profileId = second.id;
@@ -971,7 +971,7 @@ describe('atomic versioned guest registration', () => {
         expect(req.session.auth).toBeUndefined();
         expect(stored?.frontendContext).not.toBe(context);
         expect(reply).toMatchObject({emailDelivery: 'not-requested', session: {kind: 'guest', context: stored!.frontendContext,
-            activeProfile: {id: stored!.profile!.id, name: username}}});
+                activeProfile: {id: stored!.profile!.id, name: username}}});
         expect(committed.result.context).toBe(reply.session.context);
         expect(await userService.getGuestInternal(stored!.auth.guest!.id)).toMatchObject({username, profile: {id: stored!.profile!.id}});
         expect(reply.personalLink).toContain(`/guest/${stored!.auth.guest!.id}/login/`);
@@ -1545,8 +1545,8 @@ describe('atomic frontend password-reset consumption', () => {
             // non-enumerable serializer fault then proves output preparation still
             // precedes password/token commit without mocking persistence or locks.
             Object.defineProperty(result, 'toJSON', {value: function rejectSerialization(): never {
-                throw new TypeError('Reset completion serialization failed');
-            }});
+                    throw new TypeError('Reset completion serialization failed');
+                }});
             return prepareValidatedJson(req, 'resetAccountPassword', 200, result);
         }
         // Capture only the error so an unexpected fulfilled receipt cannot print
@@ -1696,8 +1696,8 @@ describe('authentication user stories', () => {
         function prepareFailingSave(staged: Request['session']): PreparedApiJsonResponse {
             const result = prepareIdentityReply(req, staged, 'loginIdentity');
             Object.defineProperty(staged, 'flash', {value: {
-                'frontend-notice': [JSON.stringify({kind: 'success', messageKey: 'auth.loginDone'})],
-            }, enumerable: true});
+                    'frontend-notice': [JSON.stringify({kind: 'success', messageKey: 'auth.loginDone'})],
+                }, enumerable: true});
             Object.defineProperty(staged, 'serializationCycle', {value: staged, enumerable: true});
             return result;
         }
@@ -2582,9 +2582,9 @@ describe('approved local identity deletion and provider outcome', () => {
         const configuration = vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value, initialized: true,
             oidcIssuerBaseUrl: 'https://identity.example.test'});
         const discovery = vi.spyOn(openid, 'discovery').mockResolvedValue({serverMetadata() {
-            if (failure === 'metadata') throw new Error('Controlled metadata failure');
-            return {end_session_endpoint: 'not an absolute URL'};
-        }} as unknown as openid.Configuration);
+                if (failure === 'metadata') throw new Error('Controlled metadata failure');
+                return {end_session_endpoint: 'not an absolute URL'};
+            }} as unknown as openid.Configuration);
         try {
             await oidc.initOIDC();
             const {req} = await ordinaryLogoutFixture('account');
@@ -2607,8 +2607,8 @@ describe('approved local identity deletion and provider outcome', () => {
         const configuration = vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value, initialized: true,
             oidcIssuerBaseUrl: 'https://identity.example.test'});
         const discovery = vi.spyOn(openid, 'discovery').mockResolvedValue({serverMetadata() {
-            throw new Error('Controlled provider-bearing deletion failure');
-        }} as unknown as openid.Configuration);
+                throw new Error('Controlled provider-bearing deletion failure');
+            }} as unknown as openid.Configuration);
         const delivery = deletionDelivery();
         try {
             await oidc.initOIDC();
@@ -2672,8 +2672,8 @@ describe('approved local identity deletion and provider outcome', () => {
         const configuration = vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value, initialized: true,
             oidcIssuerBaseUrl: 'https://identity.example.test', rootUrl: 'https://surveyor.example.test'});
         const discovery = vi.spyOn(openid, 'discovery').mockResolvedValue({serverMetadata() {
-            return {end_session_endpoint: 'https://identity.example.test/logout'};
-        }} as unknown as openid.Configuration);
+                return {end_session_endpoint: 'https://identity.example.test/logout'};
+            }} as unknown as openid.Configuration);
         try {
             await oidc.initOIDC();
             const outcome = await userController.logoutUserOidc(req.session, 'outcome');

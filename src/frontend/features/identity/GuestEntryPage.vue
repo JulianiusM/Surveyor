@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {fieldAttributes as guestFields} from "../../../../.generated/api/v1/browser/validateGuestRegistrationInput.mjs";
+import {fieldAttributes as guestFields} from '../../../../.generated/api/v1/browser/validateGuestRegistrationInput.mjs';
 import {computed, reactive, ref, watch} from 'vue';
 import {useRoute, useRouter, RouterLink} from 'vue-router';
 import type {components} from '../../../types/api/v1';

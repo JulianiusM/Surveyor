@@ -56,17 +56,17 @@ async function mounted(component: Component, props: Record<string, unknown> = {}
     const context = createFrontendContext({session, initialUrl: path, ...bootstrap}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/', component: routePlaceholder},
-        {path: '/message', component: routePlaceholder},
-        {path: '/users/dashboard', component: routePlaceholder},
-        {path: '/:pathMatch(.*)*', component: routePlaceholder},
-    ]});
+            {path: '/', component: routePlaceholder},
+            {path: '/message', component: routePlaceholder},
+            {path: '/users/dashboard', component: routePlaceholder},
+            {path: '/:pathMatch(.*)*', component: routePlaceholder},
+        ]});
     await router.push(path);
     await router.isReady();
     const wrapper = mount(component, {props, attachTo: document.body, global: {
-        plugins: [router, [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+        }});
     await flushPromises();
     cleanups.push(function disposeMountedPage() {wrapper.unmount(); context.queryClient.clear();});
     return {wrapper, context, router, request};
@@ -85,7 +85,7 @@ async function dashboardJourney(login?: () => Promise<Component>, requestFetch: 
     const context: FrontendContext = createFrontendContext({session: anonymous, initialUrl: '/'}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: frontendRoutes.map(route =>
-        login && route.path === '/users/login' ? {path: route.path, meta: route.meta, component: login} : route)});
+            login && route.path === '/users/login' ? {path: route.path, meta: route.meta, component: login} : route)});
     const stopDocument = observeInitialDocument(context, router);
     await router.push('/');
     await router.isReady();
@@ -93,9 +93,9 @@ async function dashboardJourney(login?: () => Promise<Component>, requestFetch: 
         setup: () => ({ready: context.ready, epoch: context.epoch}),
         template: '<RouterView v-if="ready" :key="epoch" />',
     }), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+        }});
     cleanups.push(function disposeDashboardJourney() {
         wrapper.unmount();
         stopDocument();
@@ -112,62 +112,62 @@ function texts(root: Element, selector: string): string[] {
 /** Assert the accepted visible information and its order after native retirement. */
 function expectedLandingText(signedIn = false): string[] {
     const introduction = signedIn ? [
-    "Surveyor",
-    "Welcome back, <Fixture profile>.",
-    "See all your surveys, events, packing lists, activity plans and drivers lists in one place.",
-    "Quickly create new plans and share links so others can respond or sign up.",
-    "Coordinate who brings what and who drives with whom.",
-    "Keep track of participants, assignments and access rights from your dashboard."
-] : [
-    "Surveyor",
-    "Organize and coordinate group activities in one place.",
-    "Plan surveys, events and activity schedules.",
-    "Share a single link so people can respond or sign up.",
-    "Keep packing lists and drivers lists together with your events.",
-    "See everything you created on your personal dashboard.",
-    "If you received an invitation link, you can also participate as a guest without creating an account."
-];
+        "Surveyor",
+        "Welcome back, <Fixture profile>.",
+        "See all your surveys, events, packing lists, activity plans and drivers lists in one place.",
+        "Quickly create new plans and share links so others can respond or sign up.",
+        "Coordinate who brings what and who drives with whom.",
+        "Keep track of participants, assignments and access rights from your dashboard."
+    ] : [
+        "Surveyor",
+        "Organize and coordinate group activities in one place.",
+        "Plan surveys, events and activity schedules.",
+        "Share a single link so people can respond or sign up.",
+        "Keep packing lists and drivers lists together with your events.",
+        "See everything you created on your personal dashboard.",
+        "If you received an invitation link, you can also participate as a guest without creating an account."
+    ];
     return [...introduction, ...[
-    "Surveys",
-    "Find suitable dates and collect responses.",
-    "Define date combinations such as specific weekdays and weeks of a month.",
-    "Let people answer with options like Yes, Maybe or No.",
-    "See everyone’s availability in a combined view.",
-    "Allow both registered users and guests to participate.",
-    "Events",
-    "Create events with participant registration and links to related plans.",
-    "Store event details such as title, dates and location.",
-    "Manage participant registration and track who is attending.",
-    "Link related packing lists, activity plans and drivers lists.",
-    "Optionally collect information such as dietary notes.",
-    "Use invoice pools to assign costs, record payments and see balances.",
-    "Packing lists",
-    "Coordinate what needs to be brought for trips or events.",
-    "Create items with descriptions and quantities.",
-    "Track how many of each item are still needed.",
-    "Assign items to people so everyone knows what they bring.",
-    "Support participation via shared links, including guests.",
-    "Activity plans",
-    "Schedule activities with time slots and roles.",
-    "Create time-based schedules organized by date and time.",
-    "Define roles for activities, such as helpers or facilitators.",
-    "Assign people to activity slots and see who is where.",
-    "Track how many assignments participants should take.",
-    "Link plans to events to reuse participant lists.",
-    "Allow guests to take part using shared plan links.",
-    "Drivers lists",
-    "Coordinate transportation by organizing drivers and passengers.",
-    "Register drivers and specify the number of seats they offer.",
-    "Let participants sign up for available rides.",
-    "Track who is riding with whom.",
-    "Support participation via links so guests can join.",
-    "Access and participation",
-    "People can take part either with a registered account or as guests using links shared by organizers.",
-    "Your dashboard works as your personal homepage and shows the surveys, events, packing lists, activity plans and drivers lists you have created.",
-    "Permissions",
-    "Surveyor uses a permission system to control who can view and edit entities and their items.",
-    "Permissions can be assigned to audiences as group permissions and to individual users, while the creator of an entity always keeps full access."
-]];
+        "Surveys",
+        "Find suitable dates and collect responses.",
+        "Define date combinations such as specific weekdays and weeks of a month.",
+        "Let people answer with options like Yes, Maybe or No.",
+        "See everyone’s availability in a combined view.",
+        "Allow both registered users and guests to participate.",
+        "Events",
+        "Create events with participant registration and links to related plans.",
+        "Store event details such as title, dates and location.",
+        "Manage participant registration and track who is attending.",
+        "Link related packing lists, activity plans and drivers lists.",
+        "Optionally collect information such as dietary notes.",
+        "Use invoice pools to assign costs, record payments and see balances.",
+        "Packing lists",
+        "Coordinate what needs to be brought for trips or events.",
+        "Create items with descriptions and quantities.",
+        "Track how many of each item are still needed.",
+        "Assign items to people so everyone knows what they bring.",
+        "Support participation via shared links, including guests.",
+        "Activity plans",
+        "Schedule activities with time slots and roles.",
+        "Create time-based schedules organized by date and time.",
+        "Define roles for activities, such as helpers or facilitators.",
+        "Assign people to activity slots and see who is where.",
+        "Track how many assignments participants should take.",
+        "Link plans to events to reuse participant lists.",
+        "Allow guests to take part using shared plan links.",
+        "Drivers lists",
+        "Coordinate transportation by organizing drivers and passengers.",
+        "Register drivers and specify the number of seats they offer.",
+        "Let participants sign up for available rides.",
+        "Track who is riding with whom.",
+        "Support participation via links so guests can join.",
+        "Access and participation",
+        "People can take part either with a registered account or as guests using links shared by organizers.",
+        "Your dashboard works as your personal homepage and shows the surveys, events, packing lists, activity plans and drivers lists you have created.",
+        "Permissions",
+        "Surveyor uses a permission system to control who can view and edit entities and their items.",
+        "Permissions can be assigned to audiences as group permissions and to individual users, while the creator of an entity always keeps full access."
+    ]];
 }
 
 function normalizedText(element: Element): string {
@@ -338,8 +338,8 @@ describe('common frontend presentation', () => {
             expect(await dispatched.json()).toEqual({locale: 'de'});
             if (cancelled) document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Tab', bubbles: true}));
             finish(new Response(JSON.stringify({...session, locale: 'de'}), {headers: {
-                'Content-Type': 'application/json', 'X-Surveyor-Context': session.context,
-            }}));
+                    'Content-Type': 'application/json', 'X-Surveyor-Context': session.context,
+                }}));
             await flushPromises();
             expect(wrapper.get<HTMLSelectElement>('#frontend-locale').element).toBe(select.element);
             expect(select.element.disabled).toBe(false);
@@ -373,13 +373,13 @@ describe('common frontend presentation', () => {
 
     it.each([
         {name: 'assignment', component: EntityAssignmentActions, props: {available: true, assigned: false, full: false, disabled: false,
-            assignLabel: 'Join', removeLabel: 'Leave', fullLabel: 'Full'}, pending: {pending: true}, settled: {pending: false}},
+                assignLabel: 'Join', removeLabel: 'Leave', fullLabel: 'Full'}, pending: {pending: true}, settled: {pending: false}},
         {name: 'quick add', component: EntityQuickAdd, props: {description: 'Keep this draft', capacity: null, disabled: false},
             pending: {pending: true}, settled: {pending: false}},
         {name: 'permanent deletion', component: EntityLifecycleActions, props: {labels: {activeHint: 'Active', archivedHint: 'Archived',
-            inheritedHint: 'Inherited', openEvent: 'Open Event', otherActions: 'Actions', deletePermanently: 'Delete permanently'},
-            direct: false, inherited: false, eventUrl: null, manageArchive: false, canArchive: false, canRestore: false,
-            canDuplicate: false, canRemove: true, duplicateTo: '/', disabled: false},
+                    inheritedHint: 'Inherited', openEvent: 'Open Event', otherActions: 'Actions', deletePermanently: 'Delete permanently'},
+                direct: false, inherited: false, eventUrl: null, manageArchive: false, canArchive: false, canRestore: false,
+                canDuplicate: false, canRemove: true, duplicateTo: '/', disabled: false},
             pending: {pendingAction: 'remove'}, settled: {pendingAction: null}},
     ])('shows progress at the initiating $name control without another request', async example => {
         const {wrapper, request} = await mounted(example.component, example.props);
@@ -526,7 +526,7 @@ describe('common frontend presentation', () => {
             // action admission. A never-focused command owns no restoration at all.
             if (state === 'unavailable') await wrapper.setProps({disabled: true});
             else if (state === 'ineligible') await wrapper.setProps({state: markRaw({available: computed(() => false),
-                disabled: computed(() => true), pending: computed(() => false), isAvailable: () => false})});
+                    disabled: computed(() => true), pending: computed(() => false), isAvailable: () => false})});
             else if (state === 'initializing') context.hydrated.value = false;
             else if (state === 'identity') context.epoch.value++;
             if (state === 'unmounted') wrapper.unmount();
@@ -810,7 +810,7 @@ describe('common frontend presentation', () => {
     it('adapts dietary arrays through the same field while retaining lowercase values and disabled omission', async () => {
         const {wrapper, request} = await mounted(ChoiceCheckboxes, {idPrefix: 'diet', name: 'dietary',
             choices: [{value: 'MEAT', inputValue: 'meat', label: 'Meat'},
-                {value: 'COMMENT', inputValue: 'comment', label: 'Comment'}], selected: ['MEAT']});
+            {value: 'COMMENT', inputValue: 'comment', label: 'Comment'}], selected: ['MEAT']});
         const form = document.createElement('form');
         form.append(wrapper.element);
         document.body.append(form);

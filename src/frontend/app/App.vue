@@ -91,7 +91,7 @@ function keepInitialNativeSubmission(event: Event): void {
  * movement keeps the current receipt, and an obsolete or canceled lazy navigation
  * cannot consume a command's destination-specific success message. */
 function finishNavigation(to: RouteLocationNormalized, from?: RouteLocationNormalized,
-                          failure?: NavigationFailure | void): void {
+    failure?: NavigationFailure | void): void {
     // Redirect feedback is applied after its destination commits. Clear it on the next
     // accepted visit, never while a cancelled guard keeps the user on the same form.
     const changedDocument = from && frontendDocumentUrl(to.fullPath) !== frontendDocumentUrl(from.fullPath);

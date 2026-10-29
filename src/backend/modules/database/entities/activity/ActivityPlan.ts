@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
-import type {RoundingMode} from "../../../../../types/ActivityRequirementTypes";
-import {DefaultEntity} from "../abstract/BaseEntity";
-import {Event} from "../event/Event";
-import {ActivityAssignment} from "./ActivityAssignment";
-import {ActivityAssignmentRecommendation} from "./ActivityAssignmentRecommendation";
-import {ActivityPlanRequirement} from "./ActivityPlanRequirement";
-import {ActivityPlanRequirementOverride} from "./ActivityPlanRequirementOverride";
-import {ActivityPlanStayRequirement} from "./ActivityPlanStayRequirement";
-import {ActivityPlanTextField} from "./ActivityPlanTextField";
-import {ActivityRole} from "./ActivityRole";
-import {ActivitySlot} from "./ActivitySlot";
+import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, RelationId,} from 'typeorm';
+import type {RoundingMode} from '../../../../../types/ActivityRequirementTypes';
+import {DefaultEntity} from '../abstract/BaseEntity';
+import {Event} from '../event/Event';
+import {ActivityAssignment} from './ActivityAssignment';
+import {ActivityAssignmentRecommendation} from './ActivityAssignmentRecommendation';
+import {ActivityPlanRequirement} from './ActivityPlanRequirement';
+import {ActivityPlanRequirementOverride} from './ActivityPlanRequirementOverride';
+import {ActivityPlanStayRequirement} from './ActivityPlanStayRequirement';
+import {ActivityPlanTextField} from './ActivityPlanTextField';
+import {ActivityRole} from './ActivityRole';
+import {ActivitySlot} from './ActivitySlot';
 
 @Entity("activity_plans", {schema: "surveyor"})
 // Match the automatic sweep's eligibility filters and (endDate, id) batch cursor.
@@ -54,13 +54,13 @@ export class ActivityPlan extends DefaultEntity {
 
     @Column("tinyint", {
         name: "allow_overfill_after_full",
-        default: () => 0
+        default: 0
     })
     allowOverfillAfterFull!: boolean;
 
     @Column("tinyint", {
         name: "allow_external_assignees",
-        default: () => 0
+        default: 0
     })
     allowExternalAssignees!: boolean;
 
@@ -72,13 +72,13 @@ export class ActivityPlan extends DefaultEntity {
 
     @Column("tinyint", {
         name: "allow_arrival_day_evening",
-        default: () => "1"
+        default: 1
     })
     allowArrivalDayEvening!: boolean;
 
     @Column("tinyint", {
         name: "allow_departure_day_morning",
-        default: () => "1"
+        default: 1
     })
     allowDepartureDayMorning!: boolean;
 

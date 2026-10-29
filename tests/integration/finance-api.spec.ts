@@ -5,14 +5,8 @@ import http from 'node:http';
 import express from 'express';
 import session from 'express-session';
 import type {Request, Router} from 'express';
-import invoices, {
-    admitEventInvoiceSubmission, closeEventInvoice, readEventFinance, readEventFinanceBreakdown,
-    readEventInvoiceProof, retractEventInvoice, createEventFinancePool, updateEventFinanceSettings,
-    changeEventFinanceSubmissionState, admitEventFinanceOrganizer, recordEventOrganizerInvoice,
-    reviewEventFinanceInvoice, updateEventFinanceAssignments, addEventFinanceAdjustment,
-    removeEventFinanceAdjustment, updateEventFinanceTakeovers,
-    previewEventFinancePool, calculateEventFinancePool, rollbackEventFinancePool, notifyEventFinancePool, settleEventFinanceShare,
-} from '../../src/backend/controller/eventPoolController';
+import * as invoices from '../../src/backend/controller/eventPoolController';
+
 import * as eventService from '../../src/backend/modules/database/services/EventService';
 import * as invoiceService from '../../src/backend/modules/database/services/EventInvoiceService';
 import * as adminService from '../../src/backend/modules/database/services/EntityAdminService';
@@ -101,7 +95,7 @@ describe('versioned finance shared ownership and private saved projections', () 
         /** Each controller request must hydrate exactly one fresh pool graph. */
         async function readParticipant(profile: Profile) {
             const before = poolLoads;
-            const result = await readEventFinance(id, actor(profile));
+            const result = await invoices.readEventFinance(id, actor(profile));
             expect(poolLoads - before).toBe(1);
             return result;
         }
@@ -138,9 +132,9 @@ describe('versioned finance shared ownership and private saved projections', () 
         await invoices.addOrganizerInvoice(event, poolId, {amount: 27.51, description: 'Preview source'}, nativeActor(owner));
         const before = (await invoiceService.getPoolWithInvoices(poolId))!;
         sendEmail.mockClear();
-        await expect(previewEventFinancePool(id, poolId, actor(participant))).rejects.toMatchObject({status: 403});
+        await expect(invoices.previewEventFinancePool(id, poolId, actor(participant))).rejects.toMatchObject({status: 403});
         await adminService.addAdmin('event', id, editor.id, PERM.MANAGE_ASSIGNMENTS);
-        const preview = await previewEventFinancePool(id, poolId, actor(editor), 'de');
+        const preview = await invoices.previewEventFinancePool(id, poolId, actor(editor), 'de');
         const validate = contractValidator('FinancePreview');
         expect(validate(preview), JSON.stringify(validate.errors)).toBe(true);
         expect(preview.revision).toBe(before.calculationRevision);
@@ -152,47 +146,47 @@ describe('versioned finance shared ownership and private saved projections', () 
         expect(JSON.stringify(preview)).not.toContain(participant.user!.email);
         expect(sendEmail).not.toHaveBeenCalled();
         // Method admission grants preview without silently admitting the private organizer page.
-        await expect(readEventFinance(id, actor(editor), 'organizer')).rejects.toMatchObject({status: 403});
+        await expect(invoices.readEventFinance(id, actor(editor), 'organizer')).rejects.toMatchObject({status: 403});
         expect((await invoiceService.getPoolWithInvoices(poolId))!.shares).toEqual(before.shares);
         expect((await invoiceService.getPoolWithInvoices(poolId))!.calculationRevision).toBe(before.calculationRevision);
         const foreign = await fixture();
-        await expect(previewEventFinancePool(foreign.id, poolId, actor(owner))).rejects.toMatchObject({status: 404});
+        await expect(invoices.previewEventFinancePool(foreign.id, poolId, actor(owner))).rejects.toMatchObject({status: 404});
         await adminService.updatePerms('event', id, {public: PERM.MANAGE_ASSIGNMENTS});
-        expect((await previewEventFinancePool(id, poolId, {})).revision).toBe(before.calculationRevision);
+        expect((await invoices.previewEventFinancePool(id, poolId, {})).revision).toBe(before.calculationRevision);
     });
 
     it('rejects stale previews, carries signed recorded transfers and restores only pool-local calculation inputs', async () => {
         const {id, event, poolId} = await fixture();
         const cost = await submit(event, poolId, participant, 'Calculation source', 40);
         await invoices.approveInvoice(event, poolId, String(cost.id), {}, nativeActor(owner));
-        const first = await previewEventFinancePool(id, poolId, actor(owner));
-        await updateEventFinanceSettings(id, poolId, {distribution: 'EQUAL', description: 'New input', sendCalculationEmails: false, roundUpShares: true}, actor(owner));
-        await expect(calculateEventFinancePool(id, poolId, {expectedRevision: first.revision, sendEmails: false}, actor(owner), false))
+        const first = await invoices.previewEventFinancePool(id, poolId, actor(owner));
+        await invoices.updateEventFinanceSettings(id, poolId, {distribution: 'EQUAL', description: 'New input', sendCalculationEmails: false, roundUpShares: true}, actor(owner));
+        await expect(invoices.calculateEventFinancePool(id, poolId, {expectedRevision: first.revision, sendEmails: false}, actor(owner), false))
             .rejects.toMatchObject({code: 'FINANCE_THE_PREVIEW_IS_OUT_OF_DATE_PREVIEW_THE_CALCULATION_409', status: 409});
         expect((await invoiceService.getPoolWithInvoices(poolId))!.shares).toEqual([]);
-        const reviewed = await previewEventFinancePool(id, poolId, actor(owner));
+        const reviewed = await invoices.previewEventFinancePool(id, poolId, actor(owner));
         sendEmail.mockClear();
-        await calculateEventFinancePool(id, poolId, {expectedRevision: reviewed.revision, sendEmails: false}, actor(owner), false);
+        await invoices.calculateEventFinancePool(id, poolId, {expectedRevision: reviewed.revision, sendEmails: false}, actor(owner), false);
         expect(sendEmail).not.toHaveBeenCalled();
         const saved = (await invoiceService.getPoolWithInvoices(poolId))!;
         const refund = saved.shares.find(row => Number(row.shareAmount) < 0)!;
         const payment = saved.shares.find(row => Number(row.shareAmount) > 0)!;
-        await settleEventFinanceShare(id, poolId, String(refund.id), true, actor(owner));
-        await settleEventFinanceShare(id, poolId, String(payment.id), true, actor(owner));
-        await updateEventFinanceSettings(id, poolId, {distribution: 'EQUAL', description: 'Pending local edit', sendCalculationEmails: false, roundUpShares: false}, actor(owner));
+        await invoices.settleEventFinanceShare(id, poolId, String(refund.id), true, actor(owner));
+        await invoices.settleEventFinanceShare(id, poolId, String(payment.id), true, actor(owner));
+        await invoices.updateEventFinanceSettings(id, poolId, {distribution: 'EQUAL', description: 'Pending local edit', sendCalculationEmails: false, roundUpShares: false}, actor(owner));
         const pending = (await invoiceService.getPoolWithInvoices(poolId))!;
         // A stale source calculation remains payable; recording/reversing uses its saved signed balance.
-        await settleEventFinanceShare(id, poolId, String(payment.id), false, actor(owner));
-        await settleEventFinanceShare(id, poolId, String(payment.id), true, actor(owner));
+        await invoices.settleEventFinanceShare(id, poolId, String(payment.id), false, actor(owner));
+        await invoices.settleEventFinanceShare(id, poolId, String(payment.id), true, actor(owner));
         expect((await invoiceService.getPoolWithInvoices(poolId))!.needsRecalculation).toBeTruthy();
-        const restored = await rollbackEventFinancePool(id, poolId, {}, actor(owner));
+        const restored = await invoices.rollbackEventFinancePool(id, poolId, {}, actor(owner));
         expect(restored).toEqual({needsRecalculation: false, externalChanges: false});
         const afterRollback = (await invoiceService.getPoolWithInvoices(poolId))!;
         expect(afterRollback.description).toBe('New input');
         expect(afterRollback.shares.map(row => [row.id, row.shareAmount, row.isPaid])).toEqual(pending.shares.map(row => [row.id, row.shareAmount, row.isPaid]));
-        const again = await previewEventFinancePool(id, poolId, actor(owner));
+        const again = await invoices.previewEventFinancePool(id, poolId, actor(owner));
         expect(again.shares.map(row => row.paymentCreditAmount).sort()).toEqual(['-20.00', '20.00']);
-        await calculateEventFinancePool(id, poolId, {expectedRevision: again.revision, sendEmails: false}, actor(owner), true);
+        await invoices.calculateEventFinancePool(id, poolId, {expectedRevision: again.revision, sendEmails: false}, actor(owner), true);
         const recalculated = (await invoiceService.getPoolWithInvoices(poolId))!;
         expect(recalculated.shares.map(row => Number(row.shareAmount))).toEqual([0, 0]);
         expect(recalculated.shares.map(row => Number(row.paymentCreditAmount)).sort((a, b) => a - b)).toEqual([-20, 20]);
@@ -202,15 +196,15 @@ describe('versioned finance shared ownership and private saved projections', () 
     it('queues optional settlement notices from the complete saved ledger and preserves PDF snapshot privacy', async () => {
         const {id, event, poolId} = await fixture();
         await invoices.addOrganizerInvoice(event, poolId, {amount: 28, description: 'Mail and output source'}, nativeActor(owner));
-        const reviewed = await previewEventFinancePool(id, poolId, actor(owner));
+        const reviewed = await invoices.previewEventFinancePool(id, poolId, actor(owner));
         sendEmail.mockClear();
-        await calculateEventFinancePool(id, poolId, {expectedRevision: reviewed.revision, sendEmails: true}, actor(owner), false);
+        await invoices.calculateEventFinancePool(id, poolId, {expectedRevision: reviewed.revision, sendEmails: true}, actor(owner), false);
         expect(sendEmail).toHaveBeenCalledTimes(2);
         const saved = (await invoiceService.getPoolWithInvoices(poolId))!;
-        await expect(notifyEventFinancePool(id, poolId, {expectedRevision: reviewed.revision}, actor(owner)))
+        await expect(invoices.notifyEventFinancePool(id, poolId, {expectedRevision: reviewed.revision}, actor(owner)))
             .rejects.toMatchObject({code: 'FINANCE_THE_SETTLEMENT_CHANGED_RELOAD_BEFORE_SENDING_EMAILS_409', status: 409});
         sendEmail.mockClear();
-        expect(await notifyEventFinancePool(id, poolId, {}, actor(owner))).toEqual({count: 2});
+        expect(await invoices.notifyEventFinancePool(id, poolId, {}, actor(owner))).toEqual({count: 2});
         expect(sendEmail).toHaveBeenCalledTimes(2);
         expect((await invoiceService.getPoolWithInvoices(poolId))!.shares).toEqual(saved.shares);
         // Both PDF variants use the existing complete saved rows, independent of any browser filtering.
@@ -220,7 +214,7 @@ describe('versioned finance shared ownership and private saved projections', () 
         expect(compact.shares).toEqual(full.shares);
         expect(full.pdfOptions?.includeExampleCalculation).toBe(true);
         expect(compact.pdfOptions?.includeExampleCalculation).toBe(false);
-        const personal = await readEventFinance(id, actor(participant));
+        const personal = await invoices.readEventFinance(id, actor(participant));
         expect(personal.pools[0].summary).toBeNull();
         expect(personal.pools[0].canRollback).toBeUndefined();
         expect(JSON.stringify(personal)).not.toContain(other.user!.email);
@@ -362,19 +356,19 @@ describe('versioned finance shared ownership and private saved projections', () 
             const publicInput = {...input, name: 'Anonymous public-grant pool'};
             async function publicPost(path: string, body?: object): Promise<globalThis.Response> {
                 return fetch(`${endpoint}${path}`, {method: 'POST', headers: body
-                    ? {...publicHeaders, 'Content-Type': 'application/json'} : publicHeaders,
+                        ? {...publicHeaders, 'Content-Type': 'application/json'} : publicHeaders,
                     ...(body ? {body: JSON.stringify(body)} : {})});
             }
             expect((await publicPost('', publicInput)).status).toBe(403);
             await adminService.updatePerms('event', id, {public: PERM.MANAGE_ASSIGNMENTS});
             const noContext = await fetch(endpoint, {method: 'POST', headers: {...headers,
-                'X-Surveyor-Context': '', 'Content-Type': 'application/json'}, body: JSON.stringify(publicInput)});
+                    'X-Surveyor-Context': '', 'Content-Type': 'application/json'}, body: JSON.stringify(publicInput)});
             expect(await noContext.json()).toMatchObject({code: 'CONTEXT_REQUIRED'});
             const wrongContext = await fetch(endpoint, {method: 'POST', headers: {...headers,
-                'X-Surveyor-Context': 'another-context-12345678901234567890', 'Content-Type': 'application/json'}, body: JSON.stringify(publicInput)});
+                    'X-Surveyor-Context': 'another-context-12345678901234567890', 'Content-Type': 'application/json'}, body: JSON.stringify(publicInput)});
             expect(await wrongContext.json()).toMatchObject({code: 'SESSION_CONTEXT_CHANGED'});
             const noOrigin = await fetch(endpoint, {method: 'POST', headers: {
-                'X-Surveyor-Api-Compatibility': apiCompatibility, 'Content-Type': 'application/json'}, body: JSON.stringify(publicInput)});
+                    'X-Surveyor-Api-Compatibility': apiCompatibility, 'Content-Type': 'application/json'}, body: JSON.stringify(publicInput)});
             expect(await noOrigin.json()).toMatchObject({code: 'CSRF_INVALID'});
             expect((await publicPost('', publicInput)).status).toBe(200);
             const publicPoolId = (await invoiceService.listPools(id)).find(row => row.name === publicInput.name)!.id;
@@ -437,37 +431,37 @@ describe('versioned finance shared ownership and private saved projections', () 
             status: 'ORGANIZER_ONLY', assignAll: true, isDefault: false, subtractPersonalInvoices: true,
             roundUpShares: false, sendCalculationEmails: false};
         // A method grant cannot be inferred from registration, page access or a visible control.
-        await expect(createEventFinancePool(id, input, actor(participant))).rejects.toMatchObject({status: 403});
+        await expect(invoices.createEventFinancePool(id, input, actor(participant))).rejects.toMatchObject({status: 403});
         await adminService.addAdmin('event', id, editor.id, PERM.ACCESS_ADMIN);
-        await expect(createEventFinancePool(id, input, actor(editor))).rejects.toMatchObject({status: 403});
+        await expect(invoices.createEventFinancePool(id, input, actor(editor))).rejects.toMatchObject({status: 403});
         await adminService.updateAdminPerms('event', id, editor.id, PERM.MANAGE_ASSIGNMENTS);
-        const createdId = await createEventFinancePool(id, input, actor(editor));
+        const createdId = await invoices.createEventFinancePool(id, input, actor(editor));
         const created = (await invoiceService.getPoolWithInvoices(createdId))!;
         expect(created).toMatchObject({name: input.name, description: input.description, status: 'ORGANIZER_ONLY', distributionMethod: 'NIGHTS'});
         expect([created.assignAll, created.isDefault, created.subtractPersonalInvoices, created.roundUpShares, created.sendCalculationEmails]
             .map(Boolean)).toEqual([true, false, true, false, false]);
         // Assign-all membership is derived from current Event registrations;
         // creation need not persist redundant explicit assignment rows.
-        expect((await readEventFinance(id, actor(owner), 'organizer')).pools.find(pool => pool.id === createdId)?.assignedCount).toBe(2);
-        await expect(readEventFinance(id, actor(editor), 'organizer')).rejects.toMatchObject({status: 403});
-        expect((await admitEventFinanceOrganizer(id, actor(editor))).id).toBe(event.id);
-        await expect(admitEventFinanceOrganizer(id, {})).rejects.toMatchObject({status: 403});
+        expect((await invoices.readEventFinance(id, actor(owner), 'organizer')).pools.find(pool => pool.id === createdId)?.assignedCount).toBe(2);
+        await expect(invoices.readEventFinance(id, actor(editor), 'organizer')).rejects.toMatchObject({status: 403});
+        expect((await invoices.admitEventFinanceOrganizer(id, actor(editor))).id).toBe(event.id);
+        await expect(invoices.admitEventFinanceOrganizer(id, {})).rejects.toMatchObject({status: 403});
 
         // The admitted Event remains the owner even when a valid pool ID belongs to another root.
         const foreignBefore = (await invoiceService.getPoolWithInvoices(foreign.poolId))!;
-        await expect(updateEventFinanceSettings(id, foreign.poolId,
+        await expect(invoices.updateEventFinanceSettings(id, foreign.poolId,
             {distribution: 'EQUAL', description: 'Forged cross-Event edit'}, actor(owner))).rejects.toMatchObject({status: 404});
-        await expect(updateEventFinanceAssignments(id, foreign.poolId,
+        await expect(invoices.updateEventFinanceAssignments(id, foreign.poolId,
             {assignAll: true, registrations: []}, actor(owner))).rejects.toMatchObject({status: 404});
         expect((await invoiceService.getPoolWithInvoices(foreign.poolId))!.calculationRevision).toBe(foreignBefore.calculationRevision);
 
         // Submission access has its existing reviewed revision and never becomes financial reopening.
         const revision = (await invoiceService.getPoolWithInvoices(poolId))!.calculationRevision;
-        await changeEventFinanceSubmissionState(id, poolId, {status: 'ORGANIZER_ONLY', expectedRevision: revision}, actor(owner));
-        await expect(changeEventFinanceSubmissionState(id, poolId,
+        await invoices.changeEventFinanceSubmissionState(id, poolId, {status: 'ORGANIZER_ONLY', expectedRevision: revision}, actor(owner));
+        await expect(invoices.changeEventFinanceSubmissionState(id, poolId,
             {status: 'OPEN', expectedRevision: revision}, actor(owner))).rejects.toMatchObject({status: 409});
         expect((await invoiceService.getPoolWithInvoices(poolId))!.status).toBe('ORGANIZER_ONLY');
-        await changeEventFinanceSubmissionState(id, poolId,
+        await invoices.changeEventFinanceSubmissionState(id, poolId,
             {status: 'OPEN', expectedRevision: revision + 1}, actor(owner));
         expect((await invoiceService.getPoolWithInvoices(poolId))!.status).toBe('OPEN');
     });
@@ -478,13 +472,13 @@ describe('versioned finance shared ownership and private saved projections', () 
         const rejected = await submit(event, poolId, other, 'Rejected original receipt', 9);
         const initial = (await invoiceService.getPoolWithInvoices(poolId))!;
         // Acceptance writes effective overrides while preserving proof and original submitted fields.
-        await reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'approve',
+        await invoices.reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'approve',
             {correctedAmount: 35, correctedDescription: 'Accepted effective receipt'}, actor(owner));
-        await reviewEventFinanceInvoice(id, poolId, String(rejected.id), 'decline',
+        await invoices.reviewEventFinanceInvoice(id, poolId, String(rejected.id), 'decline',
             {rejectionReason: 'Paid outside this pool'}, actor(owner));
-        await expect(reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'approve', {}, actor(owner)))
+        await expect(invoices.reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'approve', {}, actor(owner)))
             .rejects.toMatchObject({status: 409});
-        await reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'close', {}, actor(owner));
+        await invoices.reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'close', {}, actor(owner));
         const closedInvoice = (await invoiceService.getPoolWithInvoices(poolId))!.invoices.find(row => row.id === invoice.id)!;
         expect(closedInvoice).toMatchObject({status: 'CLOSED', amount: '40.00', description: 'Immutable submitted receipt',
             correctedAmount: '35.00', correctedDescription: 'Accepted effective receipt', proofPath: invoice.proofPath});
@@ -499,18 +493,18 @@ describe('versioned finance shared ownership and private saved projections', () 
         const saved = (await invoiceService.getPoolWithInvoices(poolId))!;
         const reviewed = {confirmed: true, expectedRevision: saved.calculationRevision,
             correctedAmount: 31, correctedDescription: 'Retroactive reviewed receipt'};
-        await updateEventFinanceSettings(id, poolId, {distribution: 'EQUAL', description: 'Concurrent saved setting'}, actor(owner));
-        await expect(reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'revise', reviewed, actor(owner)))
+        await invoices.updateEventFinanceSettings(id, poolId, {distribution: 'EQUAL', description: 'Concurrent saved setting'}, actor(owner));
+        await expect(invoices.reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'revise', reviewed, actor(owner)))
             .rejects.toMatchObject({status: 409});
         const afterConflict = (await invoiceService.getPoolWithInvoices(poolId))!;
         expect(afterConflict.invoices.find(row => row.id === invoice.id)?.correctedAmount).toBe('35.00');
-        await reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'revise',
+        await invoices.reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'revise',
             {...reviewed, expectedRevision: afterConflict.calculationRevision}, actor(owner));
         const revised = (await invoiceService.getPoolWithInvoices(poolId))!;
         expect(revised.invoices.find(row => row.id === invoice.id)).toMatchObject({amount: '40.00',
             description: 'Immutable submitted receipt', correctedAmount: '31.00', correctedDescription: 'Retroactive reviewed receipt',
             proofPath: invoice.proofPath, status: 'CLOSED'});
-        await reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'reject',
+        await invoices.reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'reject',
             {confirmed: true, expectedRevision: revised.calculationRevision, rejectionReason: 'Counted cost removed after review'}, actor(owner));
         const final = (await invoiceService.getPoolWithInvoices(poolId))!;
         expect(Boolean(final.needsRecalculation)).toBe(true);
@@ -518,7 +512,7 @@ describe('versioned finance shared ownership and private saved projections', () 
         expect(final.calculationSnapshot).toEqual(saved.calculationSnapshot);
         expect(final.invoices.find(row => row.id === invoice.id)).toMatchObject({status: 'REJECTED', amount: '40.00',
             description: 'Immutable submitted receipt', proofPath: invoice.proofPath, rejectionReason: 'Counted cost removed after review'});
-        expect(await readEventInvoiceProof(id, poolId, String(invoice.id), actor(participant))).toBeTruthy();
+        expect(await invoices.readEventInvoiceProof(id, poolId, String(invoice.id), actor(participant))).toBeTruthy();
     });
 
     it('keeps organizer recorder, attributed participant, pool cost and proof ownership distinct without creating attendance', async () => {
@@ -526,12 +520,12 @@ describe('versioned finance shared ownership and private saved projections', () 
         const registration = (await eventService.getRegistrationFor(participant.id, id))!;
         const foreign = await fixture();
         const foreignRegistration = (await eventService.getRegistrationFor(participant.id, foreign.id))!;
-        const admitted = await admitEventFinanceOrganizer(id, actor(owner));
-        await recordEventOrganizerInvoice(admitted, poolId,
+        const admitted = await invoices.admitEventFinanceOrganizer(id, actor(owner));
+        await invoices.recordEventOrganizerInvoice(admitted, poolId,
             {amount: 18, description: 'Versioned shared pool-only expense'}, actor(owner));
-        await recordEventOrganizerInvoice(admitted, poolId,
+        await invoices.recordEventOrganizerInvoice(admitted, poolId,
             {amount: 6, description: 'Versioned participant-paid expense', registrationId: registration.id}, actor(owner));
-        await expect(recordEventOrganizerInvoice(admitted, poolId,
+        await expect(invoices.recordEventOrganizerInvoice(admitted, poolId,
             {amount: 6, description: 'Foreign paid-by attribution', registrationId: foreignRegistration.id}, actor(owner)))
             .rejects.toMatchObject({status: 400});
         expect(await eventService.getRegistrationFor(owner.id, id)).toBeNull();
@@ -542,7 +536,7 @@ describe('versioned finance shared ownership and private saved projections', () 
             recordedByProfileId: owner.id, recordedByName: owner.name});
         expect(stored.invoices.find(row => row.id === attributedId)).toMatchObject({status: 'APPROVED', registrationId: registration.id,
             recordedByProfileId: owner.id, recordedByName: owner.name});
-        const personal = await readEventFinance(id, actor(participant));
+        const personal = await invoices.readEventFinance(id, actor(participant));
         expect(personal.invoices.map(row => row.id)).toContain(String(attributedId));
         expect(personal.invoices.map(row => row.id)).not.toContain(String(sharedId));
         expect(personal.invoices.find(row => row.id === String(attributedId))).toMatchObject({recordedByName: owner.name,
@@ -558,17 +552,17 @@ describe('versioned finance shared ownership and private saved projections', () 
         await invoices.addOrganizerInvoice(event, poolId, {amount: 40, description: 'Saved cost before P8 edits'}, nativeActor(owner));
         await invoices.closePool(event, poolId, {sendEmails: false}, nativeActor(owner));
         const saved = (await invoiceService.getPoolWithInvoices(poolId))!;
-        await recordEventOrganizerInvoice(await admitEventFinanceOrganizer(id, actor(owner)), poolId,
+        await invoices.recordEventOrganizerInvoice(await invoices.admitEventFinanceOrganizer(id, actor(owner)), poolId,
             {amount: 4, description: 'Additional cost after financial closure'}, actor(owner));
         // Per-form updates affect current allocation inputs only; a zero factor and exemption are separate choices.
-        await updateEventFinanceAssignments(id, poolId, {assignAll: false, isDefault: true, subtractPersonalInvoices: false,
+        await invoices.updateEventFinanceAssignments(id, poolId, {assignAll: false, isDefault: true, subtractPersonalInvoices: false,
             registrations: [registration.id, otherRegistration.id], exemptions: [otherRegistration.id],
             participantFactors: {[registration.id]: 0, [otherRegistration.id]: 1.0001}}, actor(owner));
-        await addEventFinanceAdjustment(id, poolId, {registrationId: registration.id, amount: -3.25,
+        await invoices.addEventFinanceAdjustment(id, poolId, {registrationId: registration.id, amount: -3.25,
             note: 'Reviewed redistribution rebate', subtractFromPool: true}, actor(owner));
-        await addEventFinanceAdjustment(id, poolId, {registrationId: otherRegistration.id, amount: 2.5,
+        await invoices.addEventFinanceAdjustment(id, poolId, {registrationId: otherRegistration.id, amount: 2.5,
             note: 'Additional fixed charge', subtractFromPool: false}, actor(owner));
-        await updateEventFinanceTakeovers(id, poolId,
+        await invoices.updateEventFinanceTakeovers(id, poolId,
             {payerId: registration.id, beneficiaries: [otherRegistration.id]}, actor(owner), true);
         const changed = (await invoiceService.getPoolWithInvoices(poolId))!;
         expect([changed.assignAll, changed.isDefault, changed.subtractPersonalInvoices, changed.needsRecalculation].map(Boolean))
@@ -581,20 +575,20 @@ describe('versioned finance shared ownership and private saved projections', () 
         ]));
         expect(changed.shares).toEqual(saved.shares);
         expect(changed.calculationSnapshot).toEqual(saved.calculationSnapshot);
-        const organizer = await readEventFinance(id, actor(owner), 'organizer');
+        const organizer = await invoices.readEventFinance(id, actor(owner), 'organizer');
         expect(organizer.pools.find(row => row.id === poolId)).toMatchObject({coverageGroups: [], hasPendingTakeovers: true,
             pendingCoverageGroups: [{payerId: String(registration.id), beneficiaries: [{id: String(otherRegistration.id), name: other.name}]}]});
 
         // Invalid values cannot partially change current inputs; deletion retains the saved share boundary too.
-        await expect(updateEventFinanceAssignments(id, poolId, {assignAll: false, registrations: [registration.id],
+        await expect(invoices.updateEventFinanceAssignments(id, poolId, {assignAll: false, registrations: [registration.id],
             participantFactors: {[registration.id]: 0.00001}}, actor(owner))).rejects.toMatchObject({status: 400});
-        await expect(addEventFinanceAdjustment(id, poolId, {registrationId: registration.id, amount: 0,
+        await expect(invoices.addEventFinanceAdjustment(id, poolId, {registrationId: registration.id, amount: 0,
             note: 'Zero is invalid', subtractFromPool: true}, actor(owner))).rejects.toMatchObject({status: 400});
-        await removeEventFinanceAdjustment(id, poolId, String(changed.surcharges[0].id), actor(owner));
+        await invoices.removeEventFinanceAdjustment(id, poolId, String(changed.surcharges[0].id), actor(owner));
         const afterDelete = (await invoiceService.getPoolWithInvoices(poolId))!;
         expect(afterDelete.surcharges).toHaveLength(1);
         expect(afterDelete.shares).toEqual(saved.shares);
-        await expect(changeEventFinanceSubmissionState(id, poolId,
+        await expect(invoices.changeEventFinanceSubmissionState(id, poolId,
             {status: 'OPEN', expectedRevision: afterDelete.calculationRevision}, actor(owner))).rejects.toMatchObject({status: 409});
     });
 
@@ -603,22 +597,22 @@ describe('versioned finance shared ownership and private saved projections', () 
         const registration = (await eventService.getRegistrationFor(participant.id, id))!;
         const otherRegistration = (await eventService.getRegistrationFor(other.id, id))!;
         // The participant adapter never gains the organizer's payer selection through its body.
-        await expect(updateEventFinanceTakeovers(id, poolId, {payerId: otherRegistration.id, beneficiaries: [registration.id]},
+        await expect(invoices.updateEventFinanceTakeovers(id, poolId, {payerId: otherRegistration.id, beneficiaries: [registration.id]},
             actor(participant), false)).rejects.toMatchObject({status: 403});
-        await updateEventFinanceTakeovers(id, poolId, {beneficiaries: [otherRegistration.id]}, actor(participant), false);
-        await expect(updateEventFinanceTakeovers(id, poolId, {beneficiaries: [registration.id]}, actor(other), false))
+        await invoices.updateEventFinanceTakeovers(id, poolId, {beneficiaries: [otherRegistration.id]}, actor(participant), false);
+        await expect(invoices.updateEventFinanceTakeovers(id, poolId, {beneficiaries: [registration.id]}, actor(other), false))
             .rejects.toMatchObject({status: 400});
-        await expect(updateEventFinanceTakeovers(id, poolId, {payerId: registration.id, beneficiaries: []}, actor(other), true))
+        await expect(invoices.updateEventFinanceTakeovers(id, poolId, {payerId: registration.id, beneficiaries: []}, actor(other), true))
             .rejects.toMatchObject({status: 403});
         // Managers may clear another payer's inputs and then establish the opposite valid relationship.
-        await updateEventFinanceTakeovers(id, poolId, {payerId: registration.id, beneficiaries: []}, actor(owner), true);
-        await updateEventFinanceTakeovers(id, poolId, {payerId: otherRegistration.id, beneficiaries: [registration.id]}, actor(owner), true);
+        await invoices.updateEventFinanceTakeovers(id, poolId, {payerId: registration.id, beneficiaries: []}, actor(owner), true);
+        await invoices.updateEventFinanceTakeovers(id, poolId, {payerId: otherRegistration.id, beneficiaries: [registration.id]}, actor(owner), true);
         const planning = (await invoiceService.getPoolWithInvoices(poolId))!;
-        await changeEventFinanceSubmissionState(id, poolId,
+        await invoices.changeEventFinanceSubmissionState(id, poolId,
             {status: 'ORGANIZER_ONLY', expectedRevision: planning.calculationRevision}, actor(owner));
-        await expect(updateEventFinanceTakeovers(id, poolId, {beneficiaries: []}, actor(other), false))
+        await expect(invoices.updateEventFinanceTakeovers(id, poolId, {beneficiaries: []}, actor(other), false))
             .rejects.toMatchObject({status: 409});
-        await updateEventFinanceTakeovers(id, poolId, {payerId: otherRegistration.id, beneficiaries: []}, actor(owner), true);
+        await invoices.updateEventFinanceTakeovers(id, poolId, {payerId: otherRegistration.id, beneficiaries: []}, actor(owner), true);
         expect((await invoiceService.getPoolWithInvoices(poolId))!.takeovers).toEqual([]);
         expect(event.id).toBe(id);
     });
@@ -714,7 +708,7 @@ describe('versioned finance shared ownership and private saved projections', () 
         const attributedId = await invoices.addOrganizerInvoice(event, poolId,
             {amount: 8, description: 'Attributed organizer evidence', registrationId: registration.id}, nativeActor(owner));
 
-        const personal = await readEventFinance(id, actor(participant));
+        const personal = await invoices.readEventFinance(id, actor(participant));
         expect(contractValidator('FinanceView')(personal)).toBe(true);
         expect(personal.invoices.map(row => row.id)).toEqual(expect.arrayContaining([String(own.id), String(attributedId)]));
         expect(personal.invoices).toHaveLength(2);
@@ -725,19 +719,19 @@ describe('versioned finance shared ownership and private saved projections', () 
         for (const secret of ['PRIVATE', other.id, 'password', 'proofPath', 'recordedByProfileId']) {
             expect(JSON.stringify(personal)).not.toContain(secret);
         }
-        const organizer = await readEventFinance(id, actor(owner), 'organizer');
+        const organizer = await invoices.readEventFinance(id, actor(owner), 'organizer');
         expect(contractValidator('FinanceView')(organizer)).toBe(true);
         expect(organizer.invoices).toHaveLength(4);
         expect(organizer.pools[0].summary?.primary.length).toBeGreaterThan(0);
         expect(organizer.invoices.find(row => row.id === String(own.id))?.participantEmail).toBe(participant.user!.email);
-        await expect(readEventFinance(id, actor(editor))).rejects.toMatchObject({status: 403});
-        await expect(readEventFinance(id, {})).rejects.toMatchObject({status: 401});
+        await expect(invoices.readEventFinance(id, actor(editor))).rejects.toMatchObject({status: 403});
+        await expect(invoices.readEventFinance(id, {})).rejects.toMatchObject({status: 401});
         await adminService.addAdmin('event', id, editor.id, PERM.ACCESS_ADMIN);
-        await expect(readEventFinance(id, actor(editor), 'organizer')).rejects.toMatchObject({status: 403});
+        await expect(invoices.readEventFinance(id, actor(editor), 'organizer')).rejects.toMatchObject({status: 403});
         await adminService.updateAdminPerms('event', id, editor.id, PERM.MANAGE_ASSIGNMENTS);
-        await expect(readEventFinance(id, actor(editor), 'organizer')).rejects.toMatchObject({status: 403});
+        await expect(invoices.readEventFinance(id, actor(editor), 'organizer')).rejects.toMatchObject({status: 403});
         // The independently granted proof method remains usable without organizer-page admission.
-        expect(await readEventInvoiceProof(id, poolId, String(own.id), actor(editor))).toBeTruthy();
+        expect(await invoices.readEventInvoiceProof(id, poolId, String(own.id), actor(editor))).toBeTruthy();
     });
 
     it('retains all review states, original evidence and proof after retraction or participant close', async () => {
@@ -748,24 +742,24 @@ describe('versioned finance shared ownership and private saved projections', () 
         const pending = await submit(event, poolId, participant, 'Pending evidence');
         await invoices.approveInvoice(event, poolId, String(accepted.id), {correctedAmount: 35, correctedDescription: 'Corrected saved'}, nativeActor(owner));
         await invoices.declineInvoice(event, poolId, String(rejected.id), {rejectionReason: 'Saved rejection reason'}, nativeActor(owner));
-        const revision = (await readEventFinance(id, actor(participant))).pools[0].revision;
-        await expect(retractEventInvoice(id, poolId, String(retracted.id), {confirmed: true, expectedRevision: revision - 1}, actor(participant)))
+        const revision = (await invoices.readEventFinance(id, actor(participant))).pools[0].revision;
+        await expect(invoices.retractEventInvoice(id, poolId, String(retracted.id), {confirmed: true, expectedRevision: revision - 1}, actor(participant)))
             .rejects.toMatchObject({status: 409, code: 'FINANCE_THE_POOL_CHANGED_RELOAD_AND_REVIEW_THE_INVOICE_AGAIN_409'});
-        await retractEventInvoice(id, poolId, String(retracted.id), {confirmed: true, expectedRevision: revision}, actor(participant));
-        await expect(closeEventInvoice(id, poolId, String(accepted.id), actor(other))).rejects.toMatchObject({status: 403});
-        await closeEventInvoice(id, poolId, String(accepted.id), actor(participant));
-        await closeEventInvoice(id, poolId, String(accepted.id), actor(participant));
-        await expect(closeEventInvoice(id, poolId, String(accepted.id), actor(other))).rejects.toMatchObject({status: 403});
+        await invoices.retractEventInvoice(id, poolId, String(retracted.id), {confirmed: true, expectedRevision: revision}, actor(participant));
+        await expect(invoices.closeEventInvoice(id, poolId, String(accepted.id), actor(other))).rejects.toMatchObject({status: 403});
+        await invoices.closeEventInvoice(id, poolId, String(accepted.id), actor(participant));
+        await invoices.closeEventInvoice(id, poolId, String(accepted.id), actor(participant));
+        await expect(invoices.closeEventInvoice(id, poolId, String(accepted.id), actor(other))).rejects.toMatchObject({status: 403});
 
-        const personal = await readEventFinance(id, actor(participant));
+        const personal = await invoices.readEventFinance(id, actor(participant));
         expect(personal.invoices.find(row => row.id === String(retracted.id))).toMatchObject({status: 'RETRACTED', canRetract: false});
         expect(personal.invoices.find(row => row.id === String(accepted.id))).toMatchObject({status: 'CLOSED', amount: '40.00',
             description: 'Corrected original', correctedAmount: '35.00', correctedDescription: 'Corrected saved', canClose: false});
         expect(personal.invoices.find(row => row.id === String(rejected.id))).toMatchObject({status: 'REJECTED', rejectionReason: 'Saved rejection reason'});
         expect(personal.invoices.find(row => row.id === String(pending.id))).toMatchObject({status: 'NEW', canRetract: true});
-        expect(await readEventInvoiceProof(id, poolId, String(retracted.id), actor(participant))).toBeTruthy();
-        await expect(readEventInvoiceProof(id, poolId, String(retracted.id), actor(other))).rejects.toMatchObject({status: 403});
-        await expect(retractEventInvoice(id, poolId, String(pending.id), {confirmed: true, expectedRevision: personal.pools[0].revision}, actor(other)))
+        expect(await invoices.readEventInvoiceProof(id, poolId, String(retracted.id), actor(participant))).toBeTruthy();
+        await expect(invoices.readEventInvoiceProof(id, poolId, String(retracted.id), actor(other))).rejects.toMatchObject({status: 403});
+        await expect(invoices.retractEventInvoice(id, poolId, String(pending.id), {confirmed: true, expectedRevision: personal.pools[0].revision}, actor(other)))
             .rejects.toMatchObject({status: 403});
     });
 
@@ -779,20 +773,20 @@ describe('versioned finance shared ownership and private saved projections', () 
         // Pending future coverage must not rewrite the frozen payer rows or widen a personal history-only pool's roster.
         await invoices.updateTakeovers(event, poolId, {payerId: otherRegistration.id, beneficiaries: [ownRegistration.id]}, nativeActor(owner), true);
         const stored = (await invoiceService.getPoolWithInvoices(poolId))!;
-        const personal = await readEventFinance(id, actor(participant));
+        const personal = await invoices.readEventFinance(id, actor(participant));
         expect(personal.shares).toHaveLength(1);
         expect(personal.shares[0]).toMatchObject({amount: '-20.00', status: 'refund', isPaid: false});
-        const breakdown = await readEventFinanceBreakdown(id, poolId, personal.shares[0].id, actor(participant), 'participant');
+        const breakdown = await invoices.readEventFinanceBreakdown(id, poolId, personal.shares[0].id, actor(participant), 'participant');
         const validate = contractValidator('FinanceBreakdown');
         expect(validate(breakdown), JSON.stringify(validate.errors)).toBe(true);
         expect(JSON.stringify(breakdown)).not.toContain(other.name);
         expect(breakdown.components.find(row => row.key === 'shareAmount')?.amount).toBe('-20.00');
-        const german = await readEventFinance(id, actor(participant), 'participant', 'de');
+        const german = await invoices.readEventFinance(id, actor(participant), 'participant', 'de');
         expect(german.shares[0].caption).toBe('Zu erhaltende Erstattung');
-        const germanBreakdown = await readEventFinanceBreakdown(id, poolId, personal.shares[0].id, actor(participant), 'participant', 'de');
+        const germanBreakdown = await invoices.readEventFinanceBreakdown(id, poolId, personal.shares[0].id, actor(participant), 'participant', 'de');
         expect(germanBreakdown.calculation.title).toBe('Berechnungserklärung');
-        expect((await readEventFinance(id, actor(participant))).shares[0].caption).toBe('Refund to receive');
-        const organizer = await readEventFinance(id, actor(owner), 'organizer');
+        expect((await invoices.readEventFinance(id, actor(participant))).shares[0].caption).toBe('Refund to receive');
+        const organizer = await invoices.readEventFinance(id, actor(owner), 'organizer');
         expect(organizer.shares).toHaveLength(2);
         expect(organizer.pools[0].calculation).toBeTruthy();
         expect(organizer.pools[0].exampleCalculation).toBeTruthy();
@@ -801,12 +795,12 @@ describe('versioned finance shared ownership and private saved projections', () 
                 beneficiaries: [{id: String(ownRegistration.id), name: participant.name}]}]});
         expect(personal.pools[0]).toMatchObject({coverageKnown: false, coverageGroups: [], pendingCoverageGroups: [], assignedCount: 0, assignAll: false});
         const otherShare = organizer.shares.find(row => row.id !== personal.shares[0].id)!;
-        await expect(readEventFinanceBreakdown(id, poolId, otherShare.id, actor(participant), 'participant')).rejects.toMatchObject({status: 403});
+        await expect(invoices.readEventFinanceBreakdown(id, poolId, otherShare.id, actor(participant), 'participant')).rejects.toMatchObject({status: 403});
         const afterRead = (await invoiceService.getPoolWithInvoices(poolId))!;
         expect(afterRead.calculationRevision).toBe(stored.calculationRevision);
         expect(afterRead.calculationSnapshot).toEqual(stored.calculationSnapshot);
         expect(afterRead.shares).toEqual(stored.shares);
-        expect((await readEventFinance(id, actor(participant))).pools[0].canSubmit).toBe(false);
+        expect((await invoices.readEventFinance(id, actor(participant))).pools[0].canSubmit).toBe(false);
     });
 
     it('keeps assignment/open-state submission eligibility and validates proof bytes with the generated multipart shape', async () => {
@@ -814,16 +808,16 @@ describe('versioned finance shared ownership and private saved projections', () 
         const registration = (await eventService.getRegistrationFor(participant.id, id))!;
         const otherRegistration = (await eventService.getRegistrationFor(other.id, id))!;
         await invoices.updateTakeovers(event, defaultPoolId, {beneficiaries: [otherRegistration.id]}, nativeActor(participant), false);
-        expect((await readEventFinance(id, actor(participant))).pools.find(row => row.id === defaultPoolId)).toMatchObject({assignedCount: 2, assignAll: true,
+        expect((await invoices.readEventFinance(id, actor(participant))).pools.find(row => row.id === defaultPoolId)).toMatchObject({assignedCount: 2, assignAll: true,
             coverageGroups: [{payerId: String(registration.id), payerName: participant.name,
                 beneficiaries: [{id: String(otherRegistration.id), name: other.name}]}], pendingCoverageGroups: []});
         const poolId = await invoices.createInvoicePool(event, {name: 'Assigned only', distribution: 'EQUAL', registrations: [registration.id]});
-        expect((await readEventFinance(id, actor(participant))).pools.find(row => row.id === poolId)?.canSubmit).toBe(true);
-        expect((await readEventFinance(id, actor(other))).pools.find(row => row.id === poolId)).toBeUndefined();
+        expect((await invoices.readEventFinance(id, actor(participant))).pools.find(row => row.id === poolId)?.canSubmit).toBe(true);
+        expect((await invoices.readEventFinance(id, actor(other))).pools.find(row => row.id === poolId)).toBeUndefined();
         const revision = (await invoiceService.getPoolWithInvoices(poolId))!.calculationRevision;
         await invoices.changePoolSubmissionState(event, poolId, {status: 'ORGANIZER_ONLY', expectedRevision: revision});
-        expect((await readEventFinance(id, actor(participant))).pools.find(row => row.id === poolId)).toBeUndefined();
-        await expect(admitEventInvoiceSubmission(id, actor(editor))).rejects.toMatchObject({status: 403});
+        expect((await invoices.readEventFinance(id, actor(participant))).pools.find(row => row.id === poolId)).toBeUndefined();
+        await expect(invoices.admitEventInvoiceSubmission(id, actor(editor))).rejects.toMatchObject({status: 403});
         const validate = contractValidator('FinanceInvoiceForm');
         const file = {originalname: 'receipt.pdf'} as Express.Multer.File;
         expect(validate(decodeApiMultipartData({data: JSON.stringify({amount: '10', description: 'Proof input'})}, file, 'proof'))).toBe(true);

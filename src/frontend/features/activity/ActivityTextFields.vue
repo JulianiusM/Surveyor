@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {fieldAttributes as textFields} from "../../../../.generated/api/v1/browser/validateActivityTextFieldInput.mjs";
+import {fieldAttributes as textFields} from '../../../../.generated/api/v1/browser/validateActivityTextFieldInput.mjs';
 import {computed, ref} from 'vue';
 import type {components} from '../../../types/api/v1';
 import {useFrontend} from '../../app/context';

@@ -34,7 +34,7 @@ export async function snapshotMigrationDatabase(runner: QueryRunner) {
         const definition = await runner.query(`SHOW CREATE TABLE ${identifier}`) as Array<Record<string, string>>;
         const columns = await runner.query(`SELECT COLUMN_NAME AS name, DATA_TYPE AS type
             FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION`,
-        [name]) as Array<{name: string; type: string}>;
+            [name]) as Array<{name: string; type: string}>;
         // SQL text retains all six timestamp fractional digits. JavaScript Date
         // hydration would hide a migration changing only the saved microseconds.
         const projection = columns.map(column => {

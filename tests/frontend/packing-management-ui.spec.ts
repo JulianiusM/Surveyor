@@ -86,14 +86,14 @@ async function mounted(component: Component, props: Record<string, unknown> | ((
             read: api.metadata.bind(api), save: api.saveMetadata.bind(api)};
     }
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {name: 'packing-test-overview', path: '/users/dashboard', component, props: currentProps},
-        {path: '/packing/create', component, props: currentProps},
-        {path: '/packing/:listId/duplicate', component, props: currentProps},
-        {path: '/packing/:listId', component, props: currentProps},
-        {path: '/users/login', component: defineComponent({template: '<p>Login destination</p>'})},
-        {path: '/help', component: defineComponent({template: '<p>Help destination</p>'})},
-        {path: '/away', component: defineComponent({template: '<p>Away</p>'})},
-    ]});
+            {name: 'packing-test-overview', path: '/users/dashboard', component, props: currentProps},
+            {path: '/packing/create', component, props: currentProps},
+            {path: '/packing/:listId/duplicate', component, props: currentProps},
+            {path: '/packing/:listId', component, props: currentProps},
+            {path: '/users/login', component: defineComponent({template: '<p>Login destination</p>'})},
+            {path: '/help', component: defineComponent({template: '<p>Help destination</p>'})},
+            {path: '/away', component: defineComponent({template: '<p>Away</p>'})},
+        ]});
     // Keep the real presentation declarations while substituting the component
     // under test. Loading counts/columns must not acquire a second test inventory.
     for (const route of router.getRoutes()) {
@@ -102,19 +102,19 @@ async function mounted(component: Component, props: Record<string, unknown> | ((
     await router.push(path);
     const stopInitialDocument = observeInitialDocument(context, router);
     const root = mount(withShell ? App : defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-        stubs: {AppDialog: defineComponent({
-            setup() {
-                // The isolated dialog retains its production presentation scope.
-                const noticeTarget = ref<HTMLElement | null>(null);
-                provide(noticeTargetKey, noticeTarget);
-                return {noticeTarget};
-            },
-            template: '<section role="dialog"><div ref="noticeTarget" class="frontend-notice-stack" data-frontend-notices></div>'
-                + '<slot name="navigation" /><slot /><slot name="footer" /></section>',
-        })},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+            stubs: {AppDialog: defineComponent({
+                    setup() {
+                        // The isolated dialog retains its production presentation scope.
+                        const noticeTarget = ref<HTMLElement | null>(null);
+                        provide(noticeTargetKey, noticeTarget);
+                        return {noticeTarget};
+                    },
+                    template: '<section role="dialog"><div ref="noticeTarget" class="frontend-notice-stack" data-frontend-notices></div>'
+                        + '<slot name="navigation" /><slot /><slot name="footer" /></section>',
+                })},
+        }});
     await flushPromises();
     const wrapper = root.findComponent(component);
     cleanups.push(async () => { root.unmount(); stopInitialDocument(); await context.queryClient.cancelQueries(); context.queryClient.clear(); });
@@ -171,7 +171,7 @@ describe('packing route admission and title ownership', () => {
         const {wrapper, request} = await mounted(PackingEntry, {}, async function readEntry(request): Promise<Response> {
             if (new URL(request.url).pathname.endsWith('/entry')) {
                 if (unavailable) return new Response('{}', {status, headers: {'Content-Type': 'application/json',
-                    'X-Surveyor-Context': session.context, 'Retry-After': '5'}});
+                        'X-Surveyor-Context': session.context, 'Retry-After': '5'}});
                 return json({entry: {kind: 'render'}, guest: null});
             }
             return json(list);
@@ -198,58 +198,58 @@ describe('packing route admission and title ownership', () => {
 
     it.each(['locale', 'current'] as const)(
         'retains the admitted child, draft and latest equal-read receipt through a failed %s admission', async mode => {
-        vi.useFakeTimers();
-        vi.setSystemTime(new Date('2026-10-09T12:00:00Z'));
-        let unavailable = false;
-        const {wrapper, context, request} = await mounted(PackingEntry, {}, async function readAdmission(request): Promise<Response> {
-            if (!new URL(request.url).pathname.endsWith('/entry')) return json(list);
-            return unavailable ? new Response('{}', {status: 503, headers: {'Content-Type': 'application/json',
-                'X-Surveyor-Context': session.context, 'Retry-After': '5'}})
-                : json({entry: {kind: 'render'}, guest: null});
+            vi.useFakeTimers();
+            vi.setSystemTime(new Date('2026-10-09T12:00:00Z'));
+            let unavailable = false;
+            const {wrapper, context, request} = await mounted(PackingEntry, {}, async function readAdmission(request): Promise<Response> {
+                if (!new URL(request.url).pathname.endsWith('/entry')) return json(list);
+                return unavailable ? new Response('{}', {status: 503, headers: {'Content-Type': 'application/json',
+                        'X-Surveyor-Context': session.context, 'Retry-After': '5'}})
+                    : json({entry: {kind: 'render'}, guest: null});
+            });
+            const child = wrapper.findComponent(PackingPage).element;
+            const input = wrapper.get<HTMLInputElement>('#quick-title');
+            await input.setValue('Retained admission draft');
+            input.element.focus();
+
+            // Equal successful admission uses structural sharing. Its actual query
+            // completion must still advance the receipt without replacing the child.
+            vi.setSystemTime(new Date('2026-10-09T12:00:30Z'));
+            await context.queryClient.refetchQueries({queryKey: packingKeys.entry(session.context, id, 'detail')});
+            await flushPromises();
+            unavailable = true;
+            vi.setSystemTime(new Date('2026-10-09T12:01:00Z'));
+            if (mode === 'locale') context.locale.value = 'de';
+            else await context.queryClient.refetchQueries({queryKey: packingKeys.entry(session.context, id, 'detail')});
+            await flushPromises();
+
+            expect(wrapper.findComponent(PackingPage).element).toBe(child);
+            expect(wrapper.get<HTMLInputElement>('#quick-title').element).toBe(input.element);
+            expect(input.element.value).toBe('Retained admission draft');
+            expect(document.activeElement).toBe(input.element);
+            expect(wrapper.find('.frontend-page-message').exists()).toBe(false);
+            expect(wrapper.get('[data-last-successful-refresh] time').attributes('datetime')).toBe('2026-10-09T12:00:30.000Z');
+            expect(wrapper.get('[data-read-retry-at] time').attributes('datetime')).toBe('2026-10-09T12:01:05.000Z');
+            expect(wrapper.text()).toContain(context.messages.value.t('state.stale'));
+            const retry = button(wrapper, context.messages.value.t('common.retry'));
+            expect(retry.attributes('disabled')).toBeDefined();
+            expect(request.mock.calls.filter(([request]) => new URL((request as Request).url).pathname.endsWith('/entry'))).toHaveLength(3);
+            await retry.trigger('click');
+            expect(request.mock.calls.filter(([request]) => new URL((request as Request).url).pathname.endsWith('/entry'))).toHaveLength(3);
+
+            await vi.advanceTimersByTimeAsync(5001);
+            expect(wrapper.find('[data-read-retry-at]').exists()).toBe(false);
+            unavailable = false;
+            await retry.trigger('click');
+            await flushPromises();
+            expect(wrapper.find('[data-last-successful-refresh]').exists()).toBe(false);
+            expect(wrapper.findComponent(PackingPage).element).toBe(child);
+            expect(wrapper.get<HTMLInputElement>('#quick-title').element).toBe(input.element);
+            expect(input.element.value).toBe('Retained admission draft');
+            expect(document.activeElement).toBe(input.element);
+            expect(request.mock.calls.filter(([request]) => new URL((request as Request).url).pathname.endsWith('/entry'))).toHaveLength(4);
+            expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
         });
-        const child = wrapper.findComponent(PackingPage).element;
-        const input = wrapper.get<HTMLInputElement>('#quick-title');
-        await input.setValue('Retained admission draft');
-        input.element.focus();
-
-        // Equal successful admission uses structural sharing. Its actual query
-        // completion must still advance the receipt without replacing the child.
-        vi.setSystemTime(new Date('2026-10-09T12:00:30Z'));
-        await context.queryClient.refetchQueries({queryKey: packingKeys.entry(session.context, id, 'detail')});
-        await flushPromises();
-        unavailable = true;
-        vi.setSystemTime(new Date('2026-10-09T12:01:00Z'));
-        if (mode === 'locale') context.locale.value = 'de';
-        else await context.queryClient.refetchQueries({queryKey: packingKeys.entry(session.context, id, 'detail')});
-        await flushPromises();
-
-        expect(wrapper.findComponent(PackingPage).element).toBe(child);
-        expect(wrapper.get<HTMLInputElement>('#quick-title').element).toBe(input.element);
-        expect(input.element.value).toBe('Retained admission draft');
-        expect(document.activeElement).toBe(input.element);
-        expect(wrapper.find('.frontend-page-message').exists()).toBe(false);
-        expect(wrapper.get('[data-last-successful-refresh] time').attributes('datetime')).toBe('2026-10-09T12:00:30.000Z');
-        expect(wrapper.get('[data-read-retry-at] time').attributes('datetime')).toBe('2026-10-09T12:01:05.000Z');
-        expect(wrapper.text()).toContain(context.messages.value.t('state.stale'));
-        const retry = button(wrapper, context.messages.value.t('common.retry'));
-        expect(retry.attributes('disabled')).toBeDefined();
-        expect(request.mock.calls.filter(([request]) => new URL((request as Request).url).pathname.endsWith('/entry'))).toHaveLength(3);
-        await retry.trigger('click');
-        expect(request.mock.calls.filter(([request]) => new URL((request as Request).url).pathname.endsWith('/entry'))).toHaveLength(3);
-
-        await vi.advanceTimersByTimeAsync(5001);
-        expect(wrapper.find('[data-read-retry-at]').exists()).toBe(false);
-        unavailable = false;
-        await retry.trigger('click');
-        await flushPromises();
-        expect(wrapper.find('[data-last-successful-refresh]').exists()).toBe(false);
-        expect(wrapper.findComponent(PackingPage).element).toBe(child);
-        expect(wrapper.get<HTMLInputElement>('#quick-title').element).toBe(input.element);
-        expect(input.element.value).toBe('Retained admission draft');
-        expect(document.activeElement).toBe(input.element);
-        expect(request.mock.calls.filter(([request]) => new URL((request as Request).url).pathname.endsWith('/entry'))).toHaveLength(4);
-        expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
-    });
 
     it('hydrates the admitted feature and retains its title through locale changes', async () => {
         const {wrapper, context} = await mounted(PackingEntry, {}, async request =>
@@ -451,7 +451,7 @@ describe('progressive packing loading', () => {
         } : {listId: id};
         const {wrapper, request, context} = await mounted(component, props, async () =>
             new Response('{}', {status: 429, headers: {'Content-Type': 'application/json',
-                'X-Surveyor-Context': session.context, 'Retry-After': '5'}}));
+                    'X-Surveyor-Context': session.context, 'Retry-After': '5'}}));
         if (kind === 'list') {
             await context.queryClient.invalidateQueries({queryKey: packingKeys.detail(session.context, id)});
             await flushPromises();
@@ -958,44 +958,44 @@ describe('inline packing drafts', () => {
 
     it.each(['pointer', 'keyboard', 'other-focus', 'window-blur', 'identity', 'write-admission',
         'field-admission', 'blocked', 'initializing', 'unmounted', 'confirmed'] as const)(
-        'does not restore a pending inline editor after %s retires its focus claim', async retirement => {
-            const held = deferredInlineSave();
-            const save = vi.fn(function saveRetiredEditor() { return held.result; });
-            const {root, wrapper, context, update} = await mounted(InlineCell,
-                {value: 'Tent', token: '"original"', editable: true, label: 'Title', save});
-            await wrapper.get('td').trigger('dblclick');
-            const input = wrapper.get<HTMLInputElement>('input');
-            await input.setValue('Retained local tent');
-            const focus = vi.spyOn(input.element, 'focus');
-            const other = document.createElement('button');
-            document.body.append(other);
+            'does not restore a pending inline editor after %s retires its focus claim', async retirement => {
+                const held = deferredInlineSave();
+                const save = vi.fn(function saveRetiredEditor() { return held.result; });
+                const {root, wrapper, context, update} = await mounted(InlineCell,
+                    {value: 'Tent', token: '"original"', editable: true, label: 'Title', save});
+                await wrapper.get('td').trigger('dblclick');
+                const input = wrapper.get<HTMLInputElement>('input');
+                await input.setValue('Retained local tent');
+                const focus = vi.spyOn(input.element, 'focus');
+                const other = document.createElement('button');
+                document.body.append(other);
 
-            try {
-                await input.trigger('keydown', {key: 'Enter'});
-                releasePendingEditorFocus(input.element);
-                // Each boundary is independent: no later body focus may resurrect
-                // an interaction, obsolete identity, lost admission or removed node.
-                if (retirement === 'pointer') other.dispatchEvent(new Event('pointerdown', {bubbles: true}));
-                else if (retirement === 'keyboard') document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Tab', bubbles: true}));
-                else if (retirement === 'other-focus') { other.focus(); other.blur(); }
-                else if (retirement === 'window-blur') window.dispatchEvent(new Event('blur'));
-                else if (retirement === 'identity') context.epoch.value++;
-                else if (retirement === 'write-admission') await update({writeAdmission: false});
-                else if (retirement === 'field-admission') await update({editable: false});
-                else if (retirement === 'blocked') await update({disabled: true});
-                else if (retirement === 'initializing') context.hydrated.value = false;
-                else if (retirement === 'unmounted') root.unmount();
-                held.resolve(retirement === 'confirmed');
-                await flushPromises();
-                expect(document.activeElement).toBe(document.body);
-                expect(focus).not.toHaveBeenCalled();
-                expect(save).toHaveBeenCalledExactlyOnceWith('Retained local tent', '"original"');
-                if (retirement !== 'unmounted' && retirement !== 'confirmed')
-                    expect(wrapper.get<HTMLInputElement>('input').element.value).toBe('Retained local tent');
-                else expect(input.element.isConnected).toBe(false);
-            } finally { held.resolve(false); await flushPromises(); }
-        },
-    );
+                try {
+                    await input.trigger('keydown', {key: 'Enter'});
+                    releasePendingEditorFocus(input.element);
+                    // Each boundary is independent: no later body focus may resurrect
+                    // an interaction, obsolete identity, lost admission or removed node.
+                    if (retirement === 'pointer') other.dispatchEvent(new Event('pointerdown', {bubbles: true}));
+                    else if (retirement === 'keyboard') document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Tab', bubbles: true}));
+                    else if (retirement === 'other-focus') { other.focus(); other.blur(); }
+                    else if (retirement === 'window-blur') window.dispatchEvent(new Event('blur'));
+                    else if (retirement === 'identity') context.epoch.value++;
+                    else if (retirement === 'write-admission') await update({writeAdmission: false});
+                    else if (retirement === 'field-admission') await update({editable: false});
+                    else if (retirement === 'blocked') await update({disabled: true});
+                    else if (retirement === 'initializing') context.hydrated.value = false;
+                    else if (retirement === 'unmounted') root.unmount();
+                    held.resolve(retirement === 'confirmed');
+                    await flushPromises();
+                    expect(document.activeElement).toBe(document.body);
+                    expect(focus).not.toHaveBeenCalled();
+                    expect(save).toHaveBeenCalledExactlyOnceWith('Retained local tent', '"original"');
+                    if (retirement !== 'unmounted' && retirement !== 'confirmed')
+                        expect(wrapper.get<HTMLInputElement>('input').element.value).toBe('Retained local tent');
+                    else expect(input.element.isConnected).toBe(false);
+                } finally { held.resolve(false); await flushPromises(); }
+            },
+        );
 
     it.each(['0', '-1', '', '1.5'])('sends the native raw capacity draft %j through the generated command boundary', async value => {
         const projection = {...list, items: [{...item, capabilities: {...item.capabilities, editCapacity: true, showCapacityEdit: true}}]};
@@ -1161,7 +1161,7 @@ describe('inline packing drafts', () => {
         const held = deferredResponse();
         const thirdId = '44444444-4444-4444-8444-444444444444';
         const remaining = [{...item, id: otherId, title: 'Stove', position: 1},
-            {...item, id: thirdId, title: 'Lantern', position: 2}];
+        {...item, id: thirdId, title: 'Lantern', position: 2}];
         let written = false;
         let writes = 0;
         let ordering: unknown;
@@ -1485,7 +1485,7 @@ describe('metadata conflict acknowledgement', () => {
                     detail: 'A safely described future rejection.', requestId: 'metadata-rejection'}, 400);
                 return new Response(kind === 'html' ? '<html>Proxy failed</html>' : '{invalid',
                     {status: 400, headers: {'Content-Type': kind === 'html' ? 'text/html' : 'application/json',
-                        'X-Surveyor-Context': session.context}});
+                            'X-Surveyor-Context': session.context}});
             });
             await wrapper.get('[name="title"]').setValue('Submitted title');
             await wrapper.get('form').trigger('submit');
@@ -1516,7 +1516,7 @@ describe('metadata conflict acknowledgement', () => {
             const {wrapper, context} = await mounted(MetadataFields, {listId: id}, async request => {
                 if (request.method === 'PATCH') return held.response;
                 return changed ? new Response(JSON.stringify(newer), {headers: {'Content-Type': 'application/json',
-                    'X-Surveyor-Context': session.context, ETag: '"newer-read"'}}) : json(original);
+                        'X-Surveyor-Context': session.context, ETag: '"newer-read"'}}) : json(original);
             });
             await wrapper.get('[name="title"]').setValue('Submitted title');
             await wrapper.get('form').trigger('submit');
@@ -1762,7 +1762,7 @@ describe('metadata conflict acknowledgement', () => {
         await wrapper.get('form').trigger('submit');
         await flushPromises();
         expect(patches).toEqual([{title: 'Local title', description: 'Local description'},
-            {description: 'Local description'}]);
+        {description: 'Local description'}]);
         expect(wrapper.text()).not.toContain(context.messages.value.t('state.unknownOutcome'));
     });
 
@@ -1771,7 +1771,7 @@ describe('metadata conflict acknowledgement', () => {
             values: {title: 'Original title', description: 'Original description'}, editableFields: ['title', 'description'],
             currentEventId: null, archived: false, inheritedArchived: false};
         const remote = {...baseline, values: {title: 'Remote title',
-            description: 'Remote description'}};
+                description: 'Remote description'}};
         const writes: {token: string | null; body: unknown}[] = [];
         const {wrapper, context} = await mounted(MetadataFields, {listId: id}, async request => {
             if (request.method === 'PATCH') writes.push({token: request.headers.get('If-Match'), body: await request.json()});
@@ -1956,7 +1956,7 @@ describe('packing overview presentation and navigation', () => {
         expect(button(wrapper, 'Show linked entities (2)').exists()).toBe(true);
 
         await router.push({path: '/users/dashboard', query: {...router.currentRoute.value.query,
-            owner_main_page: '2', owner_main_childPage: '3'}});
+                owner_main_page: '2', owner_main_childPage: '3'}});
         await flushPromises();
         await wrapper.get('input[type="search"]').setValue('equipment');
         await wrapper.get('form summary').trigger('keydown', {key: 'ArrowDown'});
@@ -2012,7 +2012,7 @@ describe('packing overview presentation and navigation', () => {
         };
         const {wrapper, router} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async request =>
             json({...region, type: new URL(request.url).searchParams.get('type') ?? 'all'}),
-        '/users/dashboard?owner_main_type=survey&participant_main_q=other');
+            '/users/dashboard?owner_main_type=survey&participant_main_q=other');
         expect(wrapper.get('form button[data-type="survey"]').attributes('aria-pressed')).toBe('true');
         expect(wrapper.text()).toContain('No entities match your search and filter.');
         await wrapper.get('form button[data-type="all"]').trigger('click');
@@ -2152,7 +2152,7 @@ describe('packing command forms', () => {
         const projection: components['schemas']['ListSettings'] = {...settings,
             capabilities: {...settings.capabilities, managePermissions: true},
             access: {defaults, admins: [{profileId: otherId, name: 'Delegate', isGuest: false,
-                mask: 0, editToken: '"edit-remove-admin-original"'}], permissions: [], presets: []}};
+                    mask: 0, editToken: '"edit-remove-admin-original"'}], permissions: [], presets: []}};
         const {wrapper, request} = await mounted(PackingSettings, {listId: id}, async function removeGrant(request) {
             if (request.method === 'DELETE') { removed = true; return json({changed: true}); }
             return json(removed ? {...projection, access: {...projection.access!, admins: []}} : projection);
@@ -2179,7 +2179,7 @@ describe('packing command forms', () => {
         let projection: components['schemas']['ListSettings'] = {...settings,
             capabilities: {...settings.capabilities, managePermissions: true, linkEvent: true},
             access: {defaults, admins: [{profileId: otherId, name: 'Delegate', isGuest: false,
-                mask: 0, editToken: '"edit-admin-original"'}], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
+                    mask: 0, editToken: '"edit-admin-original"'}], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
         let failRead = false;
         const writes: {body: unknown; token: string | null}[] = [];
         const {wrapper, context} = await mounted(PackingSettings, context => {
@@ -2195,11 +2195,11 @@ describe('packing command forms', () => {
             const body = await request.json();
             writes.push({body, token: request.headers.get('If-Match')});
             if (editor === 'defaults') projection = {...projection, access: {...projection.access!,
-                defaults: {...defaults, participant: 1}}};
+                    defaults: {...defaults, participant: 1}}};
             else if (editor === 'event') projection = {...projection,
                 currentEvent: {id: itemId, title: choice.title, startDate: null, endDate: null, url: null}};
             else projection = {...projection, access: {...projection.access!, admins: [{profileId: otherId,
-                name: 'Delegate', isGuest: false, mask: 1, editToken: '"edit-admin-current"'}]}};
+                        name: 'Delegate', isGuest: false, mask: 1, editToken: '"edit-admin-current"'}]}};
             projection = {...projection, settingsToken: '"edit-current"'};
             failRead = true;
             return json(editor === 'event' ? {changed: true, canView: true} : {changed: true});
@@ -2469,9 +2469,9 @@ describe('packing command forms', () => {
         context.queryClient.setQueryData(warmFiltered, {retained: 'Filtered Overview snapshot'});
         let failNavigation = true;
         router.addRoute({name: 'packing-test-overview', path: '/users/dashboard', component: async function loadOverview() {
-            if (failNavigation) throw new TypeError('Failed to fetch dynamically imported module');
-            return defineComponent({template: '<p>Overview destination</p>'});
-        }});
+                if (failNavigation) throw new TypeError('Failed to fetch dynamically imported module');
+                return defineComponent({template: '<p>Overview destination</p>'});
+            }});
         router.onError(() => {});
         await wrapper.get('#quick-title').setValue('Parent draft');
         const parentDraft = wrapper.get<HTMLInputElement>('#quick-title').element;
@@ -2537,9 +2537,9 @@ describe('packing command forms', () => {
         }, '/packing/' + id, session, {}, true);
         let failNavigation = true;
         router.addRoute({name: 'packing-test-overview', path: '/users/dashboard', component: async function loadOverview() {
-            if (failNavigation) throw new TypeError('Failed to fetch dynamically imported module');
-            return defineComponent({template: '<p>Overview destination</p>'});
-        }});
+                if (failNavigation) throw new TypeError('Failed to fetch dynamically imported module');
+                return defineComponent({template: '<p>Overview destination</p>'});
+            }});
         router.onError(() => {});
         await wrapper.get('#quick-title').setValue('Parent draft');
         await button(wrapper, 'Entity settings').trigger('click');
@@ -2830,7 +2830,7 @@ describe('packing command forms', () => {
         // Stale display flags cannot make a field editable without its current
         // actual write admission; readable row values remain in place.
         const projection = {...list, items: [{...item, capabilities: {...item.capabilities,
-            editTitle: false, editCapacity: false, showTitleEdit: true, showCapacityEdit: true}}]};
+                    editTitle: false, editCapacity: false, showTitleEdit: true, showCapacityEdit: true}}]};
         const {wrapper, request} = await mounted(PackingPage, {}, async () => json(projection));
         const cells = wrapper.get(`[data-item-id="${itemId}"]`).findAll('td');
         for (const column of [2, 4]) {
@@ -2887,7 +2887,7 @@ describe('packing command forms', () => {
     it('clears an existing item title as an empty string while clearing its description as null', async () => {
         const sent: unknown[] = [];
         let projection = {...list, items: [{...item, description: 'Bring pegs',
-            capabilities: {...item.capabilities, editDescription: true}}]};
+                capabilities: {...item.capabilities, editDescription: true}}]};
         const {wrapper} = await mounted(PackingPage, {}, async request => {
             if (request.method === 'PATCH') {
                 const body = await request.json();
@@ -2916,7 +2916,7 @@ describe('packing command forms', () => {
         const projection: components['schemas']['ListSettings'] = {...settings, editableFields: ['title'],
             capabilities: {...settings.capabilities, linkEvent: true, managePermissions: true},
             access: {defaults, admins: [{profileId: session.activeProfile!.id, name: 'Named administrator', isGuest: false,
-                mask: 1, editToken: '"edit-tab-admin"'}], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
+                    mask: 1, editToken: '"edit-tab-admin"'}], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
         let writes = 0;
         let title = 'Original';
         const {wrapper} = await mounted(PackingSettings, {listId: id}, async request => {
@@ -3105,7 +3105,7 @@ describe('packing command forms', () => {
         await wrapper.get('form').trigger('submit');
         await flushPromises();
         expect(sent).toEqual([{title: '  Ground sheet  ', description: 'Dry', maxAssignees: 3, requiredByAll: false},
-            {title: '  Ground sheet  ', description: 'Dry', maxAssignees: 3, requiredByAll: false}]);
+        {title: '  Ground sheet  ', description: 'Dry', maxAssignees: 3, requiredByAll: false}]);
         expect(wrapper.get<HTMLInputElement>('#quick-title').element.value).toBe('');
         expect(wrapper.get<HTMLInputElement>('#quick-max').element.value).toBe('1');
     });
@@ -3177,7 +3177,7 @@ describe('packing command forms', () => {
         await wrapper.get('form').trigger('submit');
         await flushPromises();
         expect(sent).toEqual([{title: '  Raw title  ', description: '  Raw note  ', maxAssignees: 1, requiredByAll: false},
-            {title: '   ', description: '', maxAssignees: 1, requiredByAll: false}]);
+        {title: '   ', description: '', maxAssignees: 1, requiredByAll: false}]);
     });
 
     it('keeps an unknown quick-add on cancelled navigation and releases it only for the committed next list', async () => {
@@ -3674,7 +3674,7 @@ describe('packing command forms', () => {
         let submitted: unknown;
         const duplicate: components['schemas']['PackingDuplicate'] = {title: 'Copy equipment', description: 'Shared', eventId: null,
             items: [{title: 'Tent', description: null, maxAssignees: 2, requiredByAll: false},
-                {title: 'Bottle', description: 'Personal', maxAssignees: 1, requiredByAll: true}], defaultPermissions: defaults,
+            {title: 'Bottle', description: 'Personal', maxAssignees: 1, requiredByAll: true}], defaultPermissions: defaults,
             formContext: {defaults, permissions: [], presets: []}};
         const {wrapper} = await mounted(PackingCreatePage, {}, async request => {
             const path = new URL(request.url).pathname;
@@ -3698,7 +3698,7 @@ describe('packing command forms', () => {
         await wrapper.findAll('tbody tr')[2]!.get('input').setValue('   ');
         // Creation preserves its accepted integer parsing of a lexical exponent.
         const expectedItems = [{title: 'Tent', description: '', maxAssignees: 2, requiredByAll: false},
-            {title: 'Bottle', description: 'Personal', maxAssignees: 1, requiredByAll: true}];
+        {title: 'Bottle', description: 'Personal', maxAssignees: 1, requiredByAll: true}];
         expect(itemRows[0]!.get<HTMLInputElement>('input[type="number"]').element.value).toBe('2e3');
         await wrapper.get('form').trigger('submit');
         await flushPromises();
@@ -3707,7 +3707,7 @@ describe('packing command forms', () => {
     });
 
     it.each([{status: 403, code: 'FORBIDDEN', key: 'common.notAllowed'},
-        {status: 404, code: 'NOT_FOUND', key: 'packing.notFound'}] as const)(
+    {status: 404, code: 'NOT_FOUND', key: 'packing.notFound'}] as const)(
         'uses the native Error/Home card for initial duplicate admission $status', async ({status, code, key}) => {
             const {wrapper, context, request} = await mounted(PackingCreatePage, {}, async () => problem(code, status),
                 `/packing/${id}/duplicate`);
@@ -3728,28 +3728,28 @@ describe('packing command forms', () => {
 
     it.each([['create', 429], ['duplicate', 429], ['create', 503], ['duplicate', 503]] as const)(
         'shows and expires the %s admission retry deadline after HTTP %s without another request', async (mode, status) => {
-        vi.useFakeTimers();
-        vi.setSystemTime(new Date('2026-10-09T12:00:00Z'));
-        const path = mode === 'create' ? '/packing/create' : `/packing/${id}/duplicate`;
-        const {wrapper, request} = await mounted(PackingCreatePage, {}, async () =>
-            new Response('{}', {status, headers: {'Content-Type': 'application/json',
-                'X-Surveyor-Context': session.context, 'Retry-After': '5'}}), path);
+            vi.useFakeTimers();
+            vi.setSystemTime(new Date('2026-10-09T12:00:00Z'));
+            const path = mode === 'create' ? '/packing/create' : `/packing/${id}/duplicate`;
+            const {wrapper, request} = await mounted(PackingCreatePage, {}, async () =>
+                new Response('{}', {status, headers: {'Content-Type': 'application/json',
+                        'X-Surveyor-Context': session.context, 'Retry-After': '5'}}), path);
 
-        const retry = button(wrapper, 'Try again');
-        expect(retry.attributes('disabled')).toBeDefined();
-        expect(wrapper.get('[data-read-retry-at] time').attributes('datetime')).toBe('2026-10-09T12:00:05.000Z');
-        expect(wrapper.find('[data-last-successful-refresh]').exists()).toBe(false);
-        await vi.advanceTimersByTimeAsync(5001);
-        await flushPromises();
-        expect(request).toHaveBeenCalledOnce();
-        expect(retry.attributes('disabled')).toBeUndefined();
-        expect(wrapper.find('[data-read-retry-at]').exists()).toBe(false);
-        await retry.trigger('click');
-        await flushPromises();
-        expect(request).toHaveBeenCalledTimes(2);
-        expect(button(wrapper, 'Try again').attributes('disabled')).toBeDefined();
-        expect(wrapper.get('[data-read-retry-at] time').attributes('datetime')).toBe('2026-10-09T12:00:10.001Z');
-    });
+            const retry = button(wrapper, 'Try again');
+            expect(retry.attributes('disabled')).toBeDefined();
+            expect(wrapper.get('[data-read-retry-at] time').attributes('datetime')).toBe('2026-10-09T12:00:05.000Z');
+            expect(wrapper.find('[data-last-successful-refresh]').exists()).toBe(false);
+            await vi.advanceTimersByTimeAsync(5001);
+            await flushPromises();
+            expect(request).toHaveBeenCalledOnce();
+            expect(retry.attributes('disabled')).toBeUndefined();
+            expect(wrapper.find('[data-read-retry-at]').exists()).toBe(false);
+            await retry.trigger('click');
+            await flushPromises();
+            expect(request).toHaveBeenCalledTimes(2);
+            expect(button(wrapper, 'Try again').attributes('disabled')).toBeDefined();
+            expect(wrapper.get('[data-read-retry-at] time').attributes('datetime')).toBe('2026-10-09T12:00:10.001Z');
+        });
 
     it('retains the admitted creation receipt, draft and focus through a failed locale admission', async () => {
         vi.useFakeTimers();
@@ -3759,7 +3759,7 @@ describe('packing command forms', () => {
             context: {defaults, permissions: [], presets: []}};
         const {wrapper, context, request} = await mounted(PackingCreatePage, {}, async function readCreation(): Promise<Response> {
             return unavailable ? new Response('{}', {status: 503, headers: {'Content-Type': 'application/json',
-                'X-Surveyor-Context': session.context, 'Retry-After': '5'}}) : json(entry);
+                    'X-Surveyor-Context': session.context, 'Retry-After': '5'}}) : json(entry);
         }, '/packing/create');
         const title = wrapper.get<HTMLInputElement>('#create-title');
         await title.setValue('My creation draft');
@@ -3954,7 +3954,7 @@ describe('packing command forms', () => {
                 items: [{title: 'Tent', description: null, maxAssignees: 1, requiredByAll: false}],
                 defaultPermissions: defaults, formContext: entry.context, selectedEvent: null});
             if (reads === 2 || reads === 4) return new Response('{}', {status, headers: {'Content-Type': 'application/json',
-                'Retry-After': '5', 'X-Surveyor-Context': session.context}});
+                    'Retry-After': '5', 'X-Surveyor-Context': session.context}});
             return json(entry);
         }, duplicate ? '/packing/' + id + '/duplicate' : '/packing/create');
         const title = wrapper.get<HTMLInputElement>('#create-title');
@@ -4084,9 +4084,9 @@ describe('packing command forms', () => {
         const destination = '/packing/' + otherId;
         let rejectNavigation = true;
         router.addRoute({path: destination, component: async function loadCreatedPage() {
-            if (failure === 'failure' && rejectNavigation) throw new TypeError('Failed to fetch dynamically imported module');
-            return defineComponent({template: '<p>Created destination</p>'});
-        }});
+                if (failure === 'failure' && rejectNavigation) throw new TypeError('Failed to fetch dynamically imported module');
+                return defineComponent({template: '<p>Created destination</p>'});
+            }});
         router.beforeEach(to => failure === 'cancellation' && rejectNavigation && to.fullPath === destination ? false : undefined);
         router.onError(() => {});
         await wrapper.get('#create-title').setValue('Confirmed list');
@@ -4118,7 +4118,7 @@ describe('packing command forms', () => {
         const {wrapper, router, request} = await mounted(PackingCreatePage, {}, async incoming =>
             json(new URL(incoming.url).pathname.endsWith('/events') ? {items: [], nextCursor: null, selected: null}
                 : {entry: {kind: 'render'}, context: {defaults, permissions: [], presets: []}}),
-        path, session, {initialUrl: path, packingError: 'common.notAllowed'});
+            path, session, {initialUrl: path, packingError: 'common.notAllowed'});
         expect(wrapper.find('form').exists()).toBe(false);
         expect(request).not.toHaveBeenCalled();
         await router.push('/away');
@@ -4142,7 +4142,7 @@ describe('packing command forms', () => {
             if (url.pathname.endsWith('/create-entry')) {
                 expect(url.searchParams.get('returnTo')).toBe(duplicateUrl);
                 return json({entry: {kind: 'redirect', url: '/users/login?next=' + encodeURIComponent(duplicateUrl),
-                    notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, context: null});
+                        notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, context: null});
             }
             if (url.pathname.endsWith('/events')) return json({items: [], selected: null, nextCursor: null});
             return json({title: 'Duplicate draft', description: null, eventId: null, defaultPermissions: defaults,
@@ -4564,9 +4564,9 @@ describe('event picker parity', () => {
         let denied = false;
         const {wrapper, context} = await mounted(EventPicker, current => ({prefix: 'denied-discovery', inline: true,
             modelValue: itemId, current: parentReadable ? autumn : null, source: usePackingApi(current).eventPicker}),
-        async function readDiscovery(): Promise<Response> {
-            return denied ? problem('FORBIDDEN', 403) : json({items: [autumn], selected: autumn, nextCursor: 'next'});
-        });
+            async function readDiscovery(): Promise<Response> {
+                return denied ? problem('FORBIDDEN', 403) : json({items: [autumn], selected: autumn, nextCursor: 'next'});
+            });
         expect(wrapper.text()).toContain('Autumn camp');
         denied = true;
         // Fail the same observed key: gcTime cannot remove its previous response

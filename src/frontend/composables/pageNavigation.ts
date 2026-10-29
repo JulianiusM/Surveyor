@@ -35,34 +35,34 @@ export function createPageReadiness(router: Router): FrontendPageReadiness {
     function wait(destination: RouteLocationNormalized): Promise<boolean> {
         if (disposed) return Promise.resolve(false);
         return new Promise(
-        /** Subscribe before checking rendered readiness. Either a settled visit
+            /** Subscribe before checking rendered readiness. Either a settled visit
          * or explicit cancellation removes its watcher and waiter; a replaced
          * destination resolves false rather than borrowing another renderer. */
-        function awaitRenderedVisit(resolve) {
-            // Subscribe before checking so a mounted/cached owner can complete
-            // synchronously without leaving an orphaned watcher behind.
-            const stop = watch(settled, finish, {flush: 'post'});
-            waiting.add(cancel);
-            if (settled()) finish();
+            function awaitRenderedVisit(resolve) {
+                // Subscribe before checking so a mounted/cached owner can complete
+                // synchronously without leaving an orphaned watcher behind.
+                const stop = watch(settled, finish, {flush: 'post'});
+                waiting.add(cancel);
+                if (settled()) finish();
 
-            function settled(): boolean {
-                return router.currentRoute.value !== destination
-                    || (source.value?.destination.value === destination.fullPath && source.value.ready.value);
-            }
+                function settled(): boolean {
+                    return router.currentRoute.value !== destination
+                        || (source.value?.destination.value === destination.fullPath && source.value.ready.value);
+                }
 
-            function finish(): void {
-                if (!settled()) return;
-                stop();
-                waiting.delete(cancel);
-                resolve(router.currentRoute.value === destination);
-            }
+                function finish(): void {
+                    if (!settled()) return;
+                    stop();
+                    waiting.delete(cancel);
+                    resolve(router.currentRoute.value === destination);
+                }
 
-            function cancel(): void {
-                stop();
-                waiting.delete(cancel);
-                resolve(false);
-            }
-        });
+                function cancel(): void {
+                    stop();
+                    waiting.delete(cancel);
+                    resolve(false);
+                }
+            });
     }
 
     /** Application retirement must not leave an unresolved Router callback or
@@ -100,7 +100,7 @@ export function observePageNavigation(router: Router, options: FrontendPageNavig
      * Finish callbacks still receive every outcome so feature-owned feedback and
      * focus can retain their established commitment/failure rules. */
     function finishDestination(to: RouteLocationNormalized, from?: RouteLocationNormalized,
-                               failure?: NavigationFailure | void): void {
+        failure?: NavigationFailure | void): void {
         if (destination.value === to) destination.value = undefined;
         options.finished?.(to, from, failure);
     }

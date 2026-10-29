@@ -227,7 +227,7 @@ export class ActivityApi {
      * The transport validates actor scope before accepting a 304; the feature
      * query owner ensures that previous belongs to this same resource family. */
     async activity(planId: string, scope: FrontendRequestScope, signal?: AbortSignal,
-                  previous?: FrontendRead<List>, windowStart?: string): Promise<FrontendRead<List>> {
+        previous?: FrontendRead<List>, windowStart?: string): Promise<FrontendRead<List>> {
         const transport = this.transport;
         function readActivity() {
             return transport.client.GET('/activity-plans/{planId}', {
@@ -243,7 +243,7 @@ export class ActivityApi {
      * Missing/malformed ETags cannot authorize an editor, even when the body
      * passed its generated shape validator or a previous snapshot is available. */
     async metadata(planId: string, scope: FrontendRequestScope, signal?: AbortSignal,
-                   previous?: FrontendRead<Metadata>): Promise<FrontendRead<Metadata>> {
+        previous?: FrontendRead<Metadata>): Promise<FrontendRead<Metadata>> {
         const transport = this.transport;
         function readMetadata() {
             return transport.client.GET('/activity-plans/{planId}/metadata', {
@@ -259,7 +259,7 @@ export class ActivityApi {
      * A confirmed response must include newly admitted header evidence as well as
      * valid field data; neither the previous token nor saved values renew authority. */
     async saveMetadata(planId: string, patch: components['schemas']['ActivityMetadataPatch'], etag: string,
-                       scope: FrontendRequestScope): Promise<FrontendRead<Metadata>> {
+        scope: FrontendRequestScope): Promise<FrontendRead<Metadata>> {
         // Structural validation precedes transport; business/field checks remain server-owned.
         if (!validateActivityMetadataPatch(patch)) throw generatedInputError(validateActivityMetadataPatch.errors, path => activityInputField(path));
 
@@ -287,7 +287,7 @@ export class ActivityApi {
     /** Creation admission is distinct from the public duplication projection. The caller supplies
      * its exact return destination; the server owns account admission and bounded destination policy. */
     async createEntry(scope: FrontendRequestScope, signal?: AbortSignal,
-                      returnTo?: string, eventId?: string): Promise<components['schemas']['ActivityCreateEntry']> {
+        returnTo?: string, eventId?: string): Promise<components['schemas']['ActivityCreateEntry']> {
         const transport = this.transport;
         function readCreationEntry() {
             return transport.client.GET('/activity-plans/create-entry', {
@@ -300,7 +300,7 @@ export class ActivityApi {
     /** Detail and explicit guest routes deliberately have different admission. Never
      * infer either route from session presence or from permissions on the other projection. */
     async resourceEntry(planId: string, view: 'detail' | 'guest', scope: FrontendRequestScope,
-                        signal?: AbortSignal): Promise<components['schemas']['ActivityResourceEntry']> {
+        signal?: AbortSignal): Promise<components['schemas']['ActivityResourceEntry']> {
         const transport = this.transport;
         function readResourceEntry() {
             return transport.client.GET('/activity-plans/{planId}/entry', {
@@ -314,7 +314,7 @@ export class ActivityApi {
      * is independently admitted and part of this read's key. Source assignments,
      * administrator grants and files stay excluded; copied values grant no creation permission. */
     async duplicate(planId: string, scope: FrontendRequestScope, signal?: AbortSignal,
-                    eventId?: string): Promise<components['schemas']['ActivityDuplicate']> {
+        eventId?: string): Promise<components['schemas']['ActivityDuplicate']> {
         const transport = this.transport;
         function readDuplicate() {
             return transport.client.GET('/activity-plans/{planId}/duplicate', {
@@ -329,7 +329,7 @@ export class ActivityApi {
      * Only a validated creation receipt confirms success, and uncertain delivery is left to
      * the shared command owner without replaying this non-idempotent request. */
     async createActivity(input: components['schemas']['ActivityCreateInput'], image: File | null,
-                        scope: FrontendRequestScope): Promise<components['schemas']['ActivityCreated']> {
+        scope: FrontendRequestScope): Promise<components['schemas']['ActivityCreated']> {
         // Validate machine data before adapting it to the established multipart envelope.
         // The image is a separate part rather than a second handwritten creation schema.
         const slots = input.slots;
@@ -350,7 +350,7 @@ export class ActivityApi {
      * The picker receives validated presentation only; eligibility and the final
      * relationship change remain independently checked by existing server owners. */
     async events(query: FrontendEventPickerQuery,
-                  scope: FrontendRequestScope, signal?: AbortSignal) {
+        scope: FrontendRequestScope, signal?: AbortSignal) {
         const transport = this.transport;
         function readEventOptions() {
             return transport.client.GET('/activity-plans/events', {
@@ -492,7 +492,7 @@ function activityRequirementField(path: string, input: components['schemas']['Ac
     if (path === '/roundingMode') return {label: 'activity.requirements.rounding'};
     const stay = /^\/stayRequirements\/(\d+)\//u.exec(path);
     if (stay) return {label: 'activity.requirements.requiredShifts', row: {label: 'activity.requirements.stays',
-        number: input.stayRequirements[Number(stay[1])]?.stayDays ?? Number(stay[1]) + 1}};
+            number: input.stayRequirements[Number(stay[1])]?.stayDays ?? Number(stay[1]) + 1}};
     if (path.startsWith('/roleRequirements/')) return {label: 'activity.requirements.roles'};
     if (path.startsWith('/overrides/')) return {label: 'activity.requirements.overrides'};
     return undefined;
@@ -505,8 +505,8 @@ function activityInputField(path: string, slots?: components['schemas']['Activit
     const field = match ? match[2] : path.slice(1);
     const label = field === 'title' ? 'packing.title' : field === 'description' ? 'packing.description' : field === 'text' ? 'activity.text'
         : field === 'startDate' || field === 'day' ? 'event.startDateLabel' : field === 'endDate' ? 'event.endDateLabel'
-        : field === 'startTime' ? 'activity.startTime' : field === 'endTime' ? 'activity.endTime'
-        : field === 'maxAssignees' ? 'activity.maxParticipants' : undefined;
+            : field === 'startTime' ? 'activity.startTime' : field === 'endTime' ? 'activity.endTime'
+                : field === 'maxAssignees' ? 'activity.maxParticipants' : undefined;
     const slot = match ? slots?.[Number(match[1])] : undefined;
     if (label) return {label, ...(slot ? {row: {label: 'validation.slot', number: slot.position + 1, day: slot.day}} : {})};
     if (path === '/eventId') return {label: 'eventPicker.currentEvent'};

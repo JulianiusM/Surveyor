@@ -53,7 +53,7 @@ afterEach(async () => {
 function denied(): Response {
     return new Response(JSON.stringify({type: 'about:blank', title: 'Forbidden', status: 403,
         detail: 'Not allowed', code: 'FORBIDDEN', messageKey: 'api:errors.FORBIDDEN', params: {}, requestId: 'organizer-denial'}),
-    {status: 403, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
+        {status: 403, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
 }
 
 /** Replace only HTTP delivery while mounting real generated adapters, query admission,
@@ -106,10 +106,10 @@ describe('Event organizer workflows', () => {
 
     it('approves sibling drafts before deleting a captured child and retries only confirmed navigation', async () => {
         const host = defineComponent({inheritAttrs: false, components: {EventThingsToDo}, setup() {
-            const draft = ref('');
-            useDraftProtection({dirty: () => !!draft.value, unknownMessage: 'draft.leaveUnknown'});
-            return {draft, eventId};
-        }, template: '<input data-test="sibling-draft" v-model="draft" /><EventThingsToDo :event-id="eventId" admin />'});
+                const draft = ref('');
+                useDraftProtection({dirty: () => !!draft.value, unknownMessage: 'draft.leaveUnknown'});
+                return {draft, eventId};
+            }, template: '<input data-test="sibling-draft" v-model="draft" /><EventThingsToDo :event-id="eventId" admin />'});
         const owned = {...card, capabilities: {...card.capabilities, remove: true}};
         let finishDelete: (() => void) | undefined;
         const {wrapper, request, router, context} = await mounted(host, async req => {
@@ -124,7 +124,7 @@ describe('Event organizer workflows', () => {
         // confirmed child deletion makes them stale without forcing discovery
         // or retiring the Event section's independently mounted observer.
         const cachedOverview = [overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main'}),
-            overviewKeys.region(session.context, 'de', {collection: 'participant', region: 'hidden'})];
+        overviewKeys.region(session.context, 'de', {collection: 'participant', region: 'hidden'})];
         for (const key of cachedOverview) context.queryClient.setQueryData(key, {items: [owned]});
         router.addRoute({path: '/users/dashboard', component: defineComponent({template: '<p>Overview</p>'})});
         router.onError(() => {});
@@ -171,7 +171,7 @@ describe('Event organizer workflows', () => {
 
     it.each([false, true])('protects sibling deletion and a new attendance draft after confirmed child deletion (held invalidation: %s)', async heldInvalidation => {
         const event = createFrontendEventView({capabilities: {...createFrontendEventView().capabilities,
-            admin: true, participants: true, settings: true, manageRegistrations: true, manageAssignments: true}});
+                admin: true, participants: true, settings: true, manageRegistrations: true, manageAssignments: true}});
         const settings: components['schemas']['EventSettings'] = {id: eventId, title: event.title,
             settingsToken: 'organizer-settings-token', headerUrl: null, headerVersion: null, editableFields: [], access: null,
             capabilities: {editHeader: false, managePermissions: false, duplicate: false, remove: true,
@@ -201,18 +201,18 @@ describe('Event organizer workflows', () => {
         context.visible.value = true;
         const placeholder = defineComponent({template: '<p>Destination</p>'});
         const router = createRouter({history: createMemoryHistory(), routes: [
-            {path: '/event/:eventId/admin', component: EventPage},
-            {path: '/users/dashboard', component: placeholder},
-            {path: '/help', component: placeholder},
-            {path: '/:pathMatch(.*)*', component: placeholder},
-        ]});
+                {path: '/event/:eventId/admin', component: EventPage},
+                {path: '/users/dashboard', component: placeholder},
+                {path: '/help', component: placeholder},
+                {path: '/:pathMatch(.*)*', component: placeholder},
+            ]});
         const origin = `/event/${eventId}/admin`;
         await router.push('/help');
         await router.push(origin);
         const wrapper = mount(App, {attachTo: document.body, global: {
-            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-            provide: {[frontendContextKey as symbol]: context},
-        }});
+                plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+                provide: {[frontendContextKey as symbol]: context},
+            }});
         let releaseInvalidation: (() => void) | undefined;
         cleanups.push(async function disposeOrganizerJourney(): Promise<void> {
             releaseInvalidation?.();
@@ -346,8 +346,8 @@ describe('Event organizer workflows', () => {
 
     it.each([
         {name: 'roster', component: EventParticipants, value: {participants: [], totals: [], dateTotals: [],
-            allergies: [], comments: [], generatedAt: '2026-10-16T00:00:00Z'},
-        props: {startDate: '2027-06-01', endDate: '2027-06-03'}},
+                allergies: [], comments: [], generatedAt: '2026-10-16T00:00:00Z'},
+            props: {startDate: '2027-06-01', endDate: '2027-06-03'}},
         {name: 'link list', component: EventBypassLinks, value: {items: []}, props: {}},
     ])('distinguishes an unknown $name count from an admitted empty result and retires it on denial', async ({component, value, props}) => {
         let finishRead: ((response: Response) => void) | undefined;
@@ -417,9 +417,9 @@ describe('Event organizer workflows', () => {
         vi.stubGlobal('navigator', {...navigator, clipboard: undefined});
         const copied: string[] = [];
         Object.defineProperty(document, 'execCommand', {configurable: true, value: vi.fn(() => {
-            copied.push(document.querySelector('textarea')!.value);
-            return true;
-        })});
+                copied.push(document.querySelector('textarea')!.value);
+                return true;
+            })});
         cleanups.push(async () => {Reflect.deleteProperty(document, 'execCommand');});
         const invoker = document.createElement('button');
         document.body.append(invoker);
@@ -462,9 +462,9 @@ describe('Event organizer workflows', () => {
         // participant selection even while its table row is filtered away.
         await wrapper.get('.js-filter').setValue('no-match');
         current = {...roster, participants: [{...participant, dietary: [
-            {choice: 'ALLERGIES', additionalInfo: ' sesame ; soy '},
-            {choice: 'COMMENT', additionalInfo: 'No tomatoes'},
-        ]}], allergies: ['sesame', 'soy'], comments: ['No tomatoes']};
+                    {choice: 'ALLERGIES', additionalInfo: ' sesame ; soy '},
+                    {choice: 'COMMENT', additionalInfo: 'No tomatoes'},
+                ]}], allergies: ['sesame', 'soy'], comments: ['No tomatoes']};
         await context.queryClient.refetchQueries({queryKey: eventKeys.participants(session.context, eventId)});
         await flushPromises();
         const dialog = document.querySelector('[role="dialog"]')!;

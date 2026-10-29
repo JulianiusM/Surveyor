@@ -41,11 +41,11 @@ export function useFinanceInvoiceReview(props: FinanceInvoiceReviewInput, callba
     });
 
     const actionState = useActionState({eligible: () => props.active && !completed.value
-        && (!props.inline || props.invoice.status === 'NEW')
-        // Participant recovery keeps read admission after status changes; only
-        // another Close dispatch depends on this current own-row capability.
-        && (!props.participant || operation.value === 'close' && props.currentInvoice?.id === invoice.value.id
-            && props.currentInvoice.canClose), blocked: () => command.action.disabled.value});
+            && (!props.inline || props.invoice.status === 'NEW')
+            // Participant recovery keeps read admission after status changes; only
+            // another Close dispatch depends on this current own-row capability.
+            && (!props.participant || operation.value === 'close' && props.currentInvoice?.id === invoice.value.id
+                && props.currentInvoice.canClose), blocked: () => command.action.disabled.value});
     const recovery = useActionState({eligible: () => props.active, blocked: () => command.recoveryAction.disabled.value,
         pending: () => command.recovering.value});
     const title = computed(() => props.inline || operation.value === 'close' ? 'finance.confirmInvoiceAction' : reviewing.value ? 'finance.confirmInvoiceChange' : operation.value === 'revise'

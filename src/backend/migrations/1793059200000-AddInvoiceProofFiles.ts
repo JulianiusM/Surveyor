@@ -1,5 +1,6 @@
 /* Copyright 2026 Julian Malovanij. Licensed under the Apache License, Version 2.0. */
-import {Table, type MigrationInterface, type QueryRunner} from 'typeorm';
+import type {MigrationInterface, QueryRunner} from 'typeorm';
+import {dropMigrationTable} from '../modules/database/utils/migration-helper';
 
 /** Add durable file ownership without touching uploads or changing invoice wire data. */
 export class AddInvoiceProofFiles1793059200000 implements MigrationInterface {
@@ -7,19 +8,21 @@ export class AddInvoiceProofFiles1793059200000 implements MigrationInterface {
     async up(queryRunner: QueryRunner): Promise<void> {
         // No invoice foreign key is intentional: cascade deletion must preserve cleanup evidence.
         if (!await queryRunner.hasTable('invoice_proof_files')) {
-            await queryRunner.createTable(new Table({name: 'invoice_proof_files', columns: [
-                {name: 'id', type: 'char', length: '64', isPrimary: true},
-                {name: 'created_at', type: 'timestamp', precision: 6, default: 'CURRENT_TIMESTAMP(6)'},
-                {name: 'updated_at', type: 'timestamp', precision: 6, default: 'CURRENT_TIMESTAMP(6)', onUpdate: 'CURRENT_TIMESTAMP(6)'},
-                {name: 'path', type: 'varchar', length: '255'},
-                {name: 'state', type: 'varchar', length: '16', default: "'STAGED'"},
-                {name: 'owner_token', type: 'char', length: '36', isNullable: true},
-                {name: 'attempts', type: 'int', unsigned: true, default: '0'},
-                {name: 'retry_at', type: 'datetime', isNullable: true},
-                {name: 'quarantine_path', type: 'varchar', length: '255', isNullable: true},
-                {name: 'manifest_id', type: 'char', length: '64', isNullable: true},
-                {name: 'quarantined_at', type: 'datetime', isNullable: true},
-            ], indices: [{name: 'idx_invoice_proof_files_scan', columnNames: ['state', 'retry_at']}]}));
+            await queryRunner.query(`CREATE TABLE \`invoice_proof_files\` (
+                \`id\` char(64) NOT NULL,
+                \`created_at\` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                \`updated_at\` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+                \`path\` varchar(255) NOT NULL,
+                \`state\` varchar(16) NOT NULL DEFAULT 'STAGED',
+                \`owner_token\` char(36) NULL,
+                \`attempts\` int UNSIGNED NOT NULL DEFAULT 0,
+                \`retry_at\` datetime NULL,
+                \`quarantine_path\` varchar(255) NULL,
+                \`manifest_id\` char(64) NULL,
+                \`quarantined_at\` datetime NULL,
+                INDEX \`idx_invoice_proof_files_scan\` (\`state\`, \`retry_at\`),
+                PRIMARY KEY (\`id\`)
+            ) ENGINE=InnoDB`);
         }
         // Backfill each stored spelling, including shared legacy paths. Runtime compares
         // resolved references as well, so aliases can never justify deleting a live file.
@@ -36,6 +39,6 @@ export class AddInvoiceProofFiles1793059200000 implements MigrationInterface {
         if (!await queryRunner.hasTable('invoice_proof_files')) return;
         const [row] = await queryRunner.query('SELECT COUNT(*) AS count FROM invoice_proof_files');
         if (Number(row.count)) throw new Error('Cannot remove proof ownership while tracked files or recovery records remain.');
-        await queryRunner.dropTable('invoice_proof_files');
+        await dropMigrationTable(queryRunner, 'invoice_proof_files');
     }
 }

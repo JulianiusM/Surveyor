@@ -66,10 +66,10 @@ async function holdRead(page: Page, path: string) {
     }
 
     return {received: received.promise, async finish(): Promise<void> {
-        release.release();
-        if (delivering) await delivered.promise;
-        await page.unroute(pattern, deliverRead);
-    }};
+            release.release();
+            if (delivering) await delivered.promise;
+            await page.unroute(pattern, deliverRead);
+        }};
 }
 
 /** Follow the actual shell link while retaining its application document marker. */
@@ -244,7 +244,7 @@ test('revoked Packing admission cannot return through history while independent 
             const baseline = await owner.request.get(grantPath + '/edit-baseline', {headers: await commandHeadersForE2E(owner.request)});
             expect(baseline.status()).toBe(200);
             expect((await owner.request.delete(grantPath, {headers: {...await commandHeadersForE2E(owner.request),
-                'If-Match': (await baseline.json()).editToken}})).status()).toBe(200);
+                    'If-Match': (await baseline.json()).editToken}})).status()).toBe(200);
             forward.release();
             expect((await denied).status()).toBe(403);
         } finally {

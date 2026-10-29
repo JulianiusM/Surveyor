@@ -172,8 +172,8 @@ describe('frontend public asset delivery', () => {
             await fs.mkdir(path.join(directory, 'assets'));
             await fs.mkdir(path.join(directory, '.vite'));
             await fs.writeFile(path.join(directory, '.vite/manifest.json'), JSON.stringify({entry: {
-                file: 'assets/entry-hash.js', css: ['assets/entry-hash.css'], assets: ['assets/icons-hash.woff2'],
-            }}));
+                    file: 'assets/entry-hash.js', css: ['assets/entry-hash.css'], assets: ['assets/icons-hash.woff2'],
+                }}));
             await fs.writeFile(path.join(directory, 'assets/entry-hash.js'), scriptBytes);
             await fs.writeFile(path.join(directory, 'assets/entry-hash.js.br'), brotliCompressSync(scriptBytes));
             await fs.writeFile(path.join(directory, 'assets/entry-hash.js.gz'), gzipSync(scriptBytes));
@@ -308,10 +308,10 @@ describe('Express-integrated frontend development', () => {
         const app = express();
         app.use(frontendDevelopmentMiddleware);
         const bootstrap: FrontendBootstrap = {session: {kind: 'anonymous', context: 'dev-context',
-            csrfToken: 'dev-csrf', locale: 'en', activeProfile: null, profiles: [], loginUrl: '/users/login',
-            logoutUrl: null, deployment: {buildId: 'dev-fixture', apiCompatibility},
-            shell: {version: 'fixture', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy',
-                localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'}},
+                csrfToken: 'dev-csrf', locale: 'en', activeProfile: null, profiles: [], loginUrl: '/users/login',
+                logoutUrl: null, deployment: {buildId: 'dev-fixture', apiCompatibility},
+                shell: {version: 'fixture', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy',
+                    localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'}},
             help: {locale: 'en', title: 'Development guide', content: '<h2 id="task">A synthetic task</h2><img src="/help/assets/diagram.png?locale=en" alt="A task diagram">',
                 currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: [{id: 'task', title: 'A synthetic task', level: 2}]}};
         app.get('/help', (req, res, next) => {

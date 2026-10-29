@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-import type {ActivityPlan} from "../backend/modules/database/entities/activity/ActivityPlan";
+import type {ActivityPlan} from '../backend/modules/database/entities/activity/ActivityPlan';
 import type {EntityManager} from 'typeorm';
-import type {DriversList} from "../backend/modules/database/entities/drivers/DriversList";
-import type {Event} from "../backend/modules/database/entities/event/Event";
-import type {PackingList} from "../backend/modules/database/entities/packing/PackingList";
-import type {Survey} from "../backend/modules/database/entities/surveys/Survey";
-import {Guest} from "../backend/modules/database/entities/user/Guest";
-import type {EntityType} from "./UtilTypes";
-import type {ArchivePresentation, ArchiveSnapshotEntry, PersonalVisibility} from "./ArchiveTypes";
+import type {DriversList} from '../backend/modules/database/entities/drivers/DriversList';
+import type {Event} from '../backend/modules/database/entities/event/Event';
+import type {PackingList} from '../backend/modules/database/entities/packing/PackingList';
+import type {Survey} from '../backend/modules/database/entities/surveys/Survey';
+import {Guest} from '../backend/modules/database/entities/user/Guest';
+import type {EntityType} from './UtilTypes';
+import type {ArchivePresentation, ArchiveSnapshotEntry, PersonalVisibility} from './ArchiveTypes';
 
 export type OidcClaims = {
     sub: string;

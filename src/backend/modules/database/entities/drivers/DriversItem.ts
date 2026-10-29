@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-import {Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
-import {UuidDefaultEntityItem} from "../abstract/ProfileEntityItem";
-import {DriversAssignment} from "./DriversAssignment";
-import {DriversList} from "./DriversList";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from 'typeorm';
+import {UuidDefaultEntityItem} from '../abstract/ProfileEntityItem';
+import {DriversAssignment} from './DriversAssignment';
+import {DriversList} from './DriversList';
 
 @Entity("drivers_items", {schema: "surveyor"})
 export class DriversItem extends UuidDefaultEntityItem {
     @Column("int", {
         name: "max_assignees",
         nullable: true,
-        default: () => "'1'",
+        default: 1,
     })
     maxAssignees?: number | null;
 

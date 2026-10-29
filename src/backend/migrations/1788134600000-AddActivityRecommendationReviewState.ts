@@ -8,12 +8,12 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
+import {MigrationInterface, QueryRunner} from 'typeorm';
 import {
     addColumnIfNotExists,
     dropColumnIfExists,
     tableExists,
-} from "../modules/database/utils/migration-helper";
+} from '../modules/database/utils/migration-helper';
 
 const TABLE = "activity_assignment_recommendations";
 

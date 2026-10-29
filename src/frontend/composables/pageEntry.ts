@@ -65,9 +65,9 @@ function pageDestination(router: Router, url: string): string {
  * Replacement makes a redirect one canonical destination rather than a second SPA visit.
  */
 export async function navigatePageEntry(context: FrontendContext, router: Router,
-                                        outcome: components['schemas']['PageEntryOutcome'],
-                                        scope: FrontendRequestScope = context.capture(),
-                                        expectedRoute: string = router.currentRoute.value.fullPath): Promise<boolean> {
+    outcome: components['schemas']['PageEntryOutcome'],
+    scope: FrontendRequestScope = context.capture(),
+    expectedRoute: string = router.currentRoute.value.fullPath): Promise<boolean> {
     if (!context.isCurrent(scope, true)
         || frontendDocumentUrl(router.currentRoute.value.fullPath) !== frontendDocumentUrl(expectedRoute)) return false;
     if (outcome.kind === 'denied') return false;
@@ -135,10 +135,10 @@ export async function navigatePageEntry(context: FrontendContext, router: Router
  * location. It remains application memory only; a fresh document follows GET admission.
  */
 export async function completePageEntry(context: FrontendContext, router: Router, destination: string,
-                                        messageKey: MessageKey, kind: 'success' | 'info',
-                                        scope: FrontendRequestScope = context.capture(),
-                                        origin: string = router.currentRoute.value.fullPath,
-                                        navigation?: FrontendConfirmedNavigation): Promise<boolean> {
+    messageKey: MessageKey, kind: 'success' | 'info',
+    scope: FrontendRequestScope = context.capture(),
+    origin: string = router.currentRoute.value.fullPath,
+    navigation?: FrontendConfirmedNavigation): Promise<boolean> {
     if (!context.isCurrent(scope) || frontendDocumentUrl(router.currentRoute.value.fullPath) !== frontendDocumentUrl(origin)
         || !isPlainMessageKey(messageKey)) return false;
     const previous = context.pageCompletion.value;
@@ -165,8 +165,8 @@ const identityNavigations = new WeakMap<FrontendContext['session'], () => void>(
  * A later matching Retry never replays login/registration or visits a retired origin.
  */
 function retainIdentityNavigation(context: FrontendContext, router: Router, confirmedContext: string | null,
-                                 outcome: components['schemas']['PageEntryOutcome'], origin: string,
-                                 completion?: FrontendConfirmedNavigation): void {
+    outcome: components['schemas']['PageEntryOutcome'], origin: string,
+    completion?: FrontendConfirmedNavigation): void {
     const navigation = observePageNavigation(router, {finished: resumeNavigation});
     const stop = watch(() => [context.ready.value, context.session.value?.context, context.epoch.value], resumeNavigation);
     identityNavigations.set(context.session, retireNavigation);
@@ -200,10 +200,10 @@ function retainIdentityNavigation(context: FrontendContext, router: Router, conf
  * actor and resumes this destination once. A mismatch or committed departure retires it.
  */
 export async function completeIdentityEntry(context: FrontendContext, router: Router,
-                                            result: FrontendIdentityConfirmation,
-                                            outcome: components['schemas']['PageEntryOutcome'],
-                                            origin: string = router.currentRoute.value.fullPath,
-                                            navigation?: FrontendConfirmedNavigation): Promise<boolean> {
+    result: FrontendIdentityConfirmation,
+    outcome: components['schemas']['PageEntryOutcome'],
+    origin: string = router.currentRoute.value.fullPath,
+    navigation?: FrontendConfirmedNavigation): Promise<boolean> {
     identityNavigations.get(context.session)?.();
     try {
         await context.acceptIdentity(result);
@@ -221,8 +221,8 @@ export async function completeIdentityEntry(context: FrontendContext, router: Ro
 /** The caller's existing admission result supplies all policy and feedback. Retained
  * completion only adds delivery recovery; render/denial still follow the ordinary boundary. */
 function navigateConfirmedEntry(context: FrontendContext, router: Router,
-                                outcome: components['schemas']['PageEntryOutcome'], origin: string,
-                                navigation?: FrontendConfirmedNavigation): Promise<boolean> {
+    outcome: components['schemas']['PageEntryOutcome'], origin: string,
+    navigation?: FrontendConfirmedNavigation): Promise<boolean> {
     if (navigation && outcome.kind === 'redirect') {
         return navigation.navigate(outcome.url, context.capture(), origin, outcome.notice);
     }
@@ -308,7 +308,7 @@ function createConfirmedNavigation(context: FrontendContext, router: Router) {
 
     /** Consume retained delivery only after an accepted departure from its origin. */
     function retireDepartedReceipt(_to: RouteLocationNormalized, _from: RouteLocationNormalized,
-                                   failure?: unknown): void {
+        failure?: unknown): void {
         // Failed/canceled navigation still belongs to the form that confirmed the write.
         if (!failure && receipt.value
             && frontendDocumentUrl(router.currentRoute.value.fullPath) !== frontendDocumentUrl(receipt.value.origin)) {
@@ -451,9 +451,9 @@ function createConfirmedNavigation(context: FrontendContext, router: Router) {
      * Copy only read dependencies, announce its public notice once, then delegate
      * first delivery and explicit retry to this existing receipt owner. */
     async function navigate(owner: unknown, destination: string, scope: FrontendRequestScope = context.capture(),
-                            origin: string = router.currentRoute.value.fullPath,
-                            notice: components['schemas']['EntryNotice'] | null = null, refreshSession = false,
-                            readFamilies: readonly (readonly unknown[])[] = []): Promise<boolean> {
+        origin: string = router.currentRoute.value.fullPath,
+        notice: components['schemas']['EntryNotice'] | null = null, refreshSession = false,
+        readFamilies: readonly (readonly unknown[])[] = []): Promise<boolean> {
         if (!mayNavigate() || !context.isCurrent(scope)
             || frontendDocumentUrl(router.currentRoute.value.fullPath) !== frontendDocumentUrl(origin)) return false;
         // Copy only the selected key arrays so later caller mutation cannot
@@ -581,15 +581,15 @@ export function useConfirmedNavigation(identity?: string): FrontendConfirmedNavi
     // These states belong to each mounted control, while the receipt and its
     // dispatch guard remain application-owned across originating-view retirement.
     const retryAction = useActionState({eligible: () => retryAvailable.value
-        && navigation.mayRetry(owner), pending: () => navigation.pending.value});
+            && navigation.mayRetry(owner), pending: () => navigation.pending.value});
     const fallbackRetryAction = useActionState({eligible: () => retryAvailable.value
-        && navigation.mayRetryFallback(), pending: () => navigation.pending.value});
+            && navigation.mayRetryFallback(), pending: () => navigation.pending.value});
     const recoveryAction = useActionState({eligible: () => retryAvailable.value
-        && navigation.mayRetryRecovery(), pending: () => navigation.pending.value});
+            && navigation.mayRetryRecovery(), pending: () => navigation.pending.value});
     async function navigate(destination: string, scope: FrontendRequestScope = context.capture(),
-                            origin: string = router.currentRoute.value.fullPath,
-                            notice: components['schemas']['EntryNotice'] | null = null, refreshSession = false,
-                            readFamilies: readonly (readonly unknown[])[] = []): Promise<boolean> {
+        origin: string = router.currentRoute.value.fullPath,
+        notice: components['schemas']['EntryNotice'] | null = null, refreshSession = false,
+        readFamilies: readonly (readonly unknown[])[] = []): Promise<boolean> {
         return navigation.navigate(owner, destination, scope, origin, notice, refreshSession, readFamilies);
     }
 
@@ -704,7 +704,7 @@ export function usePageEntry<T extends {entry: components['schemas']['PageEntryO
      * The original barrier descriptor remains readable through either retirement.
      * Feature policy is invoked in this turn, capturing its resource before navigation. */
     async function denyAdmission(entry: FrontendPageEntryDenial | ApiFailure, scope: FrontendRequestScope,
-                                 family: readonly unknown[], capturedKey: readonly unknown[]): Promise<void> {
+        family: readonly unknown[], capturedKey: readonly unknown[]): Promise<void> {
         admissionGeneration++;
         deniedEntry.value = entry;
         renderedScope.value = undefined;
@@ -712,7 +712,7 @@ export function usePageEntry<T extends {entry: components['schemas']['PageEntryO
         const preservedKey = entry instanceof ApiFailure ? undefined : capturedKey;
         const error = entry instanceof ApiFailure ? entry : new ObsoleteRequestError();
         await Promise.all([retireQueryFamily(context.queryClient, family, error, preservedKey),
-            source.onDenied?.(entry, scope)]);
+        source.onDenied?.(entry, scope)]);
     }
 
     /** Initial document eligibility is evaluated at seeding time, not captured forever
@@ -803,7 +803,7 @@ export function usePageEntry<T extends {entry: components['schemas']['PageEntryO
     watch(() => query.data.value?.entry, followEntry, {immediate: true});
 
     function navigate(entry: components['schemas']['PageEntryOutcome'], scope?: FrontendRequestScope,
-                      expectedRoute?: string): Promise<boolean> {
+        expectedRoute?: string): Promise<boolean> {
         return navigatePageEntry(context, router, entry, scope, expectedRoute);
     }
     const retryAvailable = useReadRetry(() => error.value);

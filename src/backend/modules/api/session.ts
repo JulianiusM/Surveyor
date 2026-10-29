@@ -2,6 +2,7 @@ import type {Request, Response} from 'express';
 import {timingSafeEqual} from 'node:crypto';
 import {version} from '../../../../package.json';
 import type {ApiActor} from '../../../types/ApiTypes';
+import type {SessionLike} from '../../../types/PermissionTypes';
 import type {components} from '../../../types/api/v1';
 import type {RegistrationEmailDelivery} from '../../../types/IdentityTypes';
 import type {PreparedApiJsonResponse} from '../../../types/ApiTransportTypes';
@@ -13,6 +14,12 @@ import {ApiProblem} from './problem';
 import {requestLocale} from '../lib/http';
 import settings from '../settings';
 import {compatibleApiClient, deploymentView} from './deployment';
+
+/** Require the profile of an already admitted API actor without re-reading mutable session state. */
+export function requireApiProfileId(actor: SessionLike): string {
+    if (!actor.profile?.id) throw new ApiProblem('AUTH_REQUIRED');
+    return actor.profile.id;
+}
 
 /** Compare submitted tokens without making their contents authorization evidence. */
 function sameToken(left: string | undefined, right: string | null | undefined): boolean {

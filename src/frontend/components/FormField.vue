@@ -79,7 +79,7 @@ function readControlAttributes() {
         id: props.id,
         name: props.name === null ? undefined : props.name ?? props.id,
         class: [props.type === 'checkbox' ? 'form-check-input' : ['form-control', 'text-bg-dark'], props.controlClass,
-            {'is-valid': props.state === 'valid', 'is-invalid': props.state === 'invalid'}],
+        {'is-valid': props.state === 'valid', 'is-invalid': props.state === 'invalid'}],
         required: props.required,
         maxlength: props.maxLength,
         minlength: props.minLength,

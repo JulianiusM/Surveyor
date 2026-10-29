@@ -34,7 +34,7 @@ export class EventApi {
      * Missing/malformed ETags cannot authorize an editor, even when the body
      * passed its generated shape validator or a previous snapshot is available. */
     async metadata(eventId: string, scope: FrontendRequestScope, signal?: AbortSignal,
-                   previous?: FrontendRead<Metadata>): Promise<FrontendRead<Metadata>> {
+        previous?: FrontendRead<Metadata>): Promise<FrontendRead<Metadata>> {
         const transport = this.transport;
         function readMetadata() {
             return transport.client.GET('/events/{eventId}/metadata', {
@@ -50,7 +50,7 @@ export class EventApi {
      * A confirmed response must include newly admitted header evidence as well as
      * valid field data; neither the previous token nor saved values renew authority. */
     async saveMetadata(eventId: string, patch: components['schemas']['EventMetadataPatch'], etag: string,
-                       scope: FrontendRequestScope): Promise<FrontendRead<Metadata>> {
+        scope: FrontendRequestScope): Promise<FrontendRead<Metadata>> {
         // Structural validation precedes transport; business/field checks remain server-owned.
         if (!validateEventMetadataPatch(patch)) throw generatedInputError(validateEventMetadataPatch.errors, eventInputField);
 
@@ -78,7 +78,7 @@ export class EventApi {
     /** Creation admission is distinct from the public duplication projection. The caller supplies
      * its exact return destination; the server owns account admission and bounded destination policy. */
     async createEntry(scope: FrontendRequestScope, signal?: AbortSignal,
-                      returnTo?: string): Promise<components['schemas']['EventCreateEntry']> {
+        returnTo?: string): Promise<components['schemas']['EventCreateEntry']> {
         const transport = this.transport;
         function readCreationEntry() {
             return transport.client.GET('/events/create-entry', {
@@ -91,7 +91,7 @@ export class EventApi {
     /** Adapt the generated Event draft to multipart without changing its form-shaped
      * parsing/order. Only the declared JSON receipt confirms this creation. */
     async createEvent(input: components['schemas']['EventCreateInput'], image: File | null,
-                      scope: FrontendRequestScope): Promise<components['schemas']['EventCreated']> {
+        scope: FrontendRequestScope): Promise<components['schemas']['EventCreated']> {
         if (!validateEventCreateInput(input)) throw generatedInputError(validateEventCreateInput.errors, eventInputField);
         const form = createMultipartForm(input, image);
 
@@ -105,7 +105,7 @@ export class EventApi {
     /** Detail and explicit guest routes deliberately have different admission. Never
      * infer either route from session presence or from permissions on the other projection. */
     async resourceEntry(eventId: string, view: 'detail' | 'guest' | 'admin', scope: FrontendRequestScope,
-                        signal?: AbortSignal, regToken?: string): Promise<components['schemas']['EventResourceEntry']> {
+        signal?: AbortSignal, regToken?: string): Promise<components['schemas']['EventResourceEntry']> {
         const transport = this.transport;
         function readResourceEntry() {
             return transport.client.GET('/events/{eventId}/entry', {
@@ -345,9 +345,9 @@ export class EventApi {
 
     /** Child lifecycle commands use the current Event view intent and existing shared operation. */
     async archiveChild(eventId: string, entityType: 'packing' | 'activity' | 'drivers', entityId: string,
-                       restore: boolean, scope: FrontendRequestScope, admin = false) {
+        restore: boolean, scope: FrontendRequestScope, admin = false) {
         const options = {params: {path: {eventId, entityType, entityId}, query: {view: admin ? 'admin' as const : 'detail' as const},
-            header: this.transport.headers(scope)}, cache: 'no-store' as const};
+                header: this.transport.headers(scope)}, cache: 'no-store' as const};
         const result = restore ? await this.transport.client.POST('/events/{eventId}/things-to-do/{entityType}/{entityId}/restore', options)
             : await this.transport.client.POST('/events/{eventId}/things-to-do/{entityType}/{entityId}/archive', options);
         return this.transport.read(restore ? 'restoreEventChild' : 'archiveEventChild', result, validateMutationResult, scope).data;
@@ -356,7 +356,7 @@ export class EventApi {
     /** Delete an owner-managed child only within its admitted parent/type scope.
      * The existing feature operation owns deletion and best-effort file cleanup. */
     async deleteChild(eventId: string, entityType: 'packing' | 'activity' | 'drivers', entityId: string,
-                      scope: FrontendRequestScope, admin = false): Promise<components['schemas']['MutationResult']> {
+        scope: FrontendRequestScope, admin = false): Promise<components['schemas']['MutationResult']> {
         const result = await this.transport.client.DELETE('/events/{eventId}/things-to-do/{entityType}/{entityId}', {
             params: {path: {eventId, entityType, entityId}, query: {view: admin ? 'admin' : 'detail'},
                 header: this.transport.headers(scope)}, cache: 'no-store',
@@ -366,7 +366,7 @@ export class EventApi {
 
     /** Pausing/resuming preserves shared archival state rather than editing personal placement. */
     async automateChild(eventId: string, entityType: 'packing' | 'activity' | 'drivers', entityId: string,
-                        paused: boolean, scope: FrontendRequestScope, admin = false) {
+        paused: boolean, scope: FrontendRequestScope, admin = false) {
         const result = await this.transport.client.PUT('/events/{eventId}/things-to-do/{entityType}/{entityId}/automatic-archive', {
             params: {path: {eventId, entityType, entityId}, query: {view: admin ? 'admin' : 'detail'}, header: this.transport.headers(scope)},
             body: {paused}, cache: 'no-store',
@@ -381,8 +381,8 @@ function eventInputField(path: string): FrontendInputField | undefined {
     const field = path.slice(1);
     const label = field === 'title' ? 'event.title' : field === 'description' ? 'event.description'
         : field === 'location' ? 'event.locationLabel' : field === 'startDate' ? 'event.startDateLabel'
-        : field === 'endDate' ? 'event.endDateLabel' : field === 'maxParticipants' ? 'event.maxParticipantsLabel'
-        : field === 'bindingDeadline' ? 'event.deadlineLabel' : field === 'deadlineTz' ? 'event.timezone' : undefined;
+            : field === 'endDate' ? 'event.endDateLabel' : field === 'maxParticipants' ? 'event.maxParticipantsLabel'
+                : field === 'bindingDeadline' ? 'event.deadlineLabel' : field === 'deadlineTz' ? 'event.timezone' : undefined;
     if (label) return {label};
     if (path.startsWith('/defaultPermissions')) return {label: 'packing.groupPermissions'};
     return undefined;

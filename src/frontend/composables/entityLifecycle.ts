@@ -21,13 +21,13 @@ const automationMessages: EntityAutomationMessages = {
  * Existing command/API owners retain admission, refresh dependencies,
  * uncertainty and server authority; this owner adds no state or second command. */
 export function createEntityLifecycle(api: EntityLifecycleOperations,
-                                      command: Pick<ReturnType<typeof useCommand>, 'run'>,
-                                      messages: Readonly<Ref<LocalizationContext>>) {
+    command: Pick<ReturnType<typeof useCommand>, 'run'>,
+    messages: Readonly<Ref<LocalizationContext>>) {
     /** Confirm the same direct/inherited lifecycle choice in every presentation.
      * The caller supplies its current resource state;
      * personal visibility and permanent deletion remain separate operations. */
     async function archive(listId: string, restore: boolean, inherited: boolean,
-                           confirmationKey?: FrontendPlainMessageKey, hasAutomaticSchedule = false): Promise<void> {
+        confirmationKey?: FrontendPlainMessageKey, hasAutomaticSchedule = false): Promise<void> {
         // Restore takes precedence over inherited archival, matching both existing
         // journeys. Read wording from the current locale at the user action boundary.
         // Independent schedules pause on restoration in the existing backend.
@@ -51,7 +51,7 @@ export function createEntityLifecycle(api: EntityLifecycleOperations,
      * callers retain capability checks and the command's refresh dependencies;
      * the existing server operation remains the schedule's sole policy owner. */
     async function automate(id: string, paused: boolean,
-                            labels: EntityAutomationMessages = automationMessages): Promise<void> {
+        labels: EntityAutomationMessages = automationMessages): Promise<void> {
         const operation = api.automate;
         if (!operation) return;
         const changeAutomation = operation.bind(api);
@@ -78,7 +78,7 @@ export function createEntityLifecycle(api: EntityLifecycleOperations,
  * covers the irreversible write and its first delivery attempt; later departures
  * review current drafts, while confirmed Retry can only read/deliver, never write. */
 export function useEntityRemoval(command: Pick<ReturnType<typeof useCommand>, 'run' | 'prepareDeparture' | 'pending' | 'outcome' | 'action'>,
-                                 destination: FrontendConfirmedNavigation) {
+    destination: FrontendConfirmedNavigation) {
     const context = useFrontend();
     const {messages} = context;
     const router = useRouter();

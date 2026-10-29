@@ -7893,6 +7893,202 @@ implementation_defects:
         responsibilities without a schema, general Session or provider-protocol change.
     disposition: Confirmed stored-zero owner/default defects repaired through the existing shared
       persistence owners under the current review-and-fix request; broader identifier cleanup is excluded.
+  - id: IMP-213
+    status: resolved
+    discovered_on: 2026-10-29
+    resolved_on: 2026-10-29
+    severity: medium
+    category: frontend-cache-ownership
+    owner: frontend maintainers
+    title: List-detail fallback retains a DTO outside its owning query
+    implementation_evidence:
+      - src/frontend/composables/listDetail.ts
+      - src/frontend/app/queryCache.ts
+      - src/frontend/features/event/useEventSection.ts
+      - tests/frontend/frontend-activity-requirements.spec.ts
+    evidence:
+      - During an Activity page/window change and failed replacement read, the old result mirror
+        remains displayable after its original Query is explicitly removed. This establishes a
+        cache-ownership defect, not a demonstrated cross-actor disclosure.
+    resolution:
+      implementation: Event and list-detail callers use one query-cache retention implementation,
+        retaining a registered Query through a disabled observer instead of a separate DTO copy.
+        Scope retirement, removal, denial, cleared data and unmount release the retained result.
+      verification: Ten affected frontend suites pass 527 tests, including seven new component
+        regressions for ownership, eviction, pending recovery, denial and observer disposal.
+        Independent and root source review and client/SSR/test typechecks pass.
+    disposition: Corrected under the current implementation review; no automatic read, command
+      replay, second authority store or stronger mutation guarantee is introduced.
+  - id: IMP-214
+    status: resolved
+    resolved_on: 2026-10-29
+    discovered_on: 2026-10-29
+    severity: high
+    category: database-convention
+    owner: persistence maintainers
+    title: Runtime database operations still contain handwritten SQL
+    implementation_evidence:
+      - src/backend/modules/database/services/UserService.ts
+      - src/backend/modules/database/services/EventInvoiceService.ts
+    evidence:
+      - Six Overview raw executions compose mixed-resource grouping, placement, totals and paging.
+        Two offline proof-maintenance executions acquire and release the existing connection-held lock.
+      - Additional builder expressions preserve exact provider/proof identity, permission masks,
+        aggregates and database-side atomic updates. Bound values do not satisfy the requested ban
+        on SQL strings. Installed TypeORM has no structured UNION or advisory-lock API.
+    impact: The requested literal SQL-string convention is not fulfilled; changing those operations
+      without resolving ORM expression limits can alter accepted identity, pagination or lock behavior.
+    closes_when:
+      - Resolve the permitted ORM expression boundary directly with the maintainer.
+      - All runtime access remains in Services, uses native methods where available and the agreed
+        structured representation elsewhere, with real persistence verification of existing contracts.
+    disposition: Resolved under the maintainer's explicit R1 approval recorded in the Development
+      Policy's 2026-10-29 amendment; exact identity, paging and held-lock contracts are preserved.
+    resolution:
+      implementation: Runtime persistence remains in Services, using native TypeORM methods where
+        available and structured builders elsewhere. Handwritten whole queries and raw execution
+        are removed; short bound expressions and the ORM-generated UNION retain the approved scope.
+      verification: Seventy-six native query/parameter comparisons and real held-runner lock coverage
+        pass. The full integration run passed 765 cases with 17 timeouts and 23 setup skips; unchanged
+        three-file rerun passed all 98 cases, covering every earlier failure and skip.
+  - id: IMP-215
+    status: resolved
+    resolved_on: 2026-10-29
+    discovered_on: 2026-10-29
+    severity: medium
+    category: migration-convention
+    owner: persistence maintainers
+    title: Migrations mix explicit SQL with schema-writing APIs
+    implementation_evidence:
+      - src/backend/migrations/
+      - src/backend/modules/database/utils/migration-helper.ts
+      - docs/DEVELOPMENT.md
+    evidence:
+      - All 25 migration implementations reach SQL; five migrations and their helper also contain
+        11 schema-writing API calls. The Development guide expressly protects the committed
+        1789603200000-AddOrganizerInvoices migration from changes.
+    impact: One migration style cannot cover every file while that source-preservation constraint
+      remains unresolved. Equivalent source edits can still alter future reversion behavior.
+    closes_when:
+      - Resolve the protected-file constraint and select one schema-write representation.
+      - Preserve migration identities, physical storage, data, guards, triggers, retry behavior and
+        rollback refusals; verify affected up and down behavior on disposable historical fixtures.
+    disposition: Resolved under the maintainer's explicit R2 approval and protected-file exception
+      recorded in the Development Policy's 2026-10-29 amendment. Applied records and installed
+      archives are unchanged; permanent operator-rehearsal deferrals remain in force.
+    resolution:
+      implementation: The five migrations and shared helper use explicit QueryRunner SQL with the
+        existing guards. Physical column attributes, FK/index/table order and generated-column
+        metadata bookkeeping retain the original successful and committed partial-failure behavior.
+      verification: Twenty real historical-schema fixtures pass, including stored identifier types,
+        collation, defaults, retained rows, retries, trigger behavior and admitted/refused reversions.
+        The generated-recorder fixture verifies the committed column and metadata before FK refusal.
+        The separate registration-settings rollback defect remains active as IMP-218.
+  - id: IMP-216
+    status: resolved
+    resolved_on: 2026-10-29
+    discovered_on: 2026-10-29
+    severity: medium
+    category: business-owner-convention
+    owner: application maintainers
+    title: Named controller responsibilities still contain business implementation
+    implementation_evidence:
+      - src/backend/controller/userController.ts
+      - src/backend/controller/entityAdminController.ts
+      - docs/ARCHITECTURE.md
+      - docs/policies/DEVELOPMENT_POLICY.md
+      - docs/decisions/DEC-007-APPLICATION-ARCHITECTURE-REMEDIATION.md
+    evidence:
+      - Personal-visibility membership/write decisions and account-owned/default-profile selection
+        remain in userController. Automatic approval review rejected their relocation twice,
+        including a retry with the October 28 ownership amendment and DEC-007 evidence.
+      - Shared administrator/default-permission commands contain target, zero/absent-grant and
+        sparse-update decisions. The October 26 policy expressly retains matching permission
+        administration in its existing shared controller.
+    impact: The requested uniform business boundary is incomplete. Relocation must preserve current
+      authorization, comparison evidence, transaction managers and Session/completion timing.
+    closes_when:
+      - Obtain the specific owner resolution required for the blocked User responsibilities and
+        the separately retained shared-permission business responsibility.
+      - Controllers keep request admission, normalization, projections and completion coordination;
+        any approved feature operation is adopted by every actual matching caller without forwarding.
+    disposition: Resolved under the maintainer's explicit R3/R5/R6 approvals recorded in the
+      Development Policy's 2026-10-29 amendment. Earlier approval-review rejections and the retained
+      controller assignment are superseded only within those approved ownership corrections.
+    resolution:
+      implementation: entityArchival owns locked visibility membership/writes; identity owns account
+        profile selection; permissionEngine owns administrator/default-grant business decisions.
+        All matching callers use those owners directly. Controllers retain admission, comparison,
+        projection and Session/completion timing, with the original managers and validation order.
+      verification: Source-equivalence review preserves 161 retained functions and the moved stages.
+        Four real cross-feature permission-order cases pass. The database-free run passed 2266 cases
+        with four timeouts; an unchanged two-file rerun passed all 22 cases, covering all 2270 cases.
+        Independent and root reviews confirm actual caller adoption and zero/omitted-grant behavior.
+  - id: IMP-217
+    status: resolved
+    resolved_on: 2026-10-29
+    discovered_on: 2026-10-29
+    severity: low
+    category: source-format-convention
+    owner: development tooling maintainers
+    title: Import quotes and indentation have no common approved baseline
+    implementation_evidence:
+      - docs/DEVELOPMENT.md
+      - docs/policies/DEVELOPMENT_POLICY.md
+      - tests/factories/frontendCoreDynamicFactory.ts
+      - src/
+    evidence:
+      - The source audit found 65 files mixing static-import quote forms and one two-space factory.
+        Four-space indentation and single-quoted import paths predominate, while current guidance
+        requires preserving local formatting. The ESLint configuration is empty.
+    impact: The request for one syntax convention conflicts with the existing local-format rule.
+    closes_when:
+      - Resolve that formatting rule directly and apply its bounded authored-source scope consistently.
+      - Preserve parsed behavior and literal values, generated outputs, template/JSON syntax and
+        independently protected migration constraints.
+    disposition: Resolved under the maintainer's explicit R4 approval recorded in the Development
+      Policy's 2026-10-29 amendment; no formatter dependency, hook or delivery prerequisite is added.
+    resolution:
+      implementation: Authored script code uses four-space indentation and single-quoted module
+        paths. The mechanical pass reviewed 643 files and changed 298, with 424 quote edits and
+        2963 leading-indentation edits while preserving meaningful wrapping and protected content.
+      verification: Parsed code, literal values, raw templates, comment text, line counts and target
+        containment checks pass. The final production build, test typecheck and development-policy
+        check pass, as do all 36 tooling regressions. A bounded approval-section parser fix retains
+        the six authoritative fields while excluding later policy sections, with its synthetic CLI
+        regression passing.
+  - id: IMP-218
+    status: resolved
+    resolved_on: 2026-10-29
+    discovered_on: 2026-10-29
+    severity: medium
+    category: migration-reversion
+    owner: persistence maintainers
+    title: Registration-deadline rollback targets an unrelated table name
+    implementation_evidence:
+      - src/backend/migrations/1786335515684-AddRegistrationDeadlineSettings.ts
+    evidence:
+      - The up method adds allow_reg_date_update, allow_reg_cancel and allow_reg_diet_update to
+        events; all three down helper calls instead name evente.
+      - An owned MariaDB 10.11 historical-schema fixture executes the actual up and down methods.
+        All three columns remain in events afterward, evente does not exist, and the retained
+        Event row is unchanged. The fixture is cleared after verification.
+    impact: Reversion silently fails to remove the three settings columns. Correcting the target
+      would newly execute column deletion and discard values stored in those columns.
+    closes_when:
+      - Obtain direct approval for correcting the rollback target and its resulting column deletion.
+      - Verify actual up/down behavior preserves Event rows and unrelated columns/tables while
+        removing only the three declared settings columns on an admitted rollback.
+    disposition: Resolved under the maintainer's explicit R7 approval and the Development Policy's
+      dated 2026-10-29 rollback amendment. Operator rehearsals remain permanently deferred.
+    resolution:
+      implementation: All three guarded down operations target events, preserving their order,
+        the Activity statement, migration identity and the shared explicit-SQL convention. Explicit
+        rollback now removes the three settings columns and their values as approved.
+      verification: All 20 real historical-schema migration tests pass on disposable MariaDB 10.11.
+        The extended case stores nondefault Event flags, verifies exact original schema/row restoration,
+        preserves an unrelated evente sentinel with matching columns, and covers retry-up/down and
+        re-upgrade default reset. Independent production and regression source reviews pass.
 findings:
   - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
     status: closed

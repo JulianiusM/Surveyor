@@ -94,7 +94,7 @@ function startupSession(locale: Session['locale'] = 'en'): Session {
  * origin. This selected browser boundary needs no Express server or schema reset.
  * API fixtures retain production decoding while refusing every command. */
 async function startupDocument(page: Page, path: string, bootstrap: FrontendBootstrap,
-                               documentHeaders?: Record<string, string>) {
+    documentHeaders?: Record<string, string>) {
     const renderer = await import(pathToFileURL(resolve('dist/backend/modules/frontendRenderer.js')).href) as {
         initializeFrontendRenderer(): Promise<void>;
         prepareFrontend(response: Response, url: string, bootstrap: FrontendBootstrap): Promise<FrontendPreparedDocument>;
@@ -185,7 +185,7 @@ async function startupDocument(page: Page, path: string, bootstrap: FrontendBoot
             data = {entry: {kind: 'render'}, context: bootstrap.eventCreateContext};
         if (data !== undefined) {
             await route.fulfill({status: 200, contentType: 'application/json', headers: bootstrap.session.context === null ? {} : {
-                'X-Surveyor-Context': bootstrap.session.context}, body: JSON.stringify(data)});
+                    'X-Surveyor-Context': bootstrap.session.context}, body: JSON.stringify(data)});
             return;
         }
         await route.fulfill({status: 404, contentType: 'text/plain', body: 'No startup fixture for this request.'});
@@ -370,7 +370,7 @@ for (const locale of ['en', 'de'] as const) {
                     rows: [...element.querySelectorAll('.dropdown-item')].map(item => {
                         const style = getComputedStyle(item);
                         return {height: item.getBoundingClientRect().height, oneLineHeight: Number.parseFloat(style.lineHeight)
-                            + Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom)};
+                                + Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom)};
                     })};
             });
             expect(geometry.rows).toHaveLength(5);
@@ -538,10 +538,10 @@ for (const width of [1280, 390]) {
             // A future server's safe plain-text detail crosses the real decoding
             // boundary and makes wrapping independent of today's catalog length.
             await route.fulfill({status: 503, contentType: 'application/problem+json', body: JSON.stringify({
-                type: 'urn:surveyor:problem:future-read-failure', title: 'Read unavailable', status: 503,
-                detail: diagnostic, requestId: 'responsive-feedback-fixture', code: 'FUTURE_READ_FAILURE',
-                messageKey: 'future.readFailure', params: {},
-            })});
+                    type: 'urn:surveyor:problem:future-read-failure', title: 'Read unavailable', status: 503,
+                    detail: diagnostic, requestId: 'responsive-feedback-fixture', code: 'FUTURE_READ_FAILURE',
+                    messageKey: 'future.readFailure', params: {},
+                })});
         });
         await page.goto(delivery.url);
         await waitForFrontendHydration(page);
@@ -818,7 +818,7 @@ for (const width of [1280, 1024, 390]) {
             await page.route('**/api/v1/packing-lists/' + id, async route => {
                 if (holdRefresh) { refreshStarted.release(); await refreshed.promise; }
                 await route.fulfill({status: 200, contentType: 'application/json', headers: {
-                    'X-Surveyor-Context': session.context!, ETag: '"header-fixture"'}, body: JSON.stringify(list)});
+                        'X-Surveyor-Context': session.context!, ETag: '"header-fixture"'}, body: JSON.stringify(list)});
             });
             const entry = !linked ? await failStartupModule(page, /\/app\/assets\/entry-client-[^/]+\.js(?:\?|$)/u) : undefined;
             await page.goto(delivery.url, {waitUntil: entry ? 'commit' : 'load'});
@@ -1060,7 +1060,7 @@ for (const locale of ['en', 'de'] as const) {
             const profiles: components['schemas']['ProfileManagement'] = {profiles: [profile], activeProfileId: profile.id};
             await page.route('**/api/v1/profiles', async route => {
                 await route.fulfill({status: 200, contentType: 'application/json', headers: {
-                    'X-Surveyor-Context': session.context!}, body: JSON.stringify(profiles)});
+                        'X-Surveyor-Context': session.context!}, body: JSON.stringify(profiles)});
             });
             const entry = await failStartupModule(page, /\/app\/assets\/entry-client-[^/]+\.js(?:\?|$)/u);
             try {
@@ -1103,7 +1103,7 @@ for (const locale of ['en', 'de'] as const) {
                     context: 'creation-permissions-context-1234567890', csrfToken: 'creation-permissions-csrf-1234567890'};
                 const definitions = {defaults: {participant: 1, guest: 0, authenticated: 0, public: 0}, presets: [],
                     permissions: [{key: 'ACCESS_VIEW', bit: 1}, {key: 'ITEM_ADD', bit: 2}, {key: 'EDIT_TITLE', bit: 4},
-                        {key: 'MANAGE_PERMISSIONS', bit: 8}, {key: 'DATA_EXPORT', bit: 16}]};
+                    {key: 'MANAGE_PERMISSIONS', bit: 8}, {key: 'DATA_EXPORT', bit: 16}]};
                 const delivery = await startupDocument(page, `/${family}/create?locale=${locale}`, {session,
                     pageEntry: {kind: 'render'}, packingCreateContext: definitions, driversCreateContext: definitions,
                     activityCreateContext: definitions, eventCreateContext: definitions});
@@ -1357,7 +1357,7 @@ test('a hydrated Packing denial retains its static document through a detected r
     // bootstrap; this exercises the lifecycle an unmounted route test cannot.
     await page.route('**/api/v1/session', async function deliverReplacementSession(route): Promise<void> {
         await route.fulfill({status: 200, contentType: 'application/json', headers: session.context === null ? {} : {
-            'X-Surveyor-Context': session.context}, body: JSON.stringify({...session,
+                'X-Surveyor-Context': session.context}, body: JSON.stringify({...session,
                 deployment: {...session.deployment, buildId: 'mounted-denial-replacement'}})});
     });
     await page.evaluate(function resumeSession(): void { window.dispatchEvent(new Event('focus')); });
@@ -1645,23 +1645,23 @@ for (const width of [390, 1280]) {
         // Both stylesheets render the same trusted Markdown and frame.
         const patterns = [
             '| Method | What you use | First-time setup |\n|---|---|---|\n'
-                + '| Local account | A saved username and secret phrase | Enter the details to continue. |\n'
-                + '| Organization sign-in | An external provider account | Follow the sign-in steps. |',
+            + '| Local account | A saved username and secret phrase | Enter the details to continue. |\n'
+            + '| Organization sign-in | An external provider account | Follow the sign-in steps. |',
             '| State | Who sees it | When you return |\n|---|---|---|\n'
-                + '| A shared title and **Group** setting | Everyone with access | The saved values reappear. |\n'
-                + '| **Checked?** and a row highlight | This example browser | The local selection reappears. |',
+            + '| A shared title and **Group** setting | Everyone with access | The saved values reappear. |\n'
+            + '| **Checked?** and a row highlight | This example browser | The local selection reappears. |',
             '| Field | What to enter |\n|---|---|\n'
-                + '| **Name** | A short name for this example. |\n'
-                + '| **Capacity** | A positive whole number. |',
+            + '| **Name** | A short name for this example. |\n'
+            + '| **Capacity** | A positive whole number. |',
             '| List state | Participants | Drivers | Explanation |\n|---|---|---|---|\n'
-                + '| Example offers | 2 | 3 | The displayed values describe the example rows. |\n'
-                + '| Another example | 4 | 5 | Read the complete explanation beside these values. |',
+            + '| Example offers | 2 | 3 | The displayed values describe the example rows. |\n'
+            + '| Another example | 4 | 5 | Read the complete explanation beside these values. |',
             '| Visible status | How it starts | What happens next | Included costs? |\n|---|---|---|---|\n'
-                + '| **Unreviewed** | An example entry is added. | A coordinator reviews the example entry. | No. |\n'
-                + '| **Completed** | The example has been reviewed. | Its saved information remains available. | Yes. |',
+            + '| **Unreviewed** | An example entry is added. | A coordinator reviews the example entry. | No. |\n'
+            + '| **Completed** | The example has been reviewed. | Its saved information remains available. | Yes. |',
             '| Preset | Permissions selected |\n|---|---|\n'
-                + '| **Limited** | Edit the example title and description. |\n'
-                + '| **Complete** | Edit the example and manage its assignments. |',
+            + '| **Limited** | Edit the example title and description. |\n'
+            + '| **Complete** | Edit the example and manage its assignments. |',
         ];
         const articleTables = patterns.map(markdown => renderTrustedHelpMarkdown(markdown, 'Help table fixture').content).join('\n');
         // A future authored code value can exceed an ordinary word's intrinsic
@@ -1783,7 +1783,7 @@ test('client startup preserves an explicitly supplied recovery completion and re
     const session = startupSession();
     const url = '/guest/recovery';
     const delivery = await startupDocument(page, url, {session, pageCompletion: {context: session.context,
-        destination: url, messageKey: 'auth.recoverySent', kind: 'success'}});
+            destination: url, messageKey: 'auth.recoverySent', kind: 'success'}});
     await page.goto(delivery.url, {waitUntil: 'domcontentloaded'});
     await waitForFrontendHydration(page);
     await expect(page.getByRole('heading', {name: 'Success', exact: true})).toBeVisible();
@@ -1830,10 +1830,10 @@ async function startupFinanceDocument(page: Page, admin: boolean) {
         payerName: payer, notes: [note], needsRecalculation: false, amount, status: 'settled', statusLabel: 'Refunded',
         isPaid: true, caption: 'Refunded', settledShareNotice: null, coveredNames: [], coverageKnown: true};
     const calculation: components['schemas']['FinanceCalculation'] = {title: 'Calculation explanation', sections: [{
-        key: 'balance', title: `Calculated balance for ${payer}`,
-        formula: {terms: [{label: 'Base share', value: '10.00'}, {operator: '−', label: 'Previous payments', value: '100000009.99'}],
-            result: {label: 'Calculated balance', value: amount}},
-    }]};
+            key: 'balance', title: `Calculated balance for ${payer}`,
+            formula: {terms: [{label: 'Base share', value: '10.00'}, {operator: '−', label: 'Previous payments', value: '100000009.99'}],
+                result: {label: 'Calculated balance', value: amount}},
+        }]};
     const breakdown: components['schemas']['FinanceBreakdown'] = {
         components: [{key: 'shareAmount', label: 'Calculated balance', amount}], calculation, notes: [note],
         statusLabel: 'Refunded', needsRecalculation: false, settledShareNotice: null,
@@ -1841,8 +1841,8 @@ async function startupFinanceDocument(page: Page, admin: boolean) {
     const preview: components['schemas']['FinancePreview'] = {revision: 1, roundUpShares: false,
         calculation: {title: 'Saved calculation basis', sections: []}, exampleCalculation: calculation,
         columns: [{key: 'baseShareAmount', label: 'Base'}, {key: 'extraAmount', label: 'Adjustments'},
-            {key: 'invoiceCreditAmount', label: 'Invoice credit'}, {key: 'paymentCreditAmount', label: 'Previous'},
-            {key: 'shareAmount', label: 'Calculated balance'}],
+        {key: 'invoiceCreditAmount', label: 'Invoice credit'}, {key: 'paymentCreditAmount', label: 'Previous'},
+        {key: 'shareAmount', label: 'Calculated balance'}],
         shares: [{registrationId: '1', payerName: payer, baseShareAmount: '10.00', extraAmount: '-20.00',
             invoiceCreditAmount: '100.00', paymentCreditAmount: '99999889.99', shareAmount: amount,
             calculatedAmount: '-110.00', isPaid: false, notes: [note], statusLabel: 'Refund due'}],

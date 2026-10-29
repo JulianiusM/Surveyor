@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-import {Entity, JoinColumn, ManyToOne, RelationId, Unique} from "typeorm";
-import {NumericBase} from "../abstract/TrackedBase";
-import {ActivityAssignment} from "./ActivityAssignment";
-import {ActivityRole} from "./ActivityRole";
+import {Entity, JoinColumn, ManyToOne, RelationId, Unique} from 'typeorm';
+import {NumericBase} from '../abstract/TrackedBase';
+import {ActivityAssignment} from './ActivityAssignment';
+import {ActivityRole} from './ActivityRole';
 
 @Unique("unique_act_ass_role_map", ["assignment", "role"])
 @Entity("activity_assignment_roles", {schema: "surveyor"})

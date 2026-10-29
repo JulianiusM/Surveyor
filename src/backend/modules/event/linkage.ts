@@ -15,11 +15,10 @@
  */
 
 import Joi from 'joi';
-import {parseCivilDate} from '../../../common/lib/civilDate';
 import crypto from 'node:crypto';
 import type {EntityManager} from 'typeorm';
 import type {Event} from '../database/entities/event/Event';
-import type {EventLinkOption, EventLinkOptionsQuery, EventLinkOptionsResult} from '../../../types/EventTypes';
+import type {EventLinkOption, EventLinkOptionsQuery, EventLinkOptionsResult, EventPropertyDateInput} from '../../../types/EventTypes';
 import type {EntityDescriptor, PermView, SessionLike} from '../../../types/PermissionTypes';
 import type {EntityEventChangeResult, EntityMutationCompletion, EntityPropertyPresentation} from '../../../types/EntityPropertyTypes';
 import type {EntityBase, EntityViewAdmission} from '../../../types/UserTypes';
@@ -29,7 +28,7 @@ import {
     eventMethodCandidatePermission, eventMethodPermission, mayPerformEventMethod, entityPermissionKey, can,
     entityMethodPermission, evaluateEntities, evaluateSubject, getEntityPermissionQueryScope,
 } from '../permissionEngine';
-import {sameUuid, uuidKey} from '../lib/util';
+import {rewriteISOToZone, sameUuid, uuidKey, validateCalendarDate} from '../lib/util';
 import {requireSessionProfileId} from '../lib/session';
 import {APIError} from '../lib/errors';
 import * as eventService from '../database/services/EventService';
@@ -37,6 +36,40 @@ import * as lifecycleService from '../database/services/EntityLifecycleService';
 import {invalidateGeneratedRecommendations} from '../database/services/ActivityRecommendationService';
 import {archiveKey} from '../archive/policy';
 import {getArchivePresentations, requireLockedArchiveRoot} from '../entityArchival';
+
+/** Save admitted Event properties against current dates and timezone under the existing root lock. */
+export async function saveEventProperties(eventId: string, patch: Partial<Event>, dates: EventPropertyDateInput,
+    manager?: EntityManager): Promise<void> {
+    /** Merge the sparse patch with its locked date/zone context before writing;
+     * omitted deadlines stay unchanged and supplied invalid deadlines reject. */
+    async function updateLocked(manager: EntityManager): Promise<void> {
+        // An earlier request row cannot choose omitted dates or timezone after
+        // another editor has committed a change.
+        const current = await eventService.lockEvent(manager, eventId);
+        if (!current) throw new APIError('Event not found', {}, 404);
+        const startDate = patch.startDate ?? current.startDate;
+        const endDate = patch.endDate ?? current.endDate;
+        if (startDate > endDate) throw new APIError('Start date must be before end date', {}, 400, {cause: 'EVENT_START_AFTER_END'});
+        // An omitted deadline is never rewritten. A supplied local deadline uses
+        // the submitted zone or the locked row's current zone, as before.
+        if (dates.bindingDeadline !== undefined) {
+            try {
+                patch.bindingDeadline = dates.bindingDeadline
+                    ? rewriteISOToZone(dates.bindingDeadline, dates.deadlineTz || current.timezone || 'UTC') : null;
+                if (patch.bindingDeadline && !Number.isFinite(Date.parse(patch.bindingDeadline))) throw new Error('Invalid deadline');
+            } catch {
+                throw new APIError('Invalid binding deadline or time zone.', {}, 400, {cause: 'EVENT_DEADLINE_INVALID'});
+            }
+        }
+        // Persist only the already normalized sparse patch after every range
+        // and deadline check has completed on this transaction's context.
+        await eventService.updateEventProperties(eventId, patch, manager);
+    }
+    // Versioned metadata supplies its existing lock/field comparison transaction.
+    // Direct callers retain the original service-managed transaction unchanged.
+    if (manager) await updateLocked(manager);
+    else await eventService.withEventTransaction(updateLocked);
+}
 
 /** JSON Event selectors use explicit null descriptions; domain selection retains its optional value contract. */
 export function projectEntityEventOption(event: EventLinkOption) {
@@ -54,13 +87,6 @@ export async function searchEntityEvents(query: unknown, session: SessionLike) {
 // therefore refer to a now-private event: encrypt them rather than exposing an encoded ID.
 // They are process-local navigation state; a restart simply requires restarting the search.
 const eventCursorKey = crypto.randomBytes(32);
-
-/** Reject impossible calendar dates as well as malformed strings before SQL sees them. */
-export function validateCalendarDate(value: string, helpers: Joi.CustomHelpers): string | Joi.ErrorReport {
-    const date = parseCivilDate(value);
-    if (!date || date.getUTCFullYear() < 1000) return helpers.error('any.invalid');
-    return value;
-}
 
 /** Authenticate both the seek position and the profile/filter scope as one opaque token. */
 function encodeEventCursor(position: {startDate: string; id: string}, scope: string): string {
@@ -107,7 +133,7 @@ export function projectEventLinkOption(event: Event): EventLinkOption {
  * disappeared, while undefined retains the ordinary lookup. The row belongs to eventId.
  */
 export async function authorizeEventLink(eventId: string | null | undefined, session: SessionLike,
-                                         manager?: EntityManager, knownEvent?: Event | null): Promise<Event | null> {
+    manager?: EntityManager, knownEvent?: Event | null): Promise<Event | null> {
     requireSessionProfileId(session);
     if (eventId === null || eventId === undefined || eventId === '') return null;
     const {error} = Joi.string().uuid().validate(eventId);
@@ -121,8 +147,8 @@ export async function authorizeEventLink(eventId: string | null | undefined, ses
 
     // Ownership, individual grants and audience membership all use the same engine.
     const allowed = await can({kind: 'entity', entity: {
-        entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
-    }}, session, eventMethodPermission('manageAssignments'), undefined, manager);
+            entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
+        }}, session, eventMethodPermission('manageAssignments'), undefined, manager);
     if (!allowed) throw new APIError('Not allowed to attach entities to this event.', {}, 403);
     return event;
 }
@@ -346,8 +372,8 @@ export async function getEntityViewAdmission(type: EntityType, entity: Pick<Enti
     // Snapshot callers reuse their existing permission view and transaction, preventing
     // admission from combining a projection with membership from a different DB snapshot.
     const permissions = knownPermissions ?? await evaluateSubject({kind: 'entity', entity: {
-        entityType: type, entityId: entity.id, ownerId: entity.ownerId, eventId: entity.eventId,
-    }}, session, undefined, manager);
+            entityType: type, entityId: entity.id, ownerId: entity.ownerId, eventId: entity.eventId,
+        }}, session, undefined, manager);
     return permissions.has('ACCESS_VIEW') ? 'render' : 'event-registration-required';
 }
 

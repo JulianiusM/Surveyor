@@ -42,7 +42,7 @@ async function measureHeader(surface: Locator) {
  * built image and shared controls. Recorded native originals remain separate
  * visual-review evidence after the live comparator is retired. */
 async function compareHeader(page: Page, info: TestInfo, resource: {path: string; title: string}, name: string,
-                             parent?: {path: string; title: string}): Promise<void> {
+    parent?: {path: string; title: string}): Promise<void> {
     await page.goto(resource.path + '?locale=en', {waitUntil: 'domcontentloaded'});
     await waitForFrontendHydration(page);
     const surface = page.locator('.card-header').filter({has: page.locator('h1')}).first();
@@ -206,7 +206,7 @@ for (const width of [1280, 390]) {
 // This is a browser-content reflow approximation, not certification of browser
 // chrome zoom or assistive-technology behavior.
 for (const viewport of [{width: 390, height: 844, name: 'mobile'},
-    {width: 640, height: 450, name: '200% desktop reflow equivalent'}]) {
+{width: 640, height: 450, name: '200% desktop reflow equivalent'}]) {
     test(`keeps German shared headers and settings keyboard-reachable at ${viewport.name}`, async ({page}, info) => {
         await page.setViewportSize({width: viewport.width, height: viewport.height});
         const browserErrors: string[] = [];

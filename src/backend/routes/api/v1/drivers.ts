@@ -8,9 +8,8 @@
 import {normalizeListMetadataPatch as normalizeDriversMetadataPatch} from '../../../controller/entityAdminController';
 
 
-import {Router, type Request, type Response} from 'express';
+import {Router} from 'express';
 import type {components} from '../../../../types/api/v1';
-import type {ApiOperationId, ApiResponseBody, ApiSuccessStatus, PreparedApiJsonResponse} from '../../../../types/ApiTransportTypes';
 import * as driversApi from '../../../controller/driversController';
 import {createGuestFlowApiRouter, createGuestFlowGuestRouter} from '../../../middleware/guestFlowFactory';
 import {driversFlow} from '../../driversFlow';
@@ -20,38 +19,22 @@ import {createEntityAdminApiRouter, createEntityArchiveApiRouter, createEntityPr
     createUserSearchApiRouter} from '../../../middleware/adminApiFactory';
 import {attachAssignRoutes} from '../../../middleware/assignFlowFactory';
 import {createEntityHeaderUpdateRouter} from '../../../middleware/entityHeaderUpdateHandler';
-import {prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
-import {patchDriversMetadata, readDriversMetadata, setDriversSelfAssignment} from '../../../controller/driversController';
+import {executePreparedJson, prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
+
 
 const router = Router();
 router.use(createGuestFlowApiRouter(driversFlow));
 
-/** Prepare declared success bytes inside the controller's command transaction.
- * After it commits, the HTTP adapter only delivers that immutable receipt; network
- * failure remains an unknown delivery outcome and cannot trigger another write. */
-async function sendDriversCommand<Operation extends ApiOperationId, Status extends ApiSuccessStatus<Operation>>(
-    req: Request, res: Response, operation: Operation, status: Status,
-    execute: (prepare: (data: ApiResponseBody<Operation, Status>) => void) => Promise<unknown>): Promise<void> {
-    let prepared: PreparedApiJsonResponse;
-    // The selected operation calls this while its existing DBAL transaction is
-    // still open. Validation/serialization failure therefore rejects that write.
-    function prepareResult(data: ApiResponseBody<Operation, Status>): void {
-        prepared = prepareValidatedJson(req, operation, status, data);
-    }
-    await execute(prepareResult);
-    sendPreparedJson(req, res, prepared!);
-}
-
 createEntityPropertyApiRouter<'drivers'>(router, {
     entityType: 'drivers', parameter: 'listId',
     read: {operation: 'getDriversMetadata', requireProfile: true,
-        read: ({id, actor}) => readDriversMetadata(id, actor)},
+        read: ({id, actor}) => driversApi.readDriversMetadata(id, actor)},
     update: {operation: 'updateDriversMetadata', requireProfile: true, delivery: 'controller',
         normalize: normalizeDriversMetadataPatch,
         async execute({id, body, actor, ifMatch}, prepare) {
             // The controller prepares the metadata body under its existing lock;
             // deliver its matching ETag only after that same command completes.
-            const result = await patchDriversMetadata(id, body, ifMatch, actor, result => prepare(result.data));
+            const result = await driversApi.patchDriversMetadata(id, body, ifMatch, actor, result => prepare(result.data));
             return {etag: result.etag};
         }},
     event: {operation: 'changeDriversEvent', requireProfile: true, delivery: 'controller',
@@ -73,11 +56,9 @@ router.patch('/:listId/description', asyncHandler(async function updateDriversDe
     // Admit the independently granted description command and prepare its narrow receipt under the controller lock.
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'updateDriversDescription', normalizeDriversMetadataPatch);
-    let prepared: PreparedApiJsonResponse;
-    function prepareDescription(data: components['schemas']['DriversDescriptionBaseline']): void {
-        prepared = prepareValidatedJson(req, 'updateDriversDescription', 200, data);
-    }
-    const baseline = await driversApi.patchDriversDescription(String(req.params.listId), req.body, req.get('If-Match'), actor, prepareDescription);
+    const {operationResult: baseline, prepared} = await executePreparedJson(
+        (data: components['schemas']['DriversDescriptionBaseline']) => prepareValidatedJson(req, 'updateDriversDescription', 200, data),
+        prepare => driversApi.patchDriversDescription(String(req.params.listId), req.body, req.get('If-Match'), actor, prepare));
     res.set('ETag', baseline.editToken);
     sendPreparedJson(req, res, prepared!);
 }));
@@ -88,9 +69,9 @@ attachAssignRoutes(router, {
     // The existing membership operation invokes preparation before its current
     // transaction commits; the factory then delivers that completed response.
     assign: {operation: 'assignDriversItem', delivery: 'transaction',
-        execute: ({entityId, itemId, actor}, prepare) => setDriversSelfAssignment(entityId, itemId, true, actor, prepare)},
+        execute: ({entityId, itemId, actor}, prepare) => driversApi.setDriversSelfAssignment(entityId, itemId, true, actor, prepare)},
     unassign: {operation: 'unassignDriversItem', delivery: 'transaction',
-        execute: ({entityId, itemId, actor}, prepare) => setDriversSelfAssignment(entityId, itemId, false, actor, prepare)},
+        execute: ({entityId, itemId, actor}, prepare) => driversApi.setDriversSelfAssignment(entityId, itemId, false, actor, prepare)},
 });
 
 router.get('/:listId/settings', asyncHandler(async function getDriversSettings(req, res) {
@@ -103,11 +84,9 @@ router.post('/:listId/items', asyncHandler(async function createDriversItem(req,
     const actor = await requireApiContext(req, res, true);
     validateOperationRequest(req, 'createDriversItem');
     const id = String(req.params.listId);
-    let prepared: PreparedApiJsonResponse;
-    function prepareItem(data: components['schemas']['DriversCreated']): void {
-        prepared = prepareValidatedJson(req, 'createDriversItem', 201, data);
-    }
-    const result = await driversApi.createDriversItem(id, req.body, actor, prepareItem);
+    const {operationResult: result, prepared} = await executePreparedJson(
+        (data: components['schemas']['DriversCreated']) => prepareValidatedJson(req, 'createDriversItem', 201, data),
+        prepare => driversApi.createDriversItem(id, req.body, actor, prepare));
     // The ordered parent representation is authoritative for item reads. The fragment identifies
     // its newly created row without promising an unsupported single-item GET endpoint.
     res.location(`/api/v1/drivers-lists/${encodeURIComponent(id)}#${encodeURIComponent(result.id)}`);
@@ -127,18 +106,20 @@ router.patch('/:listId/items/:itemId', asyncHandler(async function updateDrivers
     // Apply only reviewed ride fields; the controller prepares success before its sparse write commits.
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'updateDriversItem');
-    await sendDriversCommand(req, res, 'updateDriversItem', 200, function executeCommand(prepare) {
-        return driversApi.updateDriversItem(String(req.params.listId), String(req.params.itemId), req.body, req.get('If-Match'), actor, prepare);
-    });
+    const {prepared} = await executePreparedJson(
+        (data: components['schemas']['MutationResult']) => prepareValidatedJson(req, 'updateDriversItem', 200, data),
+        prepare => driversApi.updateDriversItem(String(req.params.listId), String(req.params.itemId), req.body, req.get('If-Match'), actor, prepare));
+    sendPreparedJson(req, res, prepared!);
 }));
 
 router.delete('/:listId/items/:itemId', asyncHandler(async function deleteDriversItem(req, res) {
     // Remove a currently scoped ride through its existing hard-delete owner and cascade behavior.
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'deleteDriversItem');
-    await sendDriversCommand(req, res, 'deleteDriversItem', 200, function executeCommand(prepare) {
-        return driversApi.deleteDriversItem(String(req.params.listId), String(req.params.itemId), actor, prepare);
-    });
+    const {prepared} = await executePreparedJson(
+        (data: components['schemas']['MutationResult']) => prepareValidatedJson(req, 'deleteDriversItem', 200, data),
+        prepare => driversApi.deleteDriversItem(String(req.params.listId), String(req.params.itemId), actor, prepare));
+    sendPreparedJson(req, res, prepared!);
 }));
 
 router.get('/:listId/item-order', asyncHandler(async function getDriversItemOrderBaseline(req, res) {
@@ -152,18 +133,20 @@ router.put('/:listId/item-order', asyncHandler(async function reorderDriversItem
     // Submit the complete reviewed ride order without replaying an uncertain command.
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'reorderDriversItems');
-    await sendDriversCommand(req, res, 'reorderDriversItems', 200, function executeCommand(prepare) {
-        return driversApi.reorderDriversItems(String(req.params.listId), req.body, req.get('If-Match'), actor, prepare);
-    });
+    const {prepared} = await executePreparedJson(
+        (data: components['schemas']['MutationResult']) => prepareValidatedJson(req, 'reorderDriversItems', 200, data),
+        prepare => driversApi.reorderDriversItems(String(req.params.listId), req.body, req.get('If-Match'), actor, prepare));
+    sendPreparedJson(req, res, prepared!);
 }));
 
 router.delete('/:listId/assignments/:assignmentId', asyncHandler(async function deleteDriversAssignment(req, res) {
     // Remove one scoped passenger handle through the existing assignment owner.
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'deleteDriversAssignment');
-    await sendDriversCommand(req, res, 'deleteDriversAssignment', 200, function executeCommand(prepare) {
-        return driversApi.deleteDriversAssignment(String(req.params.listId), String(req.params.assignmentId), actor, prepare);
-    });
+    const {prepared} = await executePreparedJson(
+        (data: components['schemas']['MutationResult']) => prepareValidatedJson(req, 'deleteDriversAssignment', 200, data),
+        prepare => driversApi.deleteDriversAssignment(String(req.params.listId), String(req.params.assignmentId), actor, prepare));
+    sendPreparedJson(req, res, prepared!);
 }));
 
 router.get('/:listId/default-permissions', asyncHandler(async function getDriversDefaultsBaseline(req, res) {
@@ -177,9 +160,10 @@ router.put('/:listId/default-permissions', asyncHandler(async function updateDri
     // Submit sparse audience masks against their reviewed field hashes before committing shared permission persistence.
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'updateDriversDefaults');
-    await sendDriversCommand(req, res, 'updateDriversDefaults', 200, function executeCommand(prepare) {
-        return driversApi.updateDriversDefaults(String(req.params.listId), req.body, actor, req.get('If-Match'), prepare);
-    });
+    const {prepared} = await executePreparedJson(
+        (data: components['schemas']['MutationResult']) => prepareValidatedJson(req, 'updateDriversDefaults', 200, data),
+        prepare => driversApi.updateDriversDefaults(String(req.params.listId), req.body, actor, req.get('If-Match'), prepare));
+    sendPreparedJson(req, res, prepared!);
 }));
 
 createEntityAdminApiRouter<'drivers'>(router, {

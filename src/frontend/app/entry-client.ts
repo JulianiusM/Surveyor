@@ -115,7 +115,7 @@ async function start(): Promise<void> {
         /** Move focus only after actual destination commitment, preserving the
          * current draft/focus during canceled, obsolete or failed lazy navigation. */
         async function focusDestination(to: RouteLocationNormalized, from: RouteLocationNormalized,
-                                        failure?: NavigationFailure | void): Promise<void> {
+            failure?: NavigationFailure | void): Promise<void> {
             // Path/query owners handle their own unchanged-document interaction.
             if (failure || to.path === from.path) return;
             await nextTick();

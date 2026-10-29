@@ -253,8 +253,8 @@ describe('shared entity routing components', () => {
         expect(response.headers.get('cache-control')).toBe('private, no-store');
         expect(response.headers.get('set-cookie')).toBeNull();
         expect(await response.json()).toEqual({entry: {kind: 'redirect',
-            url: `/users/login?next=${encodeURIComponent(destination)}`,
-            notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, context: null, selectedEvent: null});
+                url: `/users/login?next=${encodeURIComponent(destination)}`,
+                notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, context: null, selectedEvent: null});
     });
 
     it('cleans invalid creation uploads and retains a notified Activity image after a later feature failure', async () => {
@@ -309,7 +309,7 @@ describe('shared entity routing components', () => {
         });
         const url = `${fixture.origin}/api/v1/activity-plans/${entityId}/slots/${itemId}/self-assignment`;
         const changed = await fetch(url, {method: 'PUT', headers: fixture.headers({'Content-Type': 'application/json',
-            'X-Surveyor-Context': 'not-the-captured-context'}), body: JSON.stringify({assigned: 'invalid'})});
+                'X-Surveyor-Context': 'not-the-captured-context'}), body: JSON.stringify({assigned: 'invalid'})});
         expect((await changed.json()).code).toBe('SESSION_CONTEXT_CHANGED');
         expect(changed.status).toBe(409);
         expect(calls).toEqual([]);
@@ -383,13 +383,13 @@ describe('shared entity routing components', () => {
                 requireProfile: false,
                 async admitUpload() { if (stage === 'preflight') throw new ApiProblem('FORBIDDEN'); },
                 command: {receipt: 'after-write', async execute({file}) {
-                    calls++;
-                    acceptedPath = file?.path;
-                    if (stage === 'reject-operation') throw new ApiProblem('FORBIDDEN');
-                    // Deliberately invalid feature evidence exercises real response
-                    // validation after the unchanged operation success boundary.
-                    return {changed: 'invalid'} as unknown as components['schemas']['MutationResult'];
-                }},
+                        calls++;
+                        acceptedPath = file?.path;
+                        if (stage === 'reject-operation') throw new ApiProblem('FORBIDDEN');
+                        // Deliberately invalid feature evidence exercises real response
+                        // validation after the unchanged operation success boundary.
+                        return {changed: 'invalid'} as unknown as components['schemas']['MutationResult'];
+                    }},
             });
             app.use('/api/v1/packing-lists', router);
         });

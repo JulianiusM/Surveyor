@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
+import {MigrationInterface, QueryRunner} from 'typeorm';
 import {
     addColumnIfNotExists,
     columnExists,
@@ -31,7 +31,7 @@ import {
     assertMigrationForeignKeyNameAvailable,
     sameMigrationColumnStorage,
     tableExists
-} from "../modules/database/utils/migration-helper";
+} from '../modules/database/utils/migration-helper';
 import type {MigrationColumnStorage} from '../../types/MigrationTypes';
 
 interface ForeignKeyDef {
@@ -114,7 +114,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
         if (hasProfiles) {
             await this.refuseRows(queryRunner, `SELECT 1 FROM ${this.identifier(table)} t WHERE t.${this.identifier(column)} IS NOT NULL
                 AND (SELECT COUNT(*) FROM profiles p WHERE p.${account}_id = t.${this.identifier(column)}) > 1 LIMIT 1`,
-            `multiple profiles for ${table}.${column}`);
+                `multiple profiles for ${table}.${column}`);
         }
         // A planned profile key identifies its retained account, not a guessed future UUID.
         const planned = `CONCAT('${account}:', HEX(t.${this.identifier(column)}))`;
@@ -188,7 +188,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             (t.owner_profile_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = t.owner_id
                 AND BINARY p.id = BINARY t.owner_profile_id))
             ${complete ? 'OR (t.owner_id IS NOT NULL AND t.owner_profile_id IS NULL)' : ''} LIMIT 1`,
-        `conflicting or incomplete ${table} temporary owner`);
+            `conflicting or incomplete ${table} temporary owner`);
     }
 
     /** Retire a duplicate source only when its stored value is retained exactly. */
@@ -196,7 +196,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
         if (!await columnExists(queryRunner, table, source) || !await columnExists(queryRunner, table, destination)) return;
         await this.refuseRows(queryRunner, `SELECT 1 FROM ${this.identifier(table)} WHERE ${this.identifier(source)} IS NOT NULL
             AND ${this.identifier(destination)} IS NOT NULL AND NOT (BINARY ${this.identifier(source)} <=> BINARY ${this.identifier(destination)}) LIMIT 1`,
-        `conflicting ${table}.${source}/${destination}`);
+            `conflicting ${table}.${source}/${destination}`);
     }
 
     /** Project a direct retained parent identity after checking its physical reference and rows. */
@@ -220,7 +220,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
                     (${user} IS NOT NULL AND ${guest} IS NOT NULL AND NOT (BINARY (${user}) <=> BINARY (${guest})))
                     OR (${current} IS NOT NULL AND ${user} IS NOT NULL AND NOT (BINARY (${current}) <=> BINARY (${user})))
                     OR (${current} IS NOT NULL AND ${guest} IS NOT NULL AND NOT (BINARY (${current}) <=> BINARY (${guest}))) LIMIT 1`,
-                `conflicting ${mapping.table} identity sources`);
+                    `conflicting ${mapping.table} identity sources`);
                 expressions.set('profile_id', `COALESCE(${current}, ${user}, ${guest})`);
             }
             for (const [column, relation] of [['entity_id', mapping.entity], ['item_id', mapping.item]] as const) {
@@ -296,7 +296,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             if (capacity && Number(capacity) < 36) throw new Error('Profile migration refused: UUID() exceeds existing profile identifier capacity');
         }
         await this.refuseRows(queryRunner, `SELECT 1 FROM profiles WHERE guest_id IS NOT NULL GROUP BY guest_id HAVING COUNT(*) > 1 LIMIT 1`,
-        'multiple profiles for one guest');
+            'multiple profiles for one guest');
     }
 
     /** Compare the complete physical shape of an unchanged authored sibling reference. */
@@ -316,7 +316,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
         await this.refuseRows(queryRunner, `SELECT 1 FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE()
             AND ((EVENT_OBJECT_TABLE = 'profiles' AND EVENT_MANIPULATION = 'INSERT')
             OR (EVENT_MANIPULATION = 'UPDATE' AND EVENT_OBJECT_TABLE IN (${updates.map(() => '?').join(', ')}))) LIMIT 1`,
-        'write triggers require separate preservation review', updates);
+            'write triggers require separate preservation review', updates);
     }
 
     /** Refuse audit-time coercion or precision loss before retiring the legacy tracking column. */
@@ -402,7 +402,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
         // Retired sibling fields may have custom checks/generated/incoming dependencies.
         // Such schemas require their own recovery decision, not silent constraint loss.
         const retirements = mappings.flatMap(mapping => [mapping.profile?.oldUser, mapping.profile?.oldGuest,
-            mapping.entity?.old, mapping.item?.old].filter((column): column is string => !!column).map(column => ({table: mapping.table, column})));
+        mapping.entity?.old, mapping.item?.old].filter((column): column is string => !!column).map(column => ({table: mapping.table, column})));
         retirements.push({table: 'entity_admin_assignments', column: 'user_id'}, {table: 'activity_roles', column: 'name'},
             {table: 'activity_assignments', column: 'updatedAt'});
         if (['int', 'bigint', 'smallint'].includes(await this.getColumnType(queryRunner, 'entity_admin_assignments', 'profile_id') ?? '')) {
@@ -414,10 +414,10 @@ export class AddProfiles1785610467095 implements MigrationInterface {
         await this.requireAgreeingColumns(queryRunner, 'activity_roles', 'name', 'title');
         await this.preflightTracking(queryRunner);
         for (const [table, column] of [['activity_slots', 'description'], ['activity_roles', 'description'],
-            ['activity_roles', 'name'], ['activity_roles', 'title'], ['survey_combinations', 'title']]) {
+        ['activity_roles', 'name'], ['activity_roles', 'title'], ['survey_combinations', 'title']]) {
             if (await columnExists(queryRunner, table!, column!)) {
                 await this.refuseRows(queryRunner, `SELECT 1 FROM ${this.identifier(table!)} WHERE CHAR_LENGTH(${this.identifier(column!)}) > 255 LIMIT 1`,
-                `text narrowing would lose ${table}.${column}`);
+                    `text narrowing would lose ${table}.${column}`);
                 const storage = await queryRunner.query(`SELECT CHARACTER_SET_NAME AS charset, COLLATION_NAME AS collation FROM information_schema.COLUMNS
                     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`, [table, column]);
                 const defaults = await this.tableCharacterStorage(queryRunner, table!);
@@ -439,7 +439,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             'survey_combinations', 'drivers_lists', 'packing_lists', 'events', 'activity_plans', 'surveys'])) {
             if (await tableExists(queryRunner, table)) {
                 await this.refuseRows(queryRunner, `SELECT 1 FROM ${this.identifier(table)} LIMIT 1`,
-                `populated ${table} requires the paired database/file backup for rollback`);
+                    `populated ${table} requires the paired database/file backup for rollback`);
             }
         }
     }
@@ -481,7 +481,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
         // a separate DROP must never leave a populated table without its owner.
         const drops = plan.protectedForeignKeys.map(name => `DROP FOREIGN KEY ${this.identifier(name)}`);
         await queryRunner.query(`ALTER TABLE ${this.identifier(table)} ${[...drops, 'DROP COLUMN `owner_id`',
-            `CHANGE COLUMN \`owner_profile_id\` \`owner_id\` ${storage.definition} NULL`].join(', ')}`);
+        `CHANGE COLUMN \`owner_profile_id\` \`owner_id\` ${storage.definition} NULL`].join(', ')}`);
     }
 
     /** Recover numeric user ownership from profile references during rollback. */

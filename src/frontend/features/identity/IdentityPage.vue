@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import {fieldAttributes as registrationFields} from "../../../../.generated/api/v1/browser/validateRegistrationInput.mjs";
-import {fieldAttributes as loginFields} from "../../../../.generated/api/v1/browser/validateLoginInput.mjs";
+import {fieldAttributes as registrationFields} from '../../../../.generated/api/v1/browser/validateRegistrationInput.mjs';
+import {fieldAttributes as loginFields} from '../../../../.generated/api/v1/browser/validateLoginInput.mjs';
 import {computed, onMounted, reactive, ref, shallowRef, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
 import type {WatchCallback} from 'vue';

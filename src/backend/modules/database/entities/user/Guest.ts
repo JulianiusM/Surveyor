@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import {Column, Entity, OneToOne} from "typeorm";
-import {UuidBase} from "../abstract/TrackedBase";
-import {Profile} from "./Profile";
+import {Column, Entity, OneToOne} from 'typeorm';
+import {UuidBase} from '../abstract/TrackedBase';
+import {Profile} from './Profile';
 
 @Entity("guests", {schema: "surveyor"})
 export class Guest extends UuidBase {

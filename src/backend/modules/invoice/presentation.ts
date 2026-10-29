@@ -277,7 +277,7 @@ function calculationCostSections(explanation: InvoiceCalculationExplanation,
         ...(hasRedistribution || totals === undefined
             ? {formula: {terms, result: {label: labels.distributable, value: formatInvoiceMoney(explanation.distributableAmount)}}}
             : {metrics: [{label: equalPoolTotal ? labels.invoiceCosts : labels.distributable,
-                value: formatInvoiceMoney(explanation.distributableAmount)}]}),
+                    value: formatInvoiceMoney(explanation.distributableAmount)}]}),
     }];
     // On-top adjustments are separate from redistribution; their equation explains the full pool total only.
     if (includeFullTotal && additional.length) {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {MigrationInterface, QueryRunner} from "typeorm";
+import {MigrationInterface, QueryRunner} from 'typeorm';
 
 export class AddCheckSlotRoleTrigger1752829591073 implements MigrationInterface {
 

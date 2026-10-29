@@ -16,7 +16,7 @@
 
 import {DataSource} from 'typeorm';
 import settings from '../settings';
-import {entities, migrations, subscribers} from "./__index__";
+import {entities, migrations, subscribers} from './__index__';
 
 export let AppDataSource: DataSource;
 let initialized: boolean = false;

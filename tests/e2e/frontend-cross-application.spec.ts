@@ -114,11 +114,11 @@ async function holdOverviewRead(page: Page, collection = 'participant', defaultO
     }
 
     return {received: received.promise.then(() => {if (failure) throw failure;}), async finish(): Promise<void> {
-        released.release();
-        if (started) await delivered.promise;
-        await page.unroute(pattern, holdResponse);
-        if (failure) throw failure;
-    }};
+            released.release();
+            if (started) await delivered.promise;
+            await page.unroute(pattern, holdResponse);
+            if (failure) throw failure;
+        }};
 }
 
 for (const width of [1280, 390]) {

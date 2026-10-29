@@ -8,7 +8,7 @@ import {countInclusiveDays} from '../../../common/activity/requirements';
  * Raw absent-name consumers derive that flag before calling; false/undefined
  * preserves even an empty name. Only an existing profile fallback supplies an ID. */
 export function activityParticipantName(name: string | null | undefined, t: Translator, nameIsFallback = false,
-                                        profileId?: string | null): string {
+    profileId?: string | null): string {
     if (!nameIsFallback) return name ?? '';
     return profileId ? t('activity.profileFallback', {id: profileId}) : t('activity.participant');
 }

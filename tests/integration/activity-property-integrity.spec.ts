@@ -1,10 +1,10 @@
 import {getRecommendations, applyRecommendations} from '../../src/backend/modules/activity/recommendations';
 import {buildPlanRecommendationContext, saveGeneratedRecommendations} from '../../src/backend/modules/activity/autoAssignment';
-import {getRequirements, updateRequirements} from '../../src/backend/controller/activityController';
+
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import activityController from '../../src/backend/controller/activityController';
+import * as activityController from '../../src/backend/controller/activityController';
 import {changeEntityEvent} from '../../src/backend/modules/event/linkage';
-import {readActivityRequirements, saveActivityRequirements} from '../../src/backend/controller/activityController';
+
 import {ActivityPlan} from '../../src/backend/modules/database/entities/activity/ActivityPlan';
 import {Profile} from '../../src/backend/modules/database/entities/user/Profile';
 import {AppDataSource} from '../../src/backend/modules/database/dataSource';
@@ -42,13 +42,13 @@ describe('activity property and relationship integrity', () => {
         await registerEventAttendance(oldEventId, previousParticipant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         await registerEventAttendance(oldEventId, currentParticipant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         const planId = await createEventActivityPlan(owner.id, oldEventId);
-        await updateRequirements(planId, {assignmentMode: 'FREE', overrides: [
-            {profileId: previousParticipant.id, requiredShifts: 2}, {profileId: currentParticipant.id, requiredShifts: 1},
-        ]});
+        await activityController.updateRequirements(planId, {assignmentMode: 'FREE', overrides: [
+                {profileId: previousParticipant.id, requiredShifts: 2}, {profileId: currentParticipant.id, requiredShifts: 1},
+            ]});
         const plan = (await activityService.getActivityPlanById(planId))!;
         const actor = {profile: owner, auth: {user: owner.user!}};
         await changeEntityEvent('activity', plan, {eventId: newEventId, expectedEventId: oldEventId}, actor);
-        const config = await readActivityRequirements(planId, actor);
+        const config = await activityController.readActivityRequirements(planId, actor);
         const removed = config.overrides.find(row => row.profileId === previousParticipant.id)!;
         const retained = config.overrides.find(row => row.profileId === currentParticipant.id)!;
         const removedId = removed.id;
@@ -60,19 +60,19 @@ describe('activity property and relationship integrity', () => {
 
         // Invalid, duplicated or contradictory identities fail before the same
         // controller-owned transaction writes either settings or override rows.
-        await expect(saveActivityRequirements(planId, {...input, removedOverrideIds: ['999999999']}, actor))
+        await expect(activityController.saveActivityRequirements(planId, {...input, removedOverrideIds: ['999999999']}, actor))
             .rejects.toMatchObject({status: 400});
-        await expect(saveActivityRequirements(planId, {...input, removedOverrideIds: [removedId, removedId]}, actor))
+        await expect(activityController.saveActivityRequirements(planId, {...input, removedOverrideIds: [removedId, removedId]}, actor))
             .rejects.toMatchObject({status: 400});
-        await expect(saveActivityRequirements(planId, {...input, overrides: [removed], removedOverrideIds: [removedId]}, actor))
+        await expect(activityController.saveActivityRequirements(planId, {...input, overrides: [removed], removedOverrideIds: [removedId]}, actor))
             .rejects.toMatchObject({status: 400});
         expect((await requirementService.getRequirementConfiguration(planId))!.overrides).toHaveLength(2);
 
         // Omission retains both rows even for a versioned caller. Explicitly
         // removing one cannot erase the other row absent from this submission.
-        await saveActivityRequirements(planId, input, actor);
+        await activityController.saveActivityRequirements(planId, input, actor);
         expect((await requirementService.getRequirementConfiguration(planId))!.overrides).toHaveLength(2);
-        await saveActivityRequirements(planId, {...input, removedOverrideIds: [removedId]}, actor);
+        await activityController.saveActivityRequirements(planId, {...input, removedOverrideIds: [removedId]}, actor);
         expect((await requirementService.getRequirementConfiguration(planId))!.overrides).toEqual([
             expect.objectContaining({id: Number(retainedId), profileId: currentParticipant.id, requiredShifts: 1}),
         ]);
@@ -109,7 +109,7 @@ describe('activity property and relationship integrity', () => {
             assignmentMode: 'REQUIRED', stayRequirements: createStayRequirementSchedule(3, 1),
             roleRequirements: [], overrides: [{profileId: previousParticipant.id, requiredShifts: 2}],
         };
-        await updateRequirements(planId, settings);
+        await activityController.updateRequirements(planId, settings);
         const savedOverrides = (await requirementService.getRequirementConfiguration(planId))!.overrides;
         await recommendationService.replaceRecommendations(planId, [
             {itemId: morning.id, profileId: currentParticipant.id, status: 'PENDING'},
@@ -130,18 +130,18 @@ describe('activity property and relationship integrity', () => {
         expect(await recommendationService.getRecommendations(planId)).toHaveLength(4);
 
         // Omitted old-event targets are merged from saved rows, not silently removed by an unrelated save.
-        await updateRequirements(planId, {...settings, overrides: [], allowOverfillAfterFull: true});
+        await activityController.updateRequirements(planId, {...settings, overrides: [], allowOverfillAfterFull: true});
         const retained = (await requirementService.getRequirementConfiguration(planId))!.overrides;
         expect(retained).toEqual([expect.objectContaining({id: savedOverrides[0].id, profileId: previousParticipant.id, requiredShifts: 2})]);
-        await expect(updateRequirements(planId, {
+        await expect(activityController.updateRequirements(planId, {
             ...settings, overrides: [{id: retained[0].id, profileId: previousParticipant.id, requiredShifts: 3}],
         })).rejects.toMatchObject({status: 400});
-        await expect(updateRequirements(planId, {
+        await expect(activityController.updateRequirements(planId, {
             ...settings, overrides: [{profileId: previousParticipant.id, requiredShifts: 2}],
         })).rejects.toMatchObject({status: 400});
 
         const review = await getRecommendations(planId);
-        expect((await getRequirements(planId)).participants).toContainEqual(expect.objectContaining({
+        expect((await activityController.getRequirements(planId)).participants).toContainEqual(expect.objectContaining({
             participantKey: `profile:${previousParticipant.id}`, name: previousParticipant.name, assignedShifts: 1,
         }));
         expect(review.participantOptions.map(function profileId(participant) { return participant.profileId; }))
@@ -151,13 +151,13 @@ describe('activity property and relationship integrity', () => {
             warnings: expect.arrayContaining([{type: 'ineligible_participant'}]),
         }));
         await expect(applyRecommendations(planId, {recommendations: [{
-            itemId: evening.id, profileId: previousParticipant.id, status: 'APPROVED', manual: true,
-        }]})).rejects.toMatchObject({status: 400});
+                itemId: evening.id, profileId: previousParticipant.id, status: 'APPROVED', manual: true,
+            }]})).rejects.toMatchObject({status: 400});
         expect((await buildPlanRecommendationContext(planId)).participants.map(function profileId(participant) { return participant.profileId; }))
             .toEqual([currentParticipant.id]);
 
         // The preserved assignee becomes eligible through the existing external policy, not through its override.
-        await updateRequirements(planId, {...settings, overrides: [], allowExternalAssignees: true});
+        await activityController.updateRequirements(planId, {...settings, overrides: [], allowExternalAssignees: true});
         expect((await buildPlanRecommendationContext(planId)).participants.map(function profileId(participant) { return participant.profileId; }))
             .toEqual(expect.arrayContaining([previousParticipant.id, currentParticipant.id]));
     });

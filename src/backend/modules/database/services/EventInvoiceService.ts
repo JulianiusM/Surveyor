@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-import {EntityManager, type DeepPartial} from "typeorm";
-import type {InvoicePoolDistribution, InvoicePoolSubmissionState, ProjectedInvoiceShare} from "../../../../types/InvoicePoolTypes";
-import {formatAmount, invoiceCostTotals, toAmount} from "../../lib/util";
-import {AppDataSource} from "../dataSource";
-import {Event} from "../entities/event/Event";
-import {EventInvoice} from "../entities/event/EventInvoice";
-import {EventInvoicePool} from "../entities/event/EventInvoicePool";
-import {EventInvoiceShare} from "../entities/event/EventInvoiceShare";
-import {EventInvoiceSurcharge} from "../entities/event/EventInvoiceSurcharge";
-import {EventPoolAssignment} from "../entities/event/EventPoolAssignment";
-import {EventPoolTakeover} from "../entities/event/EventPoolTakeover";
-import {EventRegistration} from "../entities/event/EventRegistration";
-import {Profile} from "../entities/user/Profile";
+import {And, EntityManager, Equal, IsNull, LessThanOrEqual, MoreThan, Not, Raw, type DeepPartial} from 'typeorm';
+import type {InvoicePoolDistribution, InvoicePoolSubmissionState, ProjectedInvoiceShare} from '../../../../types/InvoicePoolTypes';
+import {formatAmount, invoiceCostTotals, toAmount} from '../../lib/util';
+import {AppDataSource} from '../dataSource';
+import {Event} from '../entities/event/Event';
+import {EventInvoice} from '../entities/event/EventInvoice';
+import {EventInvoicePool} from '../entities/event/EventInvoicePool';
+import {EventInvoiceShare} from '../entities/event/EventInvoiceShare';
+import {EventInvoiceSurcharge} from '../entities/event/EventInvoiceSurcharge';
+import {EventPoolAssignment} from '../entities/event/EventPoolAssignment';
+import {EventPoolTakeover} from '../entities/event/EventPoolTakeover';
+import {EventRegistration} from '../entities/event/EventRegistration';
+import {Profile} from '../entities/user/Profile';
 import {InvoiceProofFile} from '../entities/event/InvoiceProofFile';
 import type {InvoiceProofOperation} from '../../../../types/InvoiceProofTypes';
 import {lockEvent} from './EventService';
@@ -126,9 +126,9 @@ export async function deleteProofFile(id: string, manager: EntityManager): Promi
 /** Page raw ownership records without hydrating invoice graphs or losing retry state. */
 export async function getProofFilesPage(afterId?: string, limit = 100,
     manager: EntityManager = AppDataSource.manager): Promise<InvoiceProofFile[]> {
-    const query = manager.getRepository(InvoiceProofFile).createQueryBuilder('proof').orderBy('proof.id', 'ASC').take(limit);
-    if (afterId) query.where('proof.id > :afterId', {afterId});
-    return query.getMany();
+    return manager.getRepository(InvoiceProofFile).find({
+        where: afterId ? {id: MoreThan(afterId)} : undefined, order: {id: 'ASC'}, take: limit,
+    });
 }
 
 /** Return every live stored spelling; the proof owner compares filesystem identities.
@@ -137,25 +137,40 @@ export async function getInvoiceProofReferences(manager: EntityManager = AppData
     // Read only the reference column so cleanup never needs sensitive original names or invoice amounts.
     const rows = await manager.getRepository(EventInvoice).createQueryBuilder('invoice')
         .select('invoice.proof_path', 'path').distinct(true)
-        .where('invoice.proof_path IS NOT NULL').andWhere("invoice.proof_path <> ''").getRawMany<{path: string}>();
+        .where({proofPath: And(Not(IsNull()), Not(''))}).getRawMany<{path: string}>();
     return rows.map(row => row.path);
 }
 
 /** Protect the ordinary stored spelling without scanning the installation's proof inventory. */
 export async function hasInvoiceProofReference(paths: readonly string[], manager: EntityManager = AppDataSource.manager): Promise<boolean> {
     if (!paths.length) return false;
-    const row = await manager.getRepository(EventInvoice).createQueryBuilder('invoice').select('invoice.id', 'id')
-        .where('BINARY invoice.proof_path IN (:...paths)', {paths}).limit(1).getRawOne();
-    return !!row;
+    // The native existence operation retains the supplied manager. BINARY is
+    // necessary because ordinary collation equality aliases distinct proof paths.
+    return manager.getRepository(EventInvoice).existsBy({
+        proofPath: Raw(alias => `BINARY ${alias} IN (:...paths)`, {paths}),
+    });
 }
 
 /** Page legacy aliases only when an exact reference did not protect a cleanup candidate. */
 export async function getInvoiceProofReferencePage(afterId: number, manager: EntityManager = AppDataSource.manager): Promise<{id: number; path: string}[]> {
     const rows = await manager.getRepository(EventInvoice).createQueryBuilder('invoice')
         .select('invoice.id', 'id').addSelect('invoice.proof_path', 'path')
-        .where('invoice.id > :afterId', {afterId}).andWhere('invoice.proof_path IS NOT NULL')
-        .andWhere("invoice.proof_path <> ''").orderBy('invoice.id', 'ASC').limit(1000).getRawMany<{id: number; path: string}>();
+        .where({id: MoreThan(afterId), proofPath: And(Not(IsNull()), Not(''))})
+        .orderBy('invoice.id', 'ASC').limit(1000).getRawMany<{id: number; path: string}>();
     return rows.map(row => ({id: Number(row.id), path: row.path}));
+}
+
+/** Execute one fixed advisory-lock function through the held connection's builder.
+ * The native dummy source supplies exactly one row without reading application
+ * tables, including an empty ledger or schema. Values remain bound to this runner. */
+async function proofMaintenanceScalar(manager: EntityManager, operation: 'acquire' | 'release', name: string) {
+    // Every identifier/function is a closed constant. Only the lock name is
+    // supplied data, and it remains bound rather than becoming query syntax.
+    const expression = operation === 'acquire' ? 'GET_LOCK(:proofMaintenanceName, 0)' : 'RELEASE_LOCK(:proofMaintenanceName)';
+    const row = await manager.createQueryBuilder().select(expression, 'value')
+        .fromDummy().setParameter('proofMaintenanceName', name)
+        .getRawOne<{value: number | string | null}>();
+    return row!.value;
 }
 
 /** Serialize offline maintenance commands on one held connection without moving
@@ -168,11 +183,10 @@ export async function withProofMaintenanceLock<Result>(operation: () => Promise<
     try {
         // MariaDB advisory locks belong to the connection, so retain this runner
         // through the caller's filesystem work and release before returning it.
-        const [row] = await runner.query('SELECT GET_LOCK(?, 0) AS acquired', [name]);
-        acquired = Number(row.acquired) === 1;
+        acquired = Number(await proofMaintenanceScalar(runner.manager, 'acquire', name)) === 1;
         return acquired ? {result: await operation()} : null;
     } finally {
-        try { if (acquired) await runner.query('SELECT RELEASE_LOCK(?)', [name]); }
+        try { if (acquired) await proofMaintenanceScalar(runner.manager, 'release', name); }
         finally { await runner.release(); }
     }
 }
@@ -290,7 +304,7 @@ export async function getExpiredInvoices(cutoffDate: string): Promise<EventInvoi
     return AppDataSource.getRepository(EventInvoice).createQueryBuilder('invoice')
         .innerJoinAndSelect('invoice.pool', 'pool')
         .innerJoinAndSelect('pool.event', 'event')
-        .where('event.endDate <= :cutoffDate', {cutoffDate}).getMany();
+        .where({pool: {event: {endDate: LessThanOrEqual(cutoffDate)}}}).getMany();
 }
 
 export async function deleteInvoices(ids: number[], manager: EntityManager): Promise<void> {
@@ -505,7 +519,7 @@ export async function registerForDefaultPools(
             .createQueryBuilder(EventRegistration, 'reg')
             .select('reg.id')
             .leftJoinAndSelect('reg.event', 'event')
-            .where('reg.id = :id', {id: reg.id})
+            .where({id: Equal(reg.id)})
             .getOne();
 
         if (!regWithEvent?.event) {

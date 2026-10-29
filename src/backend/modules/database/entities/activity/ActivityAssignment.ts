@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-import {Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
-import {DefaultNumericEntityItemAssignment} from "../abstract/ProfileEntityItemAssignment";
-import {ActivityAssignmentRole} from "./ActivityAssignmentRole";
-import {ActivityPlan} from "./ActivityPlan";
-import {ActivitySlot} from "./ActivitySlot";
+import {Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from 'typeorm';
+import {DefaultNumericEntityItemAssignment} from '../abstract/ProfileEntityItemAssignment';
+import {ActivityAssignmentRole} from './ActivityAssignmentRole';
+import {ActivityPlan} from './ActivityPlan';
+import {ActivitySlot} from './ActivitySlot';
 
 @Entity("activity_assignments", {schema: "surveyor"})
 export class ActivityAssignment extends DefaultNumericEntityItemAssignment {

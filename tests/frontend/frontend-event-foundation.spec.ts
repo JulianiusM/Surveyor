@@ -46,29 +46,29 @@ function json(value: unknown, token = '"metadata-original"', status = 200): Resp
 /** Mount actual controls/adapters/drafts while substituting HTTP delivery only.
  * These frontend fixtures establish no persistence or complete-system result. */
 async function mounted(component: Component, handler: (request: Request) => Promise<Response>,
-                       path = '/event/create', props: Record<string, unknown> = {},
-                       initial: Omit<FrontendBootstrap, 'session'> = {}) {
+    path = '/event/create', props: Record<string, unknown> = {},
+    initial: Omit<FrontendBootstrap, 'session'> = {}) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
     const context = createFrontendContext({session, ...initial}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/event/create', component, props},
-        {path: '/event/:eventId/duplicate', component, props},
-        {path: '/event/:eventId/guest', component, props},
-        {path: '/event/:eventId/admin', component, props},
-        {path: '/event/:eventId', component, props},
-        {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
-    ]});
+            {path: '/event/create', component, props},
+            {path: '/event/:eventId/duplicate', component, props},
+            {path: '/event/:eventId/guest', component, props},
+            {path: '/event/:eventId/admin', component, props},
+            {path: '/event/:eventId', component, props},
+            {path: '/', component: defineComponent({template: '<p>Overview</p>'})},
+        ]});
     await router.push(path);
     const stopInitial = observeInitialDocument(context, router);
     const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
-        provide: {[frontendContextKey as symbol]: context},
-        stubs: {AppDialog: defineComponent({template: '<section role="dialog"><slot name="navigation" /><slot /><slot name="footer" /></section>'}),
-            // Entry assertions exercise the real admission/router/query owners;
-            // its separately tested detail body cannot manufacture admission.
-            EventPage: defineComponent({template: '<p data-test="event-admitted">Admitted Event</p>'})},
-    }});
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[frontendContextKey as symbol]: context},
+            stubs: {AppDialog: defineComponent({template: '<section role="dialog"><slot name="navigation" /><slot /><slot name="footer" /></section>'}),
+                // Entry assertions exercise the real admission/router/query owners;
+                // its separately tested detail body cannot manufacture admission.
+                EventPage: defineComponent({template: '<p data-test="event-admitted">Admitted Event</p>'})},
+        }});
     await flushPromises();
     cleanups.push(async () => {root.unmount(); stopInitial(); await context.queryClient.cancelQueries(); context.queryClient.clear();});
     return {root, wrapper: root.findComponent(component), request, context, router};
@@ -314,7 +314,7 @@ describe('Event foundation production consumers', () => {
                     // The fixture returns a valid saved projection, just as the API
                     // decodes raw numeric input before the next authoritative read.
                     current = {...current, values: {...current.values, ...patch,
-                        maxParticipants: Number(patch.maxParticipants)}, editToken: '"edit-saved"'};
+                            maxParticipants: Number(patch.maxParticipants)}, editToken: '"edit-saved"'};
                 }
                 return json(current, current.editToken);
             }

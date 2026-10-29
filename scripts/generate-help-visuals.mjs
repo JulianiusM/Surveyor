@@ -93,13 +93,13 @@ const logo = await fs.readFile(path.join(root, 'src/public/img/logo.png'));
 const renderer = await import(pathToFileURL(path.join(root, 'dist/frontend-server/entry-server.mjs')).href);
 const profile = {id: '00000000-0000-4000-8000-000000000001', name: labels.fictionalProfile};
 const rendered = await renderer.render(`/help?locale=${locale}`, {session: {
-    kind: 'account', context: 'fictional-help-figure', csrfToken: 'fictional-not-a-token', locale,
-    // The actual shell requires deployment metadata even for a server-only
-    // figure. Reuse its generated compatibility owner; this fixture never sends commands.
-    deployment: {buildId: 'fictional-help-figure', apiCompatibility},
-    activeProfile: profile, profiles: [profile], loginUrl: '/users/login', logoutUrl: '/users/login',
-    shell: {version: '', imprintUrl: '', privacyPolicyUrl: '', localLoginEnabled: true, oidcEnabled: false, oidcName: ''},
-}});
+        kind: 'account', context: 'fictional-help-figure', csrfToken: 'fictional-not-a-token', locale,
+        // The actual shell requires deployment metadata even for a server-only
+        // figure. Reuse its generated compatibility owner; this fixture never sends commands.
+        deployment: {buildId: 'fictional-help-figure', apiCompatibility},
+        activeProfile: profile, profiles: [profile], loginUrl: '/users/login', logoutUrl: '/users/login',
+        shell: {version: '', imprintUrl: '', privacyPolicyUrl: '', localLoginEnabled: true, oidcEnabled: false, oidcName: ''},
+    }});
 
 const browser = await chromium.launch({headless: true});
 const page = await browser.newPage({viewport: {width: 1344, height: 1080}, deviceScaleFactor: 1});

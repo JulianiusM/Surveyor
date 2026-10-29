@@ -28,6 +28,71 @@ import {requireLockedPool, assertLockedParticipant, savePoolChange, withInvoiceP
 import {assertPositiveInvoiceAmount, assertConfirmedInvoiceChange} from './validation';
 import {attachInvoiceProof, withInvoiceProofUpload} from './proofs';
 
+/** Apply participant submission policy to the already loaded pool before proof
+ * attribution. The locked operation repeats lifecycle and membership checks. */
+export function assertParticipantInvoiceSubmission(pool: EventInvoicePool, registrationId: number, body: object,
+    file?: Pick<Express.Multer.File, 'mimetype'>): asserts file is Pick<Express.Multer.File, 'mimetype'> {
+    // Keep the early 400 distinct from a concurrent closure's locked 409.
+    assertInvoiceSubmissionsOpen(pool, body, 400);
+    const isAssigned = pool.assignAll || pool.assignments?.some((assignment) => assignment.registration.id === registrationId);
+    if (!isAssigned) throw new APIError(invoiceText('notAllowedForThisPool'), body, 403);
+    // A participant's proof remains mandatory, after pool eligibility has won
+    // any competing rejection. Organizer proof admission stays optional.
+    if (!file) throw new APIError(invoiceText('proofRequired'), body, 400, {cause: invoiceRejectionCause('proofRequired')});
+    const isValidProof = file.mimetype === 'application/pdf' || file.mimetype.startsWith('image/');
+    if (!isValidProof) {
+        throw new APIError(invoiceText('unsupportedProofType'), body, 400, {cause: invoiceRejectionCause('unsupportedProofType')});
+    }
+}
+
+/** The same open-state rule retains each caller's existing rejection status and
+ * diagnostic data; it performs no reads and never replaces locked admission. */
+function assertInvoiceSubmissionsOpen(pool: EventInvoicePool, data: object, status: 400 | 409): void {
+    if (pool.status !== 'OPEN') throw new APIError(invoiceText('poolIsClosedForInvoiceSubmissions'), data, status,
+        {cause: invoiceRejectionCause('poolIsClosedForInvoiceSubmissions', status)});
+}
+
+/** Select a reviewable invoice before parsing corrections or rejection text.
+ * The locked transition uses the same state predicate and reports its own race. */
+export function requireInvoiceForReview(invoice: EventInvoice | null, decision: 'accept' | 'reject', data: object): EventInvoice {
+    // Resolve absence before lifecycle so a completed review keeps its precise
+    // action diagnostic without exposing or parsing a replacement form first.
+    if (!invoice) throw new APIError(invoiceText('invoiceNotFound'), {}, 404);
+    if (!isInvoiceAwaitingReview(invoice)) {
+        const key = decision === 'accept' ? 'onlyInvoicesAwaitingReviewCanBeAccepted' : 'onlyInvoicesAwaitingReviewCanBeRejected';
+        throw new APIError(invoiceText(key), data, 409, {cause: invoiceRejectionCause(key, 409)});
+    }
+    return invoice;
+}
+
+/** Review ownership is shared by early preflight and the locked winner check. */
+function isInvoiceAwaitingReview(invoice: EventInvoice): boolean {
+    return invoice.status === 'NEW';
+}
+
+/** Resolve invoice closure before actor lookup. An already closed invoice is
+ * an idempotent no-op; the two established rejection messages stay stage-specific. */
+export function requireInvoiceForClosure(invoice: EventInvoice | null, locked = false): EventInvoice | null {
+    // Terminal idempotence precedes request actor lookup and any update. The
+    // locked winner path uses the same decision with its established wording.
+    if (!invoice) throw new APIError(invoiceText('invoiceNotFound'), {}, 404);
+    if (invoice.status === 'CLOSED') return null;
+    if (invoice.status !== 'APPROVED') {
+        const key = locked ? 'onlyAcceptedInvoicesCanBeClosed' : 'invoicesMustBeAcceptedBeforeClosing';
+        throw new APIError(invoiceText(key), {}, 400, {cause: invoiceRejectionCause(key)});
+    }
+    return invoice;
+}
+
+/** Apply submitter ownership after request admission has selected whether its
+ * organizer grant may override self-service closure. */
+export function assertInvoiceClosureActor(invoice: EventInvoice, actorRegistrationId: number | undefined, canManage: boolean): void {
+    const isSubmitter = actorRegistrationId !== undefined && actorRegistrationId === invoice.registrationId;
+    if (!canManage && !isSubmitter) {
+        throw new APIError(invoiceText('youCanOnlyCloseYourOwnAcceptedInvoicesUnless'), {}, 403);
+    }
+}
+
 /** The creator owns proof validation; persistence receives already selected attribution and status. */
 export async function persistSubmittedInvoice(poolId: string, registrationId: number, amount: number, description: string | null, proof: InvoiceProof = null): Promise<number> {
     /** Retain upload ownership through all admission, persistence and receipt work. */
@@ -37,7 +102,7 @@ export async function persistSubmittedInvoice(poolId: string, registrationId: nu
             // The DBAL holds the pool lock throughout policy checks and dependent writes.
             const pool = requireLockedPool(row);
             // Recheck submission eligibility after acquiring the lock, including concurrent closure or membership edits.
-            if (pool.status !== 'OPEN') throw new APIError(invoiceText('poolIsClosedForInvoiceSubmissions'), {}, 409, {cause: invoiceRejectionCause('poolIsClosedForInvoiceSubmissions', 409)});
+            assertInvoiceSubmissionsOpen(pool, {}, 409);
             await assertLockedParticipant(manager, pool, registrationId);
             // New participant costs require review and retain the original proof and submitted amount.
             await attachInvoiceProof(proof, manager);
@@ -109,7 +174,7 @@ export async function acceptSavedInvoice(poolId: string, invoiceId: number, corr
         // Read the current review state within this pool; preloaded request data cannot authorize a stale transition.
         const invoice = await invoiceService.getInvoiceWithRegistration(poolId, invoiceId, manager);
         if (!invoice) throw new APIError(invoiceText('invoiceNotFound'), {}, 404);
-        if (invoice.status !== 'NEW') return false;
+        if (!isInvoiceAwaitingReview(invoice)) return false;
         // Only the winning NEW-to-accepted transition writes corrections and clears a prior rejection reason.
         invoice.status = 'APPROVED';
         invoice.correctedAmount = corrections.correctedAmount == null ? null : formatAmount(corrections.correctedAmount);
@@ -131,10 +196,8 @@ export async function closeSavedInvoice(poolId: string, invoiceId: number,
         // The DBAL holds the pool lock throughout policy checks and dependent writes.
         requireLockedPool(row);
         // Read the current review state within this pool; preloaded request data cannot authorize a stale transition.
-        const invoice = await invoiceService.getInvoiceWithRegistration(poolId, invoiceId, manager);
-        if (!invoice) throw new APIError(invoiceText('invoiceNotFound'), {}, 404);
-        if (invoice.status === 'CLOSED') return false;
-        if (invoice.status !== 'APPROVED') throw new APIError(invoiceText('onlyAcceptedInvoicesCanBeClosed'), {}, 400, {cause: invoiceRejectionCause('onlyAcceptedInvoicesCanBeClosed')});
+        const invoice = requireInvoiceForClosure(await invoiceService.getInvoiceWithRegistration(poolId, invoiceId, manager), true);
+        if (!invoice) return false;
         // Closing retains the accepted cost; refresh aggregates without changing saved shares or pool inputs.
         invoice.status = 'CLOSED';
         await invoiceService.saveInvoice(invoice, manager);
@@ -154,7 +217,7 @@ export async function rejectSavedInvoice(poolId: string, invoiceId: number, reje
         // Read the current review state within this pool; preloaded request data cannot authorize a stale transition.
         const invoice = await invoiceService.getInvoiceWithRegistration(poolId, invoiceId, manager);
         if (!invoice) throw new APIError(invoiceText('invoiceNotFound'), {}, 404);
-        if (invoice.status !== 'NEW') return false;
+        if (!isInvoiceAwaitingReview(invoice)) return false;
         // Preserve the original invoice and proof in history while excluding this rejected cost from calculation.
         invoice.status = 'REJECTED';
         invoice.rejectionReason = rejectionReason;

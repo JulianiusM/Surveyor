@@ -14,37 +14,38 @@
  * limitations under the License.
  */
 
-import {Request} from "express";
+import {Request} from 'express';
 import type {EntityManager} from 'typeorm';
 import * as lifecycleService from '../modules/database/services/EntityLifecycleService';
 import {
-    requireLockedArchiveRoot, getArchivePresentations,
+    savePersonalVisibility, getArchivePresentations,
 } from '../modules/entityArchival';
 import Joi from 'joi';
-import {Guest} from "../modules/database/entities/user/Guest";
+import {Guest} from '../modules/database/entities/user/Guest';
 import type {Session} from '../modules/database/entities/session/Session';
-import {Profile} from "../modules/database/entities/user/Profile";
-import {User} from "../modules/database/entities/user/User";
-import * as userService from "../modules/database/services/UserService";
+import {Profile} from '../modules/database/entities/user/Profile';
+import {User} from '../modules/database/entities/user/User';
+import * as userService from '../modules/database/services/UserService';
 import * as identity from '../modules/identity';
-import mailer, {prepareActivationEmail, prepareGuestLinkEmail, preparePasswordResetEmail, resolveEmailRecipientName} from "../modules/email";
+import mailer, {prepareActivationEmail, prepareGuestLinkEmail, preparePasswordResetEmail, resolveEmailRecipientName} from '../modules/email';
 import type {PreparedIdentityEmail} from '../../types/EmailTypes';
-import {APIError, ExpectedError, ValidationError} from "../modules/lib/errors";
-import {createSessionStore, persistSession, readStoredSession, requireSessionProfileId, stageIdentitySession, writeStoredSession} from "../modules/lib/session";
+import {APIError, ExpectedError, ValidationError} from '../modules/lib/errors';
+import {persistSession, readStoredSession, requireSessionProfileId, stageIdentitySession, writeStoredSession} from '../modules/lib/session';
 import {readFrontendSessionMetadata, rotateFrontendSessionContext, sameFrontendSessionIdentity} from '../modules/lib/frontendSession';
 import {safeFrontendReturn} from '../../common/lib/frontendIdentity';
 import type {AccountRegistrationTransactionOptions, RegistrationEmailDelivery, RegistrationReceipt, GuestRegistrationTransactionOptions, IdentityCompletionOptions, IdentityCompletionReceipt, IdentityLinkOptions, IdentityTransitionOptions, ProfileOwnerCleanup, ProfileWorkflowPreparation, ProviderLogoutOutcome} from '../../types/IdentityTypes';
 import type {MessageKey} from '../../types/LocalizationTypes';
 import {ApiProblem} from '../modules/api/problem';
-import {buildGuestLink, ENTITIES, uuidKey} from "../modules/lib/util";
-import * as oidc from "../modules/oidc";
-import settings from "../modules/settings";
-import type {Entity, GuestLinkData, OverviewCollection, OverviewQuery, OverviewReadResult, OverviewRegion, OverviewRegionView, PersonalVisibilityCompletion, PersonalVisibilityResult} from "../../types/UserTypes";
-import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, LockedArchiveContext, PersonalVisibility} from "../../types/ArchiveTypes";
-import type {SessionLike} from "../../types/PermissionTypes";
-import {archiveKey, isHiddenInOverview} from "../modules/archive/policy";
-import {evaluateEntities, entityPermissionKey} from "../modules/permissionEngine";
+import {buildGuestLink, ENTITIES, projectEntityCard, uuidKey} from '../modules/lib/util';
+import * as oidc from '../modules/oidc';
+import settings from '../modules/settings';
+import type {Entity, GuestLinkData, OverviewCollection, OverviewQuery, OverviewReadResult, OverviewRegion, OverviewRegionView, PersonalVisibilityCompletion, PersonalVisibilityResult} from '../../types/UserTypes';
+import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, LockedArchiveContext, PersonalVisibility} from '../../types/ArchiveTypes';
+import type {SessionLike} from '../../types/PermissionTypes';
+import {archiveKey, isHiddenInOverview} from '../modules/archive/policy';
+import {evaluateEntities, entityPermissionKey, isOwner} from '../modules/permissionEngine';
 import type {components, operations} from '../../types/api/v1';
+import type {ApiResponsePreparer} from '../../types/ApiTransportTypes';
 
 const CREATE_TEMPLATE = 'users/register';
 
@@ -63,8 +64,6 @@ export function getAccountPageEntry(session: SessionLike, loginUrl: string, retu
     return {kind: 'redirect', url: `${loginUrl}?next=${encodeURIComponent(returnTo)}`,
         notice: {kind: 'info', messageKey: 'auth.accountRequired'}};
 }
-
-const LOGIN_TEMPLATE = 'users/login';
 
 /**
  * Build identity-mail destinations for the shared registration/recovery operations.
@@ -115,14 +114,6 @@ function validateUserRegistration(body: any) {
     return {username, name, password, email};
 }
 
-/** Preserve the common username diagnostic while selecting the caller's current persistence scope. */
-async function requireAvailableUsername(username: string, email: string, manager?: EntityManager): Promise<void> {
-    const existingUser = await userService.getUserByUsername(username, manager);
-    if (existingUser) {
-        throw new ValidationError(CREATE_TEMPLATE, 'This username is already taken.', {username, email}, {cause: 'USERNAME_TAKEN'});
-    }
-}
-
 /**
  * Prepare a frontend account, default profile and activation token in one registration
  * transaction. Signup preserves the current actor; only document completion opts
@@ -136,7 +127,7 @@ export async function registerUserWithSession<Result>(body: any, req: Request,
     async function createAccount(manager: EntityManager, session: Request['session']) {
         // Reuse shared validation under this transaction. Database uniqueness
         // remains authoritative when separate sessions submit the same username.
-        await requireAvailableUsername(input.username, input.email, manager);
+        await identity.requireAvailableUsername(input.username, input.email, manager);
         const id = await userService.registerUser(input.username, input.name, input.password, input.email, manager);
         const token = await userService.generateActivationToken(id, manager);
 
@@ -151,61 +142,10 @@ export async function registerUserWithSession<Result>(body: any, req: Request,
     return commitRegistration(req, options.context, createAccount, Boolean(options.persistCompletion));
 }
 
-/**
- * Share credential/activation diagnostics before any identity mutation. Inactive
- * login may refresh and mail an activation token before rejecting; keep that
- * established workflow outside an identity transaction that would roll it back.
- */
-async function resolveLoginUser(body: any, options?: IdentityLinkOptions) {
-    // Keep credentials inside this check; rejected forms redisplay only
-    // the submitted username and retain their common invalid-login diagnostic.
-    const {username, password} = body;
-    const returnInfo = {username};
-
-    if (!username || !password) {
-        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
-    }
-
-    // Preserve username-first resolution and indistinguishable missing-user /
-    // invalid-password errors.
-    const user = await resolveNamedAccount(username);
-    await options?.credentialAdmission?.account(user?.id ?? null);
-    if (!user) {
-        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
-    }
-
-    const isValidPassword = await userService.verifyPassword(user.id, password);
-    if (!isValidPassword) {
-        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
-    }
-    await options?.credentialAdmission?.verified();
-
-    // An inactive account is not a session transition. Refresh expired activation
-    // mail first, then report the precise inactive/resend cause to either adapter.
-    if (!user.isActive) {
-        let errorMsg = 'User not activated.';
-        let cause: 'ACCOUNT_INACTIVE' | 'ACTIVATION_RESENT' = 'ACCOUNT_INACTIVE';
-        if ((user.activationTokenExpiration ?? new Date(0)) < new Date()) {
-            await options?.beforeIdentityMail?.(user.email);
-            // Generiere den Aktivierungs-Token und sende ihn per E-Mail
-            const token = await userService.generateActivationToken(user.id);
-            const activationLink = identityLink(`/users/activate/${encodeURIComponent(token)}`, options);
-
-            await mailer.sendActivationEmail({name: resolveEmailRecipientName(user.name, user.username), address: user.email}, activationLink);
-            cause = 'ACTIVATION_RESENT';
-            errorMsg += ' The activation link has expired. A new one has been sent to your email account.';
-        }
-
-        throw new ValidationError(LOGIN_TEMPLATE, errorMsg, returnInfo, {cause});
-    }
-
-    return user;
-}
-
 /** Select local account authority synchronously; each caller retains its original save timing. */
 function applyAccountIdentity(session: Request['session'], user: User): void {
     session.auth = {user};
-    session.profile = getDefaultProfile(user.profiles);
+    session.profile = identity.getDefaultProfile(user.profiles);
     rotateFrontendSessionContext(session);
 }
 
@@ -221,7 +161,7 @@ async function saveAccountIdentity(session: Request['session'], user: User): Pro
 export async function loginUserWithSession<Result>(body: any, req: Request,
     options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
     // Resolve credentials/resend before locking, without mutating request authority.
-    const user = await resolveLoginUser(body, options);
+    const user = await identity.resolveLoginUser(body, token => identityLink(`/users/activate/${encodeURIComponent(token)}`, options), options);
     /** Apply shared authority mutation, then prepare completion while rollback is still possible. */
     async function prepareLogin(_manager: EntityManager, session: Request['session']): Promise<Result> {
         await saveAccountIdentity(session, user);
@@ -472,9 +412,30 @@ export async function getOverviewRegion(session: SessionLike, query: unknown): P
     return makeOverviewRegionView(state, target, read);
 }
 
+/** Project the mixed overview independently of each feature command API. */
+export async function readOverview(query: operations['getOverview']['parameters']['query'], session: SessionLike): Promise<components['schemas']['OverviewRegion']> {
+    const prefix = `${query.collection}_${query.region}_`;
+    // Badges and cards must use the same authorized roots. An absent filter includes all
+    // entity kinds, including non-packing children inside a selected event container.
+    const navigation: Record<string, string> = {collection: query.collection, region: query.region, [`${prefix}type`]: query.type ?? 'all'};
+    for (const key of ['q', 'page', 'childPage'] as const) if (query[key] !== undefined) navigation[`${prefix}${key}`] = query[key];
+    if (query.eventId) navigation[`${prefix}event`] = query.eventId;
+    const region = await getOverviewRegion(session, navigation);
+    // All supported feature families use the same bounded card owner.
+    function projectCard(card: Entity): components['schemas']['OverviewCard'] {
+        return projectEntityCard(card, isOwner(session, card.ownerId), region.collection === 'owner');
+    }
+    return {collection: region.collection, region: region.region, q: region.q, type: region.type, availableTypes: region.availableTypes,
+        page: region.page, childPage: region.childPage,
+        eventId: region.eventId ?? null, pageSize: region.pageSize, totalEntities: region.totalEntities, hiddenEntities: region.hiddenEntities,
+        regionEntities: region.regionEntities, matchingEntities: region.matchingEntities, totalCards: region.totalCards, totalChildren: region.totalChildren,
+        hasPrevious: Boolean(region.previousUrl), hasNext: Boolean(region.nextUrl), parent: region.parent ? projectCard(region.parent) : null,
+        items: region.items.map(projectCard)};
+}
+
 /**
  * Change only the authenticated session profile's overview placement, never shared archival.
- * The controller checks current overview membership while holding the target row lock, which
+ * The feature checks current overview membership while holding the target row lock, which
  * serializes the check/write with a concurrent database deletion. A visible card from an old
  * page is not sufficient authority to save a preference after membership has been removed.
  */
@@ -512,11 +473,7 @@ export async function setPersonalVisibility<Result>(entityType: string, id: stri
     const visibility = preference.value.visibility;
     /** Check current membership and prepare any explicit adapter receipt on this locked transaction. */
     async function saveVisibility(manager: EntityManager, context: LockedArchiveContext) {
-        // A page rendered earlier does not authorize a write after deletion or membership loss.
-        // The controller checks both against the transaction holding the current root lock.
-        requireLockedArchiveRoot(context);
-        if (!await userService.isOverviewMember(profileId, reference, manager)) throw new APIError('This entity is not in your overview', {}, 403, {cause: 'OVERVIEW_MEMBERSHIP_LOST'});
-        await userService.setVisibility(profileId, reference, visibility, manager);
+        await savePersonalVisibility(profileId, reference, visibility, manager, context);
 
         // Explicit completions use this transaction's lifecycle and grants. Any
         // projection or receipt failure still rolls back the private preference.
@@ -533,6 +490,35 @@ export async function setPersonalVisibility<Result>(entityType: string, id: stri
     return personalVisibilityResult(reference, visibility, session);
 }
 
+/** Desired personal visibility is naturally retryable and always belongs to the admitted profile. */
+export function setOverviewVisibility(entityType: components['schemas']['OverviewCard']['type'], id: string,
+    body: components['schemas']['OverviewVisibilityInput'], session: SessionLike): Promise<components['schemas']['OverviewVisibilityResult']>;
+/** A transport preparer captures the declared response while the preference can still roll back. */
+export function setOverviewVisibility<Result>(entityType: components['schemas']['OverviewCard']['type'], id: string,
+    body: components['schemas']['OverviewVisibilityInput'], session: SessionLike,
+    prepareResult: ApiResponsePreparer<'setOverviewVisibility', 200, Result>): Promise<Result>;
+/** Map the shared locked outcome once; ordinary callers retain their exact DTO and error contract. */
+export async function setOverviewVisibility<Result>(entityType: components['schemas']['OverviewCard']['type'], id: string,
+    body: components['schemas']['OverviewVisibilityInput'], session: SessionLike,
+    prepareResult?: ApiResponsePreparer<'setOverviewVisibility', 200, Result>): Promise<components['schemas']['OverviewVisibilityResult'] | Result> {
+    /** Keep wire mapping separate from membership/placement policy and optional transport preparation. */
+    function prepareVisibility(_manager: EntityManager, outcome: PersonalVisibilityResult) {
+        // Only these public primitives leave the adapter; archive capability
+        // details remain in the shared controller's presentation contract.
+        const result = {visibility: outcome.visibility, overviewHidden: outcome.overviewHidden, archived: Boolean(outcome.archive?.archived)};
+        return prepareResult ? prepareResult(result) : result;
+    }
+
+    try {
+        // Business admission, persistence and lifecycle projection remain shared.
+        // Mapping/preparation errors reject before that transaction can commit.
+        return await setPersonalVisibility(entityType, id, body, session, {prepare: prepareVisibility});
+    } catch (error) {
+        if (error instanceof APIError && error.status === 409) throw new ApiProblem('ENTITY_CONTEXT_CHANGED');
+        throw error;
+    }
+}
+
 /** Project personal placement once, using a supplied transaction or the ordinary read. */
 async function personalVisibilityResult(reference: ArchiveReference, visibility: PersonalVisibility, session: SessionLike,
     manager?: EntityManager): Promise<PersonalVisibilityResult> {
@@ -547,14 +533,6 @@ async function personalVisibilityResult(reference: ArchiveReference, visibility:
     };
 }
 
-/** Resolve credential and recovery accounts by username before falling back to email. */
-async function resolveNamedAccount(username: string, manager?: EntityManager) {
-    // Recovery supplies its completion manager for both reads. Credential
-    // admission retains ordinary DBAL reads before the identity lock is acquired.
-    const user = await userService.getUserByUsername(username, manager);
-    return user ?? await userService.getUserByEmail(username, manager);
-}
-
 /**
  * Prepare frontend recovery's existing generic confirmation and optional token/mail
  * on the locked completion transaction. Unknown accounts stay a quiet no-op;
@@ -565,7 +543,7 @@ export async function requestPasswordResetWithSession<Result>(username: string, 
     options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
     /** Reuse username-first discovery without another connection or an account-found result. */
     async function prepareRecovery(manager: EntityManager, session: Request['session']) {
-        const user = await resolveNamedAccount(username, manager);
+        const user = await identity.resolveNamedAccount(username, manager);
         await options.beforeIdentityMail?.(user?.email ?? username);
         let emailReceipt: PreparedIdentityEmail | null = null;
         if (user) {
@@ -592,7 +570,7 @@ export async function requestPasswordResetWithSession<Result>(username: string, 
  * TOKEN_INVALID supplies the versioned adapter's stable, private-data-free cause. */
 export async function checkPasswordForgotToken(token: string) {
     // Admission and consumption share the same token diagnostic owner.
-    await requirePasswordResetToken(token);
+    await identity.requirePasswordResetToken(token);
 }
 
 /** Preserve reset's mismatch-before-token check and existing renderer data. */
@@ -606,17 +584,6 @@ function validatePasswordResetInput(token: string, body: any) {
     return password;
 }
 
-/** Share reset-token diagnostics; only a locked frontend read rechecks expiry after its wait. */
-async function requirePasswordResetToken(token: string, manager?: EntityManager, lock = false) {
-    const user = await userService.verifyPasswordResetToken(token, manager, lock);
-    // Ordinary queries retain their existing expiry predicate. A frontend lock can
-    // wait past that query timestamp, so validate its returned expiry again.
-    if (!user || lock && (!user.resetTokenExpiration || user.resetTokenExpiration <= new Date())) {
-        throw new ExpectedError('Invalid or expired token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
-    }
-    return user;
-}
-
 /**
  * Consume a frontend reset capability exactly once with its prepared API/document
  * completion. The session/token locks and password update share one manager;
@@ -627,7 +594,7 @@ export async function resetPasswordWithSession<Result>(token: string, body: any,
     const password = validatePasswordResetInput(token, body);
     /** Recheck the locked capability, prepare output and update password/token before final commit. */
     async function consumeReset(manager: EntityManager, session: Request['session']): Promise<Result> {
-        const user = await requirePasswordResetToken(token, manager, true);
+        const user = await identity.requirePasswordResetToken(token, manager, true);
 
         const result = await options.prepareResult(session, manager);
         await userService.resetPassword(user.username, password, manager);
@@ -646,12 +613,7 @@ export async function activateAccountWithSession<Result>(token: string, req: Req
     options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
     /** Admit the currently valid locked token and prepare feedback before either write. */
     async function activateWithinSession(manager: EntityManager, session: Request['session']): Promise<Result> {
-        const user = await userService.verifyActivationToken(token, manager, true);
-        // Acquiring the token lock can wait behind another transaction. Its
-        // unchanged expiry rule must still hold when that wait actually ends.
-        if (!user || !user.activationTokenExpiration || user.activationTokenExpiration <= new Date()) {
-            throw new ExpectedError('Invalid or expired token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
-        }
+        const user = await identity.requireActivationToken(token, manager);
 
         // Preparation can still reject without consuming the token. The update
         // and optional staged document flash belong to this same final commit.
@@ -746,10 +708,7 @@ export async function loginGuest(guestId: string, token: string, session: Reques
     manager?: EntityManager) {
     // Token verification returns the persisted guest and its profile. Submitted
     // profile identifiers never choose the identity attached to this session.
-    const guest = await userService.getGuestByToken(token, guestId, manager);
-    if (!guest) {
-        throw new ExpectedError('Invalid or mismatched token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
-    }
+    const guest = await identity.requireGuestLoginToken(guestId, token, manager);
     // The lookup may have yielded to another tab. Finish the optional admission
     // check before changing authority, then persist the rotated identity together.
     await options?.beforeTransition?.();
@@ -863,7 +822,7 @@ async function commitIdentityCompletion<Result>(req: Request, context: string | 
         // The library remains the owner of expiry, destroyed-row and JSON
         // semantics. Recognized sessions must retain their captured authority;
         // absence is allowed only for an admitted, uninitialized server candidate.
-        const store = createSessionStore(manager);
+        const store = userService.createSessionStore(manager);
         const stored = await readStoredSession(store, sessionId);
         if (stored) {
             if (!lockedSession || !sameFrontendSessionIdentity(req.session, stored)
@@ -976,26 +935,7 @@ export async function deactivateProfile(body: any, session: Request['session'], 
  */
 export async function changeActiveProfile(session: Request['session'], profileId?: string, beforeTransition?: () => Promise<void>,
     manager?: EntityManager) {
-    // Guest profiles belong to a separate identity and cannot use account profile
-    // selection. A submitted identifier must belong to this account in the DB.
-    if (!session.auth?.user) {
-        throw new ExpectedError("Not logged in as user!", "error", 401);
-    }
-
-    let profile;
-    if (profileId) {
-        profile = await userService.getProfileById(profileId, manager);
-        if (profile?.userId !== session.auth.user.id) {
-            throw new ExpectedError("Invalid profile id", "error", 400, {}, {cause: 'PROFILE_SELECTION_INVALID'});
-        }
-    } else {
-        const profiles = await userService.getProfilesForUser(session.auth.user.id, manager);
-        if (profiles.length > 0) {
-            profile = getDefaultProfile(profiles);
-        } else {
-            throw new ExpectedError("Invalid profile id", "error", 400, {}, {cause: 'PROFILE_SELECTION_INVALID'});
-        }
-    }
+    const profile = await identity.selectAccountProfile(session, profileId, manager);
 
     // Reads may have waited while another tab changed identity. Only current
     // admission permits replacing the profile and rotating/persisting its context.
@@ -1277,13 +1217,4 @@ export async function deleteIdentityAccount<Result>(req: Request, body: componen
         if (error instanceof ValidationError || error instanceof ApiProblem) throw error;
         throw new ApiProblem('WORKFLOW_OUTCOME_UNKNOWN');
     }
-}
-
-export function getDefaultProfile(profiles: Profile[]) {
-    const sortedProfiles = profiles.toSorted((a, b) => a.track.createdAt.getTime() - b.track.createdAt.getTime())
-    let profile = sortedProfiles.find(p => p.defaultForOwner);
-    // No default profile --> use oldest instead.
-    profile ??= sortedProfiles[0];
-
-    return profile;
 }

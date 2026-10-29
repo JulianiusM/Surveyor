@@ -14,13 +14,106 @@
  * limitations under the License.
  */
 
-import {TableForeignKey, type QueryRunner, type Table} from "typeorm";
+import type {QueryRunner, Table, TableColumn} from 'typeorm';
 import type {MigrationColumnStorage, MigrationReference, MigrationReferencePlan} from '../../../../types/MigrationTypes';
 
 /** Quote only migration-authored identifiers, never arbitrary SQL fragments. */
 function migrationIdentifier(value: string): string {
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(value)) throw new Error('Unsupported migration identifier');
     return `\`${value}\``;
+}
+
+/** Quote configured metadata identifiers separately, preserving literal punctuation. */
+function migrationMetadataPath(queryRunner: QueryRunner): string {
+    // Native bookkeeping uses the configured metadata-table database, which
+    // remains distinct from the generated column's selected historical schema.
+    const options = queryRunner.dataSource.options;
+    const database = 'database' in options && typeof options.database === 'string' ? options.database : undefined;
+    return [...(database ? [database] : []), queryRunner.dataSource.metadataTableName]
+        .map(part => `\`${part.replaceAll('`', '``')}\``).join('.');
+}
+
+/** Render an existing physical column for migration-authored ADD/CHANGE SQL.
+ * TableColumn normalizes numeric display widths and ZEROFILL, so retain the
+ * actual source type plus the caller's cloned non-primary column attributes. */
+export async function migrationColumnDefinition(queryRunner: QueryRunner, table: string,
+    sourceColumn: string, column: TableColumn): Promise<string> {
+    // Read the complete stored type before writing: normalized ORM metadata
+    // alone cannot preserve numeric display width or a ZEROFILL attribute.
+    const rows = await queryRunner.query(`SELECT COLUMN_TYPE AS columnType FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`, [table, sourceColumn]);
+    if (rows.length !== 1 || typeof rows[0].columnType !== 'string') {
+        throw new Error(`Missing migration column metadata for ${table}.${sourceColumn}`);
+    }
+    let definition = `${migrationIdentifier(column.name)} ${rows[0].columnType}`;
+    // Character metadata and generated expressions come from the inspected
+    // historical column, not assumptions about today's UUID entity mapping.
+    if (column.charset) definition += ` CHARACTER SET "${column.charset}"`;
+    if (column.collation) definition += ` COLLATE "${column.collation}"`;
+    if (column.asExpression) definition += ` AS (${column.asExpression}) ${column.generatedType ?? 'VIRTUAL'}`;
+
+    // MariaDB excludes NULL/NOT NULL on generated columns. Ordinary reference
+    // clones and nullable registration changes retain their selected nullability.
+    if (!(queryRunner.dataSource.options.type === 'mariadb' && column.asExpression
+        && ['VIRTUAL', 'STORED'].includes(column.generatedType ?? 'VIRTUAL'))) {
+        definition += column.isNullable ? ' NULL' : ' NOT NULL';
+    }
+    if (column.isGenerated && column.generationStrategy === 'increment') definition += ' AUTO_INCREMENT';
+    if (column.comment) {
+        const comment = column.comment.replaceAll('\\', '\\\\').replaceAll("'", "''").replaceAll('\u0000', '');
+        definition += ` COMMENT '${comment}'`;
+    }
+    if (column.default !== undefined && column.default !== null) definition += ` DEFAULT ${column.default}`;
+    if (column.onUpdate) definition += ` ON UPDATE ${column.onUpdate}`;
+    return definition;
+}
+
+/** Retain native ADD/CREATE generated-expression bookkeeping after its DDL.
+ * Callers choose the original generated-column condition; undefined optional
+ * values keep database defaults rather than being converted into explicit NULL. */
+export async function recordMigrationGeneratedColumn(queryRunner: QueryRunner, table: Table | string,
+    column: TableColumn): Promise<void> {
+    // Resolve the same historical target rather than recording an entity name
+    // from today's application metadata or inventing another schema owner.
+    const target = queryRunner.dataSource.driver.parseTableName(table);
+    const schema = target.database ?? await queryRunner.getCurrentDatabase();
+    const schemaValue = schema === undefined ? 'DEFAULT' : '?';
+    const expressionValue = column.asExpression === undefined ? 'DEFAULT' : '?';
+    await queryRunner.query(`INSERT INTO ${migrationMetadataPath(queryRunner)}
+        (\`database\`, \`schema\`, \`table\`, \`type\`, \`name\`, \`value\`)
+        VALUES (DEFAULT, ${schemaValue}, ?, ?, ?, ${expressionValue})`,
+        [...(schema === undefined ? [] : [schema]), target.tableName, 'GENERATED_COLUMN', column.name,
+        ...(column.asExpression === undefined ? [] : [column.asExpression])]);
+}
+
+/** Drop an owned migration table in its established FK/index/table order.
+ * Preserve generated-column bookkeeping if a pre-existing table has it, using
+ * the same selected schema and configured TypeORM metadata table. */
+export async function dropMigrationTable(queryRunner: QueryRunner, name: string): Promise<void> {
+    // Public getTable reloads physical metadata, including after earlier raw DDL;
+    // no cached pre-migration dependency list supplies authority for these drops.
+    const table = await queryRunner.getTable(name);
+    if (!table) throw new Error(`Missing migration table ${name}`);
+    const generated = table.columns.filter(column => column.generatedType);
+    const schema = generated.length ? await queryRunner.getCurrentDatabase() : undefined;
+
+    // These separate writes preserve the native drop's committed DDL prefix;
+    // replacing it with one DROP TABLE would change partial-failure behavior.
+    for (const key of table.foreignKeys) await dropFkConstraint(queryRunner, name, key.name!);
+    for (const index of table.indices) {
+        await queryRunner.query(`DROP INDEX \`${index.name}\` ON ${migrationIdentifier(name)}`);
+    }
+    await queryRunner.query(`DROP TABLE ${migrationIdentifier(name)}`);
+
+    // Only generated columns require ORM bookkeeping; the migration's own
+    // tables have none, but already-present schema still keeps this old cleanup.
+    if (generated.length) {
+        for (const column of generated) {
+            await queryRunner.query(`DELETE FROM ${migrationMetadataPath(queryRunner)} WHERE \`type\` = ? AND \`name\` = ?
+                ${schema ? 'AND `schema` = ?' : ''} AND \`table\` = ?`,
+                ['GENERATED_COLUMN', column.name, ...(schema ? [schema] : []), name]);
+        }
+    }
 }
 
 /** Read physical storage without normalizing native UUIDs or binary encodings.
@@ -33,7 +126,7 @@ export async function getMigrationColumnStorage(queryRunner: QueryRunner, table:
         CHARACTER_SET_NAME AS characterSet, COLLATION_NAME AS collation,
         IS_NULLABLE AS nullable, EXTRA AS extra, COLUMN_DEFAULT AS defaultValue
         FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
-    [table, column]);
+        [table, column]);
     if (!rows.length) return null;
     if (rows.length !== 1) throw new Error('Ambiguous migration column metadata');
     const row = rows[0];
@@ -100,7 +193,7 @@ export async function assertMigrationForeignKeyNameAvailable(queryRunner: QueryR
     migrationIdentifier(name);
     const constraints = await queryRunner.query(`SELECT TABLE_NAME AS tableName, CONSTRAINT_TYPE AS kind
         FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = ?`,
-    [name]) as Array<{tableName: string; kind: string}>;
+        [name]) as Array<{tableName: string; kind: string}>;
     if (constraints.some(constraint => constraint.kind === 'FOREIGN KEY' && constraint.tableName !== table
         || constraint.tableName === table && constraint.kind !== 'FOREIGN KEY')) {
         throw new Error(`Incompatible migration constraint name ${name}`);
@@ -160,7 +253,7 @@ async function admitEmptyReferenceAlignment(queryRunner: QueryRunner, reference:
 async function requireReferenceTable(queryRunner: QueryRunner, reference: MigrationReference): Promise<Table> {
     const engines = await queryRunner.query(`SELECT TABLE_NAME AS tableName, ENGINE AS engine
         FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (?, ?)`,
-    [reference.table, reference.referencedTable]) as Array<{tableName: string; engine: string | null}>;
+        [reference.table, reference.referencedTable]) as Array<{tableName: string; engine: string | null}>;
     const expected = new Set([reference.table, reference.referencedTable]);
     if (engines.length !== expected.size || engines.some(row => row.engine?.toLowerCase() !== 'innodb')) {
         throw new Error(`Missing or unsupported reference table engine for ${reference.table}.${reference.column}`);
@@ -168,7 +261,7 @@ async function requireReferenceTable(queryRunner: QueryRunner, reference: Migrat
     const unique = await queryRunner.query(`SELECT INDEX_NAME FROM information_schema.STATISTICS
         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND NON_UNIQUE = 0
         GROUP BY INDEX_NAME HAVING COUNT(*) = 1 AND MAX(COLUMN_NAME) = ? AND MAX(SUB_PART) IS NULL`,
-    [reference.referencedTable, reference.referencedColumn]);
+        [reference.referencedTable, reference.referencedColumn]);
     if (!unique.length) throw new Error(`Parent identifier lacks a complete unique key for ${reference.table}.${reference.column}`);
     const table = await queryRunner.getTable(reference.table);
     if (!table) throw new Error(`Missing reference child table ${reference.table}`);
@@ -237,9 +330,9 @@ export async function applyMigrationReferences(queryRunner: QueryRunner,
     for (const plan of completed) {
         const constraint = plan.reference.foreignKey;
         if (!constraint || plan.foreignKeyPresent) continue;
-        await queryRunner.createForeignKey(plan.reference.table, new TableForeignKey({name: constraint.name,
-            columnNames: [plan.reference.column], referencedTableName: plan.reference.referencedTable,
-            referencedColumnNames: [plan.reference.referencedColumn], onDelete: constraint.onDelete, onUpdate: constraint.onUpdate}));
+        await createConstraint(queryRunner, plan.reference.table, constraint.name,
+            `FOREIGN KEY (${migrationIdentifier(plan.reference.column)}) REFERENCES ${migrationIdentifier(plan.reference.referencedTable)}
+            (${migrationIdentifier(plan.reference.referencedColumn)}) ON DELETE ${constraint.onDelete} ON UPDATE ${constraint.onUpdate}`);
     }
 }
 

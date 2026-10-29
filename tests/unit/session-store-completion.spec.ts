@@ -1,6 +1,6 @@
 import {describe, expect, it, vi} from 'vitest';
 import type {EntityManager} from 'typeorm';
-import {createSessionStore} from '../../src/backend/modules/lib/session';
+import {createSessionStore} from '../../src/backend/modules/database/services/UserService';
 
 /** Replace only the asynchronous repository boundary; exercise the actual configured store adapter. */
 function storeWithDeletion(remove: (criteria: {id: string}) => Promise<unknown>) {

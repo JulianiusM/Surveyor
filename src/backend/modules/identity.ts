@@ -1,7 +1,7 @@
 import type {Request} from 'express';
 import type {EntityManager} from 'typeorm';
 import type {SessionLike} from '../../types/PermissionTypes';
-import type {PreparedOwnerCleanup, ProfileOwnerCleanup} from '../../types/IdentityTypes';
+import type {IdentityLinkOptions, PreparedOwnerCleanup, ProfileOwnerCleanup} from '../../types/IdentityTypes';
 import type {PreparedIdentityEmail} from '../../types/EmailTypes';
 import type {OidcClaims} from '../../types/UserTypes';
 import {User} from './database/entities/user/User';
@@ -17,6 +17,137 @@ import {createTranslator} from '../../common/localization/translator';
 import {contractValidator} from './api/contracts';
 import settings from './settings';
 import {identityNamePolicy} from '../../common/generated/passwordPolicy';
+
+/** Preserve registration's username diagnostic on the caller's existing transaction. */
+export async function requireAvailableUsername(username: string, email: string, manager?: EntityManager): Promise<void> {
+    const existingUser = await userService.getUserByUsername(username, manager);
+    if (existingUser) {
+        throw new ValidationError('users/register', 'This username is already taken.', {username, email}, {cause: 'USERNAME_TAKEN'});
+    }
+}
+
+/** Resolve credential and recovery accounts by username before falling back to email. */
+export async function resolveNamedAccount(username: string, manager?: EntityManager) {
+    // Recovery supplies its completion manager for both reads. Credential
+    // admission retains ordinary DBAL reads before the identity lock is acquired.
+    const user = await userService.getUserByUsername(username, manager);
+    return user ?? await userService.getUserByEmail(username, manager);
+}
+
+/**
+ * Share credential/activation diagnostics before any identity mutation. Inactive
+ * login may refresh and mail an activation token before rejecting; keep that
+ * established workflow outside an identity transaction that would roll it back.
+ * The controller supplies link presentation without giving this owner request state.
+ */
+export async function resolveLoginUser(body: any, activationLink: (token: string) => string, options?: IdentityLinkOptions) {
+    // Keep credentials inside this check; rejected forms redisplay only
+    // the submitted username and retain their common invalid-login diagnostic.
+    const {username, password} = body;
+    const returnInfo = {username};
+
+    if (!username || !password) {
+        throw new ValidationError('users/login', 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
+    }
+
+    // Preserve username-first resolution and indistinguishable missing-user /
+    // invalid-password errors.
+    const user = await resolveNamedAccount(username);
+    await options?.credentialAdmission?.account(user?.id ?? null);
+    if (!user) {
+        throw new ValidationError('users/login', 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
+    }
+
+    const isValidPassword = await userService.verifyPassword(user.id, password);
+    if (!isValidPassword) {
+        throw new ValidationError('users/login', 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
+    }
+    await options?.credentialAdmission?.verified();
+
+    // Inactive login is not a Session transition. Refresh expired activation
+    // mail first, then reject with the same inactive/resend cause.
+    if (!user.isActive) {
+        let errorMsg = 'User not activated.';
+        let cause: 'ACCOUNT_INACTIVE' | 'ACTIVATION_RESENT' = 'ACCOUNT_INACTIVE';
+        if ((user.activationTokenExpiration ?? new Date(0)) < new Date()) {
+            await options?.beforeIdentityMail?.(user.email);
+            const token = await userService.generateActivationToken(user.id);
+            const link = activationLink(token);
+            await mailer.sendActivationEmail({name: resolveEmailRecipientName(user.name, user.username), address: user.email}, link);
+            cause = 'ACTIVATION_RESENT';
+            errorMsg += ' The activation link has expired. A new one has been sent to your email account.';
+        }
+
+        throw new ValidationError('users/login', errorMsg, returnInfo, {cause});
+    }
+
+    return user;
+}
+
+/** Share reset-token diagnostics; only a locked read rechecks expiry after its wait. */
+export async function requirePasswordResetToken(token: string, manager?: EntityManager, lock = false) {
+    const user = await userService.verifyPasswordResetToken(token, manager, lock);
+    // Ordinary queries retain their existing expiry predicate. A frontend lock can
+    // wait past that query timestamp, so validate its returned expiry again.
+    if (!user || lock && (!user.resetTokenExpiration || user.resetTokenExpiration <= new Date())) {
+        throw new ExpectedError('Invalid or expired token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
+    }
+    return user;
+}
+
+/** Recheck activation expiry after its existing token lock, before completion or writes. */
+export async function requireActivationToken(token: string, manager: EntityManager): Promise<User> {
+    const user = await userService.verifyActivationToken(token, manager, true);
+    // Lock acquisition may outlive the query's initial expiry timestamp.
+    if (!user || !user.activationTokenExpiration || user.activationTokenExpiration <= new Date()) {
+        throw new ExpectedError('Invalid or expired token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
+    }
+    return user;
+}
+
+/** Admit the saved guest capability without selecting authority from submitted profile data. */
+export async function requireGuestLoginToken(guestId: string, token: string, manager?: EntityManager): Promise<Guest> {
+    const guest = await userService.getGuestByToken(token, guestId, manager);
+    if (!guest) {
+        throw new ExpectedError('Invalid or mismatched token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
+    }
+    return guest;
+}
+
+/** Select the explicit default, or the oldest saved profile, without changing the roster. */
+export function getDefaultProfile(profiles: Profile[]) {
+    const sortedProfiles = profiles.toSorted((a, b) => a.track.createdAt.getTime() - b.track.createdAt.getTime());
+    let profile = sortedProfiles.find(p => p.defaultForOwner);
+    // An owner without an explicit default retains its oldest saved profile.
+    profile ??= sortedProfiles[0];
+    return profile;
+}
+
+/** Resolve an account-owned profile through the caller's current persistence scope.
+ * Session mutation and the transition callback remain in the controller. */
+export async function selectAccountProfile(session: SessionLike, profileId?: string, manager?: EntityManager) {
+    // Guest profiles belong to a separate identity and cannot use account profile
+    // selection. A submitted identifier must belong to this account in the DB.
+    if (!session.auth?.user) {
+        throw new ExpectedError("Not logged in as user!", "error", 401);
+    }
+
+    let profile;
+    if (profileId) {
+        profile = await userService.getProfileById(profileId, manager);
+        if (profile?.userId !== session.auth.user.id) {
+            throw new ExpectedError("Invalid profile id", "error", 400, {}, {cause: 'PROFILE_SELECTION_INVALID'});
+        }
+    } else {
+        const profiles = await userService.getProfilesForUser(session.auth.user.id, manager);
+        if (profiles.length > 0) {
+            profile = getDefaultProfile(profiles);
+        } else {
+            throw new ExpectedError("Invalid profile id", "error", 400, {}, {cause: 'PROFILE_SELECTION_INVALID'});
+        }
+    }
+    return profile;
+}
 
 /** Admit one stored identity name through the same authored code-point rule used
  * by generated account, guest and profile request validators. Preserve its exact

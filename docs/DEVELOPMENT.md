@@ -6,7 +6,7 @@ owner: developer-experience maintainers
 status: current
 last-verified: 2026-10-29
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: separate former-account cleanup fencing and bounded readiness publication reconciled with current owners; existing renewal, feedback, profile, contract and proof guidance retained without deployment or exhaustive verification claim
+verification-scope: shared receipt preparation, cache retention, Sass composition and session-store persistence owners reconciled; existing cleanup, readiness, feedback, identity and proof guidance retained without deployment or exhaustive verification claim
 source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/check-development-policy.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: development-workflow-or-help-tooling-change
 -->
@@ -247,6 +247,12 @@ Human readability and the established application patterns are acceptance criter
 concerns, a single source of truth, and information hiding. Preserve local indentation, spacing, wrapping, and naming.
 Keep formatting changes within the work being reviewed.
 
+**Approved convention amendment (2026-10-29, R4):** the maintainer explicitly selects four-space code indentation
+and module import paths enclosed in single quotes for authored TypeScript, JavaScript and Vue script blocks.
+This replaces local-format preservation for those two rules only. Preserve literal values, prose, generated outputs,
+template/JSON syntax, meaningful wrapping and names; no formatter dependency or hook is introduced. The
+[approved convention decisions](policies/DEVELOPMENT_POLICY.md#approved-convention-decisions-2026-10-29) own the boundary.
+
 Visual consistency is a core acceptance criterion across the application and its exports. Reuse established
 components, spacing, typography, and interaction patterns before adding a feature-specific treatment. PDF sections
 use the existing shared `sectionTitle` style and document conventions; formulas remain readable as one complete
@@ -271,6 +277,14 @@ obvious mapping, predicate, or established framework boundary.
 
 Re-exporting imported functions, values, or types is forbidden. Import directly from the module that owns the
 implementation or declaration; do not introduce forwarding exports or barrel modules to preserve an old import path.
+Controller public operations use named exports of their own implementations, with direct named or namespace imports
+at callers rather than a second default-export object listing the same operations.
+
+The standalone `check:development` command also checks recognizable runtime TypeORM operations against the Service
+boundary. It traces lexical import/receiver provenance, with exact migration/helper exceptions and datasource
+bootstrap construction. It does not infer arbitrary dynamic or interprocedural behavior, check SQL expression
+content, or establish a formatting baseline; review those boundaries in source. This command adds no lifecycle hook
+or CI prerequisite.
 
 Once a feature has a central wording catalog, all of its visible messages, labels, help text, accessibility text,
 validation feedback, emails, and exports must use it. Distributed feature strings are prohibited. Use stable typed
@@ -346,6 +360,12 @@ checks use `exists` or `existsBy`. When replacing older names, preserve the quer
 selected columns and transaction manager. An API naming correction does not change DBAL ownership or authorize
 different transaction and locking behavior.
 
+The [approved runtime convention](policies/DEVELOPMENT_POLICY.md#approved-convention-decisions-2026-10-29) requires
+native methods before structured builders. Overview uses flat native CTE builders and only ORM-generated UNION
+composition, with separate resource parameter namespaces. Proof maintenance uses the builder's native dummy source
+for scalar advisory-lock expressions on its existing held connection. Preserve explicit named parameters where
+independently composed scopes would otherwise collide; do not replace those boundaries with raw execution.
+
 ### Authentication and permissions
 
 - Local login, guest identity, and OIDC all converge on the session's active profile.
@@ -369,6 +389,9 @@ or session save must not reject an already committed operation. Scope-preserving
 [existing-operation boundary](policies/DEVELOPMENT_POLICY.md#scope-of-separately-authorized-work) without requiring
 unapproved legacy repairs. Delivery failure remains distinct from business rejection. Services never own
 transport-specific errors.
+Matching callback-based commands share `executePreparedJson` in the existing API transport owner. The caller retains
+its established preparation stage, result-first or invariant protocol, file ownership, response headers and delivery;
+sharing receipt capture does not strengthen an operation's transaction or change when it can reject.
 The domain document routers use `src/backend/modules/frontendRenderer.ts` for Vue HTML and ordinary document
 errors, reusing controller projections. The outer generic error handler supplies a localized private/no-store
 plain-text response if parsing, session admission or rendering fails. Components do not duplicate business behavior.
@@ -387,7 +410,7 @@ endpoints or permission policy. The following contracts describe how those owner
 |---|---|
 | Wire shape to generated types/validators | `contracts/api/v1/`, `scripts/generate-api.mjs`; import declaration contracts directly. |
 | Business operation to permitted projection | Existing feature controller; transport adapters use its named operation and method policy. |
-| Locked context to checks/write | Existing DBAL transaction/lock operation invokes a named controller callback. |
+| Locked context to checks/write | Existing DBAL transaction/lock operation invokes the feature business operation; controllers coordinate admission and response preparation. |
 | DTO to browser operation | `features/<feature>/api.ts`, `app/transport.ts`, generated operation and feature validators. |
 | Entry/read to authorized view | `composables/pageEntry.ts`, `app/queryKeys.ts`, `app/queryCache.ts`; the feature supplies policy/dependencies. |
 | Snapshot to draft/command/recovery | `metadataDraft.ts`, `command.ts`, shared feedback, confirmed-navigation and fresh-read owners. |
@@ -770,6 +793,8 @@ read transition retains the same cache-owned snapshot and mounted draft through 
 commands disabled until a fresh current-language receipt. The retained Query's disabled observation prevents
 ordinary cache expiry from releasing an unfinished invoice; denial, eviction and actor/resource retirement still
 release it. No copied server snapshot or second draft owner is introduced.
+Event sections and paged list readers use `useQuerySnapshotRetention` in the existing cache module for this same
+registered-query lease and retirement mechanism. Each reader supplies its own actor, resource, intent and eligibility rules.
 
 Finance's `numbers.ts` owns the shared wheel guard for number inputs in participant submissions, organizer expenses,
 invoice review, factors and signed adjustments. Each form installs it explicitly while keeping lexical strings,
@@ -1134,8 +1159,8 @@ Packing supplies a concrete ownership example. `packingMethodPermissions` owns r
 controller's method checks and capability projections used by its v1 adapters; root property fields reuse the existing administration field policy.
 `savePackingMetadata`, `addPackingItem`, `applyPackingItemPatch` and `applyPackingMembership` own the corresponding
 writes/checks. Reorder/remove/default operations accept the existing service-managed transaction when an adapter
-coordinates several writes. `eventController.authorizeEventLink` checks the locked destination;
-`entityAdminController.applyEntityAdministrator` returns domain outcomes for each adapter's response mapping.
+coordinates several writes. The existing Event linkage feature checks the locked destination;
+`permissionEngine.applyEntityAdministrator` returns domain outcomes for each adapter's response mapping.
 These are owning operations, not forwarding wrappers or business rules in DBAL. Another feature follows its own
 policy/contracts rather than copying Packing's grants or persistence shapes.
 
@@ -1383,6 +1408,8 @@ public visits gain no cookie or row. Retained Activity print uses `renderNativeD
 consumption and direct Express rendering, avoiding a second express-flash getter or empty-state write. This bounded
 extension is approved in DEC-007; ordinary provider/deactivation identity writes retain their own boundaries.
 
+`UserService.createSessionStore` owns the repository-bound store and its persistence callbacks. The existing
+`lib/session` module retains request-session construction, staging and store-protocol helpers, without direct database access.
 The configured session store acknowledges ordinary renewal exactly once after its expiry-only update settles.
 Renewal preserves the one-day TTL and identity JSON. Response bytes may already be sent when a storage error is
 reported; renewal failure does not undo a business commit or guarantee a replacement HTTP error response.
@@ -1541,7 +1568,8 @@ renderer. It orders Bootstrap Icons CSS, base `style.sass`, `help.sass` and `fro
 another list in a caller.
 Its source link and built-manifest delivery remain usable before JavaScript, including static Help. `style.sass`
 retains its accordion/timezone graph and installed Bootstrap layer. Import Bootstrap Icons CSS and its font files
-through this authored build graph too. Application-owned browser assets use the instance's origin through existing
+through this authored build graph too. Authored Sass modules use `@use`; the accordion consumes installed Bootstrap
+with its existing local variable/mixin names, preserving emitted CSS and cascade order. Application-owned browser assets use the instance's origin through existing
 Vite development delivery and Express built-asset delivery; do not add CDN stylesheet, script or font dependencies.
 This follows the [approved 2026-10-26 amendment](decisions/DEC-006-FRONTEND-FRAMEWORK.md#approved-local-browser-assets-and-responsiveness-scope-2026-10-26),
 which supersedes the earlier requirement to preserve both CDN and compiled Bootstrap layers.
@@ -1871,11 +1899,11 @@ attachment or cleanup. `npm run proof:reconcile -- --help` describes the mainten
 
 ### Entity archival
 
-The existing `entityAdminController` owns shared lifecycle actions and authorized presentation, while `userController`
-owns personal overview visibility. Generated v1 adapters reuse those business owners. `EntityLifecycleService`
+The existing `entityAdminController` and `userController` coordinate shared lifecycle and personal-visibility
+adapters and authorized presentation. The existing `entityArchival` feature owns their business rules, including
+personal-visibility membership/write decisions under the supplied lock. `EntityLifecycleService`
 keeps root selection, parent loading, transaction locks, and archive/restore writes together;
-the existing `UserService` owns profile visibility persistence and single-target membership queries; `userController`
-decides eligibility under its service-managed lock. Feature services
+the existing `UserService` owns profile visibility persistence and single-target membership queries. Feature services
 retain their own membership predicates. `modules/archive/policy.ts` is the single computation boundary, and
 `getArchivePresentations` supplies authorized controls to shared cards and notices. Keep these rules out of individual
 feature controllers and avoid per-card parent queries.
@@ -2050,6 +2078,12 @@ revision and marks it stale without changing saved shares or payment markers. Th
 relationship supports this option without a new entity change or migration. Keep the committed
 `1789603200000-AddOrganizerInvoices.ts` migration unchanged and follow the recorder-audit rollback preflight in
 [Upgrading and Rolling Back](UPGRADING.md); its existing down guard protects invoices with no registration.
+
+**Approved migration convention amendment (2026-10-29, R2):** the maintainer lifts that source-preservation
+constraint solely for equivalent conversion to explicit QueryRunner SQL with the existing migration guards.
+Migration identities, physical schema/data, execution order and rollback refusals remain protected. Applied migration
+records and installed archives are unchanged; historical up/down fixtures verify the conversion. This amends the
+keep-unchanged instruction above without reopening operator rehearsals.
 
 Use this calculation order:
 

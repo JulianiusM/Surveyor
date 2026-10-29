@@ -70,9 +70,9 @@ describe('invoice settlement emails', () => {
         expect(group).toMatchObject({title: 'Calculation explanation', disclosure: true});
         expect(sections.find(section => section.title === 'Base share for Taylor Morgan')!.formula).toEqual({
             terms: [{label: 'Base to distribute', value: '100.00'},
-                {label: 'Nights stayed', value: '1', operator: '×'},
-                {label: 'Share factor', value: '2', operator: '×'},
-                {label: 'Total weight', value: '4', operator: '÷'}],
+            {label: 'Nights stayed', value: '1', operator: '×'},
+            {label: 'Share factor', value: '2', operator: '×'},
+            {label: 'Total weight', value: '4', operator: '÷'}],
             result: {label: 'Base share', value: '50.00'}, note: 'Rounded up to cents.',
         });
         expect(sections.find(section => section.title === 'Base share for Casey Rivera')!.formula).toMatchObject({
@@ -85,7 +85,7 @@ describe('invoice settlement emails', () => {
         expect(sections.indexOf(coverage)).toBeLessThan(sections.findIndex(section => section.title === 'Base share for Casey Rivera'));
         expect(sections.find(section => section.title === 'Combined base shares')!.formula).toEqual({
             terms: [{label: 'Base share for Taylor Morgan', value: '50.00'},
-                {label: 'Base share for Casey Rivera', value: '25.00', operator: '+'}],
+            {label: 'Base share for Casey Rivera', value: '25.00', operator: '+'}],
             result: {label: 'Base share', value: '75.00'},
         });
         expect(sections.find(section => section.title === 'Calculated balance for Taylor Morgan')!.formula).toEqual({
@@ -109,18 +109,18 @@ describe('invoice settlement emails', () => {
 
     it('uses frozen adjustment provenance to explain cancelling categories in older numeric snapshots', () => {
         const input = {...notice(), explanation: calculation(), savedAdjustments: [
-            {registrationId: 1, amount: 20, subtractFromPool: true},
-            {registrationId: 1, amount: -20, subtractFromPool: true},
-            {registrationId: 2, amount: 5, subtractFromPool: false},
-            {registrationId: 2, amount: -5, subtractFromPool: false},
-        ]};
+                {registrationId: 1, amount: 20, subtractFromPool: true},
+                {registrationId: 1, amount: -20, subtractFromPool: true},
+                {registrationId: 2, amount: 5, subtractFromPool: false},
+                {registrationId: 2, amount: -5, subtractFromPool: false},
+            ]};
         delete input.explanation.adjustmentTotals;
         const result = buildInvoiceSettlementEmail(input);
         // Net zero cannot erase the distinction between redistribution and changes added after the split.
         const sections = result.sectionGroups![0].sections;
         expect(sections[0].formula!.terms).toEqual([{label: 'Invoice costs', value: '100.00'},
-            {label: 'Redistributed surcharges', value: '20.00', operator: '−'},
-            {label: 'Redistributed rebates', value: '-20.00', operator: '−'}]);
+        {label: 'Redistributed surcharges', value: '20.00', operator: '−'},
+        {label: 'Redistributed rebates', value: '-20.00', operator: '−'}]);
         expect(sections.some(section => section.title === 'Full pool total')).toBe(false);
         expect(sections.some(section => section.formula?.result.label === 'Full pool total')).toBe(false);
         const balance = sections.find(section => section.title === 'Calculated balance for Taylor Morgan')!.formula!;
@@ -163,21 +163,21 @@ describe('invoice settlement emails', () => {
         expect(notes.items).toEqual(['Taylor Morgan: 1 night × factor 2', 'Casey Rivera covered by Taylor Morgan']);
         expect(notes.formula).toBeUndefined();
         expect(result.sections).toEqual([{title: 'Saved calculation notes', items: [
-            'Taylor Morgan: 1 night × factor 2', 'Casey Rivera covered by Taylor Morgan',
-        ]}]);
+                'Taylor Morgan: 1 night × factor 2', 'Casey Rivera covered by Taylor Morgan',
+            ]}]);
         expect(JSON.stringify(result.sectionGroups)).not.toContain('Casey Rivera covered by Taylor Morgan');
         expect(result.sectionGroups![0].sections.find(section => section.title === 'Base share for Casey Rivera')!.formula!.result.value).toBe('25.00');
     });
 
     it.each([
         {reason: 'zero factor', attendance: 3, factor: 0, totalAttendance: 5, metrics: [
-            {label: 'Nights stayed', value: '3'}, {label: 'Share factor', value: '0'},
-            {label: 'Distribution weight', value: '0'}, {label: 'Base share', value: '0.00'},
-        ]},
+                {label: 'Nights stayed', value: '3'}, {label: 'Share factor', value: '0'},
+                {label: 'Distribution weight', value: '0'}, {label: 'Base share', value: '0.00'},
+            ]},
         {reason: 'zero nights', attendance: 0, factor: 1, totalAttendance: 2, metrics: [
-            {label: 'Nights stayed', value: '0'}, {label: 'Distribution weight', value: '0'},
-            {label: 'Base share', value: '0.00'},
-        ]},
+                {label: 'Nights stayed', value: '0'}, {label: 'Distribution weight', value: '0'},
+                {label: 'Base share', value: '0.00'},
+            ]},
     ])('includes named saved inputs for $reason while preserving covered calculations', (scenario) => {
         const explanation = calculation();
         explanation.attendanceUnits = scenario.totalAttendance;
@@ -218,7 +218,7 @@ describe('invoice settlement emails', () => {
         const sections = result.sectionGroups![0].sections;
         const own = sections.find(section => section.title === 'Base share for Taylor Morgan')!;
         expect(own.details).toEqual([{label: 'Nights stayed', value: '1'}, {label: 'Share factor', value: '0'},
-            {label: 'Distribution weight', value: '0'}, {label: 'Base share', value: '0.00'}]);
+        {label: 'Distribution weight', value: '0'}, {label: 'Base share', value: '0.00'}]);
         expect(own.formula).toBeUndefined();
         expect(result.heading).toBe('Your calculated balance: 0.00 · No payment');
         expect(JSON.stringify(sections)).not.toMatch(/Alex Jordan|NaN|Infinity|"operator":"÷"/u);
@@ -273,7 +273,7 @@ describe('invoice settlement emails', () => {
 
     it.each([-50, 50, 0])('explains an applied responsibility change with its saved signed balance of %s', (balance) => {
         const input = {...notice({baseShareAmount: 0, paymentCreditAmount: -balance, shareAmount: balance,
-            isPaid: balance === 0}), reason: 'responsibility-changed' as const,
+                isPaid: balance === 0}), reason: 'responsibility-changed' as const,
             settledShareNotice: {label: 'You are exempt · settlement retained',
                 description: 'You are now exempt. Your previously recorded payments or refunds stay with you.'}};
         const result = buildInvoiceSettlementEmail(input);
