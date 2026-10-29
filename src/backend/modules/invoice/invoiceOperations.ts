@@ -129,7 +129,7 @@ export async function closeSavedInvoice(poolId: string, invoiceId: number,
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
     async function closeLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<boolean> {
         // The DBAL holds the pool lock throughout policy checks and dependent writes.
-        const pool = requireLockedPool(row);
+        requireLockedPool(row);
         // Read the current review state within this pool; preloaded request data cannot authorize a stale transition.
         const invoice = await invoiceService.getInvoiceWithRegistration(poolId, invoiceId, manager);
         if (!invoice) throw new APIError(invoiceText('invoiceNotFound'), {}, 404);

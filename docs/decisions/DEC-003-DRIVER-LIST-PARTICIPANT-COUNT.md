@@ -8,8 +8,8 @@ status: current
 last-verified: 2026-09-05
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: feature-specific-static-behavior
-source-anchors: src/backend/controller/driversController.ts; src/backend/modules/database/services/DriverService.ts; src/backend/modules/database/entities/drivers/DriversAssignment.ts; src/backend/modules/database/entities/drivers/DriversItem.ts; tests/integration/controller-smoke-workflows.spec.ts; docs/backlog/documentation-remediation.yml; src/frontend/; src/backend/routes/api/v1/
-next-review: D11
+source-anchors: src/backend/controller/driversController.ts; src/backend/modules/database/services/DriverService.ts; src/backend/modules/database/entities/drivers/DriversAssignment.ts; src/backend/modules/database/entities/drivers/DriversItem.ts; tests/integration/controller-smoke-workflows.spec.ts; docs/backlog/documentation-remediation-history.yml; src/frontend/; src/backend/routes/api/v1/
+next-review: drivers-participant-count-semantics-change
 -->
 
 ## Decision status

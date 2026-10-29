@@ -5,8 +5,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawn} from 'node:child_process';
+import {setTimeout as delay} from 'node:timers/promises';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const readinessPublicationAttempts = 5;
+const readinessPublicationRetryDelay = 25;
 let timer;
 let running = false;
 let queued = false;
@@ -60,9 +63,9 @@ async function regenerate() {
     }
 }
 
-/** Stage the marker before deciding whether this batch is still current. The
- * final known-save check and atomic publication share one event-loop step, so a
- * save received during asynchronous writing cannot advertise stale readiness. */
+/** Stage the marker before deciding whether this batch is still current. Every
+ * final known-save check and atomic publication share one event-loop step; brief
+ * filesystem sharing failures retry publication without replaying generators. */
 async function publishReadiness() {
     const directory = path.join(root, '.generated');
     const marker = path.join(directory, 'frontend-ready.json');
@@ -71,11 +74,22 @@ async function publishReadiness() {
         // This process owns one serialized batch and one ignored sibling. Writing
         // it can yield to input callbacks without touching Express's restart marker.
         await fs.writeFile(pending, JSON.stringify({completed: Date.now()}));
-        if (stopping || queued) return;
-
-        // Do not await between this check and publication. The brief synchronous
-        // rename replaces the marker atomically before another callback can run.
-        renameSync(pending, marker);
+        for (let attempt = 1; attempt <= readinessPublicationAttempts; attempt++) {
+            // A known newer save or shutdown retires this batch even if it arrived
+            // during a retry delay. Never yield between this check and rename.
+            if (stopping || queued) return;
+            try {
+                renameSync(pending, marker);
+                return;
+            } catch (error) {
+                // Windows file handles can briefly block atomic replacement. Retain
+                // both files and retry only publication; other/exhausted failures
+                // still reach the existing regeneration error owner immediately.
+                if (attempt === readinessPublicationAttempts
+                    || !['EPERM', 'EBUSY', 'EACCES'].includes(error.code)) throw error;
+            }
+            await delay(readinessPublicationRetryDelay);
+        }
     } finally {
         // Remove only this process's exact staging file. A successful rename has
         // already consumed it; a queued/stopped/failed batch leaves no false marker.

@@ -1117,7 +1117,10 @@ export async function createActivityPlan(body: components['schemas']['ActivityCr
     await authorizeEventLink(body.eventId, session);
     // Adapt only wire names and grouping; form parsing still owns date/time checks.
     const grouped: Record<string, unknown[]> = {};
-    for (const slot of body.slots) (grouped[slot.day] ??= []).push({...slot, pos: slot.position, position: undefined});
+    for (const slot of body.slots) {
+        grouped[slot.day] ??= [];
+        grouped[slot.day].push({...slot, pos: slot.position, position: undefined});
+    }
     const parsed = preprocessCreate({...body, slots: JSON.stringify(grouped), event_id: body.eventId ?? ''});
     parsed.headerImg = file?.path;
     function prepareCreated(id: string): void { prepare?.({id}); }

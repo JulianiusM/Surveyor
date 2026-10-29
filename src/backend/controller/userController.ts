@@ -350,7 +350,8 @@ function overviewUrl(state: OverviewNavigationState, key: string, change: Partia
     const selected = {...state[key], ...change};
     const params = overviewSearchParams({...state, [key]: selected});
     const search = params.toString();
-    return `/users/dashboard${search ? `?${search}` : ''}#${overviewRegionId(selected.collection, selected.region)}`;
+    const query = search ? '?' + search : '';
+    return `/users/dashboard${query}#${overviewRegionId(selected.collection, selected.region)}`;
 }
 
 /**
@@ -1091,9 +1092,12 @@ export async function getProfileMigrationPreview(session: SessionLike, token: st
 
     // Token holders see exactly the existing preview fields. Never expose
     // ORM account credentials, private guest links or unrelated relationships.
-    const owner = profile.user ? {kind: 'account' as const, name: profile.user.name,
-        username: profile.user.username, email: profile.user.email}
-        : profile.guest ? {kind: 'guest' as const, username: profile.guest.username, email: profile.guest.email ?? null} : null;
+    let owner: components['schemas']['ProfileMigrationPreview']['profile']['owner'] = null;
+    if (profile.user) {
+        owner = {kind: 'account', name: profile.user.name, username: profile.user.username, email: profile.user.email};
+    } else if (profile.guest) {
+        owner = {kind: 'guest', username: profile.guest.username, email: profile.guest.email ?? null};
+    }
     return {kind: 'preview', token: profile.migrationToken!, profile: {id: profile.id, name: profile.name, owner}};
 }
 

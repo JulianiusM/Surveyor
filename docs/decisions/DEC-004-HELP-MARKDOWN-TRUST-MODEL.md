@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: active trusted-content decision and original enforcement history retained; selected reviewed corpora and complete English fallback aligned with shared Help owner; no runtime change
-source-anchors: src/backend/controller/helpController.ts; .github/workflows/release.yml; tests/integration/controller-smoke-workflows.spec.ts; tests/e2e/public-availability.spec.ts; docs/policies/DOCUMENTATION_POLICY.md; docs/backlog/documentation-remediation.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; src/frontend/; src/backend/routes/api/v1/
+source-anchors: src/backend/controller/helpController.ts; .github/workflows/release.yml; tests/integration/controller-smoke-workflows.spec.ts; tests/e2e/public-availability.spec.ts; docs/policies/DOCUMENTATION_POLICY.md; docs/backlog/documentation-remediation-history.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; src/frontend/; src/backend/routes/api/v1/
 next-review: help-source-or-trust-boundary-change
 -->
 

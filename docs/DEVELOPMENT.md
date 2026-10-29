@@ -6,7 +6,7 @@ owner: developer-experience maintainers
 status: current
 last-verified: 2026-10-29
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved bounded renewal, document-feedback and current-profile completion guidance reconciled; existing ownership, contract, compiler and proof guidance retained without deployment or exhaustive verification claim
+verification-scope: separate former-account cleanup fencing and bounded readiness publication reconciled with current owners; existing renewal, feedback, profile, contract and proof guidance retained without deployment or exhaustive verification claim
 source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/check-development-policy.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: development-workflow-or-help-tooling-change
 -->
@@ -762,6 +762,8 @@ per-call formatter with unchanged English defaults for existing native outputs. 
 references select text/plurals from the existing invoice catalog; locale generation resolves and hashes that
 static source rather than maintaining copied English prose. The ordered development watcher observes this source
 and publishes readiness before Express restarts. German translations retain the same validated message contracts.
+Transient filesystem replacement failures receive bounded retries of the same staged readiness marker. Every retry
+rechecks known newer saves and shutdown before atomic publication; it never reruns a generator or publishes a known superseded batch.
 Localized finance cache families
 retire together on audience denial, retaining the producing observer's explicit recovery control. A language-only
 read transition retains the same cache-owned snapshot and mounted draft through pending/transient failure, with
@@ -1320,6 +1322,13 @@ Cleanup/mail, remaining-profile selection and local Session saving still follow 
 R16's partial-failure boundaries and retained domain rows. This does not add a general Session-generation fence,
 provider coordination or whole-deactivation atomicity; [DEC-007](decisions/DEC-007-APPLICATION-ARCHITECTURE-REMEDIATION.md)
 retains the original choice and bounded exception.
+
+Standalone former-account cleanup separately holds the existing User lock across its first profile-roster read and
+conditional account deletion. A profile created before that lock remains owned; creation after deletion cannot
+successfully persist a profile for the deleted account. Acquire the lock before the first ordinary read so the
+default transaction snapshot includes a creator that committed while cleanup waited. Detach remains committed
+independently, and deletion still commits before deactivation mail and later Session completion. Transfer retains its
+existing manager and precommit mail preparation; Guest cleanup retains its existing path.
 
 Guest registration, API account signup and activation use the existing user controller's `commitIdentityCompletion`
 through `UserService.withIdentitySessionTransaction`. The controller owns expiry/context checks, staged identity and

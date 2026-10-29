@@ -5,10 +5,10 @@ documentation-metadata
 audience: all documentation readers
 owner: documentation maintainers
 status: current
-last-verified: 2026-10-28
+last-verified: 2026-10-29
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: current architecture diagrams and DEC-007 navigation; existing domain and operator guidance retained without new deployment or exhaustive verification claim
-source-anchors: package.json; README.md; AGENTS.md; .github/copilot-instructions.md; .github/copilot/; docs/policies/documentation-check.json; docs/backlog/documentation-remediation.yml; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; docs/user-guide/; src/backend/server.ts; src/backend/app.ts; src/backend/modules/settings.ts; vitest.config.mts; playwright.config.ts; .github/workflows/ci.yml; .github/workflows/release.yml; docs/features/help/HELP_VISUALS.md; scripts/check-help-documentation.mjs; src/backend/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: active and historical backlog routing and permanent rehearsal deferral; existing guide content retained without new deployment or exhaustive verification claim
+source-anchors: package.json; README.md; AGENTS.md; .github/copilot-instructions.md; .github/copilot/; docs/policies/documentation-check.json; docs/backlog/documentation-remediation.yml; docs/backlog/documentation-remediation-history.yml; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; docs/user-guide/; src/backend/server.ts; src/backend/app.ts; src/backend/modules/settings.ts; vitest.config.mts; playwright.config.ts; .github/workflows/ci.yml; .github/workflows/release.yml; docs/features/help/HELP_VISUALS.md; scripts/check-help-documentation.mjs; src/backend/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: documentation-inventory-or-status-change
 -->
 
@@ -53,10 +53,10 @@ The canonical in-app help source is [`docs/user-guide/`](user-guide/). The appli
 
 | Document | Purpose | Current review state |
 |---|---|---|
-| [Configuration reference](CONFIGURATION.md) | All accepted settings, precedence, secrets, authentication, storage, and production constraints | Current: D04 accepted; controlled environment verification tracked as non-blocking D04V |
-| [Database and migrations](DATABASE.md) | MariaDB baseline, empty-schema bootstrap, migration targeting, command safety, sessions, and restore checks | Current: D04 accepted; database rehearsal tracked as non-blocking D04V |
-| [Production operations runbook](OPERATIONS.md) | Release install, filesystem layout, systemd, proxy/TLS, health, logs, SMTP/OIDC, retention, backup, restore, and incidents | Current: D04 accepted; clean deployment and restore rehearsal tracked as non-blocking D04V |
-| [Upgrading and rollback](UPGRADING.md) | Staging, maintenance-window migration, post-start checks, rollback, and change records | Current: D04 accepted; end-to-end upgrade rehearsal tracked as non-blocking D04V |
+| [Configuration reference](CONFIGURATION.md) | All accepted settings, precedence, secrets, authentication, storage, and production constraints | Current source-derived guidance; operational rehearsal permanently deferred |
+| [Database and migrations](DATABASE.md) | MariaDB baseline, empty-schema bootstrap, migration targeting, command safety, sessions, and restore checks | Current source-derived guidance; operational rehearsal permanently deferred |
+| [Production operations runbook](OPERATIONS.md) | Release install, filesystem layout, systemd, proxy/TLS, health, logs, SMTP/OIDC, retention, backup, restore, and incidents | Current source-derived guidance; operational rehearsal permanently deferred |
+| [Upgrading and rollback](UPGRADING.md) | Staging, maintenance-window migration, post-start checks, rollback, and change records | Current source-derived guidance; operational rehearsal permanently deferred |
 
 Use these four documents as one operating set. The runtime release archive and matching tagged migration workspace are
 separate deployment inputs, while the database and both upload directories form one state and backup unit.
@@ -90,7 +90,8 @@ points and topic-specific navigation aids rather than competing rule owners.
 - [DEC-007: current application remediation boundaries](decisions/DEC-007-APPLICATION-ARCHITECTURE-REMEDIATION.md)
 - [Documentation policy](policies/DOCUMENTATION_POLICY.md)
 - [Development policy](policies/DEVELOPMENT_POLICY.md)
-- [Machine-readable remediation backlog](backlog/documentation-remediation.yml)
+- [Active remediation backlog](backlog/documentation-remediation.yml)
+- [Historical backlog records](backlog/documentation-remediation-history.yml) — completed, closed and permanently deferred items; reference evidence, excluded from automatic work selection
 - [Structural checker configuration](policies/documentation-check.json)
 - [Structural checker implementation](../scripts/check-documentation.mjs)
 
@@ -114,7 +115,7 @@ Use `npm run docs:check:strict` to include all configured stale concepts in the 
 | Submit or administer shared event costs | [Invoice pools and payments](user-guide/en/INVOICE_POOLS.md) |
 | Maintain or review the permission engine | [Permission system reference](PERMISSIONS_REFERENCE.md) |
 | Understand activity requirement calculation | [Activity requirement algorithm](features/activity/ACTIVITY_REQUIREMENTS_ALGORITHM.md) |
-| Review recorded defects | [Remediation backlog](backlog/documentation-remediation.yml) |
+| Review current actionable findings | [Active remediation backlog](backlog/documentation-remediation.yml) |
 | Browse architecture diagrams | [Architecture diagram reference](features/architecture/README.md) |
 | Update documentation safely | [Documentation policy](policies/DOCUMENTATION_POLICY.md), including the in-app help trust boundary |
 

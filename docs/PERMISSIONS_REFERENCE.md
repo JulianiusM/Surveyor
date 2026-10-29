@@ -8,7 +8,7 @@ last-verified: 2026-10-29
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: current five-feature actor, page, method, field and private-projection semantics reviewed; deliberate public powers and Survey exception retained without grant changes or exhaustive runtime certification
 source-anchors: src/types/EntityPropertyTypes.d.ts; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/frontend-core.spec.ts; src/backend/controller/entityAdminController.ts; src/backend/modules/database/services/UserService.ts; src/backend/modules/lib/permissions.ts; src/backend/modules/permissionEngine.ts; src/types/PermissionTypes.d.ts; src/backend/middleware/permissionMiddleware.ts; src/backend/modules/database/services/EntityAdminService.ts; src/backend/modules/database/entities/permissions/EntityPermissions.ts; src/backend/modules/database/entities/permissions/EntityAdminAssignment.ts; src/frontend/components/EntityAccessEditor.vue; src/backend/routes/api/v1/
-next-review: D12,D14
+next-review: permission-semantics-or-generated-reference-change
 -->
 
 This is the canonical maintainer reference for Surveyor’s general permission engine. The end-user, novice-first explanation is [Permissions and Sharing](user-guide/en/PERMISSIONS.md).

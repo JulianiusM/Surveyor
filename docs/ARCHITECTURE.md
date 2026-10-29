@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; developers; AI agents
 owner: architecture maintainers
 status: current
-last-verified: 2026-10-28
+last-verified: 2026-10-29
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: current-source diagrams, controller/feature/DBAL ownership, shared list metadata, identity completion/admission and Finance authorization fences reconciled; no installed-release or deployment certification
+verification-scope: separate former-account cleanup fencing reconciled; current-source diagrams, layer ownership, identity completion and Finance authorization guidance retained without installed-release or deployment certification
 source-anchors: package.json; src/backend/app.ts; src/backend/server.ts; src/backend/modules/frontendAssets.ts; src/backend/modules/frontendRenderer.ts; src/backend/modules/lists/metadata.ts; src/backend/modules/identity.ts; src/backend/middleware/identityAdmission.ts; src/backend/modules/lib/session.ts; src/backend/modules/invoice/state.ts; src/frontend/; src/backend/routes/; src/backend/controller/; src/backend/modules/database/; src/backend/modules/api/; contracts/api/v1/; src/common/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md
 next-review: architecture-or-help-delivery-change
 -->
@@ -876,6 +876,11 @@ Final-profile deactivation retains its existing detach/cleanup/mail order, then 
 completion rather than selecting a nonexistent remaining profile. Typed cleanup facts feed the existing localized
 completion/notice owners. Provider logout clears and saves local identity first; later provider preparation failure
 confirms local sign-out with an unconfirmed-provider notice. It neither restores identity nor replays the operation.
+
+After deactivation's detach commit, standalone account cleanup uses a separate UserService transaction to lock the
+account, read its current profile roster and delete only an empty account. The existing Profile foreign key orders
+competing creation against that lock, preserving successful ownership or rejecting creation after deletion. Mail and
+later Session completion remain outside cleanup; transfer and Guest cleanup keep their existing boundaries.
 
 The shared `modules/event/registration.ts` feature owns attendance and bypass-link policy. The Event root and ordered
 pool locks precede current membership/capacity checks and token consumption on one manager. Existing-member updates

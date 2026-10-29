@@ -1,6 +1,6 @@
 import type {PackingPackedRead} from '../../../types/PackingChecklistTypes';
 
-/** Packing owns its established browser-local checklist across both frontend implementations. */
+/** Identify one item in Packing's established browser-local checklist. */
 export function packedStorageKey(listId: string, itemId: string): string {
     return `packed_${listId}_${itemId}`;
 }

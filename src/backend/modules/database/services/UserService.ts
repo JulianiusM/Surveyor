@@ -924,7 +924,8 @@ export async function lockProfileForOwner(profileId: string, manager: EntityMana
 export async function lockIdentityOwner(profile: Pick<Profile, 'userId' | 'guestId'>, manager: EntityManager): Promise<User | Guest | null> {
     // Transfer prelocks candidate owner rows before its profile; deletion calls
     // this before its FK changes. READ COMMITTED observes prior committed cleanup.
-    if (profile.userId) {
+    // A preserved numeric zero is still a User reference; only nullish values mean absence.
+    if (profile.userId !== undefined && profile.userId !== null) {
         return manager.getRepository(User).findOne({where: {id: profile.userId}, lock: {mode: 'pessimistic_write'}});
     }
     if (profile.guestId) {
@@ -1014,8 +1015,11 @@ export async function updateProfileDefault(profileId: string, isDefault: boolean
         if (isDefault) {
             // Remove all other defaults for the owner of this profile if a new one is set
             const profile = await repo.findOneByOrFail({id: profileId});
-            if (profile.userId) {
-                await repo.update({user: {id: profile.userId}}, {defaultForOwner: false});
+            if (profile.userId !== undefined && profile.userId !== null) {
+                // Match the stored FK directly: this ORM's relation-ID shortcut
+                // treats zero as absent and otherwise tries an unsupported UPDATE join.
+                await repo.createQueryBuilder().update(Profile).set({defaultForOwner: false})
+                    .where('user_id = :userId', {userId: profile.userId}).execute();
             }
             if (profile.guestId) {
                 await repo.update({guest: {id: profile.guestId}}, {defaultForOwner: false});
@@ -1060,7 +1064,7 @@ export function accountEmailExists(email: string): Promise<boolean> {
     return AppDataSource.getRepository(User).exists({where: {email}});
 }
 
-/** Preserve the original provider provisioning transaction and its default isolation. */
+/** Run caller-owned User work on the existing datasource transaction and default isolation. */
 export function withUserTransaction<T>(operation: (manager: EntityManager) => Promise<T>): Promise<T> {
     return AppDataSource.transaction(operation);
 }

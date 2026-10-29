@@ -8,8 +8,8 @@ status: current
 last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: P11 route-owner reconciliation; public callback and original decision preserved
-source-anchors: src/backend/app.ts; src/backend/modules/settings.ts; src/backend/modules/oidc.ts; docs/backlog/documentation-remediation.yml; src/backend/routes/users.ts
-next-review: D04
+source-anchors: src/backend/app.ts; src/backend/modules/settings.ts; src/backend/modules/oidc.ts; docs/backlog/documentation-remediation-history.yml; src/backend/routes/users.ts
+next-review: oidc-callback-route-or-default-change
 -->
 
 ## Decision status
@@ -47,8 +47,8 @@ https://surveyor.example.org/users/oidc/callback
 
 The hostname is illustrative; the callback path is the verified contract.
 
-A transient default-value mismatch is tracked centrally as `IMP-001` in
-[`documentation-remediation.yml`](../backlog/documentation-remediation.yml). Product documentation must not repeat that defect,
+A transient default-value mismatch was resolved as `IMP-001` in the
+[historical backlog](../backlog/documentation-remediation-history.yml). Product documentation must not repeat that defect,
 its temporary consequences, or a workaround. It describes the corrected working configuration represented by this
 decision.
 

@@ -8,8 +8,8 @@ status: current
 last-verified: 2026-09-05
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: feature-specific-static-behavior
-source-anchors: src/backend/controller/surveyController.ts; src/backend/modules/database/services/SurveyService.ts; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; docs/backlog/documentation-remediation.yml; src/frontend/; src/backend/routes/api/v1/
-next-review: D09
+source-anchors: src/backend/controller/surveyController.ts; src/backend/modules/database/services/SurveyService.ts; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; docs/backlog/documentation-remediation-history.yml; src/frontend/; src/backend/routes/api/v1/
+next-review: survey-combination-authorization-change
 -->
 
 ## Decision status

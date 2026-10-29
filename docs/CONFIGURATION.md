@@ -9,7 +9,7 @@ last-verified: 2026-10-28
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: approved authentication budgets, exact provider identity and display projection, and configurable Activity duration reconciled with current settings/source; prior archival/settings reference retained; no deployment certification
 source-anchors: src/backend/modules/entityArchival.ts; src/backend/modules/archive/policy.ts; src/backend/modules/database/services/EntityLifecycleService.ts; src/backend/modules/settings.ts; src/backend/server.ts; src/backend/app.ts; src/backend/modules/email.ts; src/backend/modules/oidc.ts; src/backend/modules/identity.ts; src/backend/middleware/identityAdmission.ts; src/backend/routes/api/v1/auth.ts; src/backend/modules/database/services/UserService.ts; contracts/api/v1/auth.yaml; src/backend/controller/activityController.ts; src/backend/modules/activity/autoAssignment.ts; src/common/lib/civilDate.ts; src/backend/modules/lib/fileCommons.ts; src/backend/modules/invoice/retention.ts; src/backend/modules/database/services/EventInvoiceService.ts; .github/workflows/ci.yml
-next-review: D04V
+next-review: configuration-or-authentication-boundary-change
 -->
 
 This is the canonical operator reference for Surveyor settings. Use it together with the

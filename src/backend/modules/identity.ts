@@ -154,24 +154,55 @@ function deletionEmail(account: User | Guest): PreparedIdentityEmail[] {
     return [prepareDeletionEmail({name, address: account.email}, account)];
 }
 
-/** Remove only a former owner made redundant by this transfer, preparing all fallible notification data. */
+/** Remove a redundant former owner through the caller's transfer transaction or
+ * a separate account-cleanup transaction after deactivation. Deactivation keeps
+ * its committed detach and later mail/session completion outside that cleanup. */
 async function cleanupFormerOwner(owner: User | Guest | null | undefined, manager?: EntityManager): Promise<PreparedOwnerCleanup> {
-    // Manager-bound transfer retains its former-owner lock through this check.
-    // Deactivation arrives after its short detach commit; its existing cleanup
-    // and mail remain separate and gain no whole-workflow serialization here.
-    if (!owner || (owner instanceof User && (await userService.getProfilesForUser(owner.id, manager)).length !== 0)) {
-        return {cleanup: 'none', emails: []};
+    if (!owner) return {cleanup: 'none', emails: []};
+    const formerOwner = owner;
+    let emails: PreparedIdentityEmail[] = [];
+
+    /** Decide redundancy and delete on one supplied connection, preserving each caller's mail boundary. */
+    async function deleteRedundantOwner(operationManager?: EntityManager): Promise<boolean> {
+        // A transfer already holds its owner fence. Standalone account cleanup
+        // acquires the same fence before this fresh roster read below.
+        if (formerOwner instanceof User && (await userService.getProfilesForUser(formerOwner.id, operationManager)).length !== 0) {
+            return false;
+        }
+        // Only the original transfer caller prepares mail before deletion.
+        // Supplying a cleanup manager must not change deactivation's later mail failure semantics.
+        if (manager) emails = deletionEmail(formerOwner);
+        if (formerOwner instanceof User) await userService.deleteUser(formerOwner.id, operationManager);
+        else await userService.deleteGuest(formerOwner.id, operationManager);
+        return true;
     }
-    // Transfer opts into precommit mail preparation through its supplied manager.
-    // Deactivation keeps its separately approved delete-before-mail sequence.
-    const emails = manager ? deletionEmail(owner) : [];
-    if (owner instanceof User) await userService.deleteUser(owner.id, manager);
-    else await userService.deleteGuest(owner.id, manager);
-    if (!manager && owner.email) {
-        await mailer.sendDeletionEmail({name: resolveEmailRecipientName(owner instanceof User ? owner.name : undefined, owner.username),
-            address: owner.email}, owner);
+
+    let deleted: boolean;
+    if (!manager && formerOwner instanceof User) {
+        const userId = formerOwner.id;
+        /** Serialize only the cleanup decision with existing Profile foreign-key insertion locks. */
+        async function cleanupLocked(operationManager: EntityManager): Promise<boolean> {
+            // If creation committed first, the roster includes its new profile.
+            // If cleanup wins, deletion prevents a later insert from reporting success.
+            // Take this lock before the transaction's first ordinary read: default
+            // repeatable-read must capture a creator that committed while the lock waited.
+            // A missing account retains the existing idempotent deletion outcome.
+            await userService.lockIdentityOwner({userId}, operationManager);
+            return deleteRedundantOwner(operationManager);
+        }
+        deleted = await userService.withUserTransaction(cleanupLocked);
+    } else {
+        deleted = await deleteRedundantOwner(manager);
     }
-    return {cleanup: owner instanceof User ? 'account-deleted' : 'guest-deleted', emails};
+    if (!deleted) return {cleanup: 'none', emails: []};
+
+    // Deactivation still deletes before preparing/sending mail. A later delivery
+    // failure cannot roll back its earlier detach or this completed cleanup.
+    if (!manager && formerOwner.email) {
+        await mailer.sendDeletionEmail({name: resolveEmailRecipientName(formerOwner instanceof User ? formerOwner.name : undefined, formerOwner.username),
+            address: formerOwner.email}, formerOwner);
+    }
+    return {cleanup: formerOwner instanceof User ? 'account-deleted' : 'guest-deleted', emails};
 }
 
 // Only the exact shared-guard rejection before detach may remain a known denial.

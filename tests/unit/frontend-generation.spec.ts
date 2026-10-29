@@ -142,10 +142,13 @@ import {syncBuiltinESMExports} from 'node:module';
 import childProcess from 'node:child_process';
 
 const writeFile = promises.writeFile.bind(promises);
+const renameSync = filesystem.renameSync.bind(filesystem);
 const watch = filesystem.watch.bind(filesystem);
 const spawn = childProcess.spawn.bind(childProcess);
 const generators = new Set();
 let firstReadinessWrite = true;
+let firstReadinessRename = true;
+let retainedMarker;
 let release;
 let stopRequested = false;
 let stopping = false;
@@ -198,6 +201,29 @@ filesystem.watch = function observeInput(directory, options, listener) {
         if (path.resolve(String(directory)) === path.join(process.cwd(), 'src/backend/modules/lib')
             && filename?.toString() === 'permissions.ts') process.send({kind: 'permission-observed'});
     }
+};
+
+// Fail one actual marker replacement at its filesystem boundary. The real
+// watcher must retry publication alone, without rerunning either generator or
+// removing the previously published marker. All other renames remain native.
+filesystem.renameSync = function failTransientReadinessRename(source, destination, ...arguments_) {
+    const target = path.resolve(String(destination));
+    const readiness = target === path.join(process.cwd(), '.generated/frontend-ready.json');
+    if (readiness && firstReadinessRename && filesystem.existsSync(target)) {
+        firstReadinessRename = false;
+        retainedMarker = filesystem.readFileSync(target, 'utf8');
+        process.send({kind: 'readiness-rename-blocked'});
+        throw Object.assign(new Error('Fixture transient readiness-marker sharing violation'), {code: 'EPERM'});
+    }
+    if (readiness && retainedMarker !== undefined) {
+        if (!filesystem.existsSync(target) || filesystem.readFileSync(target, 'utf8') !== retainedMarker) {
+            throw new Error('Readiness retry must retain the previous marker until atomic replacement');
+        }
+        retainedMarker = undefined;
+    }
+    const result = renameSync(source, destination, ...arguments_);
+    if (readiness) process.send({kind: 'readiness-renamed'});
+    return result;
 };
 syncBuiltinESMExports();
 
@@ -700,6 +726,19 @@ describe('contract and catalog generation', () => {
             enterPhase('restore original registry and publish the next coherent batch');
             await expect.poll(async function recoveredReadyMarker() { return readOptionalFile(markerPath); }, {timeout: 30_000})
                 .not.toBe(firstMarker);
+
+            // The same successful dependency batch replaces an existing marker
+            // despite one transient sharing failure. Recovery cannot replay
+            // generators or bypass the earlier known-save/invalid-edit checks.
+            await expect.poll(function readinessRenameRecovered() {
+                const blocked = trace.findIndex(entry => entry.event === 'readiness-rename-blocked');
+                return blocked >= 0 && trace.slice(blocked + 1).some(entry => entry.event === 'readiness-renamed');
+            }, {timeout: 10_000}).toBe(true);
+            const blockedRename = trace.findIndex(entry => entry.event === 'readiness-rename-blocked');
+            const completedRename = trace.findIndex((entry, index) => index > blockedRename && entry.event === 'readiness-renamed');
+            expect(trace.slice(blockedRename + 1, completedRename)
+                .some(entry => entry.event.startsWith('generator-started'))).toBe(false);
+
             const recoveredPermissions = await fs.readFile(path.join(generatedDirectory, 'permissions.ts'), 'utf8');
             expect(recoveredPermissions).toContain('"EDIT_TITLE": "permissions.EDIT_TITLE"');
             expect(recoveredPermissions).not.toContain('"WATCHER_PERMISSION":');

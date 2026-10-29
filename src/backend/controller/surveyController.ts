@@ -171,13 +171,13 @@ async function submitResponses(survey: Survey, session: SessionLike, body: any) 
         // prior answers. An omitted choice is absent from the replacement ballot.
         const combinations = await surveyService.getCombinationsBySurveyId(survey.id);
         const allowedCombinationIds = new Set(combinations.map((combination) => combination.id));
-        const invalidEntry = Object.entries(answers).find(([combId, answer]) => {
+        const hasInvalidEntry = Object.entries(answers).some(([combId, answer]) => {
             const parsedId = Number(combId);
             return !Number.isInteger(parsedId)
                 || !allowedCombinationIds.has(parsedId)
                 || !['yes', 'maybe', 'no', ''].includes(answer ?? '');
         });
-        if (invalidEntry) {
+        if (hasInvalidEntry) {
             throw new ExpectedError('Invalid survey response', 'error', 400, {}, {cause: 'SURVEY_RESPONSE_INVALID'});
         }
         // Keep the persistence order and its independently saved rows.

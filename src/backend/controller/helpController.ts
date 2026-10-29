@@ -426,7 +426,7 @@ function applyAuthoredHeadingAnchors(markdown: string, headings: HeadingInfo[], 
 
     // Require one declared anchor per parsed heading before assigning any. The
     // positional mapping keeps translated task links aligned with their headings.
-    const entries = anchors.trim().split(/\s*;\s*/u);
+    const entries = anchors.split(';').map(entry => entry.trim());
     const ids = new Set<string>();
     if (entries.length !== headings.length) {
         throw new Error(`${sourceName} heading anchors must match the article's headings`);

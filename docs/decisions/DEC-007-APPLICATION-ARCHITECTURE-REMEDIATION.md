@@ -7,7 +7,7 @@ status: current
 last-verified: 2026-10-29
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: direct maintainer decisions and scope; not implementation or execution certification
-source-anchors: docs/policies/DEVELOPMENT_POLICY.md; docs/policies/DOCUMENTATION_POLICY.md; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md; docs/backlog/documentation-remediation.yml; src/backend/; src/frontend/; .github/workflows/ci.yml
+source-anchors: docs/policies/DEVELOPMENT_POLICY.md; docs/policies/DOCUMENTATION_POLICY.md; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md; docs/backlog/documentation-remediation.yml; docs/backlog/documentation-remediation-history.yml; src/backend/; src/frontend/; .github/workflows/ci.yml
 next-review: explicit-maintainer-policy-amendment
 -->
 
@@ -203,3 +203,12 @@ cleanup/mail, remaining-profile selection or local sign-out and their partial fa
 outside that short transaction. R4 does not authorize whole-workflow atomicity, a general Session merger or provider
 redesign. Establish the real-persistence regression before dependent product changes and reassess any unreproduced
 claim. The original decisions above remain historical; conditional A19 and its external prerequisites are unchanged.
+
+## Permanent rehearsal deferral (2026-10-29)
+
+The maintainer explicitly instructs permanent deferral of rehearsal work so backlog maintenance does not request it
+again. This supersedes A19's conditional activation and the earlier instruction to continue that verification:
+D04V and OPSV-001 through OPSV-007 are permanently deferred, excluded from active work selection and automatic retry,
+and may be reactivated only by a new explicit maintainer request. More time, a corrected release or newly available
+tools do not reactivate them. Their historical records preserve the verification limits; deferral does not certify
+deployment, backup/restore or rollback, and does not remove the operating guides' safety procedures.

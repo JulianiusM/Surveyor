@@ -801,9 +801,10 @@ export async function deleteEventChild(id: string, entityType: 'activity' | 'dri
 
     // A displayed child is neither deletion authority nor an enduring parent
     // relationship. Resolve its current row and require actual profile ownership.
-    const child = entityType === 'activity' ? await activityService.getActivityPlanById(entityId)
-        : entityType === 'drivers' ? await driverService.getDriversListById(entityId)
-            : await packingService.getPackingListById(entityId);
+    let child: EntityBase | null;
+    if (entityType === 'activity') child = await activityService.getActivityPlanById(entityId);
+    else if (entityType === 'drivers') child = await driverService.getDriversListById(entityId);
+    else child = await packingService.getPackingListById(entityId);
     if (!child?.eventId || archiveKey({type: 'event', id: child.eventId}) !== archiveKey({type: 'event', id})) throw new ApiProblem('NOT_FOUND');
     if (!isOwner(session, child.ownerId)) throw new ApiProblem('FORBIDDEN');
 

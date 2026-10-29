@@ -1,6 +1,7 @@
 import {findOrCreateUserFromOidc} from '../../src/backend/modules/identity';
 import type {Request, Response} from 'express';
 import type {SessionData} from 'express-session';
+import type {QueryRunner} from 'typeorm';
 import {randomUUID} from 'node:crypto';
 import nodemailer from 'nodemailer';
 import type {Transporter} from 'nodemailer';
@@ -639,8 +640,43 @@ function profileEditOptions(req: Request): IdentityCompletionOptions<PreparedApi
 
 type OrdinaryIdentityKind = 'account' | 'guest' | 'profile';
 
+/** Model a preserved zero primary key on this fixture's connection, retaining
+ * its registered credential and Profile before ordinary production login. */
+async function preserveZeroAccountFixture(seedUserId: number): Promise<User> {
+    expect(await userService.getUserById(0)).toBeNull();
+    const runner = AppDataSource.createQueryRunner();
+    await runner.connect();
+    const [configuration] = await runner.query('SELECT @@SESSION.sql_mode AS mode');
+    const originalMode = String(configuration.mode);
+    const mode = [...new Set([...originalMode.split(','), 'NO_AUTO_VALUE_ON_ZERO'])].filter(Boolean).join(',');
+    const username = 'zero-' + randomUUID();
+    try {
+        // Only fixture INSERT needs this mode. Restore the exact connection
+        // setting before returning it to the pool; no global setting changes.
+        await runner.query('SET SESSION sql_mode = ?', [mode]);
+        await runner.query('INSERT INTO users (id, username, name, email, PASSWORD, is_active) SELECT 0, ?, name, ?, PASSWORD, is_active FROM users WHERE id = ?',
+            [username, username + '@example.test', seedUserId]);
+        await runner.query('UPDATE profiles SET user_id = 0 WHERE user_id = ?', [seedUserId]);
+        await userService.deleteUser(seedUserId, runner.manager);
+    } finally {
+        try { await runner.query('SET SESSION sql_mode = ?', [originalMode]); }
+        finally { await runner.release(); }
+    }
+    return (await userService.getUserById(0))!;
+}
+
+/** Retire only this zero-account fixture, including a detached original Profile
+ * and any additional Profile created by its cleanup concurrency regression. */
+async function removeZeroAccountFixture(req: Request): Promise<void> {
+    const owned = await userService.getProfilesForUser(0);
+    const ids = new Set([req.session.profile!.id, ...owned.map(profile => profile.id)]);
+    await AppDataSource.getRepository(Session).delete(req.sessionID);
+    await AppDataSource.getRepository(Profile).delete([...ids]);
+    await userService.deleteUser(0);
+}
+
 /** Actual owned identity records drive the three production completion adapters; repositories are never mocked. */
-async function ordinaryIdentityFixture(kind: OrdinaryIdentityKind) {
+async function ordinaryIdentityFixture(kind: OrdinaryIdentityKind, storedZero = false) {
     const req = await atomicGuestRequest();
     let username = '';
     let guestId = '';
@@ -651,9 +687,10 @@ async function ordinaryIdentityFixture(kind: OrdinaryIdentityKind) {
         guestId = guest.id;
         guestToken = guest.token;
     } else {
-        const account = await registerLocalAccount(`ordinary-${kind}`);
-        username = account.username;
+        let account = await registerLocalAccount(`ordinary-${kind}`);
         await userService.activateUser(account.id);
+        if (storedZero) account = await preserveZeroAccountFixture(account.id);
+        username = account.username;
         if (kind === 'profile') {
             const user = await userService.getUserById(account.id);
             const second = await AppDataSource.getRepository(Profile).save({name: 'Second owned profile',
@@ -681,19 +718,23 @@ async function ordinaryIdentityFixture(kind: OrdinaryIdentityKind) {
 }
 
 /** Begin logout from real persisted account/guest authority with the normal writable store session. */
-async function ordinaryLogoutFixture(kind: Exclude<OrdinaryIdentityKind, 'profile'>) {
-    const {req, run} = await ordinaryIdentityFixture(kind);
+async function ordinaryLogoutFixture(kind: Exclude<OrdinaryIdentityKind, 'profile'>, storedZero = false) {
+    const {req, run} = await ordinaryIdentityFixture(kind, storedZero);
     await run();
     const stored = await readStoredSession(req.sessionStore, req.sessionID);
     req.sessionStore.createSession(req, stored!);
     req.session.frontendAuthReturn = '/packing/return-after-login';
     await persistSession(req.session);
     req.apiActor = {context: req.session.frontendContext!, auth: req.session.auth, profile: req.session.profile};
+    if (storedZero) {
+        req.apiActor = undefined;
+        req.apiActor = await captureApiActor(req);
+    }
 
     function prepareResult(staged: Request['session']) {
         return prepareIdentityReply(req, staged, 'logoutIdentity');
     }
-    const options: IdentityCompletionOptions<PreparedApiJsonResponse> = {context: req.apiActor.context, prepareResult};
+    const options: IdentityCompletionOptions<PreparedApiJsonResponse> = {context: req.apiActor!.context, prepareResult};
     return {req, options};
 }
 
@@ -2071,7 +2112,217 @@ function deletionDelivery(accepted = true) {
     return {prepared, deliver};
 }
 
+/** Observe real SQL attempts to coordinate competing identity operations without
+ * replacing repositories, query results or feature/service implementations. */
+function observeDeactivationCleanup(userId: number, profileId: string, barrier: QueryRunner) {
+    let ownerLocks = 0;
+    const reached = new Set<string>();
+    const listeners = new Set<() => void>();
+    const original = AppDataSource.logger.logQuery.bind(AppDataSource.logger);
+    const observer = vi.spyOn(AppDataSource.logger, 'logQuery').mockImplementation((query, parameters, runner) => {
+        if (runner !== barrier && query.includes('FOR UPDATE')) {
+            if (query.includes('FROM `users`') && parameters?.includes(userId)) {
+                ownerLocks++;
+                if (ownerLocks >= 2) reached.add('cleanup');
+            }
+            if (query.includes('FROM `profiles`') && parameters?.includes(profileId)) reached.add('detach');
+        }
+        if (query.startsWith('INSERT INTO `profiles`') && parameters?.includes(userId)) reached.add('creation');
+        if (query.startsWith('DELETE FROM `users`') && parameters?.includes(userId)) {
+            reached.add('cleanup');
+            reached.add('deletion');
+        }
+        for (const listener of listeners) listener();
+        original(query, parameters, runner);
+    });
+
+    /** Bound a missing persistence milestone without changing an existing test deadline. */
+    async function waitFor(name: string): Promise<void> {
+        if (reached.has(name)) return;
+        const signal = Promise.withResolvers<void>();
+        const timer = setTimeout(() => signal.reject(new Error('Missing deactivation SQL milestone: ' + name)), 2500);
+        function changed(): void { if (reached.has(name)) signal.resolve(); }
+        listeners.add(changed);
+        try { await signal.promise; }
+        finally { clearTimeout(timer); listeners.delete(changed); }
+    }
+    return {waitFor, stop: () => observer.mockRestore()};
+}
+
 describe('approved local identity deletion and provider outcome', () => {
+    it('loads a stored User 0 and retains its actual owner lock until commit', async () => {
+        const {req} = await ordinaryLogoutFixture('account', true);
+        const holder = AppDataSource.createQueryRunner();
+        const contender = AppDataSource.createQueryRunner();
+        await holder.connect();
+        await contender.connect();
+        try {
+            // This request used normal credential verification and stored Session
+            // admission. The zero key never came from a submitted actor claim.
+            expect((await captureApiActor(req)).auth?.user?.id).toBe(0);
+            expect(req.session.profile!.userId).toBe(0);
+            await holder.startTransaction('READ COMMITTED');
+            expect(await userService.lockIdentityOwner({userId: 0}, holder.manager)).toMatchObject({id: 0});
+            await contender.startTransaction('READ COMMITTED');
+            await expect(contender.query('SELECT id FROM users WHERE id = 0 FOR UPDATE NOWAIT'))
+                .rejects.toMatchObject({code: 'ER_LOCK_WAIT_TIMEOUT'});
+            await contender.rollbackTransaction();
+            await holder.commitTransaction();
+            await contender.startTransaction('READ COMMITTED');
+            expect(await userService.lockIdentityOwner({userId: 0}, contender.manager)).toMatchObject({id: 0});
+            await contender.commitTransaction();
+        } finally {
+            if (holder.isTransactionActive) await holder.rollbackTransaction();
+            if (contender.isTransactionActive) await contender.rollbackTransaction();
+            await holder.release();
+            await contender.release();
+            await removeZeroAccountFixture(req);
+        }
+    });
+
+    it('selects one zero-account default through the real identity edit without clearing another account', async () => {
+        const {req} = await ordinaryLogoutFixture('account', true);
+        const profile = req.session.profile!;
+        try {
+            const peer = await userService.createProfile(0, 'Previous zero-account default');
+            const other = await persistIntegrationProfile({name: 'Unrelated default owner'});
+            await AppDataSource.getRepository(Profile).update(profile.id, {defaultForOwner: false});
+            await AppDataSource.getRepository(Profile).update(peer.id, {defaultForOwner: true});
+            await AppDataSource.getRepository(Profile).update(other.id, {defaultForOwner: true});
+
+            // The current-profile edit owns its existing generation, owner/Profile
+            // locks and required Session refresh; selecting one default clears peers.
+            const completed = await userController.updateProfileWithSession({isDefault: true}, req, profileEditOptions(req));
+            expect(completed.session.auth?.user?.id).toBe(0);
+            expect((await userService.getProfilesForUser(0)).filter(value => value.defaultForOwner).map(value => value.id))
+                .toEqual([profile.id]);
+            expect(await userService.getProfileById(other.id)).toMatchObject({defaultForOwner: true});
+            expect((await readStoredSession(req.sessionStore, req.sessionID))?.profile).toMatchObject({id: profile.id, defaultForOwner: true});
+        } finally { await removeZeroAccountFixture(req); }
+    });
+
+    // These cleanup regressions include real scheduling-trigger DDL in their
+    // fixture budget; existing test and application deadlines remain unchanged.
+    it.each([false, true])('retains a concurrently created profile when creation precedes final-profile account cleanup (stored zero=%s)', async storedZero => {
+        const {req} = await ordinaryLogoutFixture('account', storedZero);
+        const profile = req.session.profile!;
+        const userId = req.session.auth!.user!.id;
+        const barrier = AppDataSource.createQueryRunner();
+        await barrier.connect();
+        const lock = 'deactivation-profile-insert-' + userId;
+        const observed = observeDeactivationCleanup(userId, profile.id, barrier);
+        const smtp = vi.spyOn(email, 'sendDeletionEmail').mockResolvedValue(undefined);
+        let deactivation: Promise<{value?: string; error?: unknown}> | undefined;
+        let creation: Promise<{value?: Profile; error?: unknown}> | undefined;
+        try {
+            // Install scheduling before taking a table transaction: trigger DDL
+            // must never wait for this fixture's own metadata lock.
+            await barrier.query('SELECT GET_LOCK(?, 0)', [lock]);
+            await AppDataSource.query(`CREATE TRIGGER hold_deactivation_profile_insert AFTER INSERT ON profiles FOR EACH ROW BEGIN IF NEW.user_id = ${userId} THEN SET @deactivation_insert_wait = GET_LOCK('${lock}', 10); SET @deactivation_insert_release = RELEASE_LOCK('${lock}'); END IF; END`);
+            await barrier.startTransaction('READ COMMITTED');
+            await barrier.manager.getRepository(Profile).findOne({where: {id: profile.id}, lock: {mode: 'pessimistic_write'}});
+
+            // Deactivation owns User and waits for Profile. Queue the real
+            // creation behind that User fence, then let detachment commit.
+            deactivation = identity.deactivateProfile({name: profile.name}, req.session)
+                .then(value => ({value}), error => ({error}));
+            await observed.waitFor('detach');
+            creation = userController.createProfile({name: 'Created before cleanup'}, userId)
+                .then(value => ({value}), error => ({error}));
+            await observed.waitFor('creation');
+            await barrier.commitTransaction();
+
+            // The inserted Profile retains its real FK User lock before commit.
+            // Old cleanup selected an empty roster then waited at DELETE; current
+            // cleanup waits before its fresh roster read, observing creation.
+            await observed.waitFor('cleanup');
+            await barrier.query('SELECT RELEASE_LOCK(?)', [lock]);
+            const created = await creation;
+            expect(created.error).toBeUndefined();
+            expect(await deactivation).toEqual({value: 'none'});
+            expect(await userService.getUserById(userId)).not.toBeNull();
+            expect(await userService.getProfileById(created.value!.id)).toMatchObject({userId});
+            expect(await userService.getProfileById(profile.id)).toMatchObject({userId: null});
+            expect(smtp).not.toHaveBeenCalled();
+        } finally {
+            if (barrier.isTransactionActive) await barrier.rollbackTransaction();
+            await barrier.query('SELECT RELEASE_LOCK(?)', [lock]);
+            await Promise.allSettled([deactivation, creation]);
+            try { await AppDataSource.query('DROP TRIGGER IF EXISTS hold_deactivation_profile_insert'); }
+            finally {
+                observed.stop();
+                smtp.mockRestore();
+                await barrier.release();
+                if (storedZero) await removeZeroAccountFixture(req);
+            }
+        }
+    }, 30_000);
+
+    it('rejects concurrent profile creation after final-profile account cleanup acquires its fence', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const profile = req.session.profile!;
+        const userId = req.session.auth!.user!.id;
+        const barrier = AppDataSource.createQueryRunner();
+        await barrier.connect();
+        const lock = 'deactivation-account-delete-' + userId;
+        const observed = observeDeactivationCleanup(userId, profile.id, barrier);
+        const smtp = vi.spyOn(email, 'sendDeletionEmail').mockImplementation(async () => {
+            // Mail remains after the cleanup commit, never inside its rollback scope.
+            expect(await userService.getUserById(userId)).toBeNull();
+        });
+        let deactivation: Promise<{value?: string; error?: unknown}> | undefined;
+        let creation: Promise<{value?: Profile; error?: unknown}> | undefined;
+        try {
+            await barrier.query('SELECT GET_LOCK(?, 0)', [lock]);
+            await AppDataSource.query(`CREATE TRIGGER hold_deactivation_account_delete BEFORE DELETE ON users FOR EACH ROW BEGIN IF OLD.id = ${userId} THEN SET @deactivation_delete_wait = GET_LOCK('${lock}', 10); SET @deactivation_delete_release = RELEASE_LOCK('${lock}'); END IF; END`);
+            deactivation = identity.deactivateProfile({name: profile.name}, req.session)
+                .then(value => ({value}), error => ({error}));
+            await observed.waitFor('deletion');
+
+            // Cleanup already holds User. A competing real INSERT waits for its
+            // commit and must not claim success with detached ownership afterward.
+            creation = userController.createProfile({name: 'Must not outlive deleted owner'}, userId)
+                .then(value => ({value}), error => ({error}));
+            await observed.waitFor('creation');
+            await barrier.query('SELECT RELEASE_LOCK(?)', [lock]);
+            expect(await deactivation).toEqual({value: 'account-deleted'});
+            expect(await creation).toMatchObject({error: {code: 'ER_NO_REFERENCED_ROW_2'}});
+            expect(await userService.getUserById(userId)).toBeNull();
+            expect(await userService.getProfileById(profile.id)).toMatchObject({userId: null});
+            expect(await AppDataSource.getRepository(Profile).countBy({name: 'Must not outlive deleted owner'})).toBe(0);
+            expect(smtp).toHaveBeenCalledOnce();
+        } finally {
+            await barrier.query('SELECT RELEASE_LOCK(?)', [lock]);
+            await Promise.allSettled([deactivation, creation]);
+            try { await AppDataSource.query('DROP TRIGGER IF EXISTS hold_deactivation_account_delete'); }
+            finally {
+                observed.stop();
+                smtp.mockRestore();
+                await barrier.release();
+            }
+        }
+    }, 30_000);
+
+    it('keeps detachment committed when the separate account cleanup transaction rolls back', async () => {
+        const {req} = await ordinaryLogoutFixture('account');
+        const profile = req.session.profile!;
+        const userId = req.session.auth!.user!.id;
+        const stored = JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID));
+        const smtp = vi.spyOn(email, 'sendDeletionEmail').mockResolvedValue(undefined);
+        try {
+            await AppDataSource.query("CREATE TRIGGER reject_deactivation_cleanup BEFORE DELETE ON users FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Controlled standalone cleanup rollback'");
+            await expect(userController.deactivateIdentityProfile(req, {name: profile.name}))
+                .rejects.toMatchObject({code: 'WORKFLOW_OUTCOME_UNKNOWN'});
+            expect(await userService.getProfileById(profile.id)).toMatchObject({userId: null});
+            expect(await userService.getUserById(userId)).not.toBeNull();
+            expect(JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID)) === stored).toBe(true);
+            expect(smtp).not.toHaveBeenCalled();
+        } finally {
+            try { await AppDataSource.query('DROP TRIGGER IF EXISTS reject_deactivation_cleanup'); }
+            finally { smtp.mockRestore(); }
+        }
+    }, 30_000);
+
     it('rejects an admitted former-owner deactivation after actual transfer without detaching the recipient profile', async () => {
         const {req} = await ordinaryLogoutFixture('account');
         const profile = req.session.profile!;

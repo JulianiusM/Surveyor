@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: editorial dependency disposition against the backlog and advisory documentation policy; original technical decision retained without new runtime verification
-source-anchors: src/backend/controller/surveyController.ts; src/backend/modules/lib/permissions.ts; docs/backlog/documentation-remediation.yml; docs/policies/DOCUMENTATION_POLICY.md; src/frontend/; src/backend/routes/api/v1/
+source-anchors: src/backend/controller/surveyController.ts; src/backend/modules/lib/permissions.ts; docs/backlog/documentation-remediation-history.yml; docs/policies/DOCUMENTATION_POLICY.md; src/frontend/; src/backend/routes/api/v1/
 next-review: survey-permission-or-access-model-change
 -->
 
@@ -69,7 +69,7 @@ other areas remain confined to migration-control records under the documentation
 blocked by D01, D03, and `DEC-001`.
 
 **Current disposition (2026-10-14, maintainer-approved editorial correction):** the
-[durable backlog](../backlog/documentation-remediation.yml) records D01, D03 and D09 as done and `DEC-001`/`DEC-005`
+[historical backlog](../backlog/documentation-remediation-history.yml) records D01, D03 and D09 as done and `DEC-001`/`DEC-005`
 as resolved. The paragraph above preserves the original dependency history. Documentation review is advisory under
 the [documentation policy](../policies/DOCUMENTATION_POLICY.md#documentation-is-never-a-delivery-gate); it does not
 block application delivery. The survey permission exception and its technical decision remain unchanged.

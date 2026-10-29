@@ -517,8 +517,9 @@ export function normalizeBasicProperties(body: unknown): BasicEntityPropertyPatc
         // Preserve shared validation while identifying only the authored field
         // and rule for an actionable, value-free versioned explanation.
         const detail = error.details[0];
-        const cause = detail?.path[0] === 'title' ? 'ENTITY_TITLE_INVALID'
-            : detail?.path[0] === 'description' && detail.type === 'string.max' ? 'ENTITY_DESCRIPTION_TOO_LONG' : undefined;
+        let cause: string | undefined;
+        if (detail?.path[0] === 'title') cause = 'ENTITY_TITLE_INVALID';
+        else if (detail?.path[0] === 'description' && detail.type === 'string.max') cause = 'ENTITY_DESCRIPTION_TOO_LONG';
         throw new APIError(error.message, {}, 400, {cause});
     }
     if (value.description === '') value.description = null;
@@ -573,13 +574,17 @@ export async function getEntityPropertyPresentation(type: EntityType, entity: En
             currentEvent = projectCurrentEntityEvent(event, parentPermissions);
         }
     }
+    let exportUrl: string | undefined;
+    if (type === 'activity' && permissions.has('DATA_EXPORT')) exportUrl = `/activity/${entity.id}/export/schedule`;
+    else if (type === 'event' && permissions.has('DATA_EXPORT') && permissions.has('ACCESS_PARTICIPANTS')) {
+        exportUrl = `/event/${entity.id}/export/participants`;
+    }
     // Capabilities retain their distinct actor/method requirements; having one
     // editable value does not imply export, deletion, duplication or ACL authority.
     return {
         entityType: type, id: entity.id, updateUrl: `/api/${type}/${entity.id}/update`,
         eventUrl: canLinkEvent ? `/api/${type}/${entity.id}/event` : undefined,
-        exportUrl: type === 'activity' && permissions.has('DATA_EXPORT') ? `/activity/${entity.id}/export/schedule`
-            : type === 'event' && permissions.has('DATA_EXPORT') && permissions.has('ACCESS_PARTICIPANTS') ? `/event/${entity.id}/export/participants` : undefined,
+        exportUrl,
         exportLabel: type === 'activity' ? 'Export schedule' : 'Export participants',
         values, editableFields, canEditProperties: editableFields.length > 0, canLinkEvent,
         canEditHeader: !!session.profile && permissions.has(entityMethodPermission('editHeader')),
@@ -691,10 +696,12 @@ export async function searchUsers(q: string, limit = 10): Promise<UserInfo[]> {
     if (!query || !SQL_ALLOW_LIST.test(query)) return [];
     const rows = await userService.queryUserProfiles(query, coerceLimit(limit, 10, 25));
     // Account candidates retain the legacy masked-mail fallback without exposing full ORM records.
-    return rows.map(profile => ({id: profile.id, name: profile.name,
-        username: profile.user?.username ?? profile.guest?.username ?? '-',
-        email: profile.user?.email ? maskEmail(profile.user.email)
-            : profile.guest?.email ? maskEmail(profile.guest.email) : '-'}));
+    return rows.map(profile => {
+        const email = profile.user?.email || profile.guest?.email;
+        return {id: profile.id, name: profile.name,
+            username: profile.user?.username ?? profile.guest?.username ?? '-',
+            email: email ? maskEmail(email) : '-'};
+    });
 }
 
 /** Project the same admitted account search into feature options without exposing even masked email fields. */
